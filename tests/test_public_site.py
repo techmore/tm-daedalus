@@ -33,6 +33,13 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn("https://daedalus.cybersecuritypilot.org/", home)
         self.assertIn("https://daedalus.cybersecuritypilot.org/", overview)
 
+    def test_existing_csp_school_resources_are_preserved(self):
+        home = (SITE / "index.html").read_text(encoding="utf-8")
+        legacy_directory = SITE / "Chrome_Moysle_googleadmin"
+        self.assertIn("/Chrome_Moysle_googleadmin/school-mac-security-roadmap.html", home)
+        self.assertTrue((legacy_directory / "school-mac-security-roadmap.html").is_file())
+        self.assertTrue((legacy_directory / "school-mac-chrome-goguardian-setup-guide.md").is_file())
+
     def test_local_links_and_fragments_resolve(self):
         for page in sorted(SITE.glob("*.html")):
             parser = SiteParser()

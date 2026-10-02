@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Implementation checklist for school Google Admin, Mosyle Mac, GoGuardian, and K-12 cybersecurity hardening settings.">
+  <title>School Mac Security Implementation Checklist</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            olive: {
+              50: '#f7f6f0',
+              100: '#eeecd8',
+              200: '#dbd6b0',
+              300: '#c4bb84',
+              400: '#ada163',
+              500: '#9b8d4d',
+              600: '#7d703c',
+              700: '#5f5532',
+              800: '#4a432b',
+              900: '#3d3926',
+              950: '#1f1c12'
+            },
+            cream: {
+              50: '#fefdf8',
+              100: '#fcf9ed',
+              200: '#f9f3d9',
+              300: '#f3e9b9'
+            },
+            clay: {
+              100: '#f1e2d5',
+              500: '#b77552',
+              700: '#7b4634'
+            },
+            moss: {
+              100: '#e5eadf',
+              500: '#687957',
+              700: '#405035'
+            }
+          },
+          fontFamily: {
+            display: ['Instrument Serif', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif']
+          },
+          boxShadow: {
+            soft: '0 22px 50px rgba(31, 28, 18, 0.12)'
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      background:
+        radial-gradient(ellipse at 12% 0%, rgba(243, 233, 185, 0.8), transparent 34%),
+        radial-gradient(ellipse at 92% 8%, rgba(104, 121, 87, 0.22), transparent 30%),
+        linear-gradient(135deg, #f7f6f0 0%, #eeecd8 42%, #dbd6b0 100%);
+    }
+    .scan-lines {
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(95, 85, 50, 0.04) 2px, rgba(95, 85, 50, 0.04) 4px);
+    }
+    .glass {
+      background: rgba(254, 253, 248, 0.78);
+      backdrop-filter: blur(14px);
+    }
+    .check-row {
+      transition: background 160ms ease, border-color 160ms ease;
+    }
+    .check-row:has(input:checked) {
+      background: rgba(229, 234, 223, 0.74);
+      border-color: rgba(104, 121, 87, 0.34);
+    }
+    .check-row:has(input:checked) .task-title {
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      text-decoration-color: rgba(64, 80, 53, 0.45);
+    }
+    .source-link {
+      color: #5f5532;
+      font-weight: 700;
+      text-decoration: underline;
+      text-decoration-color: rgba(95, 85, 50, 0.28);
+      text-underline-offset: 3px;
+    }
+    .source-link:hover {
+      color: #1f1c12;
+      text-decoration-color: rgba(31, 28, 18, 0.55);
+    }
+    @media print {
+      body {
+        background: white !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-break {
+        break-before: page;
+      }
+      .glass,
+      .check-row {
+        background: white !important;
+        box-shadow: none !important;
+      }
+      a {
+        color: #1f1c12 !important;
+      }
+    }
+  </style>
+</head>
+<body class="font-sans text-olive-950 antialiased">
+  <div class="scan-lines fixed inset-0 -z-10"></div>
+
+  <header class="sticky top-0 z-50 border-b border-olive-300/60 bg-olive-50/92 backdrop-blur-xl no-print">
+    <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between gap-4">
+        <a href="#" class="flex min-w-0 items-center gap-3">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-800 text-cream-200">
+            <i data-lucide="clipboard-check" class="h-5 w-5"></i>
+          </span>
+          <span class="truncate font-display text-2xl font-semibold tracking-tight">School Security <span class="text-olive-600">Checklist</span></span>
+        </a>
+        <div class="flex shrink-0 items-center gap-2">
+          <button id="print-button" class="hidden rounded-full border border-olive-300 px-4 py-2 text-sm font-bold text-olive-800 hover:bg-olive-100 sm:inline-flex">
+            Print
+          </button>
+          <button id="reset-button" class="hidden rounded-full bg-olive-800 px-4 py-2 text-sm font-bold text-cream-100 hover:bg-olive-700 sm:inline-flex">
+            Reset checks
+          </button>
+        </div>
+      </div>
+      <nav class="flex gap-2 overflow-x-auto pb-1 text-sm font-bold text-olive-700">
+        <a class="shrink-0 rounded-full bg-white/70 px-3.5 py-2 hover:bg-white" href="#google">Google Admin</a>
+        <a class="shrink-0 rounded-full bg-white/70 px-3.5 py-2 hover:bg-white" href="#audience-matrix">Role Matrix</a>
+        <a class="shrink-0 rounded-full bg-white/70 px-3.5 py-2 hover:bg-white" href="#mosyle">Mosyle Mac</a>
+        <a class="shrink-0 rounded-full bg-white/70 px-3.5 py-2 hover:bg-white" href="#goguardian">GoGuardian</a>
+        <a class="shrink-0 rounded-full bg-white/70 px-3.5 py-2 hover:bg-white" href="#hardening">CISA / CoSN / NIST</a>
+        <a class="shrink-0 rounded-full bg-white/70 px-3.5 py-2 hover:bg-white" href="#sources">Source Library</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="px-4 py-10 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
+          <div>
+            <div class="inline-flex items-center gap-2 rounded-full border border-olive-300/60 bg-olive-100/80 px-3.5 py-1.5 text-xs font-extrabold uppercase tracking-wide text-olive-800">
+              <span class="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_0_4px_rgba(34,197,94,0.16)]"></span>
+              Admin implementation checkout
+            </div>
+            <h1 class="mt-5 max-w-4xl font-display text-5xl font-semibold leading-[1.04] text-olive-950 sm:text-6xl">
+              Configure the stack in the order it actually has to work.
+            </h1>
+            <p class="mt-5 max-w-2xl text-lg leading-relaxed text-olive-700">
+              Start with Google Admin and Chrome policy, then Mosyle Mac enforcement, then GoGuardian filtering, then district-level hardening evidence. Checkboxes save in this browser.
+            </p>
+          </div>
+
+          <aside class="glass rounded-2xl border border-olive-300/60 p-5 shadow-soft">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-extrabold uppercase tracking-wide text-olive-500">Overall progress</p>
+                <p id="overall-label" class="mt-1 text-3xl font-extrabold text-olive-950">0%</p>
+              </div>
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-olive-800 text-cream-100">
+                <i data-lucide="list-checks" class="h-8 w-8"></i>
+              </div>
+            </div>
+            <div class="mt-5 h-3 overflow-hidden rounded-full bg-olive-200">
+              <div id="overall-bar" class="h-full w-0 rounded-full bg-olive-800 transition-all"></div>
+            </div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+              <div class="rounded-xl border border-olive-200 bg-white/65 p-3">
+                <p class="text-xs font-bold uppercase tracking-wide text-olive-500">Priority</p>
+                <p class="mt-1 text-sm font-bold text-olive-950">Do P0/P1 first; pilot P2.</p>
+              </div>
+              <div class="rounded-xl border border-olive-200 bg-white/65 p-3">
+                <p class="text-xs font-bold uppercase tracking-wide text-olive-500">Proof</p>
+                <p class="mt-1 text-sm font-bold text-olive-950">Verify on a real student Mac.</p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="app-jump" class="px-4 pb-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="mb-5">
+          <p class="text-sm font-extrabold uppercase tracking-wide text-olive-600">Implementation apps</p>
+          <h2 class="font-display text-4xl font-semibold leading-tight sm:text-5xl">Jump to the platform you are configuring.</h2>
+        </div>
+        <div class="grid gap-4 md:grid-cols-3">
+          <a href="#google" class="group rounded-2xl border border-olive-300/60 bg-white/78 p-6 shadow-soft transition hover:-translate-y-1 hover:bg-white">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-cream-200 text-olive-800">
+                <i data-lucide="chrome" class="h-6 w-6"></i>
+              </div>
+              <i data-lucide="arrow-right" class="h-5 w-5 text-olive-500 transition group-hover:translate-x-1"></i>
+            </div>
+            <h3 class="mt-5 font-display text-3xl font-semibold">Google Admin</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-700">Workspace for Education, Chrome browser, extensions, Drive, Gmail, age-based access, OAuth, and admin security.</p>
+          </a>
+          <a href="#mosyle" class="group rounded-2xl border border-olive-300/60 bg-white/78 p-6 shadow-soft transition hover:-translate-y-1 hover:bg-white">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-moss-100 text-moss-700">
+                <i data-lucide="laptop" class="h-6 w-6"></i>
+              </div>
+              <i data-lucide="arrow-right" class="h-5 w-5 text-olive-500 transition group-hover:translate-x-1"></i>
+            </div>
+            <h3 class="mt-5 font-display text-3xl font-semibold">Mosyle Mac</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-700">Apple School Manager enrollment, FileVault, macOS updates, standard users, restrictions, app patching, and compliance.</p>
+          </a>
+          <a href="#goguardian" class="group rounded-2xl border border-olive-300/60 bg-white/78 p-6 shadow-soft transition hover:-translate-y-1 hover:bg-white">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-clay-100 text-clay-700">
+                <i data-lucide="shield-alert" class="h-6 w-6"></i>
+              </div>
+              <i data-lucide="arrow-right" class="h-5 w-5 text-olive-500 transition group-hover:translate-x-1"></i>
+            </div>
+            <h3 class="mt-5 font-display text-3xl font-semibold">GoGuardian</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-700">Extension deployment, filtering policy, teacher override, grade-band policy, YouTube controls, off-campus filtering, and reporting.</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="audience-matrix" class="px-4 pb-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="mb-5">
+          <p class="text-sm font-extrabold uppercase tracking-wide text-olive-600">Role matrix</p>
+          <h2 class="font-display text-4xl font-semibold leading-tight sm:text-5xl">Set the default posture by audience.</h2>
+          <p class="mt-3 max-w-3xl text-base leading-relaxed text-olive-700">Use this as the top-level policy intent before configuring individual Admin console settings. Student restrictions should be explicit; staff and admin settings should be separate so adults are not accidentally treated as under-18 users.</p>
+        </div>
+        <div class="overflow-hidden rounded-2xl border border-olive-300/60 bg-white/78 shadow-soft">
+          <div class="grid divide-y divide-olive-200 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+            <div class="p-5">
+              <div class="flex items-center gap-2">
+                <i data-lucide="users" class="h-5 w-5 text-olive-700"></i>
+                <h3 class="text-lg font-extrabold">All Users</h3>
+              </div>
+              <ul class="mt-4 space-y-3 text-sm leading-relaxed text-olive-700">
+                <li>Use managed accounts only for school services.</li>
+                <li>Keep Chrome managed and visible in <code class="rounded bg-olive-100 px-1.5 py-0.5">chrome://policy</code>.</li>
+                <li>Require Safe Browsing.</li>
+                <li>Review third-party app access instead of leaving OAuth open-ended.</li>
+                <li>Use least-privilege groups and clean OUs.</li>
+              </ul>
+            </div>
+            <div class="p-5">
+              <div class="flex items-center gap-2">
+                <i data-lucide="graduation-cap" class="h-5 w-5 text-olive-700"></i>
+                <h3 class="text-lg font-extrabold">Students</h3>
+              </div>
+              <ul class="mt-4 space-y-3 text-sm leading-relaxed text-olive-700">
+                <li>Designate under 18 unless clearly 18+.</li>
+                <li>Disable guest, incognito, unmanaged extensions, and personal Chrome profiles.</li>
+                <li>Block unconfigured third-party apps by default.</li>
+                <li>Limit Drive external sharing and public link exposure.</li>
+                <li>Apply GoGuardian filtering and non-overridable safety policy.</li>
+              </ul>
+            </div>
+            <div class="p-5">
+              <div class="flex items-center gap-2">
+                <i data-lucide="book-open-check" class="h-5 w-5 text-olive-700"></i>
+                <h3 class="text-lg font-extrabold">Staff</h3>
+              </div>
+              <ul class="mt-4 space-y-3 text-sm leading-relaxed text-olive-700">
+                <li>Designate staff OUs as 18+ when appropriate.</li>
+                <li>Require MFA and managed Chrome sign-in.</li>
+                <li>Allow only approved extensions and apps.</li>
+                <li>Permit external sharing only where school work requires it.</li>
+                <li>Allow proxy app requests for teachers only if the approval process is staffed.</li>
+              </ul>
+            </div>
+            <div class="p-5">
+              <div class="flex items-center gap-2">
+                <i data-lucide="key-round" class="h-5 w-5 text-olive-700"></i>
+                <h3 class="text-lg font-extrabold">Admins</h3>
+              </div>
+              <ul class="mt-4 space-y-3 text-sm leading-relaxed text-olive-700">
+                <li>Use separate admin accounts, not daily-use mail accounts.</li>
+                <li>Require phishing-resistant MFA/security keys for super admins.</li>
+                <li>Keep two monitored break-glass accounts.</li>
+                <li>Use delegated roles and avoid broad super admin assignment.</li>
+                <li>Review Security Center, audit logs, and alert rules on a schedule.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="google" class="px-4 pb-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm font-extrabold uppercase tracking-wide text-olive-600">Step 1</p>
+            <h2 class="font-display text-4xl font-semibold leading-tight sm:text-5xl">Google Admin and Chrome settings</h2>
+            <p class="mt-3 max-w-3xl text-base leading-relaxed text-olive-700">Set identity, Chrome browser behavior, extensions, and account protections before relying on GoGuardian visibility.</p>
+          </div>
+          <div class="rounded-full bg-olive-950 px-4 py-2 text-sm font-extrabold text-cream-100"><span data-section-count="google">0/0</span></div>
+        </div>
+        <div class="mb-6 grid gap-4 lg:grid-cols-4">
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Google Admin - All Users</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Clean OUs and configuration groups before policy.</li>
+              <li>Managed Chrome browser policy visible in <code class="rounded bg-olive-100 px-1 py-0.5">chrome://policy</code>.</li>
+              <li>Safe Browsing, Gmail safety, OAuth app control, Drive sharing rules.</li>
+              <li>Core services only unless Additional Services are approved.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Google Admin - Students</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Designate under 18 unless confirmed otherwise.</li>
+              <li>Disable guest, incognito, personal profiles, and unmanaged extensions.</li>
+              <li>Block unconfigured third-party apps; review requests and consent.</li>
+              <li>Restrict Drive external/public sharing and Groups access.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Google Admin - Staff</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Mark staff/faculty OUs as 18+ when appropriate.</li>
+              <li>Require MFA and managed Chrome sign-in.</li>
+              <li>Use approved extension allowlist, not open extension install.</li>
+              <li>Allow external sharing and proxy app requests only with workflow ownership.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Google Admin - Admins</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Separate admin accounts from daily mail accounts.</li>
+              <li>Security keys/phishing-resistant MFA for super admins.</li>
+              <li>Delegate roles instead of broad super admin access.</li>
+              <li>Review Security Center, audit logs, app access, and alerts weekly.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="grid gap-4" data-section="google">
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-ous">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Create clean Google OUs and groups before applying policy</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Admin console > Directory > Organizational units / Groups</span>
+                  <span><strong>Set:</strong> Students by grade band, Teachers, Staff/Admin, IT Test, Loaner/Shared</span>
+                  <span><strong>Verify:</strong> Test student and teacher accounts land in expected OU/group</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/chrome/a/answer/2657289" target="_blank" rel="noreferrer">Chrome policies by OU/group</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-admin-mfa">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Protect super admin and delegated admin accounts</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Admin console > Security > Authentication > 2-Step Verification</span>
+                  <span><strong>Set:</strong> Require 2SV; use security keys for super admins; keep two break-glass accounts</span>
+                  <span><strong>Verify:</strong> Admin accounts show enforced 2SV and backup codes are stored offline</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/9011373" target="_blank" rel="noreferrer">Google admin account best practices</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-admin-roles">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Separate admin accounts and delegate admin roles</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Applies:</strong> Admins</span>
+                  <span><strong>Set:</strong> Separate admin identity; minimum required roles; no routine work from super admin</span>
+                  <span><strong>Verify:</strong> Super admin list is short and every admin role has a named owner</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/2405986" target="_blank" rel="noreferrer">Google admin roles</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-age-access">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Set Google Workspace for Education age-based access</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Account settings > Age-based access settings</span>
+                  <span><strong>Students:</strong> Under 18 unless verified 18+; <strong>Staff/Admin:</strong> 18+ OUs/groups</span>
+                  <span><strong>Verify:</strong> Teachers and admins are not accidentally restricted as under-18 users</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/10651918" target="_blank" rel="noreferrer">Age-based access</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-third-party-apps">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Lock down third-party app access and OAuth scopes</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Security > Access and data control > API controls > App access control</span>
+                  <span><strong>Students:</strong> Block unconfigured apps; <strong>Staff:</strong> allow request workflow; <strong>Admins:</strong> review regularly</span>
+                  <span><strong>Verify:</strong> Unknown app sign-in is blocked or requestable, not silently allowed</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/7281227" target="_blank" rel="noreferrer">App access control</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-under18-third-party">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Review under-18 app requests and parental consent workflow</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> App access control > Apps pending review</span>
+                  <span><strong>Students:</strong> Block unconfigured apps unless approved; document consent obligations</span>
+                  <span><strong>Verify:</strong> Requested student apps are approved, limited, or blocked with an owner</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/13288950" target="_blank" rel="noreferrer">Under-18 app access</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-additional-services">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Review Additional Google Services for students annually</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Apps > Additional Google services</span>
+                  <span><strong>Students:</strong> Enable only approved instructional services; <strong>Staff:</strong> broader access if needed</span>
+                  <span><strong>Verify:</strong> Consent status is confirmed for under-18 access where required</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/15154073" target="_blank" rel="noreferrer">Additional services under 18</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-chrome-management">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Turn on Chrome management for student and staff OUs</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Admin console > Devices > Chrome > Settings > Users & browsers</span>
+                  <span><strong>Set:</strong> Manage Chrome for school users; use enrolled browser policy for school-owned Macs</span>
+                  <span><strong>Verify:</strong> On a Mac, open <code class="rounded bg-olive-100 px-1.5 py-0.5">chrome://policy</code> and confirm cloud/device policy source</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/chrome/a/answer/9024365" target="_blank" rel="noreferrer">View Chrome policies</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-chrome-current">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Keep Chrome current and report browser versions</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Applies:</strong> All users and enrolled school Macs</span>
+                  <span><strong>Set:</strong> Chrome auto-update on; monitor Chrome version and policy status in Chrome browser management</span>
+                  <span><strong>Verify:</strong> Test Mac runs current stable Chrome and appears in Google Admin reporting</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/chrome/a/answer/9024365" target="_blank" rel="noreferrer">Chrome policy reporting</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-student-signin">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Require student Chrome sign-in with school account</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Devices > Chrome > Settings > Users & browsers > Sign-in settings</span>
+                  <span><strong>Set:</strong> Restrict sign-in to school domain; prevent personal profile use for students</span>
+                  <span><strong>Verify:</strong> Personal Gmail cannot become the managed Chrome profile on a student Mac</span>
+                  <span><strong>Policy:</strong> <code>BrowserSignin</code>, <code>RestrictSigninToPattern</code></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-no-guest-incognito">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Disable student guest mode and incognito mode</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Devices > Chrome > Settings > Users & browsers</span>
+                  <span><strong>Set:</strong> Guest mode disabled; incognito disabled for student OUs</span>
+                  <span><strong>Verify:</strong> Chrome menu does not offer guest/incognito for a student account</span>
+                  <span><strong>Policy:</strong> <code>BrowserGuestModeEnabled</code>, <code>IncognitoModeAvailability</code></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-extensions-force">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Force-install GoGuardian and required school extensions</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Devices > Chrome > Apps & extensions > Users & browsers</span>
+                  <span><strong>Set:</strong> Force install required GoGuardian extensions and curriculum essentials by OU</span>
+                  <span><strong>Verify:</strong> <code>chrome://extensions</code> shows installed and not removable</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/chrome/a/answer/6306504" target="_blank" rel="noreferrer">Force-install extensions</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-extension-block">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Block student extension installs except approved allowlist</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Devices > Chrome > Apps & extensions > Settings</span>
+                  <span><strong>Set:</strong> Block all by default; allow specific school-approved extensions</span>
+                  <span><strong>Verify:</strong> Student cannot install random Chrome Web Store extension</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/chrome/a/answer/7666985" target="_blank" rel="noreferrer">Extension policy overview</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-safe-browsing">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Require Safe Browsing and restrict risky browser features</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Devices > Chrome > Settings > Users & browsers > Security</span>
+                  <span><strong>Set:</strong> Safe Browsing on; disable student password manager and payment autofill</span>
+                  <span><strong>Verify:</strong> <code>chrome://policy</code> shows expected security and autofill policies</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/9184226" target="_blank" rel="noreferrer">Google security checklist</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-drive-sharing">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Restrict Google Drive external sharing by audience</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Apps > Google Workspace > Drive and Docs > Sharing settings</span>
+                  <span><strong>Students:</strong> No public/external sharing or trusted domains only; <strong>Staff:</strong> warn/allow where needed</span>
+                  <span><strong>Verify:</strong> Student cannot create public links or share externally unless explicitly allowed</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/60781" target="_blank" rel="noreferrer">Drive external sharing</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-shared-drives">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Control shared drive creation and external membership</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Apps > Google Workspace > Drive and Docs > Shared drives</span>
+                  <span><strong>Students:</strong> Usually no shared drive creation; <strong>Staff:</strong> approved owners only</span>
+                  <span><strong>Verify:</strong> External members and content movement rules match district data policy</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/7662202" target="_blank" rel="noreferrer">Manage shared drives</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-gmail-safety">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Enable Gmail advanced phishing and malware protections</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Apps > Google Workspace > Gmail > Safety</span>
+                  <span><strong>All:</strong> Spoofing, attachment, link, external image, and domain impersonation protections</span>
+                  <span><strong>Verify:</strong> Safety settings apply to staff and students; alerts route to IT/security owners</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/9157861" target="_blank" rel="noreferrer">Gmail safety settings</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-groups">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Restrict Google Groups creation and external group access</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Apps > Google Workspace > Groups for Business > Sharing settings</span>
+                  <span><strong>Students:</strong> No public groups; no student-created groups; <strong>Staff:</strong> controlled group ownership</span>
+                  <span><strong>Verify:</strong> Students cannot create groups or join public external groups</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/167097" target="_blank" rel="noreferrer">Groups sharing settings</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-password-session">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Define password, session, and recovery policy</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Security > Authentication > Password management / session settings</span>
+                  <span><strong>All:</strong> Enforce strong passwords where passwords are used; review recovery methods and admin session length</span>
+                  <span><strong>Verify:</strong> Password policy and Google Cloud/Admin session length are documented</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/139399" target="_blank" rel="noreferrer">Password requirements</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="google-security-center">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Review Security Center, audit logs, and alert routing</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Security > Security center / Reporting / Rules</span>
+                  <span><strong>Admins:</strong> Weekly review of security health, investigation tool, alerts, OAuth, suspicious logins</span>
+                  <span><strong>Verify:</strong> Alerts go to a monitored mailbox/ticket queue and have a response owner</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.google.com/a/answer/7486127" target="_blank" rel="noreferrer">Security center</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="mosyle" class="px-4 pb-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm font-extrabold uppercase tracking-wide text-olive-600">Step 2</p>
+            <h2 class="font-display text-4xl font-semibold leading-tight sm:text-5xl">Mosyle settings for Mac</h2>
+            <p class="mt-3 max-w-3xl text-base leading-relaxed text-olive-700">Use Mosyle for device ownership, macOS controls, FileVault, app deployment, and local account enforcement.</p>
+          </div>
+          <div class="rounded-full bg-olive-950 px-4 py-2 text-sm font-extrabold text-cream-100"><span data-section-count="mosyle">0/0</span></div>
+        </div>
+        <div class="mb-6 grid gap-4 lg:grid-cols-4">
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Mosyle - All Users</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>All school Macs assigned through Apple School Manager and ADE.</li>
+              <li>MDM profile required and non-removable on school-owned devices.</li>
+              <li>FileVault enabled with personal recovery key escrow.</li>
+              <li>Chrome, productivity apps, PPPC profiles, printers, and certificates deployed by Mosyle.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Mosyle - Students</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Standard user only; no permanent local admin.</li>
+              <li>Block unapproved browsers and app installation paths.</li>
+              <li>Disable guest login and unnecessary sharing services.</li>
+              <li>Apply stricter screen lock, AirDrop, iCloud, and external media rules by grade.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Mosyle - Staff</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Standard user by default with temporary elevation workflow.</li>
+              <li>Mosyle Auth/SSO where licensed; sync local account with identity provider.</li>
+              <li>Patch apps and macOS automatically with clear deferral windows.</li>
+              <li>Broader app catalog scoped by staff group, not unmanaged installs.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">Mosyle - Admins</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Separate IT admin accounts and audit local admin inventory.</li>
+              <li>Weekly reports for FileVault, OS version, MDM check-in, and app compliance.</li>
+              <li>Use Mosyle hardening/compliance or NIST mSCP as benchmark reference.</li>
+              <li>Clear Activation Lock and rotate recovery keys during reassignment.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="grid gap-4" data-section="mosyle">
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-asm">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Assign school-owned Macs from Apple School Manager to Mosyle</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Apple School Manager > Devices; Mosyle > Enrollment / ADE</span>
+                  <span><strong>Set:</strong> Automated Device Enrollment profile for student, teacher, staff, and shared Macs</span>
+                  <span><strong>Verify:</strong> Freshly erased Mac shows Remote Management and enrolls into correct Mosyle group</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.apple.com/guide/deployment-education/welcome/web" target="_blank" rel="noreferrer">Apple K-12 deployment</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-mdm-removal">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Prevent MDM profile removal on school-owned Macs</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Enrollment profile / Restrictions</span>
+                  <span><strong>Set:</strong> MDM enrollment required and non-removable for ADE devices</span>
+                  <span><strong>Verify:</strong> Student cannot remove management profile in System Settings</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.apple.com/education/k12/deploy-and-manage/" target="_blank" rel="noreferrer">Apple deploy and manage</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-filevault">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Enforce FileVault and escrow the personal recovery key</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Management > Security / FileVault profile</span>
+                  <span><strong>Set:</strong> FileVault required; PRK escrowed; rotate on reassignment or repair</span>
+                  <span><strong>Verify:</strong> <code class="rounded bg-olive-100 px-1.5 py-0.5">fdesetup status</code> returns FileVault is On and Mosyle shows escrow</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.apple.com/guide/deployment/dep5872f7b3c/web" target="_blank" rel="noreferrer">Apple FileVault queries</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-standard-users">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Make students standard users with no local admin rights</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Auth / Account creation / Restrictions</span>
+                  <span><strong>Set:</strong> Students standard; IT admin account only; staff use temporary elevation if needed</span>
+                  <span><strong>Verify:</strong> Student cannot install apps or unlock protected settings with their password</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://business.mosyle.com/security/" target="_blank" rel="noreferrer">Mosyle Mac security</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-updates">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Enforce macOS updates with short security deadlines</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > OS Updates / Restrictions</span>
+                  <span><strong>Set:</strong> Critical/background security updates 0-3 days; minor macOS updates 7 days after validation</span>
+                  <span><strong>Verify:</strong> Test Mac receives deferral prompts and enforces restart at deadline</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.apple.com/guide/deployment/depafd2fad80/web" target="_blank" rel="noreferrer">Apple MDM updates</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-apps">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Deploy and patch approved apps through Mosyle</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Apps / Mac App Catalog / PKG deployment</span>
+                  <span><strong>Set:</strong> Chrome, Drive, Zoom/Teams if needed, printers, certificates, PPPC profiles, GoGuardian components</span>
+                  <span><strong>Verify:</strong> Student cannot install unapproved apps; approved apps update without admin prompts</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://business.mosyle.com/" target="_blank" rel="noreferrer">Mosyle platform overview</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-compliance">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Track hardening and compliance against current macOS version</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Security / Hardening & Compliance if licensed; NIST mSCP for benchmark</span>
+                  <span><strong>Set:</strong> Monitor FileVault, firewall, Gatekeeper, update status, local admin, profiles, certificates, and app compliance</span>
+                  <span><strong>Verify:</strong> Compliance report separates current macOS devices from older-version exceptions</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://business.mosyle.com/security/" target="_blank" rel="noreferrer">Mosyle hardening/compliance</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-restrictions">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Restrict risky student Mac features</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Restrictions / Profiles</span>
+                  <span><strong>Set:</strong> Disable guest login, unmanaged sharing services, unapproved browsers, App Store installs, and profile removal</span>
+                  <span><strong>Verify:</strong> Student cannot use another browser to bypass Chrome/GoGuardian expectations</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.apple.com/guide/security/sec469d47bd8/web" target="_blank" rel="noreferrer">Apple malware protections</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P2">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="mosyle-activation-lock">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-moss-100 px-2.5 py-1 text-xs font-extrabold text-moss-700">P2</span>
+                  <span class="task-title text-lg font-extrabold">Control Activation Lock and device reassignment workflow</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> Mosyle > Device details / Security queries / Lost mode process</span>
+                  <span><strong>Set:</strong> Store bypass code where available; clear lock before repair, sale, or reassignment</span>
+                  <span><strong>Verify:</strong> Reassigned Mac does not prompt for prior user Apple Account</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://support.apple.com/guide/deployment/dep5872f7b3c/web" target="_blank" rel="noreferrer">Apple Activation Lock query</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="goguardian" class="px-4 pb-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm font-extrabold uppercase tracking-wide text-olive-600">Step 3</p>
+            <h2 class="font-display text-4xl font-semibold leading-tight sm:text-5xl">GoGuardian settings</h2>
+            <p class="mt-3 max-w-3xl text-base leading-relaxed text-olive-700">Use GoGuardian for student web safety, classroom focus, reporting, and filtering policy. Keep it aligned with Google OUs and Mosyle browser controls.</p>
+          </div>
+          <div class="rounded-full bg-olive-950 px-4 py-2 text-sm font-extrabold text-cream-100"><span data-section-count="goguardian">0/0</span></div>
+        </div>
+        <div class="mb-6 grid gap-4 lg:grid-cols-4">
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">GoGuardian - All Users</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Deploy required GoGuardian components through Google Admin and Mosyle.</li>
+              <li>Sync users, OUs, classes, and roles from the authoritative source.</li>
+              <li>Document when monitoring/filtering applies on campus and off campus.</li>
+              <li>Keep reports and audit access role-restricted.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">GoGuardian - Students</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Root non-overridable safety policy for CIPA categories.</li>
+              <li>Grade-band policies for elementary, middle, and high school.</li>
+              <li>Block proxies, VPNs, anonymizers, malware, phishing, explicit content, and bypass tools.</li>
+              <li>Use current YouTube controls and category updates to reduce workarounds.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">GoGuardian - Staff</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Teacher access limited to assigned classes and OUs.</li>
+              <li>Teacher Override only for approved class-level policies.</li>
+              <li>Use Scenes Policy Checker and URL checking before lessons where available.</li>
+              <li>Train teachers on privacy, override boundaries, and support workflow.</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-olive-200 bg-white/78 p-5">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-olive-500">GoGuardian - Admins</p>
+            <ul class="mt-3 space-y-2 text-sm leading-relaxed text-olive-700">
+              <li>Review policy templates before applying elementary/middle/high baselines.</li>
+              <li>Review Smart Alerts, reports, unblock requests, and bypass attempts weekly.</li>
+              <li>Keep GoGuardian App current where used; track 2026 release notes.</li>
+              <li>Audit Super User and "log in as" privileges.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="grid gap-4" data-section="goguardian">
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-sync">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Sync users, OUs, and roles from Google/Clever/ClassLink</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Org Management > Integrations / Provisioning</span>
+                  <span><strong>Set:</strong> Student groups, teacher access, delegated admin roles, school/campus mappings</span>
+                  <span><strong>Verify:</strong> Pilot student appears in correct group and teacher can see only assigned classes</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/product-update/admin-provisioning-for-google-clever-and-classlink" target="_blank" rel="noreferrer">GoGuardian provisioning</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-install">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Complete GoGuardian extension deployment through Google Admin</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Org Management > Installations; Google Admin > Chrome extensions</span>
+                  <span><strong>Set:</strong> Follow GoGuardian-provided extension IDs and deployment instructions for your products</span>
+                  <span><strong>Verify:</strong> GoGuardian dashboard shows student device active and extension installed</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/product-update/installation-guide-in-org-management" target="_blank" rel="noreferrer">GoGuardian install guide</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-root-policy">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Create non-overridable root safety policy</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Admin > Filtering / Policies</span>
+                  <span><strong>Set:</strong> Block explicit content, malware, phishing, proxies, VPNs, anonymizers, gambling, illegal drugs</span>
+                  <span><strong>Verify:</strong> Block page appears for test sites and teacher override is not available for root safety blocks</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/admin" target="_blank" rel="noreferrer">GoGuardian Admin</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-grade-policies">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Create grade-band and classroom policies</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Admin > Policies / Groups</span>
+                  <span><strong>Set:</strong> Elementary, middle, high, staff, testing, and temporary exception groups</span>
+                  <span><strong>Verify:</strong> A site allowed for high school remains blocked for elementary</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/blog/a-guide-to-web-and-content-filtering-for-schools" target="_blank" rel="noreferrer">School filtering guide</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-teacher-override">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Limit teacher override to class-level policies only</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Admin / Teacher settings</span>
+                  <span><strong>Set:</strong> Teacher override allowed only for specific OU-level instructional policies</span>
+                  <span><strong>Verify:</strong> Teacher can unblock approved class site but cannot override CIPA/safety blocks</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/product-update/teacher-override-filtering" target="_blank" rel="noreferrer">Teacher override guidance</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-off-campus">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Decide and test off-campus filtering coverage</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Admin > Out-of-school / DNS protection if licensed</span>
+                  <span><strong>Set:</strong> Define school-hour and after-hour filtering for take-home Macs</span>
+                  <span><strong>Verify:</strong> Student Mac is filtered on a non-school network if that is the policy</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/admin" target="_blank" rel="noreferrer">GoGuardian filtering coverage</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-youtube-smarter-filtering">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Review current GoGuardian smarter filtering and YouTube controls</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian Admin > Filtering / YouTube / categories</span>
+                  <span><strong>Set:</strong> Use current categories and YouTube controls to reduce downloader/bypass workarounds</span>
+                  <span><strong>Verify:</strong> Student test account cannot use known YouTube downloader or bypass patterns</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/product-update/smarter-filtering-youtube-controls" target="_blank" rel="noreferrer">2025 filtering controls</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P2">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="gg-current-app">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-moss-100 px-2.5 py-1 text-xs font-extrabold text-moss-700">P2</span>
+                  <span class="task-title text-lg font-extrabold">Track GoGuardian App versions where the app is deployed</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> GoGuardian release notes / Mosyle app deployment inventory</span>
+                  <span><strong>Set:</strong> Keep GoGuardian App current on macOS if your deployment uses it</span>
+                  <span><strong>Verify:</strong> App version matches current GoGuardian macOS release notes before broad rollout</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.goguardian.com/product-updates" target="_blank" rel="noreferrer">2026 product updates</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="hardening" class="px-4 pb-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm font-extrabold uppercase tracking-wide text-olive-600">Step 4</p>
+            <h2 class="font-display text-4xl font-semibold leading-tight sm:text-5xl">School hardening and evidence</h2>
+            <p class="mt-3 max-w-3xl text-base leading-relaxed text-olive-700">Use CISA and CoSN for K-12 program priorities, and NIST mSCP for Mac-specific security baseline generation and validation.</p>
+          </div>
+          <div class="rounded-full bg-olive-950 px-4 py-2 text-sm font-extrabold text-cream-100"><span data-section-count="hardening">0/0</span></div>
+        </div>
+        <div class="grid gap-4" data-section="hardening">
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="hardening-cisa-k12">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Map district priorities to CISA K-12 recommendations</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> District cybersecurity plan / board policy / IT roadmap</span>
+                  <span><strong>Set:</strong> MFA, patching, backups, incident reporting, vendor risk, training, and recovery priorities</span>
+                  <span><strong>Verify:</strong> Written roadmap has owners, due dates, and review cadence</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.cisa.gov/K12Cybersecurity" target="_blank" rel="noreferrer">CISA K-12 cybersecurity</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P0">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="hardening-cpg">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-clay-100 px-2.5 py-1 text-xs font-extrabold text-clay-700">P0</span>
+                  <span class="task-title text-lg font-extrabold">Use CISA Cybersecurity Performance Goals as the minimum control set</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> IT security standards / annual audit checklist</span>
+                  <span><strong>Set:</strong> MFA, known exploited vulnerability response, asset inventory, backups, logging, incident reporting</span>
+                  <span><strong>Verify:</strong> Each goal has evidence or a documented gap/exception</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.cisa.gov/cybersecurity-performance-goals-cpgs" target="_blank" rel="noreferrer">CISA CPGs</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="hardening-cosn">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Use CoSN resources for K-12 policy and planning language</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> District IT governance / cybersecurity planning</span>
+                  <span><strong>Set:</strong> Risk assessment, vendor review, incident response, student data privacy, leadership reporting</span>
+                  <span><strong>Verify:</strong> Checklist aligns with school operations, not only enterprise language</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://www.cosn.org/edtech-topics/cybersecurity/cybersecurity-planning/" target="_blank" rel="noreferrer">CoSN cybersecurity planning</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+
+          <article class="check-row rounded-2xl border border-olive-200 bg-white/78 p-5 shadow-sm" data-priority="P1">
+            <label class="flex gap-4">
+              <input class="mt-1 h-5 w-5 accent-olive-800" type="checkbox" data-check="hardening-nist-mscp">
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-cream-200 px-2.5 py-1 text-xs font-extrabold text-olive-800">P1</span>
+                  <span class="task-title text-lg font-extrabold">Compare Mosyle Mac baseline to NIST mSCP</span>
+                </span>
+                <span class="mt-3 grid gap-3 text-sm leading-relaxed text-olive-700 md:grid-cols-4">
+                  <span><strong>Path:</strong> NIST macOS Security Compliance Project / Mosyle profiles</span>
+                  <span><strong>Set:</strong> Tailored macOS baseline; do not blindly apply STIG-style controls to classrooms</span>
+                  <span><strong>Verify:</strong> Pilot profile does not break testing, accessibility, printing, video, or curriculum apps</span>
+                  <span><strong>Source:</strong> <a class="source-link" href="https://pages.nist.gov/macos_security/" target="_blank" rel="noreferrer">NIST mSCP</a></span>
+                </span>
+              </span>
+            </label>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="sources" class="px-4 pb-16 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl rounded-2xl border border-olive-300/60 bg-olive-950 p-6 text-cream-50 shadow-soft">
+        <div class="grid gap-8 lg:grid-cols-[0.7fr_1.3fr]">
+          <div>
+            <p class="text-sm font-extrabold uppercase tracking-wide text-cream-300">Source library</p>
+            <h2 class="mt-3 font-display text-4xl font-semibold leading-tight">Official guidance links.</h2>
+            <p class="mt-4 text-sm leading-relaxed text-cream-100/75">These are the references used by the checklist. Keep vendor-specific implementation details current from these pages.</p>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.apple.com/guide/deployment-education/welcome/web" target="_blank" rel="noreferrer"><strong>Apple Deployment Guide for K-12 Education</strong><span class="mt-1 block text-sm text-cream-100/70">Apple School Manager, MDM, and education deployment.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.apple.com/guide/deployment/depafd2fad80/web" target="_blank" rel="noreferrer"><strong>Apple MDM Software Updates</strong><span class="mt-1 block text-sm text-cream-100/70">Managed update deadlines and OS update service.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://business.mosyle.com/security/" target="_blank" rel="noreferrer"><strong>Mosyle Security and Management</strong><span class="mt-1 block text-sm text-cream-100/70">Mac security, FileVault, patching, Chrome management.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/chrome/a/answer/2657289" target="_blank" rel="noreferrer"><strong>Google Chrome Policy Management</strong><span class="mt-1 block text-sm text-cream-100/70">User and enrolled browser policy behavior.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/chrome/a/answer/6306504" target="_blank" rel="noreferrer"><strong>Google Force-Install Extensions</strong><span class="mt-1 block text-sm text-cream-100/70">Chrome app and extension deployment.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/a/answer/9184226" target="_blank" rel="noreferrer"><strong>Google Workspace Security Checklists</strong><span class="mt-1 block text-sm text-cream-100/70">Admin security best practices.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/a/answer/10651918" target="_blank" rel="noreferrer"><strong>Google Age-Based Access</strong><span class="mt-1 block text-sm text-cream-100/70">Education settings for under-18 and 18+ users.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/a/answer/7281227" target="_blank" rel="noreferrer"><strong>Google App Access Control</strong><span class="mt-1 block text-sm text-cream-100/70">Trusted, limited, specific-data, and blocked OAuth app access.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/a/answer/60781" target="_blank" rel="noreferrer"><strong>Google Drive External Sharing</strong><span class="mt-1 block text-sm text-cream-100/70">External sharing, trusted domains, visitor sharing, and warnings.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://support.google.com/a/answer/9157861" target="_blank" rel="noreferrer"><strong>Gmail Safety Settings</strong><span class="mt-1 block text-sm text-cream-100/70">Advanced phishing, malware, spoofing, attachment, and link protections.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.goguardian.com/admin" target="_blank" rel="noreferrer"><strong>GoGuardian Admin</strong><span class="mt-1 block text-sm text-cream-100/70">Filtering policies, reporting, audit logs.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.goguardian.com/product-update/teacher-override-filtering" target="_blank" rel="noreferrer"><strong>GoGuardian Teacher Override</strong><span class="mt-1 block text-sm text-cream-100/70">Override guidance for class-level policies.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.goguardian.com/product-update/smarter-filtering-youtube-controls" target="_blank" rel="noreferrer"><strong>GoGuardian Smarter Filtering</strong><span class="mt-1 block text-sm text-cream-100/70">Recent filtering, category, YouTube, and workaround controls.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.goguardian.com/product-updates" target="_blank" rel="noreferrer"><strong>GoGuardian Product Updates</strong><span class="mt-1 block text-sm text-cream-100/70">2026 release stream for GoGuardian App and product changes.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.cisa.gov/K12Cybersecurity" target="_blank" rel="noreferrer"><strong>CISA K-12 Cybersecurity</strong><span class="mt-1 block text-sm text-cream-100/70">Federal K-12 cybersecurity toolkit.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.cisa.gov/cybersecurity-performance-goals-cpgs" target="_blank" rel="noreferrer"><strong>CISA Cybersecurity Performance Goals</strong><span class="mt-1 block text-sm text-cream-100/70">Minimum cybersecurity outcomes.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://www.cosn.org/edtech-topics/cybersecurity/cybersecurity-planning/" target="_blank" rel="noreferrer"><strong>CoSN Cybersecurity Planning</strong><span class="mt-1 block text-sm text-cream-100/70">K-12 planning and governance resources.</span></a>
+            <a class="rounded-xl border border-cream-100/15 bg-white/7 p-4 hover:bg-white/10" href="https://pages.nist.gov/macos_security/" target="_blank" rel="noreferrer"><strong>NIST macOS Security Compliance Project</strong><span class="mt-1 block text-sm text-cream-100/70">Current macOS hardening baselines.</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-olive-300/60 bg-olive-50/85 px-4 py-6 text-sm text-olive-700 sm:px-6 lg:px-8">
+    <div class="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p><strong>School Security Checklist</strong> | Last reviewed May 2026</p>
+      <p>Order of work: Google Admin, Mosyle, GoGuardian, CISA/CoSN/NIST.</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    lucide.createIcons();
+
+    const checks = Array.from(document.querySelectorAll('[data-check]'));
+    const storageKey = 'school-security-checklist-state-v2';
+
+    function loadState() {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function saveState() {
+      const state = {};
+      checks.forEach((box) => {
+        state[box.dataset.check] = box.checked;
+      });
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    }
+
+    function updateProgress() {
+      const complete = checks.filter((box) => box.checked).length;
+      const total = checks.length;
+      const percent = total ? Math.round((complete / total) * 100) : 0;
+      document.getElementById('overall-label').textContent = `${percent}%`;
+      document.getElementById('overall-bar').style.width = `${percent}%`;
+
+      document.querySelectorAll('[data-section]').forEach((section) => {
+        const sectionName = section.dataset.section;
+        const sectionChecks = Array.from(section.querySelectorAll('[data-check]'));
+        const sectionComplete = sectionChecks.filter((box) => box.checked).length;
+        const label = document.querySelector(`[data-section-count="${sectionName}"]`);
+        if (label) {
+          label.textContent = `${sectionComplete}/${sectionChecks.length}`;
+        }
+      });
+    }
+
+    const saved = loadState();
+    checks.forEach((box) => {
+      box.checked = Boolean(saved[box.dataset.check]);
+      box.addEventListener('change', () => {
+        saveState();
+        updateProgress();
+      });
+    });
+    updateProgress();
+
+    document.getElementById('print-button').addEventListener('click', () => window.print());
+    document.getElementById('reset-button').addEventListener('click', () => {
+      checks.forEach((box) => {
+        box.checked = false;
+      });
+      saveState();
+      updateProgress();
+    });
+  </script>
+</body>
+</html>
