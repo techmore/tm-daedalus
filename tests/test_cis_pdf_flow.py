@@ -149,7 +149,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn('href="/api/agents/bridge/download"', response.text)
         self.assertIn("install-nmapui.sh", response.text)
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261002-034", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261002-036", response.text)
         self.assertIn('id="cis-install-macos26"', response.text)
         self.assertIn('id="cis-device-list"', response.text)
         self.assertIn('src="/static/js/dashboard.js?', response.text)

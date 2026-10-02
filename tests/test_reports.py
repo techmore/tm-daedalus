@@ -3,8 +3,10 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import KeepTogether, LongTable
 
 from daedalus.reports import (
+    _change_field_label,
     _record_value,
     _time_text,
+    _tls_valid_at_collection,
     _tls_issuer_text,
     build_external_posture_pdf,
     build_scanner_results_pdf,
@@ -55,8 +57,9 @@ class ExternalPostureReportTests(unittest.TestCase):
             "dns": {"run": {"id": 7, "status": "completed", "snapshot": {
                 "records": {}, "resolver_errors": {},
             }}, "changes": [{"field_path": "A", "previous_value": "192.0.2.1", "current_value": "192.0.2.2"}]},
-            "web": {"run": {"id": 8, "status": "completed", "snapshot": {
-                "http_status": 200, "tls": {"certificate_valid": True},
+            "web": {"run": {"id": 8, "status": "completed", "completed_at": "2026-10-02T23:23:01Z", "snapshot": {
+                "http_status": 200,
+                "tls": {"valid_from": "2026-09-01T00:00:00Z", "valid_until": "2026-11-01T00:00:00Z"},
             }}, "changes": []},
         }}
         with patch.object(reports, "_paragraph", wraps=reports._paragraph) as paragraphs:
@@ -67,7 +70,16 @@ class ExternalPostureReportTests(unittest.TestCase):
         self.assertIn("DNS AND EMAIL", values)
         self.assertIn("CONFIRMED CHANGES", values)
         self.assertIn("1", values)
+        self.assertTrue(any("TLS certificate valid at collection" in value for value in values))
         self.assertTrue(any("does not calculate a combined security score" in value for value in values))
+
+    def test_tls_coverage_uses_collection_time_and_missing_times_stay_unknown(self):
+        tls = {"valid_from": "2026-09-01T00:00:00Z", "valid_until": "2026-11-01T00:00:00Z"}
+        self.assertIs(_tls_valid_at_collection(tls, {"completed_at": "2026-10-02T23:23:01Z"}), True)
+        self.assertIs(_tls_valid_at_collection(tls, {"completed_at": "2026-11-02T00:00:00Z"}), False)
+        self.assertIsNone(_tls_valid_at_collection(tls, {}))
+        self.assertEqual(_change_field_label("page_content.sampled_bytes"), "Page content size")
+        self.assertEqual(_change_field_label("records.WWW_A"), "DNS record www A")
 
     def test_dns_lookup_failures_are_unknown_instead_of_absent(self):
         value, status = _record_value({}, {"www A": "SERVFAIL"}, "WWW_A")

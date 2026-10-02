@@ -63,7 +63,7 @@ class WorkspaceNotificationTests(unittest.TestCase):
             self.assertEqual(len(notices), 1)
             self.assertEqual(notices[0].reason, "changes")
             self.assertEqual(notices[0].source_id, run["id"])
-            self.assertIn("A", notices[0].summary)
+            self.assertIn("DNS records", notices[0].summary)
             self.assertIsNotNone(notices[0].detected_at)
         from unittest.mock import patch
         org_id, user_id = self.workspace()
@@ -90,6 +90,32 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertIn("could not be confirmed", notice["summary"])
         self.assertIn("No confirmed changes", notice["summary"])
         self.assertTrue(notice["detected_at"])
+
+    def test_website_change_notices_and_history_use_human_readable_labels(self):
+        baseline = {
+            "domain": "cybersecuritypilot.org", "http_status": 200,
+            "final_url": "https://cybersecuritypilot.org/", "content_type": "text/html",
+            "page_content": {"sampled_bytes": 100, "sha256": "a" * 64, "comparison_eligible": True},
+        }
+        self.run_web(baseline)
+        changed = {
+            "domain": "cybersecuritypilot.org", "http_status": 200,
+            "final_url": "https://cybersecuritypilot.org/", "content_type": "text/html",
+            "page_content": {"sampled_bytes": 120, "sha256": "b" * 64, "comparison_eligible": True},
+        }
+        run = self.run_web(changed)
+        self.assertEqual(run["change_count"], 2)
+
+        notice = self.client.get("/api/notifications").json()["notifications"][0]
+        self.assertIn("2 material changes detected: page content", notice["summary"])
+        self.assertNotIn("page_content", notice["summary"])
+
+        self.assertEqual(server.external_check_field_label("records.A"), "DNS record A")
+        self.assertEqual(server.external_check_field_label("records.WWW_A"), "DNS record www A")
+        history = self.client.get("/api/external-checks/web").json()
+        labels = {change["field_path"]: change["field_label"] for change in history["changes"]}
+        self.assertEqual(labels["page_content.sampled_bytes"], "Page content size")
+        self.assertEqual(labels["page_content.sha256"], "Page content fingerprint")
 
     def test_partial_website_evidence_creates_warning_only_notice_not_a_change_notice(self):
         snapshot = {

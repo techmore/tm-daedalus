@@ -59,6 +59,42 @@ def _time_text(value: Any) -> str:
     )
 
 
+def _tls_valid_at_collection(tls: Any, run: dict[str, Any]) -> bool | None:
+    """Assess the captured certificate dates at the successful check time."""
+    if not isinstance(tls, dict):
+        return None
+    try:
+        starts = datetime.fromisoformat(str(tls["valid_from"]).replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(str(tls["valid_until"]).replace("Z", "+00:00"))
+        observed = datetime.fromisoformat(str(run["completed_at"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    if starts.tzinfo is None:
+        starts = starts.replace(tzinfo=UTC)
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=UTC)
+    return starts <= observed <= expires
+
+
+def _change_field_label(field_path: Any) -> str:
+    """Turn stored machine paths into concise labels in exported reports."""
+    path = str(field_path or "Unknown field")
+    labels = {
+        "page_content.sampled_bytes": "Page content size",
+        "page_content.sha256": "Page content fingerprint",
+    }
+    if path in labels:
+        return labels[path]
+    if path.startswith("records."):
+        record = path.removeprefix("records.")
+        return "DNS record " + record.replace("WWW_", "www ").replace("_", " ")
+    if path.startswith("resolver_errors."):
+        return "DNS lookup " + path.removeprefix("resolver_errors.") + " status"
+    return path.replace("_", " ").replace(".", " · ").strip().capitalize()
+
+
 def _tls_issuer_text(value: Any) -> str:
     if not isinstance(value, str):
         return _text(value)
@@ -397,7 +433,7 @@ def _append_changes(story: list[Any], changes: list[dict[str, Any]], styles: dic
     ]]
     for change in changes[:100]:
         rows.append([
-            _paragraph(change.get("field_path"), styles["cell"]),
+            _paragraph(_change_field_label(change.get("field_path")), styles["cell"]),
             _paragraph(change.get("previous_value"), styles["cell"]),
             _paragraph(change.get("current_value"), styles["cell"]),
         ])
@@ -467,7 +503,11 @@ def _append_posture_overview(story: list[Any], checks: dict[str, Any], styles: d
     http_status = web_snapshot.get("http_status")
     web_value = f"HTTPS {http_status}" if type(http_status) is int else "No HTTP result"
     tls = web_snapshot.get("tls") or {}
-    web_detail = "TLS certificate valid" if tls.get("certificate_valid") is True else "TLS validity not confirmed"
+    tls_valid = _tls_valid_at_collection(tls, web_run)
+    web_detail = "TLS certificate valid at collection" if tls_valid is True else (
+        "TLS certificate outside validity dates at collection" if tls_valid is False
+        else "TLS validity dates not confirmed"
+    )
     web_status = str(web_run.get("status") or "no saved run").replace("_", " ").title()
     if web_run.get("id") is not None:
         web_detail += f" · run #{web_run['id']} {web_status}"

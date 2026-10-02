@@ -2388,7 +2388,7 @@
         var main = document.createElement("div");
         main.className = "check-change-main";
         var field = document.createElement("strong");
-        field.textContent = change.field_path;
+        field.textContent = change.field_label || change.field_path;
         var actor = document.createElement("small");
         actor.textContent = "Run #" + change.run_id + " · detected by " + (change.actor || "system");
         var values = document.createElement("div");
@@ -2956,6 +2956,17 @@
     return "No security changes, warnings, or audit notices have been recorded for this workspace.";
   }
 
+  function readableNotificationSummary(summary) {
+    return String(summary || "")
+      .replace(/(?:page_content\.[a-z0-9_]+)(?:,\s*page_content\.[a-z0-9_]+)*/gi, "page content")
+      .replace(/\brecords\.([A-Z][A-Z0-9_]*)\b/g, function (_match, field) {
+        return "DNS record " + field.replace(/^WWW_/, "www ").replaceAll("_", " ");
+      })
+      .replace(/(\d+) material change\(s\) detected/g, function (_match, count) {
+        return count + " material " + (Number(count) === 1 ? "change" : "changes") + " detected";
+      });
+  }
+
   async function loadNotifications() {
     if (!orgId) return;
     var list = document.getElementById("notification-list");
@@ -2980,7 +2991,7 @@
         var title = document.createElement("strong");
         title.textContent = notice.title;
         var summary = document.createElement("p");
-        summary.textContent = notice.summary;
+        summary.textContent = readableNotificationSummary(notice.summary);
         var time = document.createElement("time");
         time.dateTime = notice.detected_at;
         time.textContent = "Detected " + dateLabel(notice.detected_at);

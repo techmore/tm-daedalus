@@ -1116,6 +1116,58 @@ def check_type_label(check_type: str) -> str:
     return {"dns": "DNS and email", "web": "Website", "web-active": "Website exposure"}.get(check_type, "Security")
 
 
+def external_check_field_label(field_path: str) -> str:
+    """Turn stored comparison paths into labels people can scan in the dashboard."""
+    labels = {
+        "page_content.sampled_bytes": "Page content size",
+        "page_content.sha256": "Page content fingerprint",
+        "http_status": "Website HTTP status",
+        "title": "Website page title",
+        "external_resources": "Linked third-party resources",
+        "external_host_count": "Linked third-party hosts",
+        "tls.valid": "TLS certificate validity",
+        "tls.days_remaining": "TLS certificate lifetime",
+    }
+    if field_path in labels:
+        return labels[field_path]
+    if field_path.startswith("records."):
+        field = field_path.removeprefix("records.")
+        is_www = field.startswith("WWW_")
+        field = field.removeprefix("WWW_").replace("_", " ")
+        return f"DNS record {'www ' if is_www else ''}{field}"
+    if field_path.startswith("resolver_errors."):
+        query = field_path.removeprefix("resolver_errors.")
+        return f"DNS lookup status {query}"
+    if field_path.startswith("security_headers."):
+        header = field_path.removeprefix("security_headers.").replace("-", " ")
+        return f"Security header {header}"
+    if field_path.startswith("tls."):
+        attribute = field_path.removeprefix("tls.").replace("_", " ").replace(".", " ")
+        return f"TLS {attribute}"
+    return field_path.replace("_", " ").replace(".", " · ").strip().capitalize()
+
+
+def external_check_change_group(check_type: str, field_path: str) -> str:
+    """Use compact category names in inbox notices; the history retains each detail."""
+    if check_type == "web":
+        if field_path.startswith("page_content."):
+            return "page content"
+        if field_path.startswith("security_headers."):
+            return "security headers"
+        if field_path.startswith("tls."):
+            return "TLS certificate"
+        if field_path.startswith(("external_resources", "external_host_count")):
+            return "linked third-party resources"
+        return "website configuration"
+    if field_path.startswith("records."):
+        return "DNS records"
+    if field_path.startswith("resolver_errors."):
+        return "DNS lookup status"
+    if field_path.startswith("email_authentication_assessment."):
+        return "email authentication policy"
+    return "DNS and email configuration"
+
+
 def external_check_warning_reasons(check_type: str, snapshot: dict[str, Any]) -> list[str]:
     """Return concise, stable reasons when a completed snapshot has limited coverage."""
     reasons: list[str] = []
@@ -1332,10 +1384,15 @@ def _execute_external_check(
                 reason = "changes_and_warnings" if changes and warning_reasons else "changes" if changes else "warnings"
                 parts = []
                 if changes:
-                    fields = ", ".join(field_path for field_path, _, _ in changes[:3])
-                    parts.append(f"{len(changes)} material change(s) detected" + (f": {fields}" if fields else ""))
+                    groups = list(dict.fromkeys(
+                        external_check_change_group(check_type, field_path)
+                        for field_path, _, _ in changes
+                    ))
+                    fields = ", ".join(groups[:3])
+                    count_label = "change" if len(changes) == 1 else "changes"
+                    parts.append(f"{len(changes)} material {count_label} detected" + (f": {fields}" if fields else ""))
                     if len(changes) > 3:
-                        parts.append(f"and {len(changes) - 3} more")
+                        parts.append(f"and {len(changes) - 3} more field changes")
                 if warning_reasons:
                     parts.append("Check warning: " + "; ".join(warning_reasons))
                     if not changes:
@@ -2552,6 +2609,7 @@ def external_check_history(
                 "id": change.id,
                 "run_id": run.id,
                 "field_path": change.field_path,
+                "field_label": external_check_field_label(change.field_path),
                 "previous_value": change.previous_value,
                 "current_value": change.current_value,
                 "detected_at": iso_utc(change.detected_at),
