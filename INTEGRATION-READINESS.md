@@ -6,6 +6,8 @@ Reviewed September 30, 2026 (New York); deployment and Pages state refreshed Oct
 
 The canonical portal is live at `https://daedalus.cybersecuritypilot.org/` in the `daedalus-prod` Incus container. Its application source commit is `741975c`; the public HTTPS health endpoint returns HTTP 200, the systemd service is active, and the persistent `/data` volume is mounted. The deployment release and off-host backup passed archive-manifest and SQLite verification. GitHub Pages now publishes the CSP marketing site and Daedalus overview from this repository at `https://cybersecuritypilot.org/`; Pages has workflow publishing, the custom domain, and HTTPS enforcement enabled.
 
+Commit `630a7b9` passed CI and is pushed to `main`, but is not deployed. Its release plan verified the 52-file archive; deployment stopped before backup or activation because SSH to `10.20.0.117:22` timed out and port 22 on the public IP refused connections. The existing public `/healthz` endpoint still returns HTTP 200. Production therefore remains on source commit `741975c` until the Incus SSH route is available.
+
 The unconfigured `app.cybersecuritypilot.org` and `app.bfs.org` names below are historical alternate-host checks. They do not describe the canonical production portal. Real owner Google sign-in has been verified; additional-user onboarding remains open.
 
 ## Cisco Meraki
