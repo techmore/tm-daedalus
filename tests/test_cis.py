@@ -2,6 +2,8 @@ import unittest
 
 from daedalus.cis import (
     CISDataError,
+    apply_profile_coverage_limits,
+    bind_report_to_profile,
     load_macos26_starter_profiles,
     load_starter_profile,
     normalize_cis_report,
@@ -96,6 +98,47 @@ class CISProfileTests(unittest.TestCase):
 
 
 class CISReportNormalizationTests(unittest.TestCase):
+    def test_filevault_pass_is_manual_until_tahoe_coverage_includes_connected_volumes(self):
+        profile = {
+            "benchmark": {
+                "name": "CIS Apple macOS 26.0 Tahoe Benchmark",
+                "version": "1.1.0",
+            },
+            "checks": [
+                {"id": "filevault", "rule_id": "system_settings_filevault_enforce", "category": "macos", "description": "FileVault"},
+                {"id": "firewall", "rule_id": "system_settings_firewall_enable", "category": "macos", "description": "Firewall"},
+            ],
+        }
+        report = normalize_cis_report({
+            "timestamp": "2026-10-02T10:00:00Z",
+            "device_uuid": "coverage-guard",
+            "results": [
+                {"id": "filevault", "category": "macos", "description": "FileVault", "status": "pass", "details": "FileVault is On."},
+                {"id": "firewall", "category": "macos", "description": "Firewall", "status": "pass", "details": "Enabled."},
+            ],
+        })
+
+        bind_report_to_profile(report, profile)
+        apply_profile_coverage_limits(report, profile)
+
+        filevault = next(result for result in report["results"] if result["id"] == "filevault")
+        self.assertEqual(filevault["status"], "manual")
+        self.assertIn("connected drives and volumes", filevault["details"])
+        self.assertEqual(report["summary"]["pass"], 1)
+        self.assertEqual(report["summary"]["manual"], 1)
+        self.assertEqual(report["summary"]["score"], 50.0)
+        self.assertEqual(report["summary"]["assessment_coverage"], 50.0)
+
+    def test_filevault_coverage_guard_does_not_change_other_benchmarks_or_failures(self):
+        result = {"rule_id": "system_settings_filevault_enforce", "status": "fail", "details": "FileVault is Off."}
+        report = {
+            "results": [result],
+            "summary": {"score": 0.0, "fail": 1, "pass": 0, "manual": 0, "error": 0, "total": 1},
+        }
+        apply_profile_coverage_limits(report, {"benchmark": {"name": "Other Benchmark", "version": "1.1.0"}})
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(report["summary"]["fail"], 1)
+
     def test_assessment_coverage_does_not_treat_manual_or_error_as_assessed(self):
         report = normalize_cis_report({
             "device_uuid": "coverage-fixture",

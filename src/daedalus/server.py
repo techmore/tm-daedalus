@@ -51,6 +51,7 @@ from daedalus.config import (
 )
 from daedalus.cis import (
     CISDataError,
+    apply_profile_coverage_limits,
     bind_report_to_profile,
     load_macos26_starter_profiles,
     load_starter_profile,
@@ -3307,6 +3308,7 @@ async def receive_cis_report(
             if profile is None:
                 raise CISDataError("The report profile and version must match a published workspace profile.")
             bind_report_to_profile(normalized, profile.content)
+            apply_profile_coverage_limits(normalized, profile.content)
     except CISDataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

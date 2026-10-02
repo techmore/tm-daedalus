@@ -153,6 +153,52 @@ def bind_report_to_profile(report: dict[str, Any], profile: dict[str, Any]) -> N
     report["summary"]["profile_verified"] = True
 
 
+def apply_profile_coverage_limits(report: dict[str, Any], profile: dict[str, Any]) -> None:
+    """Keep known partial benchmark procedures from becoming a full pass."""
+    benchmark = profile.get("benchmark")
+    if not isinstance(benchmark, dict):
+        return
+    if (
+        benchmark.get("name") != "CIS Apple macOS 26.0 Tahoe Benchmark"
+        or benchmark.get("version") != "1.1.0"
+    ):
+        return
+
+    changed = False
+    for result in report["results"]:
+        if result.get("rule_id") != "system_settings_filevault_enforce" or result["status"] != "pass":
+            continue
+        result["status"] = "manual"
+        limitation = (
+            "Daedalus observed FileVault status, but this check does not verify connected drives and volumes "
+            "required by CIS macOS 26 v1.1.0; manual review is required."
+        )
+        result["details"] = (limitation + " " + result["details"]).strip()
+        changed = True
+
+    if not changed:
+        return
+    counts = {status: 0 for status in ALLOWED_STATUSES}
+    categories: dict[str, dict[str, int]] = {}
+    for result in report["results"]:
+        status = result["status"]
+        category = result["category"]
+        counts[status] += 1
+        summary = categories.setdefault(category, {"total": 0, **{key: 0 for key in ALLOWED_STATUSES}})
+        summary["total"] += 1
+        summary[status] += 1
+    for summary in categories.values():
+        summary["score"] = round(summary["pass"] / summary["total"] * 100, 2) if summary["total"] else 0.0
+    total = len(report["results"])
+    report["summary"].update({
+        **counts,
+        "score": round(counts["pass"] / total * 100, 2) if total else 0.0,
+        "categories": categories,
+        "assessed": counts["pass"] + counts["fail"],
+        "assessment_coverage": round((counts["pass"] + counts["fail"]) / total * 100, 2) if total else 0.0,
+    })
+
+
 def load_starter_profile() -> dict[str, Any]:
     profile_path = Path(__file__).resolve().parent / "profiles" / "csp-macos-browser-baseline-v1.json"
     try:
