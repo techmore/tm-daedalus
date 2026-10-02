@@ -26,7 +26,7 @@ The local portal loaded three organizations using the existing key. Only the alr
 - Production runs as the `daedalus-prod` Incus instance on the CSP host. The service is managed with systemd inside the instance; Docker is not part of this deployment.
 - The public application health endpoint returned HTTP 200 during the October 2, 2026 review. The deployed server, scanner bridge, dashboard template, and dashboard JavaScript matched the reviewed source snapshot.
 - GitHub Pages publishes the static marketing and project overview pages. FastAPI authentication, customer data, APIs, and scanner communication remain on the Incus application host.
-- A fresh off-host backup and staging restore rehearsal remain to be verified. Google consent/sign-in, a new non-owner onboarding path, macOS 26 endpoint results, and multiple VLAN scanner behavior also remain open validation items.
+- A fresh off-host backup was verified and restored into a temporary staging directory on October 2; SQLite integrity passed and 26 report files were recovered. Replication to independent storage and restoring over live `/data` remain untested. Owner Google sign-in is verified; additional-user onboarding, macOS 26 endpoint results, and multiple VLAN scanner behavior remain open validation items.
 
 ## Review boundaries
 
