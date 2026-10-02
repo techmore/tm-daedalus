@@ -29,6 +29,7 @@ ROOT_FILES = (
     "README.md",
     "pyproject.toml",
     "uv.lock",
+    "requirements-production.txt",
     ".env.production.example",
 )
 SCRIPT_FILES = (
@@ -37,6 +38,8 @@ SCRIPT_FILES = (
     "backup_incus.sh",
     "check_production_env.py",
     "check_public_deployment.py",
+    "deploy_incus.py",
+    "deploy_incus_remote.sh",
     "package_release.py",
     "restore_data.py",
 )

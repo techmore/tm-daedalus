@@ -31,5 +31,9 @@ jobs:
           enable-cache: true
       - name: Install locked dependencies
         run: uv sync --locked --group dev
+      - name: Verify pinned production requirements export
+        run: |
+          uv export --locked --no-dev --no-emit-project --no-annotate --format requirements-txt > "$RUNNER_TEMP/requirements-production.txt"
+          diff -u requirements-production.txt "$RUNNER_TEMP/requirements-production.txt"
       - name: Run application and static-site tests
         run: uv run --locked python -m pytest -q

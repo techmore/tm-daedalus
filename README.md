@@ -26,6 +26,10 @@ uv run uvicorn daedalus.server:app --host 127.0.0.1 --port 8000
 
 Open `http://127.0.0.1:8000`. Google sign-in and external integrations need their own credentials in the local environment. Never commit `.env` files, runtime databases, backups, generated reports, or customer scan data.
 
+## Production on Incus
+
+The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/INCUS-DEPLOYMENT.md) for the verified backup, staged release, health-check, and automatic rollback workflow.
+
 ## Product overview
 
 See the [Daedalus project overview](site/daedalus.html) for the feature map, architecture, and current scope. The application is an active pilot; the overview distinguishes implemented workflows from hosting and operational work that remains.
