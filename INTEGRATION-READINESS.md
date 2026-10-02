@@ -21,11 +21,12 @@ The local portal loaded three organizations using the existing key. Only the alr
 - The local callback is `http://127.0.0.1:8000/auth/google/callback`; production requires a registered HTTPS callback for the selected canonical host. Real consent and sign-in remain unvalidated.
 - Fresh DNS A lookups on September 30, 2026 UTC returned NXDOMAIN for both `app.cybersecuritypilot.org` and `app.bfs.org`; neither hostname currently reaches a production portal.
 
-## DigitalOcean deployment
+## Incus production deployment
 
-- `doctl` is unavailable on this Mac. The legacy `docker-compose` binary is installed and parses the Compose project, but the Docker Engine daemon is unreachable; the newer `docker compose` plugin is unavailable. No `.env.production` exists.
-- The deployment script runs Compose on the host where it is invoked; it does not create or connect to a DigitalOcean droplet.
-- Production rollout therefore remains unverified. It needs a reachable droplet with Docker Compose, configured DNS for the chosen app host, and protected production environment settings. GitHub Pages can serve static frontend files but cannot run this project's FastAPI authentication and API backend by itself.
+- Production runs as the `daedalus-prod` Incus instance on the CSP host. The service is managed with systemd inside the instance; Docker is not part of this deployment.
+- The public application health endpoint returned HTTP 200 during the October 2, 2026 review. The deployed server, scanner bridge, dashboard template, and dashboard JavaScript matched the reviewed source snapshot.
+- GitHub Pages publishes the static marketing and project overview pages. FastAPI authentication, customer data, APIs, and scanner communication remain on the Incus application host.
+- A fresh off-host backup and staging restore rehearsal remain to be verified. Google consent/sign-in, a new non-owner onboarding path, macOS 26 endpoint results, and multiple VLAN scanner behavior also remain open validation items.
 
 ## Review boundaries
 

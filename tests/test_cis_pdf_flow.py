@@ -37,7 +37,23 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/cis/client-package/download").status_code, 401)
 
     def test_demo_cis_client_download_is_verified_audited_and_disabled_in_production(self):
-        response = self.client.get("/api/cis/client-package/download")
+        package_dir = self.root / "client_bundle"
+        package_dir.mkdir()
+        contents_buffer = io.BytesIO()
+        with zipfile.ZipFile(contents_buffer, "w", compression=zipfile.ZIP_DEFLATED) as package:
+            package.writestr("CSP-CIS_Audit.app/Contents/Info.plist", "fixture package")
+        contents = contents_buffer.getvalue()
+        filename = "CSP-CIS_Audit-local-unsigned.zip"
+        (package_dir / filename).write_bytes(contents)
+        (package_dir / "manifest.json").write_text(json.dumps({
+            "filename": filename,
+            "sha256": hashlib.sha256(contents).hexdigest(),
+            "architecture": "arm64",
+            "signing": "unsigned",
+            "build": "test-fixture",
+        }))
+        with patch.object(server, "PACKAGE_DIR", self.root):
+            response = self.client.get("/api/cis/client-package/download")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["cache-control"], "no-store")
         self.assertEqual(response.headers["x-content-sha256"], hashlib.sha256(response.content).hexdigest())

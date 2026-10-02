@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, verify, and safely extract a secret-free Daedalus deployment bundle."""
+"""Build, verify, and safely extract a secret-free Daedalus release bundle."""
 
 from __future__ import annotations
 
@@ -25,17 +25,8 @@ MAX_FILE_BYTES = 128 * 1024 * 1024
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 ROOT_FILES = (
-    ".dockerignore",
-    "Caddyfile",
-    "DAEDALUS-PROJECT-REPORT.md",
-    "Dockerfile",
-    "INCUS-DEPLOYMENT.md",
+    "PUBLIC-PROJECT-REPORT.md",
     "README.md",
-    "PROJECT-STATUS.md",
-    "CIS-MACOS26-ALIGNMENT.md",
-    "INTEGRATION-READINESS.md",
-    "REMOTE-MANAGEMENT-ALIGNMENT.md",
-    "compose.yaml",
     "pyproject.toml",
     "uv.lock",
     ".env.production.example",
@@ -43,14 +34,11 @@ ROOT_FILES = (
 SCRIPT_FILES = (
     "__init__.py",
     "backup_data.py",
-    "backup_digitalocean.sh",
     "backup_incus.sh",
     "check_production_env.py",
     "check_public_deployment.py",
-    "deploy_digitalocean.sh",
-    "package_digitalocean.py",
+    "package_release.py",
     "restore_data.py",
-    "wait_deployment.py",
 )
 REQUIRED_ARCHIVE_PATHS = {
     *ROOT_FILES,
@@ -64,6 +52,11 @@ FORBIDDEN_PARTS = {
     "node_modules",
     "data",
     "backups",
+    "client_bundle",
+    "dist",
+    "tmp",
+    "output",
+    "validation",
 }
 FORBIDDEN_NAMES = {
     ".env",

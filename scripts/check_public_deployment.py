@@ -60,7 +60,7 @@ def main() -> int:
         print(f"{hostname}: {message}")
         failed |= not success
     if failed:
-        print("Public deployment verification failed. Confirm DNS points to this Droplet and Caddy has issued trusted certificates.", file=sys.stderr)
+        print("Public deployment verification failed. Confirm DNS and the HTTPS reverse proxy for each configured hostname.", file=sys.stderr)
         return 1
     print("All configured public Daedalus hostnames passed.")
     return 0

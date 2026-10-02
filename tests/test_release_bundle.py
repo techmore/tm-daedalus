@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.package_digitalocean import (
+from scripts.package_release import (
     BundleError,
     build_bundle,
     extract_bundle,
@@ -19,7 +19,7 @@ from scripts.package_digitalocean import (
 PROJECT_ROOT = Path(__file__).parents[1]
 
 
-class DigitalOceanBundleTests(unittest.TestCase):
+class ReleaseBundleTests(unittest.TestCase):
     def test_current_project_bundle_is_secret_free_deterministic_and_verifiable(self):
         with tempfile.TemporaryDirectory(prefix="daedalus-package-") as directory:
             first = Path(directory) / "first.tar.gz"
@@ -32,10 +32,12 @@ class DigitalOceanBundleTests(unittest.TestCase):
             self.assertGreater(result["file_count"], 20)
             with tarfile.open(first, "r:gz") as archive:
                 names = archive.getnames()
-            self.assertIn("daedalus/compose.yaml", names)
-            self.assertIn("daedalus/DAEDALUS-PROJECT-REPORT.md", names)
+            self.assertIn("daedalus/PUBLIC-PROJECT-REPORT.md", names)
             self.assertIn("daedalus/src/daedalus/server.py", names)
-            self.assertIn("daedalus/src/daedalus/client_bundle/manifest.json", names)
+            self.assertNotIn("daedalus/src/daedalus/client_bundle/manifest.json", names)
+            self.assertNotIn("daedalus/Dockerfile", names)
+            self.assertNotIn("daedalus/compose.yaml", names)
+            self.assertNotIn("daedalus/INCUS-DEPLOYMENT.md", names)
             self.assertNotIn("daedalus/.env.production", names)
             self.assertFalse(any("/config.yaml" in name or "daedalus.db" in name or ".venv/" in name for name in names))
 
@@ -47,7 +49,7 @@ class DigitalOceanBundleTests(unittest.TestCase):
             self.assertTrue(verify_bundle(archive_path)["manifest_verified"])
             destination = root / "release"
             extracted = extract_bundle(archive_path, destination)
-            self.assertTrue((extracted / "compose.yaml").is_file())
+            self.assertTrue((extracted / "src/daedalus/server.py").is_file())
             with self.assertRaises(BundleError):
                 extract_bundle(archive_path, destination)
 
@@ -75,19 +77,17 @@ class DigitalOceanBundleTests(unittest.TestCase):
     def test_build_never_follows_private_data_outside_allowlist(self):
         with tempfile.TemporaryDirectory(prefix="daedalus-package-fixture-") as directory:
             root = Path(directory)
-            for name in (
-                ".dockerignore", "Caddyfile", "DAEDALUS-PROJECT-REPORT.md", "Dockerfile", "INCUS-DEPLOYMENT.md", "README.md", "PROJECT-STATUS.md",
-                "CIS-MACOS26-ALIGNMENT.md", "INTEGRATION-READINESS.md",
-                "REMOTE-MANAGEMENT-ALIGNMENT.md", "compose.yaml", "pyproject.toml",
-                "uv.lock", ".env.production.example",
-            ):
+            for name in ("PUBLIC-PROJECT-REPORT.md", "README.md", "pyproject.toml", "uv.lock", ".env.production.example"):
                 (root / name).write_text("fixture", encoding="utf-8")
             (root / "scripts").mkdir()
-            for name in ("__init__.py", "backup_data.py", "backup_digitalocean.sh", "backup_incus.sh", "check_production_env.py", "check_public_deployment.py", "deploy_digitalocean.sh", "package_digitalocean.py", "restore_data.py", "wait_deployment.py"):
+            for name in ("__init__.py", "backup_data.py", "backup_incus.sh", "check_production_env.py", "check_public_deployment.py", "package_release.py", "restore_data.py"):
                 (root / "scripts" / name).write_text("fixture", encoding="utf-8")
             source = root / "src" / "daedalus"
             source.mkdir(parents=True)
             (source / "server.py").write_text("server", encoding="utf-8")
+            local_client = source / "client_bundle"
+            local_client.mkdir()
+            (local_client / "private-demo.zip").write_bytes(b"unsigned demo package")
             (source / "config.yaml").write_text("secret", encoding="utf-8")
             (root / ".env.production").write_text("secret", encoding="utf-8")
             (root / "data").mkdir()
@@ -99,6 +99,7 @@ class DigitalOceanBundleTests(unittest.TestCase):
             self.assertIn("daedalus/src/daedalus/server.py", names)
             self.assertNotIn("daedalus/src/daedalus/config.yaml", names)
             self.assertNotIn("daedalus/.env.production", names)
+            self.assertFalse(any("client_bundle" in name for name in names))
             self.assertFalse(any("daedalus.db" in name for name in names))
 
 

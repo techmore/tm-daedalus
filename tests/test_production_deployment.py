@@ -25,8 +25,6 @@ from scripts.check_production_env import (
     validate,
 )
 from scripts import check_public_deployment
-from scripts.wait_deployment import container_ready
-from scripts import wait_deployment
 
 
 def valid_production_values():
@@ -155,118 +153,7 @@ class ProductionEnvironmentTests(unittest.TestCase):
                 self.assertEqual(validate_production_env(), 0)
             self.assertIn("Production environment is valid", output.getvalue())
 
-    def test_deployment_wait_observes_startup_then_health(self):
-        starting = [{"State": {"Status": "running", "Health": {"Status": "starting"}}}, {"State": {"Status": "running"}}]
-        healthy = [{"State": {"Status": "running", "Health": {"Status": "healthy"}}}, {"State": {"Status": "running"}}]
-        with patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.subprocess, "run", side_effect=[subprocess.CompletedProcess([], 0, json.dumps(starting)), subprocess.CompletedProcess([], 0, json.dumps(healthy))]) as inspect, patch.object(wait_deployment, "validate_caddy_config", return_value=True) as validate, patch.object(wait_deployment, "caddy_proxy_healthy", return_value=True) as proxy, patch.object(wait_deployment.time, "sleep") as sleep, redirect_stdout(io.StringIO()):
-            self.assertEqual(wait_deployment.main(), 0)
-            self.assertEqual(inspect.call_count, 2)
-            validate.assert_called_once_with("proxy-id")
-            proxy.assert_called_once_with(healthy[1])
-            sleep.assert_called_once_with(2)
-
-    def test_deployment_wait_retries_transient_inspection_on_same_ids(self):
-        healthy = [{"State": {"Status": "running", "Health": {"Status": "healthy"}}}, {"State": {"Status": "running"}}]
-        for failure in (subprocess.TimeoutExpired(["docker", "inspect"], 10), subprocess.CalledProcessError(1, ["docker", "inspect"]), subprocess.CompletedProcess([], 0, "not-json")):
-            with self.subTest(failure=type(failure).__name__), patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.subprocess, "run", side_effect=[failure, subprocess.CompletedProcess([], 0, json.dumps(healthy))]) as inspect, patch.object(wait_deployment, "validate_caddy_config", return_value=True), patch.object(wait_deployment, "caddy_proxy_healthy", return_value=True), patch.object(wait_deployment.time, "sleep") as sleep, redirect_stdout(io.StringIO()):
-                self.assertEqual(wait_deployment.main(), 0)
-                self.assertEqual(inspect.call_count, 2)
-                self.assertEqual(inspect.call_args_list[0].args[0], inspect.call_args_list[1].args[0])
-                sleep.assert_called_once_with(2)
-
-    def test_deployment_wait_fails_when_caddy_config_is_invalid(self):
-        healthy = [{"State": {"Status": "running", "Health": {"Status": "healthy"}}}, {"State": {"Status": "running"}}]
-        error = io.StringIO()
-        with patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(healthy))), patch.object(wait_deployment, "validate_caddy_config", return_value=False) as validate, patch.object(wait_deployment, "caddy_proxy_healthy") as proxy, redirect_stderr(error):
-            self.assertEqual(wait_deployment.main(), 1)
-        validate.assert_called_once_with("proxy-id")
-        proxy.assert_not_called()
-        self.assertIn("Caddy configuration validation failed", error.getvalue())
-
-    def test_deployment_wait_retries_until_caddy_proxy_serves_app_health(self):
-        healthy = [{"State": {"Status": "running", "Health": {"Status": "healthy"}}}, {"State": {"Status": "running"}}]
-        with patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(healthy))) as inspect, patch.object(wait_deployment, "validate_caddy_config", return_value=True) as validate, patch.object(wait_deployment, "caddy_proxy_healthy", side_effect=[False, True]) as proxy, patch.object(wait_deployment.time, "sleep") as sleep, redirect_stdout(io.StringIO()):
-            self.assertEqual(wait_deployment.main(), 0)
-        self.assertEqual(inspect.call_count, 2)
-        validate.assert_called_once_with("proxy-id")
-        self.assertEqual(proxy.call_count, 2)
-        sleep.assert_called_once_with(2)
-
-    def test_deployment_wait_times_out_if_caddy_never_returns_app_health(self):
-        healthy = [{"State": {"Status": "running", "Health": {"Status": "healthy"}}}, {"State": {"Status": "running"}}]
-        error = io.StringIO()
-        with patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(healthy))), patch.object(wait_deployment, "validate_caddy_config", return_value=True) as validate, patch.object(wait_deployment, "caddy_proxy_healthy", return_value=False) as proxy, patch.object(wait_deployment.time, "monotonic", side_effect=[0, 0, 181]), patch.object(wait_deployment.time, "sleep"), redirect_stderr(error):
-            self.assertEqual(wait_deployment.main(), 1)
-        validate.assert_called_once_with("proxy-id")
-        proxy.assert_called_once_with(healthy[1])
-        self.assertIn("readiness timed out", error.getvalue())
-
-    def test_caddy_config_validation_uses_caddyfile_adapter(self):
-        result = subprocess.CompletedProcess([], 0, "Valid configuration")
-        with patch.object(wait_deployment.subprocess, "run", return_value=result) as run:
-            self.assertTrue(wait_deployment.validate_caddy_config("proxy-id"))
-        self.assertEqual(run.call_args.args[0], [
-            "docker", "exec", "proxy-id", "caddy", "validate",
-            "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile",
-        ])
-
-    def test_caddy_proxy_probe_uses_container_ip_sni_and_health_payload(self):
-        container = {
-            "Config": {"Env": ["DAEDALUS_HOSTNAMES=app.example.org,app.bfs.org"]},
-            "NetworkSettings": {"Networks": {"daedalus_default": {"IPAddress": "172.20.0.3"}}},
-        }
-        calls = {}
-
-        class Response:
-            status = 200
-
-            @staticmethod
-            def read(limit):
-                self.assertLessEqual(limit, 4096)
-                return b'{"status":"ok","app":"daedalus"}'
-
-        class Connection:
-            def __init__(self, address, host, *, timeout):
-                calls["target"] = (address, host, timeout)
-
-            def request(self, method, path, *, headers):
-                calls["request"] = (method, path, headers)
-
-            @staticmethod
-            def getresponse():
-                return Response()
-
-            @staticmethod
-            def close():
-                pass
-
-        with patch.object(wait_deployment, "_SNIHTTPSConnection", Connection):
-            self.assertTrue(wait_deployment.caddy_proxy_healthy(container))
-        self.assertEqual(calls["target"], ("172.20.0.3", "app.example.org", 5))
-        self.assertEqual(calls["request"], (
-            "GET", "/healthz", {"Host": "app.example.org", "Connection": "close"},
-        ))
-
-    def test_deployment_wait_returns_failure_for_stopped_service(self):
-        import contextlib
-        stopped = [{"State": {"Status": "exited"}}, {"State": {"Status": "running"}}]
-        with patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, json.dumps(stopped))), contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(wait_deployment.main(), 1)
-
-    def test_deployment_wait_has_a_bounded_deadline(self):
-        import contextlib
-        with patch.object(sys, "argv", ["wait", "app-id", "proxy-id"]), patch.object(wait_deployment.time, "monotonic", side_effect=[0, 181]), patch.object(wait_deployment.subprocess, "run") as inspect, contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(wait_deployment.main(), 1)
-            inspect.assert_not_called()
-
-    def test_deployment_readiness_requires_application_health(self):
-        for status in ("starting", "unhealthy", None):
-            self.assertEqual(container_ready({"State": {"Status": "running", "Health": {"Status": status}}}, require_health=True), (False, False))
-        self.assertEqual(container_ready({"State": {"Status": "running", "Health": {"Status": "healthy"}}}, require_health=True), (True, False))
-        self.assertEqual(container_ready({"State": {"Status": "running"}}, require_health=False), (True, False))
-        self.assertEqual(container_ready({"State": {"Status": "exited"}}, require_health=True), (False, True))
-
-    def test_requires_caddy_to_serve_canonical_portal(self):
+    def test_public_hostnames_include_the_canonical_portal(self):
         values = valid_production_values()
         values["DAEDALUS_HOSTNAMES"] = "app.bfs.org"
         self.assertIn("DAEDALUS_HOSTNAMES must include the DAEDALUS_BASE_URL hostname", validate(values))
@@ -348,39 +235,6 @@ class ProductionEnvironmentTests(unittest.TestCase):
 
 
 
-    def test_container_healthchecks_use_the_canonical_host(self):
-        import yaml
-        root = Path(__file__).resolve().parents[1]
-        docker_line = next(line for line in (root / "Dockerfile").read_text().splitlines() if line.startswith("HEALTHCHECK "))
-        docker_command = json.loads(docker_line.split(" CMD ", 1)[1])[2]
-        compose_command = yaml.safe_load((root / "compose.yaml").read_text())["services"]["daedalus"]["healthcheck"]["test"][3]
-        for command in (docker_command, compose_command):
-            with self.subTest(command=command), patch.dict(os.environ, {"DAEDALUS_BASE_URL": "https://portal.example.org:8443"}), patch("urllib.request.urlopen") as open_url:
-                exec(command, {})
-                request = open_url.call_args.args[0]
-                self.assertEqual(request.full_url, "http://127.0.0.1:8000/healthz")
-                self.assertEqual(request.get_header("Host"), "portal.example.org:8443")
-                self.assertEqual(open_url.call_args.kwargs["timeout"], 3)
-
-    def test_docker_image_installs_the_application_after_copying_its_source(self):
-        root = Path(__file__).resolve().parents[1]
-        lines = (root / "Dockerfile").read_text().splitlines()
-        dependency_sync = next(
-            index for index, line in enumerate(lines)
-            if line.startswith("RUN uv sync") and "--no-install-project" in line
-        )
-        source_copy = next(
-            index for index, line in enumerate(lines)
-            if line.strip() == "COPY src ./src"
-        )
-        project_sync = next(
-            index for index, line in enumerate(lines)
-            if line.startswith("RUN uv sync") and "--no-install-project" not in line
-        )
-
-        self.assertLess(dependency_sync, source_copy)
-        self.assertLess(source_copy, project_sync)
-        self.assertIn("--no-editable", lines[project_sync])
 
 class ProductionConfigStartupTests(unittest.TestCase):
     def run_config_import(self, extra_values: dict[str, str]):
