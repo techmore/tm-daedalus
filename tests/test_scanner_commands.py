@@ -219,3 +219,102 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
             self.assertEqual(command.result, "completed evidence")
             self.assertIsNone(command.delivered_at)
             self.assertIsNone(command.deadline_at)
+
+    def test_scan_target_must_be_inside_the_selected_scanners_approved_networks(self):
+        self.assertEqual(server.validate_scanner_network_scopes(["10.0.0.0/8"]), ["10.0.0.0/8"])
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            saved = db.get(server.Agent, agent)
+            saved.authorized_networks = ["10.24.8.0/24", "192.168.44.0/24"]
+            db.commit()
+
+        allowed = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "10.24.8.128/25",
+        })
+        self.assertEqual(allowed.status_code, 200, allowed.text)
+        saved_command = self.client.get(f"/api/agents/{agent}/commands").json()["commands"][0]
+        self.assertEqual(saved_command["target"], "10.24.8.128/25")
+
+        outside = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "10.24.9.0/24",
+        })
+        self.assertEqual(outside.status_code, 422)
+        self.assertIn("outside the scanner's approved networks", outside.json()["detail"])
+
+        invalid_scope = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": ["203.0.113.0/24"],
+        })
+        self.assertEqual(invalid_scope.status_code, 422)
+
+        removed_scope = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": [],
+        })
+        self.assertEqual(removed_scope.status_code, 200, removed_scope.text)
+        self.assertEqual(removed_scope.json()["authorized_networks"], [])
+        now_unscoped = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "10.24.8.2",
+        })
+        self.assertEqual(now_unscoped.status_code, 422)
+
+    def test_scope_update_cancels_queued_scan_that_no_longer_fits(self):
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            db.get(server.Agent, agent).authorized_networks = ["127.0.0.0/24"]
+            db.commit()
+        queued = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.0/24",
+        })
+        self.assertEqual(queued.status_code, 200, queued.text)
+        narrowed = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": ["127.0.0.1/32"],
+        })
+        self.assertEqual(narrowed.status_code, 200, narrowed.text)
+        self.assertEqual(narrowed.json()["cancelled_queued_scan_count"], 1)
+        command = self.client.get(f"/api/agents/{agent}/commands").json()["commands"][0]
+        self.assertEqual(command["status"], "cancelled")
+        self.assertIn("scope changed", command["result"])
+
+    def test_scope_update_reports_already_delivered_scan_as_unconfirmed(self):
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            db.get(server.Agent, agent).authorized_networks = ["127.0.0.0/24"]
+            db.commit()
+        queued = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.0/24",
+        })
+        self.assertEqual(queued.status_code, 200, queued.text)
+        command_id = queued.json()["id"]
+        self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers)
+        narrowed = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": ["127.0.0.1/32"],
+        })
+        self.assertEqual(narrowed.status_code, 200, narrowed.text)
+        self.assertEqual(narrowed.json()["unconfirmed_active_scan_count"], 1)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(AgentCommand, command_id).status, "delivered")
+
+    def test_enrollment_code_binds_scanner_name_and_network_scope(self):
+        enrollment = self.client.post("/api/enrollment-tokens", json={
+            "name": "Office VLAN 24",
+            "authorized_networks": ["10.24.8.0/24", "192.168.44.0/24"],
+        })
+        self.assertEqual(enrollment.status_code, 200, enrollment.text)
+        code = enrollment.json()["code"]
+        mismatched_name = self.client.post("/api/agents/enroll", json={
+            "code": code, "name": "Unapproved name",
+        })
+        self.assertEqual(mismatched_name.status_code, 409)
+        enrolled = self.client.post("/api/agents/enroll", json={
+            "code": code, "name": "Office VLAN 24",
+        })
+        self.assertEqual(enrolled.status_code, 200, enrolled.text)
+        self.assertEqual(enrolled.json()["authorized_networks"], ["10.24.8.0/24", "192.168.44.0/24"])
+        with self.session_factory() as db:
+            saved = db.get(server.Agent, enrolled.json()["agent_id"])
+            self.assertEqual(saved.authorized_networks, ["10.24.8.0/24", "192.168.44.0/24"])

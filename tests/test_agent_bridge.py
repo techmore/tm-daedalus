@@ -353,8 +353,26 @@ class AgentSchemaUpgradeTests(unittest.TestCase):
                     "nmapui_version",
                     "nmapui_ready",
                     "nmapui_restart_supported",
+                    "authorized_networks",
                 }.issubset(columns)
             )
+        finally:
+            engine.dispose()
+
+    def test_adds_agent_network_scope_to_existing_enrollment_tables(self):
+        engine = create_engine("sqlite:///:memory:")
+        try:
+            with engine.begin() as connection:
+                connection.exec_driver_sql("CREATE TABLE agents (id INTEGER PRIMARY KEY)")
+                connection.exec_driver_sql("CREATE TABLE enrollment_tokens (id INTEGER PRIMARY KEY)")
+                server.ensure_agent_telemetry_columns(connection)
+                server.ensure_enrollment_scope_columns(connection)
+                server.ensure_agent_telemetry_columns(connection)
+                server.ensure_enrollment_scope_columns(connection)
+                agent_columns = {column["name"] for column in inspect(connection).get_columns("agents")}
+                token_columns = {column["name"] for column in inspect(connection).get_columns("enrollment_tokens")}
+            self.assertIn("authorized_networks", agent_columns)
+            self.assertTrue({"scanner_name", "authorized_networks"}.issubset(token_columns))
         finally:
             engine.dispose()
 

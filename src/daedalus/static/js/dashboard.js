@@ -46,6 +46,8 @@
   var notifiedScannerComparisons = new Set();
   var scannerTargets = new Map();
   var scannerSkipDiscovery = new Map();
+  var scannerNetworkInputs = new Map();
+  var scannerScopeFeedback = new Map();
   var dashboardRefreshPromise = null;
   var scannerComparisonCache = new Map();
   var titleMap = {
@@ -297,12 +299,47 @@
       : "Waiting for first heartbeat";
     card.append(head, name, subtitle, telemetry, readiness, lastSeen, meta);
 
+    var authorizedNetworks = Array.isArray(agent.authorized_networks) ? agent.authorized_networks : [];
+    var scopeSummary = document.createElement("p");
+    scopeSummary.className = "scanner-scope-summary";
+    scopeSummary.textContent = authorizedNetworks.length
+      ? "Approved networks: " + authorizedNetworks.join(", ")
+      : "No approved network scope. This scanner cannot receive scan commands until an admin assigns a CIDR.";
+    card.append(scopeSummary);
+
+    if (role === "admin" && controlsEnabled) {
+      var scopeEditor = document.createElement("div");
+      scopeEditor.className = "scanner-network-editor";
+      var scopeLabel = document.createElement("label");
+      scopeLabel.textContent = "Authorized network CIDRs · comma separated";
+      var scopeInput = document.createElement("input");
+      scopeInput.value = scannerNetworkInputs.has(agent.id)
+        ? scannerNetworkInputs.get(agent.id)
+        : authorizedNetworks.join(", ");
+      scopeInput.placeholder = "10.20.20.0/24, 10.20.21.0/24";
+      scopeInput.setAttribute("aria-label", "Authorized network CIDRs for " + agent.name);
+      scopeInput.addEventListener("input", function () { scannerNetworkInputs.set(agent.id, scopeInput.value); });
+      scopeLabel.append(scopeInput);
+      var saveScope = document.createElement("button");
+      saveScope.type = "button";
+      saveScope.className = "button button-small button-secondary";
+      saveScope.dataset.saveScannerScope = agent.id;
+      saveScope.textContent = "Save scope";
+      var scopeFeedback = document.createElement("span");
+      scopeFeedback.className = "scanner-scope-feedback";
+      scopeFeedback.setAttribute("aria-live", "polite");
+      scopeFeedback.textContent = scannerScopeFeedback.get(agent.id) || "";
+      scopeEditor.append(scopeLabel, saveScope, scopeFeedback);
+      card.append(scopeEditor);
+    }
+
     if (role === "admin" && controlsEnabled) {
       var actions = document.createElement("div");
       actions.className = "agent-actions";
       var target = document.createElement("input");
       target.className = "scan-target";
-      target.value = scannerTargets.get(agent.id) || "127.0.0.1";
+      target.value = scannerTargets.get(agent.id) || authorizedNetworks[0] || "";
+      target.placeholder = authorizedNetworks.length ? "Target inside " + authorizedNetworks[0] : "Set scanner network scope first";
       target.addEventListener("input", function () { scannerTargets.set(agent.id, target.value); });
       target.setAttribute("aria-label", "Scan target");
       var knownTargetLabel = document.createElement("label");
@@ -328,7 +365,7 @@
       scan.className = "button button-small";
       scan.dataset.command = "start_scan";
       scan.textContent = "Run scan";
-      scan.disabled = agent.status !== "online";
+      scan.disabled = agent.status !== "online" || authorizedNetworks.length === 0;
       var stop = document.createElement("button");
       stop.className = "button button-small button-quiet";
       stop.dataset.command = "cancel_scan";
@@ -775,16 +812,22 @@
     }
     var agentList = document.getElementById("agent-list");
     if (agentList) {
-      agentList.replaceChildren();
-      if (!data.agents.length) {
-        var empty = document.createElement("div");
-        empty.className = "empty-card";
-        empty.textContent = "No scanner connected yet. Use Add scanner to enroll the Mac bridge.";
-        agentList.append(empty);
-      } else {
-        data.agents.forEach(function (agent) {
-          agentList.append(makeAgentCard(agent, data.organization.domain));
-        });
+      var activeScannerField = document.activeElement;
+      var preserveScannerEdit = agentList.contains(activeScannerField)
+        && (/^(INPUT|TEXTAREA|SELECT)$/.test(activeScannerField.tagName)
+          || Boolean(activeScannerField.closest(".scanner-network-editor")));
+      if (!preserveScannerEdit) {
+        agentList.replaceChildren();
+        if (!data.agents.length) {
+          var empty = document.createElement("div");
+          empty.className = "empty-card";
+          empty.textContent = "No scanner connected yet. Use Add scanner to enroll the Mac bridge.";
+          agentList.append(empty);
+        } else {
+          data.agents.forEach(function (agent) {
+            agentList.append(makeAgentCard(agent, data.organization.domain));
+          });
+        }
       }
     }
     text(document.getElementById("stat-agents"), data.agents.length);
@@ -864,7 +907,46 @@
     }
   }
 
+  async function saveScannerScope(button) {
+    var card = button.closest("[data-agent-id]");
+    if (!card) return;
+    var agentId = card.dataset.agentId;
+    var input = card.querySelector(".scanner-network-editor input");
+    var feedback = card.querySelector(".scanner-scope-feedback");
+    var networks = input ? input.value.split(/[\n,;]+/).map(function (value) { return value.trim(); }).filter(Boolean) : [];
+    button.disabled = true;
+    if (feedback) feedback.textContent = "Saving approved scanner scope…";
+    try {
+      var response = await fetch("/api/agents/" + encodeURIComponent(agentId) + "/network-scope", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorized_networks: networks })
+      });
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "Could not save scanner scope");
+      scannerNetworkInputs.set(agentId, body.authorized_networks.join(", "));
+      var message = body.authorized_networks.length
+        ? "Scope saved. " + body.authorized_networks.length + " network(s) approved."
+        : "Scope cleared. Scans are disabled until a network is approved.";
+      if (body.cancelled_queued_scan_count) message += " Cancelled " + body.cancelled_queued_scan_count + " queued scan(s) outside the new scope.";
+      if (body.unconfirmed_active_scan_count) message += " " + body.unconfirmed_active_scan_count + " already-delivered scan(s) may continue until the scanner reports completion.";
+      scannerScopeFeedback.set(agentId, message);
+      await refresh();
+    } catch (error) {
+      scannerScopeFeedback.set(agentId, error.message);
+      if (feedback) feedback.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   document.addEventListener("click", function (event) {
+    var scopeButton = event.target.closest("[data-save-scanner-scope]");
+    if (scopeButton) {
+      saveScannerScope(scopeButton);
+      return;
+    }
     var button = event.target.closest("[data-command]");
     if (button) {
       runCommand(button);
@@ -878,21 +960,36 @@
 
   var addScanner = document.getElementById("add-scanner");
   if (addScanner) {
-    addScanner.addEventListener("click", async function () {
+    addScanner.addEventListener("click", function () {
       var card = document.getElementById("enrollment-card");
       card.classList.remove("hidden");
+      document.getElementById("enrollment-scanner-name").focus();
+    });
+  }
+  var issueScannerEnrollment = document.getElementById("issue-scanner-enrollment");
+  if (issueScannerEnrollment) {
+    issueScannerEnrollment.addEventListener("click", async function () {
+      var nameInput = document.getElementById("enrollment-scanner-name");
+      var networksInput = document.getElementById("enrollment-network-scopes");
+      var scannerName = nameInput.value.trim();
+      var authorizedNetworks = networksInput.value.split(/[\n,;]+/).map(function (value) { return value.trim(); }).filter(Boolean);
       var codeOutput = document.getElementById("enrollment-code");
       var commandOutput = document.getElementById("enrollment-command");
+      if (!scannerName || authorizedNetworks.length === 0) {
+        text(codeOutput, "Enter a scanner name and at least one authorized CIDR first.");
+        return;
+      }
+      issueScannerEnrollment.disabled = true;
       text(codeOutput, "Preparing one-time code…");
       try {
         var response = await fetch("/api/enrollment-tokens", {
           method: "POST",
-          credentials: "same-origin"
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: scannerName, authorized_networks: authorizedNetworks })
         });
         var body = await response.json();
         if (!response.ok) throw new Error(body.detail || "Unable to issue an enrollment code");
-        var organizationSlug = shell.dataset.organizationSlug || "daedalus";
-        var scannerName = organizationSlug + "-mac";
         var clientPlatform = navigator.platform || navigator.userAgent;
         var installerName = /Mac/i.test(clientPlatform)
           ? "install-service-macos.sh"
@@ -905,6 +1002,8 @@
         text(commandOutput, command);
       } catch (error) {
         text(codeOutput, error.message);
+      } finally {
+        issueScannerEnrollment.disabled = false;
       }
     });
   }

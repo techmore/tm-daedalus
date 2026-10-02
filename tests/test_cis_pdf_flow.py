@@ -149,7 +149,9 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn('href="/api/agents/bridge/download"', response.text)
         self.assertIn("install-nmapui.sh", response.text)
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261002-036", response.text)
+        self.assertIn('id="enrollment-scanner-name"', response.text)
+        self.assertIn('id="enrollment-network-scopes"', response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261002-039", response.text)
         self.assertIn('id="cis-install-macos26"', response.text)
         self.assertIn('id="cis-device-list"', response.text)
         self.assertIn('src="/static/js/dashboard.js?', response.text)
@@ -165,6 +167,10 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn('restart_nmapui', script.text)
         self.assertIn('skip_host_discovery: action === "start_scan"', script.text)
         self.assertIn('scan-skip-discovery', script.text)
+        self.assertIn('data-save-scanner-scope', script.text)
+        self.assertIn('/network-scope', script.text)
+        self.assertIn('authorized_networks: authorizedNetworks', script.text)
+        self.assertIn('var preserveScannerEdit = agentList.contains(activeScannerField)', script.text)
         self.assertIn('data-membership-revoke', script.text)
         self.assertIn('/revoke', script.text)
         self.assertIn('profiles_endpoint: ', script.text)
@@ -370,6 +376,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
             agent = Agent(
                 organization_id=organization.id,
                 name="Test Mac scanner",
+                authorized_networks=["127.0.0.1/32", "192.168.1.0/24"],
                 token_hash=server.token_digest("test-scanner-token"),
                 enabled=True,
                 nmapui_connected=False,

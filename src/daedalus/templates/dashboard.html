@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261002-035">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261002-037">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -172,11 +172,17 @@
           <button id="add-scanner" class="button button-primary">＋ Add scanner</button>
           {% endif %}
         </div>
-        <div class="security-note"><span>ⓘ</span><span>Only private IP addresses and subnets are accepted here. Website hostnames and public ranges are blocked. Daedalus supports scan, cancel, read-only update checks, and managed NmapUI service restarts; it does not expose a general-purpose shell.</span></div>
+        <div class="security-note"><span>ⓘ</span><span>Each scanner can scan only its admin-approved private CIDR scopes. Website hostnames and public ranges are blocked. Daedalus supports scan, cancel, read-only update checks, and managed NmapUI service restarts; it does not expose a general-purpose shell.</span></div>
         {% if membership.role == 'admin' and workspace_controls_enabled %}
         <div id="enrollment-card" class="enrollment-card hidden">
-          <div class="enrollment-heading"><div><p class="eyebrow">ONE-TIME ENROLLMENT</p><h3>Set up a scanner on your Mac</h3></div><button id="close-enrollment" class="icon-button" aria-label="Close">×</button></div>
+          <div class="enrollment-heading"><div><p class="eyebrow">ONE-TIME ENROLLMENT</p><h3>Set up a scanner node</h3></div><button id="close-enrollment" class="icon-button" aria-label="Close">×</button></div>
           <p class="muted">Download and extract the scanner kit in Downloads, then run the copied enrollment command in Terminal. On macOS, the managed installer prepares NmapUI and the bridge as user LaunchAgents so they start at login and restart after a process exit. On Linux, start NmapUI with <code>install-nmapui.sh</code> and run the bridge installer after it is ready. The code expires in 15 minutes and can enroll one scanner.</p>
+          <div class="scanner-scope-form">
+            <label>Scanner name<input id="enrollment-scanner-name" maxlength="120" placeholder="CSP office · VLAN 20" required></label>
+            <label>Authorized network CIDRs<textarea id="enrollment-network-scopes" rows="2" placeholder="10.20.20.0/24, 10.20.21.0/24" required></textarea></label>
+            <small>Only targets inside these private networks can be sent to this scanner. Separate VLANs can use separate named scanners.</small>
+          </div>
+          <div class="copy-row"><button class="button button-primary" id="issue-scanner-enrollment" type="button">Create scoped enrollment code</button></div>
           <div class="copy-row"><a class="button button-small button-quiet" href="https://github.com/techmore/TM-NmapUI" target="_blank" rel="noopener noreferrer">NmapUI source</a><a class="button button-small" href="/api/agents/bridge/download">Download NmapUI + Daedalus kit</a></div>
           <div class="copy-row"><code id="enrollment-code">Preparing one-time code…</code><button class="button button-small" id="copy-code">Copy code</button></div>
           <div class="copy-row"><code id="enrollment-command">Preparing installer command…</code><button class="button button-small button-quiet" id="copy-enrollment">Copy command</button></div>
@@ -195,9 +201,10 @@
             <p class="agent-telemetry">{{ agent.host_platform or 'Scanner details awaiting heartbeat' }}{% if agent.bridge_version %} · Bridge {{ agent.bridge_version }}{% endif %}{% if agent.nmapui_version %} · NmapUI {{ agent.nmapui_version }}{% endif %}</p>
             <p class="agent-readiness">{% if agent.nmapui_ready is sameas true %}NmapUI ready{% elif agent.nmapui_ready is sameas false %}NmapUI not ready{% else %}NmapUI health check pending{% endif %}</p>
             <p class="agent-last-seen">{% if agent.last_seen_at %}Last heartbeat {{ agent.last_seen_at.isoformat() }} UTC{% else %}Waiting for first heartbeat{% endif %}</p>
+            <p class="scanner-scope-summary">{% if agent.authorized_networks %}Approved networks: {{ agent.authorized_networks|join(', ') }}{% else %}No approved network scope. This scanner cannot receive scan commands until an admin assigns a CIDR.{% endif %}</p>
             <div class="agent-meta"><span>Scanner ID</span><code>{{ agent.id }}</code></div>
             {% if membership.role == 'admin' and workspace_controls_enabled %}
-            <div class="agent-actions"><input class="scan-target" value="127.0.0.1" placeholder="192.168.1.0/24" aria-label="Private IP or subnet to scan"><label class="scan-known-target-option"><input type="checkbox" class="scan-skip-discovery" aria-label="Skip host discovery for this scan" {% if agent.command_protocol_version < 2 %}disabled{% endif %}><span>Treat target as known for this scan (-Pn)</span></label><small class="scan-known-target-help">{% if agent.command_protocol_version < 2 %}Update this scanner kit to use per-scan options.{% else %}On skips discovery; off uses normal discovery. This does not change scanner settings.{% endif %}</small><button class="button button-small" data-command="start_scan" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Run scan</button><button class="button button-small button-quiet" data-command="cancel_scan" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Stop</button><button class="button button-small button-quiet" data-command="check_nmapui_updates" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Check NmapUI updates</button>{% if agent.host_platform == 'Darwin' and agent.command_protocol_version >= 3 %}<button class="button button-small button-quiet" data-command="check_os_updates" title="Reads Apple's software update catalog; does not install updates." {% if agent_status(agent) != 'online' %}disabled{% endif %}>Check macOS updates</button>{% endif %}</div>
+            <div class="agent-actions"><input class="scan-target" value="{{ agent.authorized_networks[0] if agent.authorized_networks else '' }}" placeholder="Target inside approved CIDR" aria-label="Private IP or subnet inside the scanner's approved network"><label class="scan-known-target-option"><input type="checkbox" class="scan-skip-discovery" aria-label="Skip host discovery for this scan" {% if agent.command_protocol_version < 2 %}disabled{% endif %}><span>Treat target as known for this scan (-Pn)</span></label><small class="scan-known-target-help">{% if agent.command_protocol_version < 2 %}Update this scanner kit to use per-scan options.{% else %}On skips discovery; off uses normal discovery. This does not change scanner settings.{% endif %}</small><button class="button button-small" data-command="start_scan" {% if agent_status(agent) != 'online' or not agent.authorized_networks %}disabled{% endif %}>Run scan</button><button class="button button-small button-quiet" data-command="cancel_scan" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Stop</button><button class="button button-small button-quiet" data-command="check_nmapui_updates" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Check NmapUI updates</button>{% if agent.host_platform == 'Darwin' and agent.command_protocol_version >= 3 %}<button class="button button-small button-quiet" data-command="check_os_updates" title="Reads Apple's software update catalog; does not install updates." {% if agent_status(agent) != 'online' %}disabled{% endif %}>Check macOS updates</button>{% endif %}</div>
             {% endif %}
           </article>
           {% else %}
@@ -441,6 +448,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261002-036" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261002-039" defer></script>
 </body>
 </html>

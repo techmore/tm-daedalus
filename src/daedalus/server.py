@@ -245,10 +245,25 @@ def ensure_agent_telemetry_columns(connection) -> None:
         "nmapui_ready": "BOOLEAN",
         "nmapui_restart_supported": "BOOLEAN NOT NULL DEFAULT 0",
         "command_protocol_version": "INTEGER NOT NULL DEFAULT 0",
+        "authorized_networks": "JSON NOT NULL DEFAULT '[]'",
     }
     for name, sql_type in additions.items():
         if name not in existing:
             connection.execute(text(f"ALTER TABLE agents ADD COLUMN {name} {sql_type}"))
+            existing.add(name)
+
+
+def ensure_enrollment_scope_columns(connection) -> None:
+    """Add scanner identity/scope to outstanding one-time enrollment codes."""
+    existing = {
+        column["name"] for column in sqlalchemy_inspect(connection).get_columns("enrollment_tokens")
+    }
+    for name, sql_type in {
+        "scanner_name": "VARCHAR(120)",
+        "authorized_networks": "JSON",
+    }.items():
+        if name not in existing:
+            connection.execute(text(f"ALTER TABLE enrollment_tokens ADD COLUMN {name} {sql_type}"))
             existing.add(name)
 
 
@@ -300,6 +315,7 @@ async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
         ensure_agent_telemetry_columns(connection)
+        ensure_enrollment_scope_columns(connection)
         ensure_scanner_event_columns(connection)
         ensure_agent_command_columns(connection)
         ensure_external_check_columns(connection)
@@ -391,6 +407,28 @@ async def security_headers(request: Request, call_next):
 class EnrollmentRequest(BaseModel):
     code: str = Field(min_length=16, max_length=200)
     name: str = Field(min_length=1, max_length=120)
+
+
+class ScannerEnrollmentOptions(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    authorized_networks: list[str] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def normalize_networks(self):
+        self.name = self.name.strip()
+        if not self.name:
+            raise ValueError("A scanner name is required.")
+        self.authorized_networks = validate_scanner_network_scopes(self.authorized_networks)
+        return self
+
+
+class ScannerNetworkScopeInput(BaseModel):
+    authorized_networks: list[str] = Field(max_length=32)
+
+    @model_validator(mode="after")
+    def normalize_networks(self):
+        self.authorized_networks = validate_scanner_network_scopes(self.authorized_networks)
+        return self
 
 
 class AgentEventRequest(BaseModel):
@@ -1803,14 +1841,7 @@ def close_scanner_controls(
         )
 
 
-def validate_internal_scan_target(raw_target: str) -> str:
-    value = raw_target.strip()
-    try:
-        network = ipaddress.ip_network(value, strict=False)
-    except ValueError as exc:
-        raise ValueError(
-            "NmapUI accepts private IP addresses or subnets only. Website names and public ranges are blocked."
-        ) from exc
+def _network_is_internal(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
     if network.version == 4:
         allowed_ranges = (
             ipaddress.ip_network("10.0.0.0/8"),
@@ -1825,12 +1856,63 @@ def validate_internal_scan_target(raw_target: str) -> str:
             ipaddress.ip_network("fe80::/10"),
             ipaddress.ip_network("::1/128"),
         )
-    allowed = any(network.subnet_of(allowed_range) for allowed_range in allowed_ranges)
-    if not allowed or network.num_addresses > 65_536:
+    return any(network.subnet_of(allowed_range) for allowed_range in allowed_ranges)
+
+
+def validate_internal_scan_target(raw_target: str) -> str:
+    value = raw_target.strip()
+    try:
+        network = ipaddress.ip_network(value, strict=False)
+    except ValueError as exc:
+        raise ValueError(
+            "NmapUI accepts private IP addresses or subnets only. Website names and public ranges are blocked."
+        ) from exc
+    if not _network_is_internal(network) or network.num_addresses > 65_536:
         raise ValueError(
             "NmapUI accepts private IP addresses or subnets of at most 65,536 addresses. Public website targets are blocked."
         )
     return value
+
+
+def validate_scanner_network_scopes(raw_scopes: list[str]) -> list[str]:
+    """Normalize a bounded allowlist of private CIDRs for one scanner node."""
+    if len(raw_scopes) > 32:
+        raise ValueError("A scanner can have at most 32 authorized network scopes.")
+    normalized: set[str] = set()
+    for raw_scope in raw_scopes:
+        if not isinstance(raw_scope, str) or not raw_scope.strip():
+            raise ValueError("Every authorized scanner network must be a private IP or CIDR.")
+        try:
+            network = ipaddress.ip_network(raw_scope.strip(), strict=False)
+        except ValueError as exc:
+            raise ValueError("Authorized networks must be IP addresses or CIDRs.") from exc
+        if not _network_is_internal(network):
+            raise ValueError("Only private, loopback, or link-local scanner networks are allowed.")
+        normalized.add(str(network))
+    return sorted(
+        normalized,
+        key=lambda value: (
+            ipaddress.ip_network(value).version,
+            int(ipaddress.ip_network(value).network_address),
+            ipaddress.ip_network(value).prefixlen,
+        ),
+    )
+
+
+def scan_target_within_agent_scope(raw_target: str, authorized_networks: list[str] | None) -> str:
+    target = validate_internal_scan_target(raw_target)
+    network = ipaddress.ip_network(target, strict=False)
+    scopes = authorized_networks if isinstance(authorized_networks, list) else []
+    for scope in scopes:
+        try:
+            authorized = ipaddress.ip_network(scope, strict=False)
+        except ValueError:
+            continue
+        if authorized.version == network.version and network.subnet_of(authorized):
+            return target
+    raise ValueError(
+        "This target is outside the scanner's approved networks. Update its authorized CIDR scope before scanning."
+    )
 
 
 def issue_workspace_challenge(
@@ -4305,6 +4387,7 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
                 "nmapui_ready": agent.nmapui_ready,
                 "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
                 "command_protocol_version": agent.command_protocol_version or 0,
+                "authorized_networks": agent.authorized_networks or [],
             }
             for agent in agents
         ],
@@ -4313,7 +4396,11 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
 
 
 @app.post("/api/enrollment-tokens")
-def create_enrollment_token(request: Request, db: Session = Depends(get_db)):
+def create_enrollment_token(
+    request: Request,
+    payload: ScannerEnrollmentOptions | None = None,
+    db: Session = Depends(get_db),
+):
     user, organization, _ = get_org_context(request, db, admin=True)
     if not workspace_controls_available(db, organization):
         raise HTTPException(
@@ -4326,6 +4413,8 @@ def create_enrollment_token(request: Request, db: Session = Depends(get_db)):
         organization_id=organization.id,
         code_hash=token_digest(clear_code),
         created_by_user_id=user.id,
+        scanner_name=payload.name if payload else None,
+        authorized_networks=payload.authorized_networks if payload else None,
         expires_at=now + timedelta(minutes=15),
         created_at=now,
     )
@@ -4335,13 +4424,19 @@ def create_enrollment_token(request: Request, db: Session = Depends(get_db)):
         organization.id,
         user.id,
         "scanner.enrollment_token_issued",
-        {"expires_at": token.expires_at.isoformat() + "Z"},
+        {
+            "expires_at": token.expires_at.isoformat() + "Z",
+            "scanner_name": token.scanner_name,
+            "authorized_networks": token.authorized_networks or [],
+        },
     )
     db.commit()
     return {
         "code": clear_code,
         "expires_at": token.expires_at.isoformat() + "Z",
         "organization": organization.name,
+        "scanner_name": token.scanner_name,
+        "authorized_networks": token.authorized_networks or [],
     }
 
 
@@ -4398,11 +4493,14 @@ def enroll_agent(payload: EnrollmentRequest, db: Session = Depends(get_db)):
     organization = db.get(Organization, enrollment.organization_id)
     if organization is None or not workspace_controls_available(db, organization):
         raise HTTPException(status_code=403, detail="Workspace verification or active override required")
+    if enrollment.scanner_name and enrollment.scanner_name != payload.name.strip():
+        raise HTTPException(status_code=409, detail="The scanner name does not match this enrollment code.")
 
     clear_agent_token = secrets.token_urlsafe(40)
     agent = Agent(
         organization_id=organization.id,
         name=payload.name.strip(),
+        authorized_networks=enrollment.authorized_networks or [],
         token_hash=token_digest(clear_agent_token),
         enabled=True,
         nmapui_connected=False,
@@ -4427,6 +4525,7 @@ def enroll_agent(payload: EnrollmentRequest, db: Session = Depends(get_db)):
         "organization_id": organization.id,
         "organization": organization.name,
         "agent_token": clear_agent_token,
+        "authorized_networks": agent.authorized_networks or [],
     }
 
 
@@ -4778,6 +4877,64 @@ def list_agent_commands(agent_id: int, request: Request, limit: int = 50, db: Se
     return {"commands": [serialize_command(command) for command in commands]}
 
 
+@app.put("/api/agents/{agent_id}/network-scope")
+def update_agent_network_scope(
+    agent_id: int,
+    payload: ScannerNetworkScopeInput,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user, organization, _ = get_org_context(request, db, admin=True)
+    if not workspace_controls_available(db, organization):
+        raise HTTPException(status_code=403, detail="Verify the domain or grant a 14-day probation override before managing scanners.")
+    agent = db.get(Agent, agent_id)
+    if agent is None or agent.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Scanner not found in this workspace")
+    agent.authorized_networks = payload.authorized_networks
+    now = utcnow()
+    cancelled_count = 0
+    queued = db.scalars(select(AgentCommand).where(
+        AgentCommand.organization_id == organization.id,
+        AgentCommand.agent_id == agent.id,
+        AgentCommand.status == "queued",
+        AgentCommand.action == "start_scan",
+    )).all()
+    for command in queued:
+        try:
+            scan_target_within_agent_scope(command.target or "", agent.authorized_networks)
+        except ValueError:
+            command.status = "cancelled"
+            command.result = "Cancelled because the scanner's approved network scope changed before delivery."
+            command.updated_at = now
+            command.completed_at = now
+            cancelled_count += 1
+    active = db.scalars(select(AgentCommand).where(
+        AgentCommand.organization_id == organization.id,
+        AgentCommand.agent_id == agent.id,
+        AgentCommand.status.in_(("delivered", "accepted")),
+        AgentCommand.action == "start_scan",
+    )).all()
+    unconfirmed_active_count = 0
+    for command in active:
+        try:
+            scan_target_within_agent_scope(command.target or "", agent.authorized_networks)
+        except ValueError:
+            unconfirmed_active_count += 1
+    audit(db, organization.id, user.id, "scanner.network_scope.updated", {
+        "agent_id": agent.id,
+        "authorized_networks": agent.authorized_networks,
+        "cancelled_queued_scan_count": cancelled_count,
+        "unconfirmed_active_scan_count": unconfirmed_active_count,
+    })
+    db.commit()
+    return {
+        "agent_id": agent.id,
+        "authorized_networks": agent.authorized_networks,
+        "cancelled_queued_scan_count": cancelled_count,
+        "unconfirmed_active_scan_count": unconfirmed_active_count,
+    }
+
+
 @app.post("/api/agents/{agent_id}/disable")
 async def disable_scanner(agent_id: int, request: Request, db: Session = Depends(get_db)):
     user, organization, _membership = get_org_context(request, db, admin=True)
@@ -4871,7 +5028,7 @@ def create_agent_command(
         raise HTTPException(status_code=422, detail="A scan target is required")
     if payload.action == "start_scan":
         try:
-            target = validate_internal_scan_target(target)
+            target = scan_target_within_agent_scope(target, agent.authorized_networks)
         except ValueError as exc:
             audit(
                 db,
