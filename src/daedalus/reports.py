@@ -10,7 +10,7 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from daedalus.email_policy import analyze_email_auth
 
@@ -247,13 +247,14 @@ def _append_dns(story: list[Any], check: dict[str, Any], styles: dict[str, Parag
 
 
 def _append_active_website(story: list[Any], check: dict[str, Any], styles: dict[str, ParagraphStyle]) -> None:
-    story.append(Paragraph("Bounded website exposure observations", styles["section"]))
-    _append_latest_attempt(story, check, styles)
+    section: list[Any] = [Paragraph("Bounded website exposure observations", styles["section"])]
+    _append_latest_attempt(section, check, styles)
     run = check.get("run")
     if not run or not run.get("snapshot"):
-        story.append(_paragraph("No saved bounded exposure-check evidence is available.", styles["body"]))
+        section.append(_paragraph("No saved bounded exposure-check evidence is available.", styles["body"]))
+        story.append(KeepTogether(section))
         return
-    _append_run_line(story, run, styles)
+    _append_run_line(section, run, styles)
     snapshot = run["snapshot"]
     baseline = snapshot.get("baseline") or {}
     summary = [
@@ -262,12 +263,15 @@ def _append_active_website(story: list[Any], check: dict[str, Any], styles: dict
         [_paragraph("Coverage complete", styles["cell"]), _paragraph("Yes" if snapshot.get("coverage_complete") is True else "No · findings cannot be resolved from this run", styles["cell"])],
         [_paragraph("Missing-page baseline", styles["cell"]), _paragraph(baseline.get("assessment") or "Unknown", styles["cell"])],
     ]
-    story.append(_table(summary, [1.8 * inch, 4.7 * inch]))
+    section.append(_table(summary, [1.8 * inch, 4.7 * inch]))
     probe_rows = [[_paragraph(label, styles["table_header"]) for label in ("Path", "HTTP", "Assessment", "Status")]]
     for probe in snapshot.get("probes") or []:
         probe_rows.append([_paragraph(probe.get("path") or "Unknown", styles["cell"]), _paragraph(probe.get("http_status") if probe.get("http_status") is not None else "Unknown", styles["cell"]), _paragraph(probe.get("assessment") or "unassessed", styles["cell"]), _paragraph(probe.get("error_code") or "None", styles["cell"])])
     if len(probe_rows) > 1:
-        story.append(_table(probe_rows, [2.2 * inch, .65 * inch, 2.0 * inch, 1.65 * inch]))
+        section.append(_table(probe_rows, [2.2 * inch, .65 * inch, 2.0 * inch, 1.65 * inch]))
+    # Keep the section heading, coverage summary, and complete fixed-path table
+    # together so a page break cannot strand only part of the probe list.
+    story.append(KeepTogether(section))
     findings = snapshot.get("findings") or []
     story.append(Paragraph("Signature observations requiring review", styles["subsection"]))
     if findings:

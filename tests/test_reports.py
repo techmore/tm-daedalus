@@ -1,4 +1,6 @@
 import unittest
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import KeepTogether, LongTable
 
 from daedalus.reports import (
     _record_value,
@@ -13,6 +15,38 @@ from daedalus.reports import (
 
 
 class ExternalPostureReportTests(unittest.TestCase):
+    def test_bounded_exposure_heading_and_complete_probe_list_stay_together(self):
+        from daedalus import reports
+
+        sample = getSampleStyleSheet()
+        styles = {
+            "section": sample["Heading2"],
+            "subsection": sample["Heading3"],
+            "body": sample["BodyText"],
+            "small": sample["BodyText"],
+            "cell": sample["BodyText"],
+            "table_header": sample["BodyText"],
+        }
+        probes = [
+            {"path": path, "http_status": 404, "assessment": "missing_response_observed"}
+            for path in ("/.git/HEAD", "/.git/config", "/.env", "/server-status", "/phpinfo.php")
+        ]
+        story = []
+        reports._append_active_website(story, {
+            "run": {"id": 43, "status": "completed", "completed_at": "2026-10-02T15:14:42Z",
+                    "snapshot": {"preset_version": "fixed-exposure-v1", "coverage_complete": True,
+                                 "baseline": {"assessment": "missing_response_observed"},
+                                 "probes": probes, "findings": [], "limitations": []}},
+            "changes": [],
+        }, styles)
+
+        self.assertIsInstance(story[0], KeepTogether)
+        grouped = story[0]._content
+        self.assertEqual(grouped[0].getPlainText(), "Bounded website exposure observations")
+        probe_table = next(item for item in grouped if isinstance(item, LongTable) and len(item._cellvalues) == 6)
+        rendered_paths = [cell.getPlainText() for row in probe_table._cellvalues[1:] for cell in row]
+        self.assertTrue(all(probe["path"] in rendered_paths for probe in probes))
+
     def test_posture_pdf_starts_with_coverage_cards_and_confirmed_change_count(self):
         from unittest.mock import patch
         from daedalus import reports
