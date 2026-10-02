@@ -5,6 +5,7 @@ import unittest
 
 
 CSS = Path(__file__).resolve().parents[1] / "src/daedalus/static/css/app.css"
+DASHBOARD = Path(__file__).resolve().parents[1] / "src/daedalus/templates/dashboard.html"
 
 
 def luminance(color):
@@ -35,6 +36,16 @@ class ThemeTests(unittest.TestCase):
             with self.subTest(foreground=foreground, background=background):
                 high, low = sorted([luminance(foreground), luminance(background)], reverse=True)
                 self.assertGreaterEqual((high + .05) / (low + .05), 4.5)
+
+    def test_local_demo_account_switcher_stays_in_header_flow(self):
+        css = CSS.read_text()
+        dashboard = DASHBOARD.read_text()
+        header = dashboard.index('<div class="topbar-actions">')
+        switch = dashboard.index('<form class="demo-switch"')
+        header_end = dashboard.index("</div>", header)
+        self.assertLess(header, switch)
+        self.assertLess(switch, header_end)
+        self.assertNotIn(".demo-switch { position: fixed", css)
 
 
 if __name__ == "__main__":
