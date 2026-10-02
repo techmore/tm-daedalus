@@ -28,3 +28,9 @@ The project combines CSP's public-facing marketing site with the source for a se
 The repository contains implementation for the product areas above and has an existing pilot deployment. It remains pilot software: production readiness still depends on operational testing, recovery rehearsal, external sign-in verification, scanner lifecycle validation, and review of the maintained CIS profiles. A GitHub Pages deployment can publish the CSP marketing site and Daedalus overview, but it does not move the authenticated service or its customer data to GitHub.
 
 The Pages workflow intentionally publishes only `site/`. Private deployment runbooks, local validation receipts, databases, generated bundles, reports, and credentials are excluded from the public source snapshot.
+
+## Validation snapshot
+
+On October 2, 2026, the Daedalus suite passed 341 tests and 70 subtests under Python 3.11 and 3.12. The adjacent NmapUI source suite passed 660 tests with 28 skipped; its packaged runtime source matches the current Daedalus scanner bundle. The adjacent CIS client unit suite passed 57 tests on macOS 27 with code signing disabled. The production Daedalus health endpoint returned HTTP 200, and the deployed server, scanner bridge, dashboard template, and dashboard JavaScript matched the source snapshot. Both GitHub Pages routes returned HTTP 200.
+
+These checks do not replace a real macOS 26 endpoint audit, Developer ID signing/notarization, additional-user onboarding, recovery rehearsal, or multi-VLAN scanner validation. The local Mac runs macOS 27, so the Tahoe-only profile is not run on it.

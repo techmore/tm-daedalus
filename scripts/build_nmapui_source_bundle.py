@@ -45,6 +45,26 @@ def _source_commit(source: Path) -> str:
         return "unavailable"
 
 
+def _source_worktree_paths(source: Path, packaged_paths: set[str]) -> list[str]:
+    """Identify packaged files whose bytes are not represented by the source HEAD."""
+    try:
+        status = subprocess.check_output(
+            ["git", "-C", str(source), "status", "--porcelain", "--untracked-files=all"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    changed = set()
+    for line in status.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].split(" -> ")[-1].strip().strip('"')
+        if path in packaged_paths:
+            changed.add(path)
+    return sorted(changed)
+
+
 def collect_files(source: Path) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     for name in ROOT_FILES:
@@ -81,9 +101,11 @@ def collect_files(source: Path) -> dict[str, bytes]:
         digest.update(b"\0")
         digest.update(contents)
         digest.update(b"\0")
+    source_paths = set(files)
     manifest = {
         "version": (source / "VERSION").read_text(encoding="utf-8").strip(),
         "source_commit": _source_commit(source),
+        "source_worktree_paths": _source_worktree_paths(source, source_paths),
         "source_tree_sha256": digest.hexdigest(),
         "file_count": len(files),
         "scope": "runtime source only; no settings, customer data, credentials, or Node dependencies",

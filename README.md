@@ -12,7 +12,7 @@ Daedalus is Cyber Security Pilot's multi-organization security portal. It brings
 
 GitHub Pages publishes only `site/` through [`.github/workflows/pages.yml`](.github/workflows/pages.yml). The Python application, its database, sign-in, reports, integrations, and scanner command channel require a server; GitHub Pages hosts only the static marketing pages. The Daedalus portal runs separately from the Pages site.
 
-For the first preview, configure the repository's Pages source as **GitHub Actions**. The project site will be available at `https://techmore.github.io/tm-daedalus/` after the workflow succeeds. The `cybersecuritypilot.org` domain is not configured by this repository's Pages workflow.
+The Pages preview is live at <https://techmore.github.io/tm-daedalus/>. GitHub Pages is configured to publish through Actions; the `cybersecuritypilot.org` domain is not connected to this repository. See [`PUBLIC-PROJECT-REPORT.md`](PUBLIC-PROJECT-REPORT.md) for the public project summary.
 
 ## Run locally
 
