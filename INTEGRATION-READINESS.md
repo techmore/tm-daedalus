@@ -1,6 +1,12 @@
 # Integration readiness
 
-Reviewed September 30, 2026 (New York). This note contains no credential values or organization IDs.
+Reviewed September 30, 2026 (New York); deployment and Pages state refreshed October 2. This note contains no credential values or organization IDs.
+
+## Current deployment state (October 2, 2026)
+
+The canonical portal is live at `https://daedalus.cybersecuritypilot.org/` in the `daedalus-prod` Incus container. Its application source commit is `741975c`; the public HTTPS health endpoint returns HTTP 200, the systemd service is active, and the persistent `/data` volume is mounted. The deployment release and off-host backup passed archive-manifest and SQLite verification. GitHub Pages now publishes the CSP marketing site and Daedalus overview from this repository at `https://cybersecuritypilot.org/`; Pages has workflow publishing, the custom domain, and HTTPS enforcement enabled.
+
+The unconfigured `app.cybersecuritypilot.org` and `app.bfs.org` names below are historical alternate-host checks. They do not describe the canonical production portal. Real owner Google sign-in has been verified; additional-user onboarding remains open.
 
 ## Cisco Meraki
 
