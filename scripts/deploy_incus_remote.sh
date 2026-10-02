@@ -25,10 +25,11 @@ case "$phase" in
     mkdir -p "$releases"
     [[ -d "$app" || -L "$app" ]] || { echo "Current application path is missing." >&2; exit 1; }
     [[ -f "$archive" ]] || { echo "Release archive is missing." >&2; exit 1; }
-    python3.12 "$app/scripts/package_release.py" verify --archive "$archive" >/dev/null
+    actual_digest=$(sha256sum "$archive" | awk '{print $1}')
+    [[ "$actual_digest" == "$release_id" ]] || { echo "Release archive checksum mismatch." >&2; exit 1; }
     mkdir -m 0755 "$candidate"
     trap 'rm -rf "$candidate"' ERR
-    python3.12 "$app/scripts/package_release.py" extract --archive "$archive" --destination "$candidate" >/dev/null
+    tar -xzf "$archive" --strip-components=1 --no-same-owner --no-same-permissions -C "$candidate"
     python3.12 -m venv "$candidate/.venv"
     "$candidate/.venv/bin/python" -m pip install --disable-pip-version-check --no-compile --require-hashes -r "$candidate/requirements-production.txt"
     site_packages=$("$candidate/.venv/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
