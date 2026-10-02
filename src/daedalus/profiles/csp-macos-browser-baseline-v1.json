@@ -1,0 +1,779 @@
+{
+  "slug": "csp-macos-browser-baseline",
+  "name": "CSP macOS & Browser Baseline",
+  "version": "1.0.0",
+  "platform": "macos",
+  "description": "Starter profile from the CSP CIS audit checklist. Includes macOS, Chrome, and Safari checks; individual endpoint results may be pass, fail, manual, or error.",
+  "checks": [
+    {
+      "id": "macos_1",
+      "category": "macos",
+      "description": "Ensure all Apple-provided software is current"
+    },
+    {
+      "id": "macos_2",
+      "category": "macos",
+      "description": "Ensure Auto Update is enabled"
+    },
+    {
+      "id": "macos_3",
+      "category": "macos",
+      "description": "Ensure Download New Updates When Available is enabled"
+    },
+    {
+      "id": "macos_4",
+      "category": "macos",
+      "description": "Ensure Install of macOS Updates is enabled"
+    },
+    {
+      "id": "macos_5",
+      "category": "macos",
+      "description": "Ensure Install Application Updates from the App Store is enabled"
+    },
+    {
+      "id": "macos_6",
+      "category": "macos",
+      "description": "Ensure Install Security Responses and System Files is enabled"
+    },
+    {
+      "id": "macos_7",
+      "category": "macos",
+      "description": "Ensure Software Update Deferment is 30 days or less"
+    },
+    {
+      "id": "macos_8",
+      "category": "macos",
+      "description": "Ensure Gatekeeper is enabled"
+    },
+    {
+      "id": "macos_9",
+      "category": "macos",
+      "description": "Ensure FileVault is enabled"
+    },
+    {
+      "id": "macos_10",
+      "category": "macos",
+      "description": "Ensure Firewall is enabled"
+    },
+    {
+      "id": "macos_11",
+      "category": "macos",
+      "description": "Ensure Firewall Stealth Mode is enabled"
+    },
+    {
+      "id": "macos_12",
+      "category": "macos",
+      "description": "Ensure Firewall is configured to block all incoming connections"
+    },
+    {
+      "id": "macos_13",
+      "category": "macos",
+      "description": "Ensure Automatic Login is disabled"
+    },
+    {
+      "id": "macos_14",
+      "category": "macos",
+      "description": "Ensure Guest account is disabled"
+    },
+    {
+      "id": "macos_15",
+      "category": "macos",
+      "description": "Ensure Guest access to shared folders is disabled"
+    },
+    {
+      "id": "macos_16",
+      "category": "macos",
+      "description": "Ensure Fast User Switching is disabled"
+    },
+    {
+      "id": "macos_17",
+      "category": "macos",
+      "description": "Ensure the screensaver is enabled and set to begin after 20 minutes or less"
+    },
+    {
+      "id": "macos_18",
+      "category": "macos",
+      "description": "Ensure screensaver requires a password"
+    },
+    {
+      "id": "macos_19",
+      "category": "macos",
+      "description": "Ensure password screensaver grace period is set to 5 seconds or less"
+    },
+    {
+      "id": "macos_20",
+      "category": "macos",
+      "description": "Ensure Secure Keyboard Entry in Terminal.app is enabled"
+    },
+    {
+      "id": "macos_21",
+      "category": "macos",
+      "description": "Ensure Secure Empty Trash is enabled"
+    },
+    {
+      "id": "macos_22",
+      "category": "macos",
+      "description": "Ensure security auditing is enabled"
+    },
+    {
+      "id": "macos_23",
+      "category": "macos",
+      "description": "Ensure security auditing retention is configured"
+    },
+    {
+      "id": "macos_24",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for startup and time changes"
+    },
+    {
+      "id": "macos_25",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for system-wide settings"
+    },
+    {
+      "id": "macos_26",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for authentication and authorization"
+    },
+    {
+      "id": "macos_27",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for file system events"
+    },
+    {
+      "id": "macos_28",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for user events"
+    },
+    {
+      "id": "macos_29",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for network events"
+    },
+    {
+      "id": "macos_30",
+      "category": "macos",
+      "description": "Ensure security auditing flags are configured for process events"
+    },
+    {
+      "id": "macos_31",
+      "category": "macos",
+      "description": "Ensure Set Time and Date Automatically is enabled"
+    },
+    {
+      "id": "macos_32",
+      "category": "macos",
+      "description": "Ensure NTP servers are configured properly"
+    },
+    {
+      "id": "macos_33",
+      "category": "macos",
+      "description": "Ensure Remote Login is disabled"
+    },
+    {
+      "id": "macos_34",
+      "category": "macos",
+      "description": "Ensure Remote Management is disabled"
+    },
+    {
+      "id": "macos_35",
+      "category": "macos",
+      "description": "Ensure Remote Apple Events is disabled"
+    },
+    {
+      "id": "macos_36",
+      "category": "macos",
+      "description": "Ensure Internet Sharing is disabled"
+    },
+    {
+      "id": "macos_37",
+      "category": "macos",
+      "description": "Ensure Media Sharing is disabled"
+    },
+    {
+      "id": "macos_38",
+      "category": "macos",
+      "description": "Ensure DVD/CD Sharing is disabled"
+    },
+    {
+      "id": "macos_39",
+      "category": "macos",
+      "description": "Ensure Screen Sharing is disabled"
+    },
+    {
+      "id": "macos_40",
+      "category": "macos",
+      "description": "Ensure File Sharing is disabled"
+    },
+    {
+      "id": "macos_41",
+      "category": "macos",
+      "description": "Ensure Printer Sharing is disabled"
+    },
+    {
+      "id": "macos_42",
+      "category": "macos",
+      "description": "Ensure Bluetooth is disabled when not needed"
+    },
+    {
+      "id": "macos_43",
+      "category": "macos",
+      "description": "Ensure Bluetooth Sharing is disabled"
+    },
+    {
+      "id": "macos_44",
+      "category": "macos",
+      "description": "Ensure AirDrop is disabled"
+    },
+    {
+      "id": "macos_45",
+      "category": "macos",
+      "description": "Ensure AirPlay Receiver is disabled"
+    },
+    {
+      "id": "macos_46",
+      "category": "macos",
+      "description": "Ensure Content Caching is disabled"
+    },
+    {
+      "id": "macos_47",
+      "category": "macos",
+      "description": "Ensure password account lockout threshold is configured"
+    },
+    {
+      "id": "macos_48",
+      "category": "macos",
+      "description": "Ensure password minimum length is configured"
+    },
+    {
+      "id": "macos_49",
+      "category": "macos",
+      "description": "Ensure password complexity is configured"
+    },
+    {
+      "id": "macos_50",
+      "category": "macos",
+      "description": "Ensure password history is configured"
+    },
+    {
+      "id": "macos_51",
+      "category": "macos",
+      "description": "Ensure password maximum age is configured"
+    },
+    {
+      "id": "macos_52",
+      "category": "macos",
+      "description": "Ensure password minimum age is configured"
+    },
+    {
+      "id": "macos_53",
+      "category": "macos",
+      "description": "Ensure root account is disabled"
+    },
+    {
+      "id": "macos_54",
+      "category": "macos",
+      "description": "Ensure login keychain is locked when system sleeps"
+    },
+    {
+      "id": "macos_55",
+      "category": "macos",
+      "description": "Ensure login items are not added"
+    },
+    {
+      "id": "macos_56",
+      "category": "macos",
+      "description": "Ensure System Integrity Protection is enabled"
+    },
+    {
+      "id": "macos_57",
+      "category": "macos",
+      "description": "Ensure Apple Mobile File Integrity is enabled"
+    },
+    {
+      "id": "macos_58",
+      "category": "macos",
+      "description": "Ensure Sealed System Volume is enabled"
+    },
+    {
+      "id": "macos_59",
+      "category": "macos",
+      "description": "Ensure Automatic Login is disabled"
+    },
+    {
+      "id": "macos_60",
+      "category": "macos",
+      "description": "Ensure the guest user account is disabled"
+    },
+    {
+      "id": "macos_61",
+      "category": "macos",
+      "description": "Ensure Show All Users on Login Screen is disabled"
+    },
+    {
+      "id": "macos_62",
+      "category": "macos",
+      "description": "Ensure Show password hints is disabled"
+    },
+    {
+      "id": "macos_63",
+      "category": "macos",
+      "description": "Ensure users' home directories permissions are 750 or more restrictive"
+    },
+    {
+      "id": "macos_64",
+      "category": "macos",
+      "description": "Ensure users' dot-files permissions are 750 or more restrictive"
+    },
+    {
+      "id": "macos_65",
+      "category": "macos",
+      "description": "Ensure users' .ssh directory permissions are 700 or more restrictive"
+    },
+    {
+      "id": "macos_66",
+      "category": "macos",
+      "description": "Ensure users' .ssh/config permissions are 600 or more restrictive"
+    },
+    {
+      "id": "macos_67",
+      "category": "macos",
+      "description": "Ensure users' .ssh/authorized_keys permissions are 600 or more restrictive"
+    },
+    {
+      "id": "macos_68",
+      "category": "macos",
+      "description": "Ensure Location Services is disabled"
+    },
+    {
+      "id": "macos_69",
+      "category": "macos",
+      "description": "Ensure Sending diagnostic and usage data to Apple is disabled"
+    },
+    {
+      "id": "macos_70",
+      "category": "macos",
+      "description": "Ensure Limit Ad Tracking is enabled"
+    },
+    {
+      "id": "macos_71",
+      "category": "macos",
+      "description": "Ensure Siri is disabled"
+    },
+    {
+      "id": "macos_72",
+      "category": "macos",
+      "description": "Ensure Dictation is disabled"
+    },
+    {
+      "id": "macos_73",
+      "category": "macos",
+      "description": "Ensure Spotlight Suggestions are disabled"
+    },
+    {
+      "id": "macos_74",
+      "category": "macos",
+      "description": "Ensure Safari Spotlight Suggestions are disabled"
+    },
+    {
+      "id": "macos_75",
+      "category": "macos",
+      "description": "Ensure Safari Prevent cross-site tracking is enabled"
+    },
+    {
+      "id": "macos_76",
+      "category": "macos",
+      "description": "Ensure Safari Block all cookies is enabled"
+    },
+    {
+      "id": "macos_77",
+      "category": "macos",
+      "description": "Ensure Safari Extensions are disabled"
+    },
+    {
+      "id": "macos_78",
+      "category": "macos",
+      "description": "Ensure Safari Web Content is set to deny without user prompt"
+    },
+    {
+      "id": "macos_79",
+      "category": "macos",
+      "description": "Ensure Safari JavaScript is disabled"
+    },
+    {
+      "id": "macos_80",
+      "category": "macos",
+      "description": "Ensure Safari Pop-up Windows are blocked"
+    },
+    {
+      "id": "macos_81",
+      "category": "macos",
+      "description": "Ensure Safari Fraudulent Website Warning is enabled"
+    },
+    {
+      "id": "macos_82",
+      "category": "macos",
+      "description": "Ensure Gatekeeper is configured to only allow code signed by Apple"
+    },
+    {
+      "id": "macos_83",
+      "category": "macos",
+      "description": "Ensure Automatic Opening of Safe Files in Safari is disabled"
+    },
+    {
+      "id": "macos_84",
+      "category": "macos",
+      "description": "Ensure Automatic Execution of JavaScript is disabled in downloaded files"
+    },
+    {
+      "id": "macos_85",
+      "category": "macos",
+      "description": "Ensure Automatic Execution of Java Applets is disabled"
+    },
+    {
+      "id": "macos_86",
+      "category": "macos",
+      "description": "Ensure Automatic Execution of Plugins is disabled"
+    },
+    {
+      "id": "macos_87",
+      "category": "macos",
+      "description": "Ensure Automatic Execution of Safe Files is disabled"
+    },
+    {
+      "id": "macos_88",
+      "category": "macos",
+      "description": "Ensure Quarantine of Downloaded Files is enabled"
+    },
+    {
+      "id": "macos_89",
+      "category": "macos",
+      "description": "Ensure XProtect Updater is enabled"
+    },
+    {
+      "id": "macos_90",
+      "category": "macos",
+      "description": "Ensure XProtect Signatures are updated regularly"
+    },
+    {
+      "id": "macos_91",
+      "category": "macos",
+      "description": "Ensure MRT.app is enabled"
+    },
+    {
+      "id": "macos_92",
+      "category": "macos",
+      "description": "Ensure Bluetooth is disabled when not needed"
+    },
+    {
+      "id": "macos_93",
+      "category": "macos",
+      "description": "Ensure Camera access is limited to approved apps"
+    },
+    {
+      "id": "macos_94",
+      "category": "macos",
+      "description": "Ensure Microphone access is limited to approved apps"
+    },
+    {
+      "id": "macos_95",
+      "category": "macos",
+      "description": "Ensure Full Disk Access is limited to approved apps"
+    },
+    {
+      "id": "macos_96",
+      "category": "macos",
+      "description": "Ensure Screen Recording access is limited to approved apps"
+    },
+    {
+      "id": "macos_97",
+      "category": "macos",
+      "description": "Ensure Automation access is limited to approved apps"
+    },
+    {
+      "id": "macos_98",
+      "category": "macos",
+      "description": "Ensure USB restricted mode is enabled"
+    },
+    {
+      "id": "chrome_1",
+      "category": "chrome",
+      "description": "Ensure Safe Browsing settings are enabled"
+    },
+    {
+      "id": "chrome_2",
+      "category": "chrome",
+      "description": "Ensure 'Safe Browsing Protection Level' is enabled"
+    },
+    {
+      "id": "chrome_3",
+      "category": "chrome",
+      "description": "Ensure 'Allow Google Cast to connect to Cast devices on all IP addresses' is disabled"
+    },
+    {
+      "id": "chrome_4",
+      "category": "chrome",
+      "description": "Ensure 'Allow queries to a Google time service' is enabled"
+    },
+    {
+      "id": "chrome_5",
+      "category": "chrome",
+      "description": "Ensure 'Allow the audio sandbox to run' is enabled"
+    },
+    {
+      "id": "chrome_6",
+      "category": "chrome",
+      "description": "Ensure 'Ask where to save each file before downloading' is enabled"
+    },
+    {
+      "id": "chrome_7",
+      "category": "chrome",
+      "description": "Ensure 'Continue running background apps when Chrome is closed' is disabled"
+    },
+    {
+      "id": "chrome_8",
+      "category": "chrome",
+      "description": "Ensure 'Control SafeSites adult content filtering' is enabled"
+    },
+    {
+      "id": "chrome_9",
+      "category": "chrome",
+      "description": "Ensure 'Disable Certificate Transparency enforcement for a list of Legacy Certificate Authorities' is disabled"
+    },
+    {
+      "id": "chrome_10",
+      "category": "chrome",
+      "description": "Ensure 'Disable saving browser history' is disabled"
+    },
+    {
+      "id": "chrome_11",
+      "category": "chrome",
+      "description": "Ensure 'DNS interception checks enabled' is enabled"
+    },
+    {
+      "id": "chrome_12",
+      "category": "chrome",
+      "description": "Ensure 'Enable component updates in Google Chrome' is enabled"
+    },
+    {
+      "id": "chrome_13",
+      "category": "chrome",
+      "description": "Ensure 'Enable third party software injection blocking' is enabled"
+    },
+    {
+      "id": "chrome_14",
+      "category": "chrome",
+      "description": "Ensure 'Import autofill form data from default browser on first run' is disabled"
+    },
+    {
+      "id": "chrome_15",
+      "category": "chrome",
+      "description": "Ensure 'Import of homepage from default browser on first run' is disabled"
+    },
+    {
+      "id": "chrome_16",
+      "category": "chrome",
+      "description": "Ensure 'Import search engines from default browser on first run' is disabled"
+    },
+    {
+      "id": "chrome_17",
+      "category": "chrome",
+      "description": "Ensure 'Enable security warnings for command-line flags' is enabled"
+    },
+    {
+      "id": "chrome_18",
+      "category": "chrome",
+      "description": "Ensure 'Enable reporting of usage and crash-related data' is disabled"
+    },
+    {
+      "id": "chrome_19",
+      "category": "chrome",
+      "description": "Ensure 'Enable Safe Browsing for trusted sources' is disabled"
+    },
+    {
+      "id": "chrome_20",
+      "category": "chrome",
+      "description": "Ensure 'Enable search suggestions' is disabled"
+    },
+    {
+      "id": "chrome_21",
+      "category": "chrome",
+      "description": "Ensure 'Set disk cache size, in bytes' is set to recommended value"
+    },
+    {
+      "id": "chrome_22",
+      "category": "chrome",
+      "description": "Ensure 'Block third-party cookies' is enabled"
+    },
+    {
+      "id": "chrome_23",
+      "category": "chrome",
+      "description": "Ensure 'Clear cookies and site data when you quit Chrome' is enabled"
+    },
+    {
+      "id": "chrome_24",
+      "category": "chrome",
+      "description": "Ensure 'Default cookies setting' is set to 'Keep local data only until you quit your browser'"
+    },
+    {
+      "id": "chrome_25",
+      "category": "chrome",
+      "description": "Ensure 'Enable Do Not Track' is enabled"
+    },
+    {
+      "id": "chrome_26",
+      "category": "chrome",
+      "description": "Ensure 'Configure extension installation blocklist' is set to block extensions not explicitly approved"
+    },
+    {
+      "id": "chrome_27",
+      "category": "chrome",
+      "description": "Ensure 'Configure allowed Chrome Web Store extensions' is configured"
+    },
+    {
+      "id": "chrome_28",
+      "category": "chrome",
+      "description": "Ensure 'Control which extensions can access file URLs' is configured"
+    },
+    {
+      "id": "chrome_29",
+      "category": "chrome",
+      "description": "Ensure 'Control which extensions can inject scripts into websites' is configured"
+    },
+    {
+      "id": "chrome_30",
+      "category": "chrome",
+      "description": "Ensure 'Enable saving passwords to the password manager' is disabled"
+    },
+    {
+      "id": "chrome_31",
+      "category": "chrome",
+      "description": "Ensure 'Enable Autofill for addresses' is disabled"
+    },
+    {
+      "id": "chrome_32",
+      "category": "chrome",
+      "description": "Ensure 'Enable Autofill for credit cards' is disabled"
+    },
+    {
+      "id": "chrome_33",
+      "category": "chrome",
+      "description": "Ensure 'Enable Autofill for payment methods' is disabled"
+    },
+    {
+      "id": "safari_1",
+      "category": "safari",
+      "description": "Ensure 'Open safe files after downloading' is disabled"
+    },
+    {
+      "id": "safari_2",
+      "category": "safari",
+      "description": "Ensure AutoFill is disabled"
+    },
+    {
+      "id": "safari_3",
+      "category": "safari",
+      "description": "Ensure AutoFill web forms is disabled"
+    },
+    {
+      "id": "safari_4",
+      "category": "safari",
+      "description": "Ensure AutoFill credit cards is disabled"
+    },
+    {
+      "id": "safari_5",
+      "category": "safari",
+      "description": "Ensure AutoFill contact information is disabled"
+    },
+    {
+      "id": "safari_6",
+      "category": "safari",
+      "description": "Ensure AutoFill usernames and passwords is disabled"
+    },
+    {
+      "id": "safari_7",
+      "category": "safari",
+      "description": "Ensure Block pop-up windows is enabled"
+    },
+    {
+      "id": "safari_8",
+      "category": "safari",
+      "description": "Ensure JavaScript is disabled"
+    },
+    {
+      "id": "safari_9",
+      "category": "safari",
+      "description": "Ensure 'Warn when visiting a fraudulent website' is enabled"
+    },
+    {
+      "id": "safari_10",
+      "category": "safari",
+      "description": "Ensure 'Prevent cross-site tracking' is enabled"
+    },
+    {
+      "id": "safari_11",
+      "category": "safari",
+      "description": "Ensure 'Block all cookies' is enabled"
+    },
+    {
+      "id": "safari_12",
+      "category": "safari",
+      "description": "Ensure 'Website tracking' is set to 'Prevent cross-site tracking'"
+    },
+    {
+      "id": "safari_13",
+      "category": "safari",
+      "description": "Ensure 'Ask websites not to track me' is enabled"
+    },
+    {
+      "id": "safari_14",
+      "category": "safari",
+      "description": "Ensure 'Privacy preserving ad measurement' is disabled"
+    },
+    {
+      "id": "safari_15",
+      "category": "safari",
+      "description": "Ensure 'Allow Extensions' is disabled"
+    },
+    {
+      "id": "safari_16",
+      "category": "safari",
+      "description": "Ensure 'Enable JavaScript' is disabled for untrusted sites"
+    },
+    {
+      "id": "safari_17",
+      "category": "safari",
+      "description": "Ensure 'Internet plug-ins' are disabled"
+    },
+    {
+      "id": "safari_18",
+      "category": "safari",
+      "description": "Ensure 'Java' is disabled"
+    },
+    {
+      "id": "safari_19",
+      "category": "safari",
+      "description": "Ensure 'Show full website address' is enabled"
+    },
+    {
+      "id": "safari_20",
+      "category": "safari",
+      "description": "Ensure 'Show Develop menu in menu bar' is enabled for debugging"
+    },
+    {
+      "id": "safari_21",
+      "category": "safari",
+      "description": "Ensure 'Show status bar' is enabled"
+    },
+    {
+      "id": "safari_22",
+      "category": "safari",
+      "description": "Ensure 'Smart Search Field' shows search suggestions is disabled"
+    },
+    {
+      "id": "safari_23",
+      "category": "safari",
+      "description": "Ensure 'Default search engine' is set to a privacy-focused engine"
+    }
+  ]
+}

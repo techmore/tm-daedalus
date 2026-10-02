@@ -1,0 +1,15 @@
+# Transfer only application sources and deployment scripts to the builder.
+*
+!Dockerfile
+!pyproject.toml
+!uv.lock
+!src/
+!src/**
+!scripts/
+!scripts/**
+**/__pycache__
+**/*.pyc
+**/.env*
+**/config.yaml
+**/cis-client.yaml
+**/cis-client.yml

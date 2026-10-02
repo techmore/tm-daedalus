@@ -1,0 +1,282 @@
+import json
+import unittest
+import hashlib
+import socket
+import threading
+import time
+import httpx
+import uvicorn
+from uuid import uuid4
+from sqlalchemy import inspect, text
+from daedalus import server
+from daedalus.models import ScanEvent, ReportJob, AuditLog
+from sqlalchemy import select
+from unittest.mock import patch
+try:
+    from . import test_cis_pdf_flow as fixtures
+except ImportError:
+    import test_cis_pdf_flow as fixtures
+
+
+class ScannerRunTests(unittest.TestCase):
+    setUp = fixtures.CISReportPDFFlowTests.setUp
+    tearDown = fixtures.CISReportPDFFlowTests.tearDown
+    create_scanner = fixtures.CISReportPDFFlowTests.create_scanner
+
+    def setup_scanner(self):
+        self.agent, _ = self.create_scanner()
+        self.headers = {"Authorization": "Bearer test-scanner-token"}
+        self.job_id = str(uuid4())
+
+    def envelope(self, name="scan_results", payload=None):
+        return {"event_name": name, "payload": [] if payload is None else payload,
+                "client_event_id": str(uuid4()), "occurred_at": "2026-09-29T14:00:00Z",
+                "source_job_id": self.job_id, "source_job_type": "scan"}
+
+    def send(self, envelope):
+        return self.client.post(f"/api/agents/{self.agent}/events", headers=self.headers, json=envelope)
+
+    def test_explicit_grouping_legacy_unknown_and_terminal_evidence(self):
+        self.setup_scanner()
+        self.assertEqual(self.send(self.envelope()).status_code, 200)
+        self.send(self.envelope("quick_scan_complete"))
+        self.send({"event_name": "scan_results", "payload": []})
+        listing = self.client.get(f"/api/agents/{self.agent}/runs").json()
+        self.assertEqual(listing["total_runs"], 1)
+        self.assertEqual(listing["runs"][0]["event_count"], 2)
+        self.assertEqual(listing["runs"][0]["result_count"], 1)
+        self.assertEqual(listing["runs"][0]["status"], "unknown")
+        event = self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"})).json()
+        detail = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
+        self.assertEqual(detail["run"]["status"], "completed")
+        self.assertEqual(detail["run"]["status_evidence_event_id"], event["event_id"])
+        self.assertEqual(len(detail["events"]), 3)
+        self.assertTrue(all(row["source_job_id"] == self.job_id for row in detail["events"]))
+        self.send(self.envelope("job_status", {"status": "interrupted", "job_type": "scan"}))
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()["run"]["status"], "interrupted")
+
+    def test_grouping_identity_conflicts_and_validation(self):
+        self.setup_scanner()
+        envelope = self.envelope()
+        self.assertEqual(self.send(envelope).status_code, 200)
+        self.assertTrue(self.send(envelope).json()["duplicate"])
+        self.assertEqual(self.send({**envelope, "source_job_id": str(uuid4())}).status_code, 409)
+        self.assertEqual(self.send({**envelope, "source_job_type": "report"}).status_code, 409)
+        del envelope["source_job_type"]
+        self.assertEqual(self.send(envelope).status_code, 422)
+        self.assertEqual(self.send({**envelope, "source_job_id": "not-uuid", "source_job_type": "scan"}).status_code, 422)
+
+    def test_artifact_metadata_dedup_and_scope(self):
+        self.setup_scanner()
+        envelope = self.envelope(payload=[{"ip": "192.168.1.1", "text": "x" * 520000}])
+        endpoint = f"/api/agents/{self.agent}/event-artifacts"
+        first = self.client.post(endpoint, headers=self.headers, content=json.dumps(envelope))
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertTrue(self.client.post(endpoint, headers=self.headers, content=json.dumps(envelope)).json()["duplicate"])
+        changed = self.client.post(endpoint, headers=self.headers, content=json.dumps({**envelope, "source_job_type": "report"}))
+        self.assertEqual(changed.status_code, 409)
+        detail = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
+        self.assertTrue(detail["events"][0]["artifact_download_url"])
+        self.client.post("/api/workspaces", json={"name": "Other", "domain": "other-scan-fixture.example"})
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").status_code, 404)
+
+    def test_detail_and_list_truncation_do_not_imply_completion(self):
+        self.setup_scanner()
+        with self.session_factory() as db:
+            agent = db.get(server.Agent, self.agent)
+            for index in range(205):
+                db.add(ScanEvent(organization_id=agent.organization_id, agent_id=agent.id,
+                    source_job_id=self.job_id, source_job_type="scan", event_name="scan_feedback",
+                    payload={"index": index}, created_at=server.utcnow()))
+            for _ in range(21):
+                db.add(ScanEvent(organization_id=agent.organization_id, agent_id=agent.id,
+                    source_job_id=str(uuid4()), source_job_type="report", event_name="report_complete",
+                    payload={}, created_at=server.utcnow()))
+            db.commit()
+        listing = self.client.get(f"/api/agents/{self.agent}/runs").json()
+        self.assertTrue(listing["truncated"])
+        self.assertEqual(len(listing["runs"]), 20)
+        detail = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
+        self.assertTrue(detail["truncated"])
+        self.assertEqual(detail["returned_event_count"], 200)
+        self.assertEqual(detail["run"]["event_count"], 205)
+        self.assertEqual(detail["run"]["status"], "unknown")
+        self.assertEqual(detail["events"][0]["payload"]["index"], 5)
+
+    def test_migration_is_additive_repeatable(self):
+        with self.engine.begin() as connection:
+            connection.execute(text("DROP TABLE scan_events"))
+            connection.execute(text("CREATE TABLE scan_events (id INTEGER PRIMARY KEY, agent_id INTEGER, organization_id INTEGER)"))
+            server.ensure_scanner_event_columns(connection)
+            server.ensure_scanner_event_columns(connection)
+            columns = {column["name"] for column in inspect(connection).get_columns("scan_events")}
+            self.assertTrue({"source_job_id", "source_job_type"}.issubset(columns))
+
+    def test_malformed_or_conflicting_job_evidence_is_unknown(self):
+        self.setup_scanner()
+        self.send(self.envelope("job_status", {"status": ["completed"], "job_type": "scan"}))
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs").json()["runs"][0]["status"], "unknown")
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "report"}))
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs").json()["runs"][0]["status"], "unknown")
+        self.send({**self.envelope("job_status", {"status": "completed"}), "source_job_type": "report"})
+        run = self.client.get(f"/api/agents/{self.agent}/runs").json()["runs"][0]
+        self.assertTrue(run["group_metadata_conflict"])
+        self.assertEqual(run["status"], "unknown")
+
+    def test_detail_payload_bytes_are_bounded_with_explicit_truncation(self):
+        self.setup_scanner()
+        with self.session_factory() as db:
+            agent = db.get(server.Agent, self.agent)
+            for _ in range(10):
+                db.add(ScanEvent(organization_id=agent.organization_id, agent_id=agent.id,
+                    source_job_id=self.job_id, source_job_type="scan", event_name="scan_results",
+                    payload="x" * 500000, created_at=server.utcnow()))
+            db.commit()
+        detail = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
+        self.assertTrue(detail["truncated"])
+        self.assertLess(detail["returned_event_count"], 10)
+        self.assertLessEqual(len(json.dumps(detail["events"]).encode()), detail["event_byte_limit"])
+
+    def test_run_pdf_freezes_all_phases_summary_results_and_verified_artifact(self):
+        self.setup_scanner()
+        self.send(self.envelope("quick_scan_start", "started"))
+        self.send(self.envelope("quickscan_results", {"total_ips": 2, "hosts_up": 1, "time_taken": 0.4}))
+        artifact = self.envelope("deep_scan_results", [{"ip": "192.168.1.1", "evidence": "x" * 520000}])
+        response = self.client.post(f"/api/agents/{self.agent}/event-artifacts", headers=self.headers, content=json.dumps(artifact))
+        self.assertEqual(response.status_code, 200, response.text)
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        with patch.object(server, "generate_report_job"):
+            queued = self.client.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf")
+        self.assertEqual(queued.status_code, 200, queued.text)
+        self.send(self.envelope("scan_feedback", "later evidence"))
+        with self.session_factory() as db:
+            job = db.get(ReportJob, queued.json()["id"])
+            snapshot = job.report_snapshot["scanner"]
+            self.assertEqual(snapshot["run"]["event_count"], 4)
+            self.assertEqual(snapshot["run"]["status"], "completed")
+            self.assertFalse(snapshot["run"]["truncated"])
+            self.assertEqual(snapshot["events"][2]["payload"], artifact["payload"])
+            self.assertTrue(snapshot["events"][2]["artifact_sha256"])
+            self.assertEqual(len(snapshot["events"]), 4)
+            self.assertEqual(job.report_type, "scanner_results")
+            logs = db.scalars(select(AuditLog).where(AuditLog.action == "report.requested")).all()
+            self.assertEqual(logs[-1].details["source_job_id"], self.job_id)
+
+    def test_run_pdf_limits_and_malformed_result_create_no_partial_job(self):
+        self.setup_scanner()
+        self.send(self.envelope("scan_feedback", "evidence"))
+        endpoint = f"/api/agents/{self.agent}/runs/{self.job_id}/pdf"
+        with patch.object(server, "MAX_SCANNER_RUN_PDF_EVENTS", 0):
+            self.assertEqual(self.client.post(endpoint).status_code, 413)
+        with patch.object(server, "MAX_SCANNER_RUN_PDF_BYTES", 1):
+            self.assertEqual(self.client.post(endpoint).status_code, 413)
+        self.send(self.envelope("scan_results", {"hosts": ["invalid host"]}))
+        self.assertEqual(self.client.post(endpoint).status_code, 422)
+        with self.session_factory() as db:
+            self.assertEqual(db.scalars(select(ReportJob)).all(), [])
+
+    def test_run_pdf_zero_results_scope_and_saved_artifact_corruption(self):
+        self.setup_scanner()
+        self.send(self.envelope("job_status", {"status": "interrupted", "job_type": "scan"}))
+        endpoint = f"/api/agents/{self.agent}/runs/{self.job_id}/pdf"
+        with patch.object(server, "generate_report_job"):
+            zero = self.client.post(endpoint)
+        self.assertEqual(zero.status_code, 200, zero.text)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(ReportJob, zero.json()["id"]).report_snapshot["scanner"]["run"]["result_count"], 0)
+        artifact = self.envelope("scan_results", [{"ip": "192.168.1.1"}])
+        uploaded = self.client.post(f"/api/agents/{self.agent}/event-artifacts", headers=self.headers, content=json.dumps(artifact))
+        with self.session_factory() as db:
+            event = db.get(ScanEvent, uploaded.json()["event_id"])
+            server.scanner_artifact_path(event).write_text("corrupted")
+        self.assertEqual(self.client.post(endpoint).status_code, 409)
+        self.client.post("/api/workspaces", json={"name": "Other", "domain": "other-runpdf-fixture.example"})
+        self.assertEqual(self.client.post(endpoint).status_code, 404)
+
+    def test_real_http_artifact_run_pdf_roundtrip(self):
+        """Use a real ephemeral loopback listener; startup never touches the demo DB."""
+        self.setup_scanner()
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.bind(("127.0.0.1", 0))
+        address = listener.getsockname()
+        runtime = uvicorn.Server(uvicorn.Config(server.app, host="127.0.0.1",
+            port=address[1], lifespan="off", log_level="error", access_log=False))
+        thread = threading.Thread(target=runtime.run, kwargs={"sockets": [listener]}, daemon=True)
+        thread.start()
+        try:
+            ready_deadline = time.monotonic() + 5
+            while not runtime.started and thread.is_alive() and time.monotonic() < ready_deadline:
+                time.sleep(0.01)
+            self.assertTrue(runtime.started, "Isolated HTTP listener did not start")
+            with httpx.Client(base_url=f"http://127.0.0.1:{address[1]}", timeout=10) as http:
+                self.assertEqual(http.post("/dev/login").status_code, 303)
+                payload = [{"ip": "192.168.1.1", "ports": [{"port": "443", "protocol": "tcp",
+                    "state": "open", "service": "https"}], "evidence": "fixture evidence " * 40000}]
+                envelope = self.envelope("deep_scan_results", payload)
+                artifact_route = f"/api/agents/{self.agent}/event-artifacts"
+                first = http.post(artifact_route, headers=self.headers, json=envelope)
+                self.assertEqual(first.status_code, 200, first.text)
+                event_id = first.json()["event_id"]
+                retry = http.post(artifact_route, headers=self.headers, json=envelope)
+                self.assertTrue(retry.json()["duplicate"])
+                self.assertEqual(retry.json()["event_id"], event_id)
+                conflict = http.post(artifact_route, headers=self.headers,
+                    json={**envelope, "source_job_id": str(uuid4())})
+                self.assertEqual(conflict.status_code, 409)
+                conflict = http.post(artifact_route, headers=self.headers,
+                    json={**envelope, "payload": [{"ip": "192.168.1.2"}]})
+                self.assertEqual(conflict.status_code, 409)
+                status = http.post(f"/api/agents/{self.agent}/events", headers=self.headers,
+                    json=self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+                self.assertEqual(status.status_code, 200, status.text)
+                runs = http.get(f"/api/agents/{self.agent}/runs").json()
+                self.assertEqual(runs["total_runs"], 1)
+                self.assertEqual(runs["runs"][0]["source_job_id"], self.job_id)
+                self.assertEqual(runs["runs"][0]["source_job_type"], "scan")
+                self.assertEqual(runs["runs"][0]["event_count"], 2)
+                self.assertEqual(runs["runs"][0]["status"], "completed")
+                detail = http.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
+                saved = detail["events"][0]
+                canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                    separators=(",", ":"), allow_nan=False).encode()
+                digest = hashlib.sha256(canonical).hexdigest()
+                self.assertEqual(saved["artifact_sha256"], digest)
+                download = http.get(saved["artifact_download_url"])
+                self.assertEqual(download.status_code, 200)
+                self.assertEqual(hashlib.sha256(download.content).hexdigest(), digest)
+                self.assertEqual(download.json(), payload)
+                queued = http.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf")
+                self.assertEqual(queued.status_code, 200, queued.text)
+                report_id = queued.json()["id"]
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    with self.session_factory() as db:
+                        job = db.get(ReportJob, report_id)
+                        job_status, job_error = job.status, job.error_summary
+                    if job_status in {"completed", "failed"}:
+                        break
+                    time.sleep(0.02)
+                self.assertEqual(job_status, "completed", job_error)
+                pdf = http.get(f"/api/reports/{report_id}/download")
+                self.assertEqual(pdf.status_code, 200)
+                self.assertTrue(pdf.content.startswith(b"%PDF-"))
+                with self.session_factory() as db:
+                    stored = db.get(ScanEvent, event_id)
+                    self.assertEqual(stored.source_job_id, self.job_id)
+                    self.assertEqual(stored.source_job_type, "scan")
+                    self.assertEqual(hashlib.sha256(server.scanner_artifact_path(stored).read_bytes()).hexdigest(), digest)
+                    job = db.get(ReportJob, report_id)
+                    frozen = job.report_snapshot["scanner"]
+                    self.assertEqual(frozen["events"][0]["payload"], payload)
+                    self.assertEqual(frozen["events"][0]["artifact_sha256"], digest)
+                    self.assertEqual(frozen["run"]["event_count"], 2)
+                    self.assertEqual(job.progress, 100)
+        finally:
+            runtime.should_exit = True
+            thread.join(timeout=5)
+            if thread.is_alive():
+                runtime.force_exit = True
+                thread.join(timeout=2)
+            listener.close()
+            self.assertFalse(thread.is_alive(), "Isolated HTTP server did not exit")

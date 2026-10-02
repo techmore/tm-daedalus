@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daedalus · Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261002-034">
+</head>
+<body class="app-page">
+  <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
+    <aside class="sidebar">
+      <a class="brand" href="/dashboard">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+        <span class="brand-wordmark"><strong>Daedalus</strong><small>Cyber Security Pilot</small></span>
+      </a>
+      {% if organization %}
+      <label class="workspace-switcher" for="workspace-select">
+        <span class="workspace-icon">{{ organization.name[:1]|upper }}</span>
+        <span class="workspace-copy">
+          <strong>{{ organization.name }}</strong>
+          <small>{{ organization.domain }}</small>
+        </span>
+        <select id="workspace-select" aria-label="Switch workspace">
+          {% for member, workspace in workspaces %}
+          <option value="{{ workspace.id }}" {% if workspace.id == organization.id %}selected{% endif %}>{{ workspace.name }} · {{ member.role }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="sidebar-add-workspace" type="button" data-open-workspace-dialog>＋ Add or join workspace</button>
+      <div class="nav-label">WORKSPACE</div>
+      <nav class="main-nav" aria-label="Workspace">
+        <button class="nav-item active" data-tab="overview"><span>◫</span>Overview</button>
+        <button class="nav-item" data-tab="scanners"><span>⌘</span>NmapUI scanners <b class="nav-badge">LIVE</b></button>
+        <button class="nav-item" data-tab="meraki"><span>◈</span>Meraki security</button>
+        <button class="nav-item" data-tab="dns"><span>⌁</span>DNS &amp; email health</button>
+        <button class="nav-item" data-tab="web"><span>◎</span>Website health</button>
+        <button class="nav-item" data-tab="cis"><span>▤</span>CIS profiles</button>
+        <button class="nav-item" data-tab="reports"><span>▧</span>Reports</button>
+        <button class="nav-item" data-tab="notifications"><span>♢</span>Notifications <b id="notification-badge" class="notification-badge hidden" aria-label="Unread notifications">0</b></button>
+      </nav>
+      <div class="nav-label nav-label-lower">ADMINISTRATION</div>
+      <nav class="main-nav" aria-label="Administration">
+        <button class="nav-item" data-tab="members"><span>♙</span>Members &amp; access</button>
+      </nav>
+      {% endif %}
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-footer">
+        <div class="avatar">{{ (user.display_name or user.email)[:1]|upper }}</div>
+        <div class="user-copy">
+          <strong>{{ user.display_name or user.email }}</strong>
+          <small>{{ membership.role if membership else 'No workspace access' }}</small>
+        </div>
+        <form method="post" action="/logout">
+          <button class="icon-button" type="submit" title="Sign out" aria-label="Sign out">↪</button>
+        </form>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div id="membership-live-notice" class="security-note hidden" role="status" aria-live="polite"></div>
+      {% if not organization %}
+      <div class="empty-workspace">
+        <p class="eyebrow">WELCOME TO DAEDALUS</p>
+        <h1>Your account is ready.</h1>
+        <p class="muted">Create a workspace for a domain you manage, or request access to an existing workspace. An administrator must approve shared access.</p>
+        <div class="empty-workspace-actions">
+          <button class="button button-primary" type="button" data-open-workspace-dialog>Create a workspace</button>
+          <button class="button button-secondary" type="button" data-open-workspace-dialog>Request access</button>
+        </div>
+        <div id="account-workspace-list" class="workspace-request-list" aria-live="polite"></div>
+      </div>
+      {% else %}
+      <header class="topbar">
+        <div>
+          <div class="breadcrumb">{{ organization.name }} <span>/</span> Security operations</div>
+          <h1 id="page-title">Workspace overview</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="connection-pill"><i></i><span id="live-label">Connecting live view</span></span>
+          <span class="verification-pill verification-{{ organization.verification_status }}">Domain {{ organization.verification_status }}</span>
+        </div>
+      </header>
+
+      <section class="tab-panel active" id="tab-overview">
+        <div class="welcome-row overview-hero">
+          <div class="overview-hero-copy">
+            <p class="eyebrow">FROM CHAOS TO CADENCE</p>
+            <h2>Security work, in one place.</h2>
+            <p class="muted">Keep your organization’s scanner activity and security work in a clear, shared workspace.</p>
+          </div>
+          {% set scanner_state = namespace(online=0) %}
+          {% for agent in agents %}
+          {% if agent_status(agent) == 'online' %}{% set scanner_state.online = scanner_state.online + 1 %}{% endif %}
+          {% endfor %}
+          <aside class="overview-preview" aria-label="Workspace security cadence">
+            <div class="overview-preview-head">
+              <div><p class="eyebrow">SECURITY CADENCE</p><h3>Workspace pulse</h3></div>
+              <span class="overview-status {{ 'is-verified' if organization.verification_status == 'verified' else 'is-pending' }}"><i></i>{{ organization.verification_status|title }}</span>
+            </div>
+            <p class="overview-preview-copy">A shared view of scanner activity and domain ownership.</p>
+            <div class="overview-preview-metrics">
+              <div><strong>{{ scanner_state.online }}/{{ agents|length }}</strong><span>Scanners online</span></div>
+              <div><strong>{{ recent_events|length }}</strong><span>Recent scan events</span></div>
+              <div><strong>{{ organization.verification_status|title }}</strong><span>Domain ownership</span></div>
+            </div>
+            <div class="overview-preview-activity">
+              <span class="overview-activity-icon" aria-hidden="true">⌘</span>
+              <span><strong>Internal scan activity</strong><small>{{ 'Live updates are flowing from NmapUI.' if scanner_state.online else 'Scan events appear here when a scanner connects.' }}</small></span>
+              <span class="overview-live-state {{ 'connected' if scanner_state.online else 'waiting' }}"><i></i>{{ 'Live' if scanner_state.online else 'Waiting' }}</span>
+            </div>
+          </aside>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card"><span>Scanner nodes</span><strong id="stat-agents">{{ agents|length }}</strong><small>Mac or Ubuntu NmapUI instances</small></article>
+          <article class="stat-card"><span>Active scanners</span><strong id="stat-online">0</strong><small>Connected to Daedalus now</small></article>
+          <article class="stat-card"><span>Scan events</span><strong id="stat-events">{{ recent_events|length }}</strong><small>Live progress and result history</small></article>
+          <article class="stat-card"><span>Workspace</span><strong class="stat-status" id="stat-domain-status">{{ organization.verification_status|title }}</strong><small>{{ organization.domain }}</small></article>
+        </div>
+        {% if membership.role == 'admin' and organization.verification_status != 'verified' %}
+        <section class="verification-card" aria-labelledby="verify-domain-title">
+          <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; bounded fixed-path exposure checks require a verified domain or an active admin override. Nikto requires a separately supported transport.</p></div>
+          <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button">Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button">Check DNS now</button></div>
+          <p class="verification-feedback" id="verification-feedback" aria-live="polite"></p>
+          <div class="dns-challenge hidden" id="dns-challenge">
+            <div><small>TXT record name</small><code id="challenge-record-name"></code></div>
+            <div><small>TXT record value</small><code id="challenge-record-value"></code></div>
+            <p class="fine-print" id="challenge-expires"></p>
+          </div>
+        </section>
+        {% if membership.role == 'admin' %}
+        {% if probation_override %}
+        <section class="override-card override-active" id="probation-override-card">
+          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Probation controls are open through <time>{{ probation_override.expires_at.isoformat() }} UTC</time></h3><p class="muted">Reason: {{ probation_override.reason }} Revoking closes controls, cancels queued scans, and requests cancellation of an active scan.</p></div>
+          <button class="button button-quiet" type="button" data-revoke-override="{{ probation_override.id }}">Revoke now</button>
+        </section>
+        {% else %}
+        <section class="override-card" id="probation-override-card">
+          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Need scanner or sharing controls before verification?</h3><p class="muted">An admin can open those controls for 14 days. Each grant and revocation is recorded with the admin and reason.</p></div>
+          <form id="grant-override-form" class="override-form">
+            <label for="override-reason">Reason for the override</label>
+            <input id="override-reason" name="reason" minlength="8" maxlength="500" required placeholder="Why are these controls needed now?">
+            <button class="button button-primary" type="submit">Open controls for 14 days</button>
+          </form>
+          <p id="override-feedback" class="verification-feedback" aria-live="polite"></p>
+        </section>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+        <div class="section-heading"><div><p class="eyebrow">YOUR MODULES</p><h2>Security overview</h2></div></div>
+        <div class="module-grid">
+          <button class="module-card module-live" data-tab="scanners"><span class="module-icon teal">⌘</span><span class="module-title">Internal network scans</span><span class="module-description">Run local NmapUI scanners across VLANs and subnets.</span><span class="module-link">Open scanner fleet →</span></button>
+          <button class="module-card" data-tab="meraki"><span class="module-icon violet">◈</span><span class="module-title">Meraki security</span><span class="module-description">Connect an API key, review an organization, and build a report.</span><span class="module-link">Open Meraki →</span></button>
+          <button class="module-card" data-tab="dns"><span class="module-icon blue">⌁</span><span class="module-title">DNS &amp; email health</span><span class="module-description">Review DNS posture, SPF, DKIM, DMARC, and MX.</span><span class="module-link">Open DNS &amp; email →</span></button>
+          <button class="module-card" data-tab="cis"><span class="module-icon amber">▤</span><span class="module-title">CIS profiles</span><span class="module-description">Distribute audit profiles and review endpoint results.</span><span class="module-link">Open CIS profiles →</span></button>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-scanners">
+        <div class="page-intro">
+          <div><p class="eyebrow">INTERNAL NETWORK</p><h2>NmapUI scanner fleet</h2><p class="muted">Each scanner connects outward from its network. Daedalus streams status, scan progress, and results into this workspace.</p></div>
+          {% if membership.role == 'admin' and workspace_controls_enabled %}
+          <button id="add-scanner" class="button button-primary">＋ Add scanner</button>
+          {% endif %}
+        </div>
+        <div class="security-note"><span>ⓘ</span><span>Only private IP addresses and subnets are accepted here. Website hostnames and public ranges are blocked. Daedalus supports scan, cancel, read-only update checks, and managed NmapUI service restarts; it does not expose a general-purpose shell.</span></div>
+        {% if membership.role == 'admin' and workspace_controls_enabled %}
+        <div id="enrollment-card" class="enrollment-card hidden">
+          <div class="enrollment-heading"><div><p class="eyebrow">ONE-TIME ENROLLMENT</p><h3>Set up a scanner on your Mac</h3></div><button id="close-enrollment" class="icon-button" aria-label="Close">×</button></div>
+          <p class="muted">Download and extract the scanner kit in Downloads, then run the copied enrollment command in Terminal. On macOS, the managed installer prepares NmapUI and the bridge as user LaunchAgents so they start at login and restart after a process exit. On Linux, start NmapUI with <code>install-nmapui.sh</code> and run the bridge installer after it is ready. The code expires in 15 minutes and can enroll one scanner.</p>
+          <div class="copy-row"><a class="button button-small button-quiet" href="https://github.com/techmore/TM-NmapUI" target="_blank" rel="noopener noreferrer">NmapUI source</a><a class="button button-small" href="/api/agents/bridge/download">Download NmapUI + Daedalus kit</a></div>
+          <div class="copy-row"><code id="enrollment-code">Preparing one-time code…</code><button class="button button-small" id="copy-code">Copy code</button></div>
+          <div class="copy-row"><code id="enrollment-command">Preparing installer command…</code><button class="button button-small button-quiet" id="copy-enrollment">Copy command</button></div>
+          <p class="fine-print">NmapUI runs locally on loopback and keeps its data on this device. The bridge asks for the one-time code without showing it on screen, reports NmapUI scan events, and receives workspace-scoped commands. Managed macOS installs support audited NmapUI restarts.</p>
+          <p class="fine-print">If NmapUI Basic Authentication is enabled, set <code>NMAPUI_USERNAME</code> and <code>NMAPUI_PASSWORD</code> in Terminal before running the command.</p>
+        </div>
+        {% endif %}
+        {% if not workspace_controls_enabled %}
+        <div class="security-note"><span>ⓘ</span><span>Scanner enrollment, internal scan commands, and member approval are paused until domain verification or an active 14-day admin override.</span></div>
+        {% endif %}
+        <div id="agent-list" class="agent-grid">
+          {% for agent in agents %}
+          <article class="agent-card" data-agent-id="{{ agent.id }}">
+            <div class="agent-card-head"><span class="agent-icon">⌘</span><span class="agent-status {{ agent_status(agent)|lower|replace(' ', '-') }}">{{ agent_status(agent) }}</span></div>
+            <h3>{{ agent.name }}</h3><p class="agent-subtitle">{{ organization.domain }}</p>
+            <p class="agent-telemetry">{{ agent.host_platform or 'Scanner details awaiting heartbeat' }}{% if agent.bridge_version %} · Bridge {{ agent.bridge_version }}{% endif %}{% if agent.nmapui_version %} · NmapUI {{ agent.nmapui_version }}{% endif %}</p>
+            <p class="agent-readiness">{% if agent.nmapui_ready is sameas true %}NmapUI ready{% elif agent.nmapui_ready is sameas false %}NmapUI not ready{% else %}NmapUI health check pending{% endif %}</p>
+            <p class="agent-last-seen">{% if agent.last_seen_at %}Last heartbeat {{ agent.last_seen_at.isoformat() }} UTC{% else %}Waiting for first heartbeat{% endif %}</p>
+            <div class="agent-meta"><span>Scanner ID</span><code>{{ agent.id }}</code></div>
+            {% if membership.role == 'admin' and workspace_controls_enabled %}
+            <div class="agent-actions"><input class="scan-target" value="127.0.0.1" placeholder="192.168.1.0/24" aria-label="Private IP or subnet to scan"><label class="scan-known-target-option"><input type="checkbox" class="scan-skip-discovery" aria-label="Skip host discovery for this scan" {% if agent.command_protocol_version < 2 %}disabled{% endif %}><span>Treat target as known for this scan (-Pn)</span></label><small class="scan-known-target-help">{% if agent.command_protocol_version < 2 %}Update this scanner kit to use per-scan options.{% else %}On skips discovery; off uses normal discovery. This does not change scanner settings.{% endif %}</small><button class="button button-small" data-command="start_scan" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Run scan</button><button class="button button-small button-quiet" data-command="cancel_scan" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Stop</button><button class="button button-small button-quiet" data-command="check_nmapui_updates" {% if agent_status(agent) != 'online' %}disabled{% endif %}>Check NmapUI updates</button>{% if agent.host_platform == 'Darwin' and agent.command_protocol_version >= 3 %}<button class="button button-small button-quiet" data-command="check_os_updates" title="Reads Apple's software update catalog; does not install updates." {% if agent_status(agent) != 'online' %}disabled{% endif %}>Check macOS updates</button>{% endif %}</div>
+            {% endif %}
+          </article>
+          {% else %}
+          <div class="empty-card" id="no-agents"><div class="empty-icon">⌘</div><h3>No scanner connected yet</h3><p class="muted">Enroll the NmapUI bridge on your Mac. You can add a separate scanner for each VLAN or subnet.</p>{% if membership.role == 'admin' and workspace_controls_enabled %}<button class="button button-primary" data-open-enrollment>＋ Add your first scanner</button>{% endif %}</div>
+          {% endfor %}
+        </div>
+        <div class="section-heading event-heading"><div><p class="eyebrow">REAL-TIME ACTIVITY</p><h2>Scanner event stream</h2></div><span id="event-count" class="count-pill">{{ recent_events|length }} recent</span></div>
+        <div id="event-stream" class="event-stream">
+          {% for event in recent_events %}
+          <article class="event-row"><span class="event-dot"></span><div class="event-main"><div class="event-title">{{ event.event_name }} <span>scanner {{ event.agent_id }}</span></div><pre>{{ event.payload|tojson }}</pre><div class="agent-actions">{% if event.artifact_sha256 %}<a class="button button-small button-quiet" href="/api/events/{{ event.id }}/artifact">Download complete JSON</a>{% endif %}{% if event.event_name in ['scan_results', 'quickscan_results', 'deep_scan_results'] %}<button class="button button-small" data-scanner-pdf-event="{{ event.id }}">Generate PDF report</button>{% endif %}<span class="scanner-pdf-feedback" aria-live="polite"></span></div></div><time title="Received {{ event.created_at.isoformat() }} UTC">{{ (event.occurred_at or event.created_at).isoformat() }} UTC</time></article>
+          {% else %}
+          <div class="empty-events" id="no-events">Scan progress and findings will appear here as they arrive.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      {% for key, title, eyebrow, description in [
+        ('meraki', 'Meraki security report', 'NETWORK SECURITY', 'Connect a Meraki API key, select an organization, and generate a revisioned security report with progress and history.'),
+        ('dns', 'DNS & email health', 'EXTERNAL POSTURE', 'Run domain DNS checks for nameservers, MX, SPF, DKIM, and DMARC, then keep a dated history.'),
+        ('web', 'Website health', 'EXTERNAL POSTURE', 'Review the public HTTPS response, TLS certificate, and selected security headers.'),
+        ('cis', 'CIS profiles', 'ENDPOINT COMPLIANCE', 'Distribute versioned audit profiles and receive authenticated endpoint audit results.'),
+        ('reports', 'Report library', 'REPORTING', 'Generate and keep workspace reports from saved security-check evidence.')
+      ] %}
+      <section class="tab-panel" id="tab-{{ key }}">
+        <div class="page-intro"><div><p class="eyebrow">{{ eyebrow }}</p><h2>{{ title }}</h2><p class="muted">{{ description }}</p></div></div>
+        {% if key == 'meraki' %}
+        <section class="meraki-workspace">
+          <div class="meraki-connection-card">
+            <div class="meraki-connection-copy">
+              <p class="eyebrow">READ-ONLY API CONNECTION</p>
+              <h3>Connect a Meraki Dashboard API key</h3>
+              <p class="muted">The key is sent to Daedalus over this session, verified with Cisco, and encrypted before it is stored. It is never returned to this page or included in reports.</p>
+            </div>
+            <span class="meraki-connection-state" id="meraki-connection-state" aria-live="polite">Checking connection…</span>
+          </div>
+          {% if membership.role == 'admin' %}
+          <form class="meraki-key-form" id="meraki-key-form">
+            <label for="meraki-api-key">API key</label>
+            <input id="meraki-api-key" name="api_key" type="password" minlength="16" maxlength="256" autocomplete="new-password" spellcheck="false" required placeholder="Paste a read-only Dashboard API key">
+            <button class="button button-primary" type="submit">Verify and save key</button>
+            <button class="button button-quiet" type="button" id="meraki-remove-key" disabled>Remove saved key</button>
+          </form>
+          <p class="meraki-feedback" id="meraki-feedback" aria-live="polite"></p>
+          <div class="meraki-org-toolbar">
+            <div><strong>Meraki organization</strong><p class="muted">Choose an organization and explicitly authorize it for this workspace. Approval applies only here.</p></div>
+            <div class="meraki-org-actions">
+              <select id="meraki-org-select" aria-label="Meraki organization" disabled><option value="">Connect a key to load organizations</option></select>
+              <button class="button button-secondary" type="button" id="meraki-load-organizations" disabled>Load organizations</button>
+              <button class="button button-secondary" type="button" id="meraki-authorize-org" disabled>Authorize for workspace</button>
+              <button class="button button-quiet" type="button" id="meraki-revoke-org" disabled>Revoke access</button>
+              <button class="button button-primary" type="button" id="meraki-generate-report" disabled>Generate security report</button>
+              <span class="meraki-scope-state" id="meraki-org-scope-state" aria-live="polite">Load organizations to manage workspace access.</span>
+            </div>
+          </div>
+          {% else %}
+          <p class="check-scope-note">Only workspace admins can configure the connection or request new Meraki reports. Available workspace reports appear below.</p>
+          {% endif %}
+          <div class="section-heading check-subheading"><div><p class="eyebrow">WORKSPACE REPORTS</p><h3>Meraki report history</h3></div></div>
+          <p class="meraki-feedback" id="meraki-report-library-status" aria-live="polite">Reports are scoped to this workspace.</p>
+          <p class="check-scope-note">Reports are immutable read-only snapshots of device availability and selected appliance security settings at collection time. Unsupported API endpoints are recorded as coverage gaps.</p>
+          <div class="report-job-list" id="meraki-report-job-list" aria-live="polite"><div class="empty-events">Loading Meraki report history…</div></div>
+        </section>
+        {% elif key == 'cis' %}
+        <section class="cis-workspace">
+          <div class="cis-hero-card">
+            <div><p class="eyebrow">ENDPOINT COMPLIANCE</p><h3>Distribute profiles and review endpoint results</h3><p class="muted">Publish versioned macOS and browser audit profiles, give the CSP client a workspace upload configuration, then compare each endpoint’s check results over time.</p></div>
+            <div class="cis-hero-metrics" id="cis-summary-metrics" aria-live="polite"><div class="cis-mini-metric"><strong>—</strong><span>Enrolled devices</span></div><div class="cis-mini-metric"><strong>—</strong><span>Published profiles</span></div><div class="cis-mini-metric"><strong>—</strong><span>Reports received</span></div></div>
+          </div>
+          <p class="cis-alignment-note"><strong>macOS 26 Tahoe profiles:</strong> Level 1 and Level 2 are based on the pinned NIST mSCP Tahoe Revision 3 baselines for <a href="https://www.cisecurity.org/benchmark/apple_os" target="_blank" rel="noopener noreferrer">CIS macOS 26.0 Benchmark v1.1.0</a>. The CSP client runs only its bundled read-only mappings; unsupported checks stay manual. Preference results describe the reporting user’s effective settings, while system checks describe the device; they do not prove enforcement for every user. The displayed percentage is a pass rate across all checks, not a CIS attestation. Source attribution and license are included with each profile.</p>
+          <div class="cis-key-card">
+            <div><p class="eyebrow">CLIENT CONNECTION</p><h3>Connect the CSP CIS client</h3><p class="muted">Choose a profile for the downloaded client config. Daedalus stores only a hash of the workspace upload key. Rotating or revoking it stops older client configurations from uploading.</p><p class="cis-feedback" id="cis-key-status" aria-live="polite">Checking workspace connection…</p></div>
+            {% if membership.role == 'admin' %}
+            <div class="cis-key-actions">
+              <label class="cis-client-profile-picker" for="cis-client-profile">Client profile<select id="cis-client-profile"><option value="">Newest compatible macOS profile</option></select></label>
+              <button class="button button-primary" type="button" id="cis-issue-key">Issue client key and download config</button>
+              <button class="button button-quiet" type="button" id="cis-revoke-key" disabled>Revoke client key</button>
+            </div>
+            {% endif %}
+          </div>
+          {% if demo_mode %}
+          <div class="cis-key-card">
+            <div><h3>Mac demo client</h3><p class="muted">Apple Silicon download, unsigned and not notarized. Import your workspace configuration before running an audit. macOS 26 profiles run only on macOS 26; this package has passed fixture tests, not a live Tahoe audit.</p></div>
+            <a class="button button-secondary" href="/api/cis/client-package/download">Download Mac demo client</a>
+          </div>
+          {% endif %}
+          <div class="cis-section-toolbar"><div><p class="eyebrow">PUBLISHED PROFILES</p><h3>Workspace profile library</h3><p class="muted">Published versions are immutable. Clients can retrieve workspace profiles using the key in the configuration file.</p></div>
+            {% if membership.role == 'admin' %}<div class="cis-profile-install-actions"><button class="button button-secondary" type="button" id="cis-install-macos26">Install macOS 26 Level 1 + 2 profiles</button><button class="button button-quiet" type="button" id="cis-install-starter">Install CSP starter profile</button></div>{% endif %}
+          </div>
+          <div class="cis-profile-list" id="cis-profile-list" aria-live="polite"><div class="empty-events">Loading published CIS profiles…</div></div>
+          {% if membership.role == 'admin' %}
+          <details class="cis-import-panel">
+            <summary>Publish a profile from JSON</summary>
+            <form id="cis-profile-form" class="cis-profile-form">
+              <label>Profile name<input name="name" required maxlength="200" placeholder="CSP macOS & Browser Baseline"></label>
+              <label>Version<input name="version" required maxlength="32" placeholder="1.1.0"></label>
+              <label>Platform<select name="platform"><option value="multi">Multi-platform</option><option value="macos">macOS</option><option value="browser">Browser</option><option value="windows">Windows</option><option value="linux">Linux</option></select></label>
+              <label>Description<input name="description" maxlength="1000" placeholder="What this profile covers"></label>
+              <label class="cis-file-field">Profile JSON<input name="profile_file" type="file" accept=".json,application/json" required><small>Use a downloaded profile JSON as a starting point; edit its checks and choose a new version.</small></label>
+              <button class="button button-primary" type="submit">Validate and publish new version</button>
+            </form>
+          </details>
+          {% endif %}
+          <div class="section-heading check-subheading"><div><p class="eyebrow">SCANNER ENDPOINTS</p><h3>Client check-in status</h3></div></div>
+          <p class="check-scope-note">The menu-bar client runs at launch, on demand, and every 24 hours while open. A device is marked offline after 36 hours without a report.</p>
+          <div class="cis-device-list" id="cis-device-list" aria-live="polite"><div class="empty-events">No endpoint has checked in yet.</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">ENDPOINT REPORTS</p><h3>Latest compliance snapshots</h3></div></div>
+          <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">CHANGES BETWEEN REPORTS</p><h3>Check status history</h3></div></div>
+          <div class="cis-change-list" id="cis-change-list" aria-live="polite"><div class="empty-events">Changes appear after an endpoint sends a later report.</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">GENERATED PDFS</p><h3>Endpoint report library</h3></div></div>
+          <p class="meraki-feedback" id="cis-pdf-library-status" aria-live="polite">PDF jobs are scoped to this workspace.</p>
+          <div class="report-job-list" id="cis-pdf-job-list" aria-live="polite"><div class="empty-events">No CIS endpoint PDFs generated yet.</div></div>
+        </section>
+        {% elif key in ['dns', 'web'] %}
+        <section class="external-check-workspace" data-external-check="{{ key }}">
+          <div class="check-toolbar">
+            <div>
+              <span class="check-status" id="{{ key }}-check-status">No check run yet</span>
+              <p class="muted" id="{{ key }}-check-last-run">Run a check to establish the first baseline.</p>
+            </div>
+            {% if membership.role == 'admin' %}
+            <button class="button button-primary" type="button" data-run-external-check="{{ key }}">Run {{ 'DNS' if key == 'dns' else 'website' }} check</button>
+            {% endif %}
+          </div>
+          <section class="external-schedule-card" aria-label="Recurring check schedule">
+            <div class="external-schedule-copy">
+              <span class="check-status" id="{{ key }}-schedule-status">Recurring checks are off</span>
+              <p class="muted" id="{{ key }}-schedule-next-run">Schedules start one full interval after they are saved.</p>
+            </div>
+            {% if membership.role == 'admin' %}
+            <div class="external-schedule-controls">
+              <label class="schedule-toggle" for="{{ key }}-schedule-enabled"><input id="{{ key }}-schedule-enabled" type="checkbox" data-schedule-enabled="{{ key }}" {% if organization.verification_status != 'verified' %}disabled{% endif %}><span>Enable recurring checks</span></label>
+              <select id="{{ key }}-schedule-interval" aria-label="Check interval" data-schedule-interval="{{ key }}" disabled>
+                <option value="24">Daily</option>
+                <option value="168">Weekly</option>
+              </select>
+              <button class="button button-secondary" type="button" data-save-schedule="{{ key }}">Save schedule</button>
+            </div>
+            {% endif %}
+            <p class="check-scope-note schedule-note">Recurring checks run only for TXT-verified workspaces and use the same passive checks, saved history, comparisons, and audit log as manual runs. An admin can disable them at any time.</p>
+          </section>
+          {% if key == 'dns' %}
+          <p class="check-scope-note">DNS and email records can be checked on demand or on a daily/weekly schedule after TXT domain verification. Results include root and www address/alias records, mail routing, SPF, DMARC, and six common DKIM selectors; selector discovery and DNSSEC checks are not included.</p>
+          {% else %}
+          <p class="check-scope-note">Passive checks make one HTTPS request to the domain root and inventory linked references. Separate fixed-path exposure checks are explicit, bounded requests against this registered domain and never use Nmap. Results are signature observations that need review, not an assurance that the site is free of vulnerabilities.</p>
+          {% endif %}
+          {% if key == 'dns' %}
+          <div class="check-record-grid" id="dns-record-grid" aria-live="polite"><div class="empty-events">Loading stored DNS results…</div></div>
+          <p class="check-footnote">DKIM checks cover six common selectors and are not an exhaustive selector discovery process.</p>
+          {% else %}
+          <div class="website-summary-grid" id="web-summary-grid" aria-live="polite"><div class="empty-events">Loading stored website results…</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">RESPONSE HEADERS</p><h3>Browser security policy</h3></div></div>
+          <div class="check-record-grid" id="web-header-grid" aria-live="polite"><div class="empty-events">No website result yet.</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">LINKED VENDORS</p><h3>External page dependencies</h3></div></div>
+          <p class="check-scope-note">Hosts are derived from scripts, stylesheets, resource hints, embedded frames, and media references in the root page. This inventory identifies linked providers; it does not assess their security or load their content.</p>
+          <div class="check-record-grid" id="web-vendor-grid" aria-live="polite"><div class="empty-events">External dependency results will appear after a website check.</div></div>
+          {% endif %}
+          {% if key == 'web' %}
+          <section class="external-schedule-card active-exposure-card" aria-labelledby="web-active-title">
+            <div class="section-heading check-subheading"><div><p class="eyebrow">AUTHORIZED ACTIVE CHECK</p><h3 id="web-active-title">Common public exposure paths</h3></div></div>
+            <p class="check-scope-note">Checks five fixed paths and a random missing-page baseline. It records signature IDs only; no response contents or secret values are stored. Coverage gaps and soft-404 responses remain inconclusive. This is not Nikto and does not crawl the site.</p>
+            <div class="check-toolbar"><span class="check-status" id="web-active-status">No active check run yet</span>
+            {% if membership.role == 'admin' %}<button class="button button-secondary" type="button" data-run-active-exposure {% if not workspace_controls_enabled %}disabled{% endif %}>Run bounded exposure check</button>{% endif %}</div>
+            <p class="muted" id="web-active-feedback" aria-live="polite"></p>
+            <div class="check-run-list" id="web-active-runs" aria-live="polite"><div class="empty-events">No active check history yet.</div></div>
+          </section>
+          {% endif %}
+          <div class="section-heading check-subheading"><div><p class="eyebrow">PERSISTED RUNS</p><h3>Check history</h3></div></div>
+          <div class="check-run-list" id="{{ key }}-check-runs" aria-live="polite"><div class="empty-events">No check history yet.</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">DETECTED DIFFERENCES</p><h3>Change history</h3></div></div>
+          <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
+        </section>
+        {% elif key == 'reports' %}
+        <section class="report-library">
+          <div class="report-toolbar">
+            <div>
+              <span class="check-status" id="report-library-status">Reports are scoped to this workspace.</span>
+              <p class="muted">Generate a point-in-time PDF from the latest saved DNS, email, and website results.</p>
+            </div>
+            <button class="button button-primary" type="button" data-generate-report>Generate posture PDF</button>
+          </div>
+          <p class="check-scope-note">The PDF uses saved check snapshots and their recorded differences. It does not start new scans or include API credentials.</p>
+          <div class="report-job-list" id="report-job-list" aria-live="polite"><div class="empty-events">Loading workspace reports…</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">INTERNAL NETWORK</p><h3>NmapUI scan reports</h3></div></div>
+          <p class="muted">Full-run PDFs use the scanner's saved event history. Generation progress and finished downloads stay with this workspace.</p>
+          <span class="check-status" id="scanner-report-library-status" aria-live="polite">Reports are scoped to this workspace.</span>
+          <div class="report-job-list" id="scanner-report-job-list" aria-live="polite"><div class="empty-events">Loading scanner reports…</div></div>
+        </section>
+        {% else %}
+        <div class="module-placeholder">
+          <div class="module-icon teal">◌</div>
+          <h3>{{ title }} is in the Daedalus build plan</h3>
+          <p class="muted">This workspace shell is in place. The local demo is being built around the real NmapUI Mac scanner connection first, then these existing audit/report workflows will be brought into the same organization and report history.</p>
+        </div>
+        {% endif %}
+      </section>
+      {% endfor %}
+      <section class="tab-panel" id="tab-members">
+        <div class="page-intro"><div><p class="eyebrow">WORKSPACE ACCESS</p><h2>Members &amp; access</h2><p class="muted">Membership is approved separately for each domain. Every approved shared member has the user role.</p></div></div>
+        <div id="member-access-note" class="security-note hidden"></div>
+        <div id="membership-list" class="membership-list" aria-live="polite"><div class="empty-events">Loading workspace members…</div></div>
+        {% if membership.role == 'admin' %}
+        <div class="section-heading"><div><p class="eyebrow">ADMIN ACTION HISTORY</p><h2>Workspace audit log</h2></div></div>
+        <div id="audit-log-list" class="audit-log-list" aria-live="polite"><div class="empty-events">Loading audit log…</div></div>
+        {% endif %}
+      </section>
+      <section class="tab-panel" id="tab-notifications">
+        <div class="page-intro"><div><p class="eyebrow">WORKSPACE INBOX</p><h2>Security notifications</h2><p class="muted">DNS, email, website, Meraki, CIS endpoint, and internal scan changes. Notices remain here when you are offline.</p></div></div>
+        <div id="notification-inbox-status" class="check-status" aria-live="polite">Loading notifications…</div>
+        <div id="notification-list" class="notification-list" aria-live="polite"><div class="empty-events">Loading notifications…</div></div>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+  <div id="check-toast" class="check-toast hidden" role="status" aria-live="polite"></div>
+  <dialog class="workspace-dialog" id="workspace-dialog" aria-labelledby="workspace-dialog-title">
+    <div class="dialog-heading"><div><p class="eyebrow">DAEDALUS WORKSPACES</p><h2 id="workspace-dialog-title">Create or join a workspace</h2></div><button class="icon-button dialog-close" type="button" data-close-workspace-dialog aria-label="Close">×</button></div>
+    <p class="muted">Domains have independent workspaces. Matching email addresses do not grant access automatically.</p>
+    <div class="workspace-forms">
+      <form id="create-workspace-form" class="workspace-form">
+        <h3>Create a domain workspace</h3>
+        <label>Workspace name<input name="name" required minlength="2" maxlength="200" placeholder="Cyber Security Pilot"></label>
+        <label>Domain you manage<input name="domain" required minlength="3" maxlength="253" placeholder="example.com" autocomplete="url"></label>
+        <button class="button button-primary" type="submit">Create workspace</button>
+        <small>You'll start as its admin. Add a DNS TXT record within 30 days to verify ownership.</small>
+      </form>
+      <form id="request-access-form" class="workspace-form">
+        <h3>Request access</h3>
+        <label>Workspace domain<input name="domain" required minlength="3" maxlength="253" placeholder="example.com"></label>
+        <button class="button button-secondary" type="submit">Ask for access</button>
+        <small>The workspace admin approves requests. Approval grants the user role for this workspace only.</small>
+      </form>
+    </div>
+    <p class="workspace-feedback" id="workspace-feedback" aria-live="polite"></p>
+    <div class="created-challenge hidden" id="created-challenge">
+      <strong>Publish this DNS TXT record to verify the new workspace</strong>
+      <small>Record name</small><code id="created-record-name"></code>
+      <small>Record value</small><code id="created-record-value"></code>
+      <p class="fine-print" id="created-probation"></p>
+      <button class="button button-primary" id="open-created-workspace" type="button">Open this workspace</button>
+    </div>
+    <div id="dialog-workspace-list" class="workspace-request-list"></div>
+  </dialog>
+  {% if demo_mode %}
+  {% if user.google_subject == 'daedalus-local-demo-member' %}
+  <form class="demo-switch" method="post" action="/dev/login"><button type="submit" class="button button-small button-quiet">Switch to CSP admin</button></form>
+  {% else %}
+  <form class="demo-switch" method="post" action="/dev/login/member"><button type="submit" class="button button-small button-quiet">Switch to demo member</button></form>
+  {% endif %}
+  {% endif %}
+  <script src="/static/js/dashboard.js?v=daedalus-20261002-034" defer></script>
+</body>
+</html>

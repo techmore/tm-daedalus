@@ -1,0 +1,1089 @@
+{
+  "slug": "cis-macos-26-tahoe-level-2",
+  "name": "CIS Apple macOS 26 Tahoe Benchmark v1.1.0 — Level 2",
+  "version": "1.1.0-r2",
+  "platform": "macos",
+  "description": "119 rules from the pinned NIST mSCP baseline. The installed client implements a documented subset as bundled read-only checks and reports unsupported rules as manual. Check coverage depends on the client build. The percentage is a pass rate, not a CIS attestation.",
+  "benchmark": {
+    "name": "CIS Apple macOS 26.0 Tahoe Benchmark",
+    "version": "1.1.0",
+    "level": "2",
+    "os_version": "26.0",
+    "source": "NIST macOS Security Compliance Project (mSCP)",
+    "source_release": "Tahoe Guidance Revision 3",
+    "source_commit": "beceac1d21baf9d924c2780f2e248577435bbfb1",
+    "source_url": "https://github.com/usnistgov/macos_security/tree/beceac1d21baf9d924c2780f2e248577435bbfb1/baselines/cis_lvl2.yaml",
+    "license": "CC BY 4.0",
+    "attribution": "NIST macOS Security Compliance Project; derived from its CIS Level baseline.",
+    "disclaimer": "CIS and NIST do not endorse Daedalus or the CSP client."
+  },
+  "checks": [
+    {
+      "id": "audit_acls_files_configure",
+      "rule_id": "audit_acls_files_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Files to Not Contain Access Control Lists",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_acls_folders_configure",
+      "rule_id": "audit_acls_folders_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Folder to Not Contain Access Control Lists",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_auditd_enabled",
+      "rule_id": "audit_auditd_enabled",
+      "category": "macos",
+      "description": "Enable Security Auditing",
+      "benchmark_ids": [
+        "3.1"
+      ]
+    },
+    {
+      "id": "audit_control_acls_configure",
+      "rule_id": "audit_control_acls_configure",
+      "category": "macos",
+      "description": "Configure Audit_Control to Not Contain Access Control Lists",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_control_group_configure",
+      "rule_id": "audit_control_group_configure",
+      "category": "macos",
+      "description": "Configure Audit_Control Group to Wheel",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_control_mode_configure",
+      "rule_id": "audit_control_mode_configure",
+      "category": "macos",
+      "description": "Configure Audit_Control Owner to Mode 440 or Less Permissive",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_control_owner_configure",
+      "rule_id": "audit_control_owner_configure",
+      "category": "macos",
+      "description": "Configure Audit_Control Owner to Root",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_files_group_configure",
+      "rule_id": "audit_files_group_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Files Group to Wheel",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_files_mode_configure",
+      "rule_id": "audit_files_mode_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Files to Mode 440 or Less Permissive",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_files_owner_configure",
+      "rule_id": "audit_files_owner_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Files to be Owned by Root",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_flags_aa_configure",
+      "rule_id": "audit_flags_aa_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Authorization and Authentication Events",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_flags_ad_configure",
+      "rule_id": "audit_flags_ad_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Administrative Action Events",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_flags_ex_configure",
+      "rule_id": "audit_flags_ex_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Failed Program Execution on the System",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_flags_fm_failed_configure",
+      "rule_id": "audit_flags_fm_failed_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Failed Change of Object Attributes",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_flags_fr_configure",
+      "rule_id": "audit_flags_fr_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Failed Read Actions on the System",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_flags_fw_configure",
+      "rule_id": "audit_flags_fw_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Failed Write Actions on the System",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_flags_lo_configure",
+      "rule_id": "audit_flags_lo_configure",
+      "category": "macos",
+      "description": "Configure System to Audit All Log In and Log Out Events",
+      "benchmark_ids": [
+        "3.2"
+      ]
+    },
+    {
+      "id": "audit_folder_group_configure",
+      "rule_id": "audit_folder_group_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Folders Group to Wheel",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_folder_owner_configure",
+      "rule_id": "audit_folder_owner_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Folders to be Owned by Root",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_folders_mode_configure",
+      "rule_id": "audit_folders_mode_configure",
+      "category": "macos",
+      "description": "Configure Audit Log Folders to Mode 700 or Less Permissive",
+      "benchmark_ids": [
+        "3.5"
+      ]
+    },
+    {
+      "id": "audit_retention_configure",
+      "rule_id": "audit_retention_configure",
+      "category": "macos",
+      "description": "Configure Audit Retention to $ODV",
+      "benchmark_ids": [
+        "3.4"
+      ]
+    },
+    {
+      "id": "icloud_sync_disable",
+      "rule_id": "icloud_sync_disable",
+      "category": "macos",
+      "description": "Disable iCloud Desktop and Document Folder Sync",
+      "benchmark_ids": [
+        "2.1.1.3"
+      ]
+    },
+    {
+      "id": "os_airdrop_disable",
+      "rule_id": "os_airdrop_disable",
+      "category": "macos",
+      "description": "Disable AirDrop",
+      "benchmark_ids": [
+        "2.3.1.1"
+      ]
+    },
+    {
+      "id": "os_anti_virus_installed",
+      "rule_id": "os_anti_virus_installed",
+      "category": "macos",
+      "description": "Must Use an Approved Antivirus Program",
+      "benchmark_ids": [
+        "5.10"
+      ]
+    },
+    {
+      "id": "os_authenticated_root_enable",
+      "rule_id": "os_authenticated_root_enable",
+      "category": "macos",
+      "description": "Enable Authenticated Root",
+      "benchmark_ids": [
+        "5.1.4"
+      ]
+    },
+    {
+      "id": "os_bonjour_disable",
+      "rule_id": "os_bonjour_disable",
+      "category": "macos",
+      "description": "Disable Bonjour Multicast",
+      "benchmark_ids": [
+        "4.1"
+      ]
+    },
+    {
+      "id": "os_config_data_install_enforce",
+      "rule_id": "os_config_data_install_enforce",
+      "category": "macos",
+      "description": "Enforce Installation of XProtect Remediator and Gatekeeper Updates Automatically",
+      "benchmark_ids": [
+        "1.5"
+      ]
+    },
+    {
+      "id": "os_external_apfs_hfs_volumes_encrypted",
+      "rule_id": "os_external_apfs_hfs_volumes_encrypted",
+      "category": "macos",
+      "description": "Ensure All APFS and HFS+ External User Storage Volumes Are Encrypted",
+      "benchmark_ids": [
+        "5.3.2"
+      ]
+    },
+    {
+      "id": "os_gatekeeper_enable",
+      "rule_id": "os_gatekeeper_enable",
+      "category": "macos",
+      "description": "Enable Gatekeeper",
+      "benchmark_ids": [
+        "2.6.5"
+      ]
+    },
+    {
+      "id": "os_guest_folder_removed",
+      "rule_id": "os_guest_folder_removed",
+      "category": "macos",
+      "description": "Remove Guest Folder if Present",
+      "benchmark_ids": [
+        "5.9"
+      ]
+    },
+    {
+      "id": "os_home_folders_secure",
+      "rule_id": "os_home_folders_secure",
+      "category": "macos",
+      "description": "Secure User's Home Folders",
+      "benchmark_ids": [
+        "5.1.1"
+      ]
+    },
+    {
+      "id": "os_httpd_disable",
+      "rule_id": "os_httpd_disable",
+      "category": "macos",
+      "description": "Disable the Built-in Web Server",
+      "benchmark_ids": [
+        "4.2"
+      ]
+    },
+    {
+      "id": "os_install_log_retention_configure",
+      "rule_id": "os_install_log_retention_configure",
+      "category": "macos",
+      "description": "Configure Install.log Retention to $ODV",
+      "benchmark_ids": [
+        "3.3"
+      ]
+    },
+    {
+      "id": "os_internal_apfs_volumes_encrypted",
+      "rule_id": "os_internal_apfs_volumes_encrypted",
+      "category": "macos",
+      "description": "Ensure All Internal User Storage APFS Volumes Are Encrypted",
+      "benchmark_ids": [
+        "5.3.1"
+      ]
+    },
+    {
+      "id": "os_mail_summary_disable",
+      "rule_id": "os_mail_summary_disable",
+      "category": "macos",
+      "description": "Disable Apple Intelligence Mail Summary",
+      "benchmark_ids": [
+        "2.5.1.3"
+      ]
+    },
+    {
+      "id": "os_mobile_file_integrity_enable",
+      "rule_id": "os_mobile_file_integrity_enable",
+      "category": "macos",
+      "description": "Enable Apple Mobile File Integrity",
+      "benchmark_ids": [
+        "5.1.3"
+      ]
+    },
+    {
+      "id": "os_nfsd_disable",
+      "rule_id": "os_nfsd_disable",
+      "category": "macos",
+      "description": "Disable Network File System Service",
+      "benchmark_ids": [
+        "4.3"
+      ]
+    },
+    {
+      "id": "os_notes_transcription_disable",
+      "rule_id": "os_notes_transcription_disable",
+      "category": "macos",
+      "description": "Disable Apple Intelligence Notes Transcription",
+      "benchmark_ids": [
+        "2.5.1.4"
+      ]
+    },
+    {
+      "id": "os_notes_transcription_summary_disable",
+      "rule_id": "os_notes_transcription_summary_disable",
+      "category": "macos",
+      "description": "Disable Apple Intelligence Notes Transcription Summary",
+      "benchmark_ids": [
+        "2.5.1.4"
+      ]
+    },
+    {
+      "id": "os_on_device_dictation_enforce",
+      "rule_id": "os_on_device_dictation_enforce",
+      "category": "macos",
+      "description": "Enforce On Device Dictation",
+      "benchmark_ids": [
+        "2.18.1"
+      ]
+    },
+    {
+      "id": "os_password_hint_remove",
+      "rule_id": "os_password_hint_remove",
+      "category": "macos",
+      "description": "Remove Password Hint From User Accounts",
+      "benchmark_ids": [
+        "2.12.1"
+      ]
+    },
+    {
+      "id": "os_policy_banner_loginwindow_enforce",
+      "rule_id": "os_policy_banner_loginwindow_enforce",
+      "category": "macos",
+      "description": "Display Policy Banner at Login Window",
+      "benchmark_ids": [
+        "5.8"
+      ]
+    },
+    {
+      "id": "os_power_nap_disable",
+      "rule_id": "os_power_nap_disable",
+      "category": "macos",
+      "description": "Disable Power Nap",
+      "benchmark_ids": [
+        "2.10.2"
+      ]
+    },
+    {
+      "id": "os_root_disable",
+      "rule_id": "os_root_disable",
+      "category": "macos",
+      "description": "Disable Root Login",
+      "benchmark_ids": [
+        "5.6"
+      ]
+    },
+    {
+      "id": "os_safari_advertising_privacy_protection_enable",
+      "rule_id": "os_safari_advertising_privacy_protection_enable",
+      "category": "macos",
+      "description": "Ensure Advertising Privacy Protection in Safari Is Enabled",
+      "benchmark_ids": [
+        "6.3.6"
+      ]
+    },
+    {
+      "id": "os_safari_open_safe_downloads_disable",
+      "rule_id": "os_safari_open_safe_downloads_disable",
+      "category": "macos",
+      "description": "Disable Automatic Opening of Safe Files in Safari",
+      "benchmark_ids": [
+        "6.3.1"
+      ]
+    },
+    {
+      "id": "os_safari_prevent_cross-site_tracking_enable",
+      "rule_id": "os_safari_prevent_cross-site_tracking_enable",
+      "category": "macos",
+      "description": "Ensure Prevent Cross-site Tracking in Safari Is Enabled",
+      "benchmark_ids": [
+        "6.3.4"
+      ]
+    },
+    {
+      "id": "os_safari_show_full_website_address_enable",
+      "rule_id": "os_safari_show_full_website_address_enable",
+      "category": "macos",
+      "description": "Ensure Show Full Website Address in Safari Is Enabled",
+      "benchmark_ids": [
+        "6.3.7"
+      ]
+    },
+    {
+      "id": "os_safari_show_status_bar_enabled",
+      "rule_id": "os_safari_show_status_bar_enabled",
+      "category": "macos",
+      "description": "Ensure Show Safari shows the Status Bar is Enabled",
+      "benchmark_ids": [
+        "6.3.10"
+      ]
+    },
+    {
+      "id": "os_safari_warn_fraudulent_website_enable",
+      "rule_id": "os_safari_warn_fraudulent_website_enable",
+      "category": "macos",
+      "description": "Ensure Warn When Visiting A Fraudulent Website in Safari Is Enabled",
+      "benchmark_ids": [
+        "6.3.3"
+      ]
+    },
+    {
+      "id": "os_sip_enable",
+      "rule_id": "os_sip_enable",
+      "category": "macos",
+      "description": "Ensure System Integrity Protection is Enabled",
+      "benchmark_ids": [
+        "5.1.2"
+      ]
+    },
+    {
+      "id": "os_sleep_and_display_sleep_apple_silicon_enable",
+      "rule_id": "os_sleep_and_display_sleep_apple_silicon_enable",
+      "category": "macos",
+      "description": "Ensure Sleep and Display Sleep Is Enabled on Apple Silicon Devices",
+      "benchmark_ids": [
+        "2.10.1.2"
+      ]
+    },
+    {
+      "id": "os_software_update_app_update_enforce",
+      "rule_id": "os_software_update_app_update_enforce",
+      "category": "macos",
+      "description": "Enforce Software Update App Update Updates Automatically",
+      "benchmark_ids": [
+        "1.4"
+      ]
+    },
+    {
+      "id": "os_software_update_deferral",
+      "rule_id": "os_software_update_deferral",
+      "category": "macos",
+      "description": "Ensure Software Update Deferment Is Less Than or Equal to $ODV Days",
+      "benchmark_ids": [
+        "1.6"
+      ]
+    },
+    {
+      "id": "os_sudo_log_enforce",
+      "rule_id": "os_sudo_log_enforce",
+      "category": "macos",
+      "description": "Configure Sudo To Log Events",
+      "benchmark_ids": [
+        "5.11"
+      ]
+    },
+    {
+      "id": "os_sudo_timeout_configure",
+      "rule_id": "os_sudo_timeout_configure",
+      "category": "macos",
+      "description": "Configure Sudo Timeout Period to $ODV",
+      "benchmark_ids": [
+        "5.4"
+      ]
+    },
+    {
+      "id": "os_sudoers_timestamp_type_configure",
+      "rule_id": "os_sudoers_timestamp_type_configure",
+      "category": "macos",
+      "description": "Configure Sudoers Timestamp Type",
+      "benchmark_ids": [
+        "5.5"
+      ]
+    },
+    {
+      "id": "os_system_wide_applications_configure",
+      "rule_id": "os_system_wide_applications_configure",
+      "category": "macos",
+      "description": "Ensure Appropriate Permissions Are Enabled for System Wide Applications",
+      "benchmark_ids": [
+        "5.1.5"
+      ]
+    },
+    {
+      "id": "os_terminal_secure_keyboard_enable",
+      "rule_id": "os_terminal_secure_keyboard_enable",
+      "category": "macos",
+      "description": "Ensure Secure Keyboard Entry Terminal.app is Enabled",
+      "benchmark_ids": [
+        "6.4.1"
+      ]
+    },
+    {
+      "id": "os_time_server_enabled",
+      "rule_id": "os_time_server_enabled",
+      "category": "macos",
+      "description": "Enable Time Synchronization Daemon",
+      "benchmark_ids": [
+        "2.3.2.2"
+      ]
+    },
+    {
+      "id": "os_unlock_active_user_session_disable",
+      "rule_id": "os_unlock_active_user_session_disable",
+      "category": "macos",
+      "description": "Disable Login to Other User's Active and Locked Sessions",
+      "benchmark_ids": [
+        "5.7"
+      ]
+    },
+    {
+      "id": "os_world_writable_library_folder_configure",
+      "rule_id": "os_world_writable_library_folder_configure",
+      "category": "macos",
+      "description": "Ensure No World Writable Files Exist in the Library Folder",
+      "benchmark_ids": [
+        "5.1.7"
+      ]
+    },
+    {
+      "id": "os_world_writable_system_folder_configure",
+      "rule_id": "os_world_writable_system_folder_configure",
+      "category": "macos",
+      "description": "Ensure No World Writable Files Exist in the System Folder",
+      "benchmark_ids": [
+        "5.1.6"
+      ]
+    },
+    {
+      "id": "os_writing_tools_disable",
+      "rule_id": "os_writing_tools_disable",
+      "category": "macos",
+      "description": "Disable Apple Intelligence Writing Tools",
+      "benchmark_ids": [
+        "2.5.1.2"
+      ]
+    },
+    {
+      "id": "pwpolicy_account_lockout_enforce",
+      "rule_id": "pwpolicy_account_lockout_enforce",
+      "category": "macos",
+      "description": "Limit Consecutive Failed Login Attempts to $ODV",
+      "benchmark_ids": [
+        "5.2.1"
+      ]
+    },
+    {
+      "id": "pwpolicy_account_lockout_timeout_enforce",
+      "rule_id": "pwpolicy_account_lockout_timeout_enforce",
+      "category": "macos",
+      "description": "Set Account Lockout Time to $ODV Minutes",
+      "benchmark_ids": [
+        "5.2.1"
+      ]
+    },
+    {
+      "id": "pwpolicy_alpha_numeric_enforce",
+      "rule_id": "pwpolicy_alpha_numeric_enforce",
+      "category": "macos",
+      "description": "Require Passwords Contain a Minimum of One Numeric Character",
+      "benchmark_ids": [
+        "5.2.3",
+        "5.2.4"
+      ]
+    },
+    {
+      "id": "pwpolicy_custom_regex_enforce",
+      "rule_id": "pwpolicy_custom_regex_enforce",
+      "category": "macos",
+      "description": "Require Passwords to Match the Defined Custom Regular Expression",
+      "benchmark_ids": [
+        "5.2.6"
+      ]
+    },
+    {
+      "id": "pwpolicy_history_enforce",
+      "rule_id": "pwpolicy_history_enforce",
+      "category": "macos",
+      "description": "Prohibit Password Reuse for a Minimum of $ODV Generations",
+      "benchmark_ids": [
+        "5.2.8"
+      ]
+    },
+    {
+      "id": "pwpolicy_max_lifetime_enforce",
+      "rule_id": "pwpolicy_max_lifetime_enforce",
+      "category": "macos",
+      "description": "Restrict Maximum Password Lifetime to $ODV Days",
+      "benchmark_ids": [
+        "5.2.7"
+      ]
+    },
+    {
+      "id": "pwpolicy_minimum_length_enforce",
+      "rule_id": "pwpolicy_minimum_length_enforce",
+      "category": "macos",
+      "description": "Require a Minimum Password Length of $ODV Characters",
+      "benchmark_ids": [
+        "5.2.2"
+      ]
+    },
+    {
+      "id": "pwpolicy_special_character_enforce",
+      "rule_id": "pwpolicy_special_character_enforce",
+      "category": "macos",
+      "description": "Require Passwords Contain a Minimum of One Special Character",
+      "benchmark_ids": [
+        "5.2.5"
+      ]
+    },
+    {
+      "id": "system_settings_airplay_receiver_disable",
+      "rule_id": "system_settings_airplay_receiver_disable",
+      "category": "macos",
+      "description": "Disable Airplay Receiver",
+      "benchmark_ids": [
+        "2.3.1.2"
+      ]
+    },
+    {
+      "id": "system_settings_automatic_login_disable",
+      "rule_id": "system_settings_automatic_login_disable",
+      "category": "macos",
+      "description": "Disable Unattended or Automatic Logon to the System",
+      "benchmark_ids": [
+        "2.13.3"
+      ]
+    },
+    {
+      "id": "system_settings_bluetooth_sharing_disable",
+      "rule_id": "system_settings_bluetooth_sharing_disable",
+      "category": "macos",
+      "description": "Disable Bluetooth Sharing",
+      "benchmark_ids": [
+        "2.3.3.10"
+      ]
+    },
+    {
+      "id": "system_settings_content_caching_disable",
+      "rule_id": "system_settings_content_caching_disable",
+      "category": "macos",
+      "description": "Disable Content Caching Service",
+      "benchmark_ids": [
+        "2.3.3.8"
+      ]
+    },
+    {
+      "id": "system_settings_critical_update_install_enforce",
+      "rule_id": "system_settings_critical_update_install_enforce",
+      "category": "macos",
+      "description": "Enforce Critical Security Updates to be Installed",
+      "benchmark_ids": [
+        "1.5"
+      ]
+    },
+    {
+      "id": "system_settings_diagnostics_reports_disable",
+      "rule_id": "system_settings_diagnostics_reports_disable",
+      "category": "macos",
+      "description": "Disable Sending Diagnostic and Usage Data to Apple",
+      "benchmark_ids": [
+        "2.6.3.1",
+        "2.6.3.4"
+      ]
+    },
+    {
+      "id": "system_settings_external_intelligence_disable",
+      "rule_id": "system_settings_external_intelligence_disable",
+      "category": "macos",
+      "description": "Disable External Intelligence Integrations",
+      "benchmark_ids": [
+        "2.5.1.1"
+      ]
+    },
+    {
+      "id": "system_settings_external_intelligence_sign_in_disable",
+      "rule_id": "system_settings_external_intelligence_sign_in_disable",
+      "category": "macos",
+      "description": "Disable External Intelligence Integration Sign In",
+      "benchmark_ids": [
+        "2.5.1.1"
+      ]
+    },
+    {
+      "id": "system_settings_filevault_enforce",
+      "rule_id": "system_settings_filevault_enforce",
+      "category": "macos",
+      "description": "Enforce FileVault",
+      "benchmark_ids": [
+        "2.6.6"
+      ]
+    },
+    {
+      "id": "system_settings_firewall_enable",
+      "rule_id": "system_settings_firewall_enable",
+      "category": "macos",
+      "description": "Enable macOS Application Firewall",
+      "benchmark_ids": [
+        "2.2.1"
+      ]
+    },
+    {
+      "id": "system_settings_firewall_stealth_mode_enable",
+      "rule_id": "system_settings_firewall_stealth_mode_enable",
+      "category": "macos",
+      "description": "Enable Firewall Stealth Mode",
+      "benchmark_ids": [
+        "2.2.2"
+      ]
+    },
+    {
+      "id": "system_settings_guest_access_smb_disable",
+      "rule_id": "system_settings_guest_access_smb_disable",
+      "category": "macos",
+      "description": "Disable Guest Access to Shared SMB Folders",
+      "benchmark_ids": [
+        "2.13.2"
+      ]
+    },
+    {
+      "id": "system_settings_guest_account_disable",
+      "rule_id": "system_settings_guest_account_disable",
+      "category": "macos",
+      "description": "Disable the Guest Account",
+      "benchmark_ids": [
+        "2.13.1"
+      ]
+    },
+    {
+      "id": "system_settings_hot_corners_secure",
+      "rule_id": "system_settings_hot_corners_secure",
+      "category": "macos",
+      "description": "Secure Hot Corners",
+      "benchmark_ids": [
+        "2.7.1"
+      ]
+    },
+    {
+      "id": "system_settings_improve_assistive_voice_disable",
+      "rule_id": "system_settings_improve_assistive_voice_disable",
+      "category": "macos",
+      "description": "Disable Sending Audio Recordings and Transcripts to Apple",
+      "benchmark_ids": [
+        "2.6.3.3"
+      ]
+    },
+    {
+      "id": "system_settings_improve_search_disable",
+      "rule_id": "system_settings_improve_search_disable",
+      "category": "macos",
+      "description": "Disable Improve Search Information to Apple",
+      "benchmark_ids": [
+        "2.9.1"
+      ]
+    },
+    {
+      "id": "system_settings_improve_siri_dictation_disable",
+      "rule_id": "system_settings_improve_siri_dictation_disable",
+      "category": "macos",
+      "description": "Disable Improve Siri and Dictation Information to Apple",
+      "benchmark_ids": [
+        "2.6.3.2"
+      ]
+    },
+    {
+      "id": "system_settings_install_macos_updates_enforce",
+      "rule_id": "system_settings_install_macos_updates_enforce",
+      "category": "macos",
+      "description": "Enforce macOS Updates are Automatically Installed",
+      "benchmark_ids": [
+        "1.3"
+      ]
+    },
+    {
+      "id": "system_settings_internet_sharing_disable",
+      "rule_id": "system_settings_internet_sharing_disable",
+      "category": "macos",
+      "description": "Disable Internet Sharing",
+      "benchmark_ids": [
+        "2.3.3.7"
+      ]
+    },
+    {
+      "id": "system_settings_location_services_enable",
+      "rule_id": "system_settings_location_services_enable",
+      "category": "macos",
+      "description": "Enable Location Services",
+      "benchmark_ids": [
+        "2.6.1.1"
+      ]
+    },
+    {
+      "id": "system_settings_location_services_menu_enforce",
+      "rule_id": "system_settings_location_services_menu_enforce",
+      "category": "macos",
+      "description": "Ensure Location Services Is In the Menu Bar",
+      "benchmark_ids": [
+        "2.6.1.2"
+      ]
+    },
+    {
+      "id": "system_settings_loginwindow_loginwindowtext_enable",
+      "rule_id": "system_settings_loginwindow_loginwindowtext_enable",
+      "category": "macos",
+      "description": "Configure Login Window to Show A Custom Message",
+      "benchmark_ids": [
+        "2.11.3"
+      ]
+    },
+    {
+      "id": "system_settings_loginwindow_prompt_username_password_enforce",
+      "rule_id": "system_settings_loginwindow_prompt_username_password_enforce",
+      "category": "macos",
+      "description": "Configure Login Window to Prompt for Username and Password",
+      "benchmark_ids": [
+        "2.11.4"
+      ]
+    },
+    {
+      "id": "system_settings_media_sharing_disabled",
+      "rule_id": "system_settings_media_sharing_disabled",
+      "category": "macos",
+      "description": "Disable Media Sharing",
+      "benchmark_ids": [
+        "2.3.3.9"
+      ]
+    },
+    {
+      "id": "system_settings_password_hints_disable",
+      "rule_id": "system_settings_password_hints_disable",
+      "category": "macos",
+      "description": "Disable Password Hints",
+      "benchmark_ids": [
+        "2.11.5"
+      ]
+    },
+    {
+      "id": "system_settings_personalized_advertising_disable",
+      "rule_id": "system_settings_personalized_advertising_disable",
+      "category": "macos",
+      "description": "Disable Personalized Advertising",
+      "benchmark_ids": [
+        "2.6.4"
+      ]
+    },
+    {
+      "id": "system_settings_printer_sharing_disable",
+      "rule_id": "system_settings_printer_sharing_disable",
+      "category": "macos",
+      "description": "Disable Printer Sharing",
+      "benchmark_ids": [
+        "2.3.3.3"
+      ]
+    },
+    {
+      "id": "system_settings_rae_disable",
+      "rule_id": "system_settings_rae_disable",
+      "category": "macos",
+      "description": "Disable Remote Apple Events",
+      "benchmark_ids": [
+        "2.3.3.6"
+      ]
+    },
+    {
+      "id": "system_settings_remote_management_disable",
+      "rule_id": "system_settings_remote_management_disable",
+      "category": "macos",
+      "description": "Disable Remote Management",
+      "benchmark_ids": [
+        "2.3.3.5"
+      ]
+    },
+    {
+      "id": "system_settings_screen_sharing_disable",
+      "rule_id": "system_settings_screen_sharing_disable",
+      "category": "macos",
+      "description": "Disable Screen Sharing and Apple Remote Desktop",
+      "benchmark_ids": [
+        "2.3.3.1"
+      ]
+    },
+    {
+      "id": "system_settings_screensaver_ask_for_password_delay_enforce",
+      "rule_id": "system_settings_screensaver_ask_for_password_delay_enforce",
+      "category": "macos",
+      "description": "Enforce Session Lock After Screen Saver is Started",
+      "benchmark_ids": [
+        "2.11.2"
+      ]
+    },
+    {
+      "id": "system_settings_screensaver_password_enforce",
+      "rule_id": "system_settings_screensaver_password_enforce",
+      "category": "macos",
+      "description": "Enforce Screen Saver Password",
+      "benchmark_ids": [
+        "2.11.2"
+      ]
+    },
+    {
+      "id": "system_settings_screensaver_timeout_enforce",
+      "rule_id": "system_settings_screensaver_timeout_enforce",
+      "category": "macos",
+      "description": "Enforce Screen Saver Timeout",
+      "benchmark_ids": [
+        "2.11.1"
+      ]
+    },
+    {
+      "id": "system_settings_siri_disable",
+      "rule_id": "system_settings_siri_disable",
+      "category": "macos",
+      "description": "Disable Siri",
+      "benchmark_ids": [
+        "2.5.2.1"
+      ]
+    },
+    {
+      "id": "system_settings_smbd_disable",
+      "rule_id": "system_settings_smbd_disable",
+      "category": "macos",
+      "description": "Disable Server Message Block Sharing",
+      "benchmark_ids": [
+        "2.3.3.2"
+      ]
+    },
+    {
+      "id": "system_settings_software_update_download_enforce",
+      "rule_id": "system_settings_software_update_download_enforce",
+      "category": "macos",
+      "description": "Enforce Software Update Downloads Updates Automatically",
+      "benchmark_ids": [
+        "1.2"
+      ]
+    },
+    {
+      "id": "system_settings_softwareupdate_current",
+      "rule_id": "system_settings_softwareupdate_current",
+      "category": "macos",
+      "description": "Ensure Software Update is Updated and Current",
+      "benchmark_ids": [
+        "1.1"
+      ]
+    },
+    {
+      "id": "system_settings_ssh_disable",
+      "rule_id": "system_settings_ssh_disable",
+      "category": "macos",
+      "description": "Disable SSH Server for Remote Access Sessions",
+      "benchmark_ids": [
+        "2.3.3.4"
+      ]
+    },
+    {
+      "id": "system_settings_system_wide_preferences_configure",
+      "rule_id": "system_settings_system_wide_preferences_configure",
+      "category": "macos",
+      "description": "Require Administrator Password to Modify System-Wide Preferences",
+      "benchmark_ids": [
+        "2.6.8"
+      ]
+    },
+    {
+      "id": "system_settings_time_machine_auto_backup_enable",
+      "rule_id": "system_settings_time_machine_auto_backup_enable",
+      "category": "macos",
+      "description": "Configure Time Machine for Automatic Backups",
+      "benchmark_ids": [
+        "2.3.4.1"
+      ]
+    },
+    {
+      "id": "system_settings_time_machine_encrypted_configure",
+      "rule_id": "system_settings_time_machine_encrypted_configure",
+      "category": "macos",
+      "description": "Ensure Time Machine Volumes are Encrypted",
+      "benchmark_ids": [
+        "2.3.4.2"
+      ]
+    },
+    {
+      "id": "system_settings_time_server_configure",
+      "rule_id": "system_settings_time_server_configure",
+      "category": "macos",
+      "description": "Configure macOS to Use an Authorized Time Server",
+      "benchmark_ids": [
+        "2.3.2.1"
+      ]
+    },
+    {
+      "id": "system_settings_time_server_enforce",
+      "rule_id": "system_settings_time_server_enforce",
+      "category": "macos",
+      "description": "Enforce macOS Time Synchronization",
+      "benchmark_ids": [
+        "2.3.2.1"
+      ]
+    },
+    {
+      "id": "system_settings_wake_network_access_disable",
+      "rule_id": "system_settings_wake_network_access_disable",
+      "category": "macos",
+      "description": "Ensure Wake for Network Access Is Disabled",
+      "benchmark_ids": [
+        "2.10.3"
+      ]
+    },
+    {
+      "id": "supplemental_cis_manual",
+      "rule_id": "supplemental_cis_manual",
+      "category": "macos",
+      "description": "CIS Manual Recommendations",
+      "benchmark_ids": []
+    },
+    {
+      "id": "supplemental_filevault",
+      "rule_id": "supplemental_filevault",
+      "category": "macos",
+      "description": "FileVault Supplemental",
+      "benchmark_ids": []
+    },
+    {
+      "id": "supplemental_password_policy",
+      "rule_id": "supplemental_password_policy",
+      "category": "macos",
+      "description": "Password Policy Supplemental",
+      "benchmark_ids": []
+    }
+  ]
+}

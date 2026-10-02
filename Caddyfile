@@ -1,0 +1,4 @@
+{$DAEDALUS_HOSTNAMES} {
+	encode zstd gzip
+	reverse_proxy daedalus:8000
+}

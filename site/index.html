@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cyber Security Pilot brings external monitoring, internal process baselines, vulnerability scanning, and custom security solution development into a practical roadmap.">
+  <title>Cyber Security Pilot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            olive: {
+              50: '#f7f6f0',
+              100: '#eeecd8',
+              200: '#dbd6b0',
+              300: '#c4bb84',
+              400: '#ada163',
+              500: '#9b8d4d',
+              600: '#7d703c',
+              700: '#5f5532',
+              800: '#4a432b',
+              900: '#3d3926',
+              950: '#1f1c12',
+            },
+            cream: {
+              50: '#fefdf8',
+              100: '#fcf9ed',
+              200: '#f9f3d9',
+              300: '#f3e9b9',
+              400: '#eddb90',
+              500: '#e5cb65',
+            },
+          },
+          fontFamily: {
+            instrument: ['Instrument Serif', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    .gradient-hero {
+      background:
+        radial-gradient(ellipse at 25% 10%, rgba(243, 233, 185, 0.9), transparent 34%),
+        radial-gradient(ellipse at 84% 24%, rgba(196, 187, 132, 0.52), transparent 32%),
+        linear-gradient(135deg, #f7f6f0 0%, #eeecd8 45%, #dbd6b0 100%);
+    }
+    .scan-line {
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(95, 85, 50, 0.045) 2px, rgba(95, 85, 50, 0.045) 4px);
+    }
+    .card-hover {
+      transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 18px 34px rgba(61, 57, 38, 0.12);
+      border-color: rgba(125, 112, 60, 0.35);
+    }
+    ::selection {
+      background-color: #c4bb84;
+      color: #1f1c12;
+    }
+  </style>
+</head>
+<body class="overflow-x-hidden bg-olive-50 text-olive-900 font-sans antialiased">
+  <nav class="fixed left-0 right-0 top-0 z-50 border-b border-olive-200/60 bg-olive-50/88 backdrop-blur-lg">
+    <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <a href="#" class="flex items-center gap-2.5">
+        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-olive-800 text-cream-200">
+          <i data-lucide="shield-check" class="h-5 w-5"></i>
+        </span>
+        <span class="font-instrument text-xl font-semibold tracking-tight text-olive-900">Cyber Security <span class="text-olive-600">Pilot</span></span>
+      </a>
+      <div class="hidden items-center gap-8 md:flex">
+        <a href="daedalus.html" class="text-sm font-medium text-olive-700 transition-colors hover:text-olive-950">Daedalus</a>
+        <a href="#services" class="text-sm font-medium text-olive-700 transition-colors hover:text-olive-950">Services</a>
+        <a href="#approach" class="text-sm font-medium text-olive-700 transition-colors hover:text-olive-950">Approach</a>
+        <a href="#vulnerability-scanning" class="text-sm font-medium text-olive-700 transition-colors hover:text-olive-950">Vulnerability Scanning</a>
+        <a href="#contact" class="inline-flex items-center gap-2 rounded-full bg-olive-800 px-4 py-2 text-sm font-semibold text-cream-100 shadow-sm transition hover:bg-olive-700">
+          Get Started
+          <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i>
+        </a>
+        <a href="https://daedalus.cybersecuritypilot.org/" aria-label="Sign in to the Daedalus client portal" class="inline-flex items-center gap-2 rounded-full bg-olive-950 px-4 py-2 text-sm font-semibold text-cream-100 shadow-sm transition hover:bg-olive-800">Client Portal</a>
+      </div>
+      <button id="mobile-menu-btn" class="rounded-lg p-2 transition hover:bg-olive-200/60 md:hidden" aria-label="Open menu">
+        <i data-lucide="menu" class="h-6 w-6 text-olive-800"></i>
+      </button>
+    </div>
+    <div id="mobile-menu" class="mx-auto hidden max-w-7xl border-t border-olive-200/50 px-4 pb-4 pt-3 md:hidden">
+      <div class="flex flex-col gap-3">
+        <a href="daedalus.html" class="py-2 text-sm font-medium text-olive-700">Daedalus platform</a>
+        <a href="#services" class="py-2 text-sm font-medium text-olive-700">Services</a>
+        <a href="#approach" class="py-2 text-sm font-medium text-olive-700">Approach</a>
+        <a href="#vulnerability-scanning" class="py-2 text-sm font-medium text-olive-700">Vulnerability Scanning</a>
+        <a href="#contact" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-800 px-4 py-2.5 text-sm font-semibold text-cream-100">Get Started</a>
+        <a href="https://daedalus.cybersecuritypilot.org/" aria-label="Sign in to the Daedalus client portal" class="inline-flex items-center justify-center gap-2 rounded-full bg-olive-950 px-4 py-2.5 text-sm font-semibold text-cream-100">Client Portal</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <section class="gradient-hero relative overflow-hidden pt-16">
+      <div class="scan-line absolute inset-0 pointer-events-none"></div>
+      <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-28">
+        <div class="min-w-0 space-y-8">
+          <div class="inline-flex items-center gap-2 rounded-full border border-olive-300/50 bg-olive-100/70 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-olive-800">
+            <span class="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_0_4px_rgba(34,197,94,0.16)]"></span>
+            From chaos to cadence
+          </div>
+          <div class="space-y-5">
+            <h1 class="font-instrument text-4xl font-semibold leading-[1.08] text-olive-950 sm:text-6xl lg:text-7xl">
+              A practical cyber security roadmap for organizations in motion.
+            </h1>
+            <p class="max-w-xl text-lg leading-relaxed text-olive-700 sm:text-xl">
+              Cyber Security Pilot brings industry standards, monitoring, validation, and peer-informed security practices into a clear operating cadence.
+            </p>
+          </div>
+          <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+            <a href="#services" class="inline-flex items-center justify-center gap-2.5 rounded-full bg-olive-800 px-6 py-3.5 text-sm font-semibold text-cream-100 shadow-lg shadow-olive-800/20 transition hover:bg-olive-700">
+              Explore Services
+              <i data-lucide="layers-3" class="h-4.5 w-4.5"></i>
+            </a>
+            <a href="https://techmore.github.io/TM-NMapUI-www/" class="inline-flex items-center justify-center gap-2.5 rounded-full border-2 border-olive-400/50 px-6 py-3.5 text-sm font-semibold text-olive-800 transition hover:bg-olive-200/40">
+              Vulnerability Scanning
+              <i data-lucide="external-link" class="h-4.5 w-4.5"></i>
+            </a>
+          </div>
+          <div class="flex flex-wrap gap-x-6 gap-y-3 pt-2 text-sm text-olive-600">
+            <span class="inline-flex items-center gap-1.5"><i data-lucide="radar" class="h-4 w-4"></i>External monitoring</span>
+            <span class="inline-flex items-center gap-1.5"><i data-lucide="clipboard-check" class="h-4 w-4"></i>CIS-aligned baselines</span>
+            <span class="inline-flex items-center gap-1.5"><i data-lucide="messages-square" class="h-4 w-4"></i>Realtime collaboration</span>
+          </div>
+        </div>
+
+        <div class="relative min-w-0">
+          <div class="overflow-hidden rounded-2xl border border-olive-300/50 bg-white/70 shadow-2xl shadow-olive-900/10 backdrop-blur-sm">
+            <div class="flex items-center gap-2 border-b border-olive-200/60 bg-olive-100/80 px-5 py-3">
+              <span class="h-3 w-3 rounded-full bg-red-400/70"></span>
+              <span class="h-3 w-3 rounded-full bg-yellow-400/70"></span>
+              <span class="h-3 w-3 rounded-full bg-green-400/70"></span>
+              <span class="ml-3 text-xs font-medium text-olive-500">Security Pilot dashboard</span>
+            </div>
+            <div class="space-y-4 p-5">
+              <div class="rounded-xl border border-olive-200/50 bg-olive-50 p-4">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <p class="text-sm font-semibold text-olive-950">Security cadence</p>
+                    <p class="mt-1 text-xs text-olive-600">External, internal, and project controls tracked together</p>
+                  </div>
+                  <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Active</span>
+                </div>
+                <div class="mt-4 h-2 overflow-hidden rounded-full bg-olive-200">
+                  <div class="h-full w-[72%] rounded-full bg-olive-700"></div>
+                </div>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div class="rounded-xl border border-olive-200/40 bg-cream-50 p-4 text-center">
+                  <p class="text-2xl font-bold text-olive-950">24/7</p>
+                  <p class="mt-1 text-xs text-olive-500">Monitoring</p>
+                </div>
+                <div class="rounded-xl border border-olive-200/40 bg-cream-50 p-4 text-center">
+                  <p class="text-2xl font-bold text-olive-950">CIS</p>
+                  <p class="mt-1 text-xs text-olive-500">Controls</p>
+                </div>
+                <div class="rounded-xl border border-olive-200/40 bg-cream-50 p-4 text-center">
+                  <p class="text-2xl font-bold text-olive-950">PDF</p>
+                  <p class="mt-1 text-xs text-olive-500">Reports</p>
+                </div>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-xl border border-olive-200/40 bg-white/70 p-4">
+                  <i data-lucide="globe-lock" class="h-5 w-5 text-olive-700"></i>
+                  <p class="mt-3 text-sm font-semibold text-olive-950">External domain baseline</p>
+                  <p class="mt-1 text-xs leading-relaxed text-olive-600">DNS, web, email hygiene, and certificate monitoring.</p>
+                </div>
+                <div class="rounded-xl border border-olive-200/40 bg-white/70 p-4">
+                  <i data-lucide="scan-search" class="h-5 w-5 text-olive-700"></i>
+                  <p class="mt-3 text-sm font-semibold text-olive-950">Validated exposure</p>
+                  <p class="mt-1 text-xs leading-relaxed text-olive-600">Recurring scans and evidence-ready reporting.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="services" class="bg-white py-20 lg:py-28">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto mb-14 max-w-2xl text-center">
+          <span class="mb-4 inline-block rounded-full bg-olive-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-olive-700">Services</span>
+          <h2 class="font-instrument text-4xl font-semibold text-olive-950 sm:text-5xl">Security work organized into an operating model.</h2>
+          <p class="mt-4 text-lg leading-relaxed text-olive-600">Keep the original Cyber Security Pilot foundation, with a visual system aligned to NMapUI.</p>
+        </div>
+        <div class="grid gap-6 lg:grid-cols-3">
+          <article class="card-hover rounded-2xl border border-olive-200/50 bg-olive-50/70 p-6">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-olive-200/60 text-olive-700">
+              <i data-lucide="network" class="h-6 w-6"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-olive-950">
+              <a class="inline-flex items-center gap-2 text-olive-950 underline decoration-olive-300 underline-offset-4 hover:text-olive-700" href="https://techmore.github.io/tm-external-baseline/">
+                External Domain Baseline
+                <i data-lucide="external-link" class="h-4 w-4"></i>
+              </a>
+            </h3>
+            <p class="mt-3 text-sm leading-relaxed text-olive-600">Monitor the public-facing assets that attackers and vendors see first.</p>
+            <ul class="mt-5 space-y-2 text-sm text-olive-700">
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>DNS record monitoring</li>
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Website monitoring</li>
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>SPF, DKIM, DMARC security</li>
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Domain email enumeration</li>
+            </ul>
+          </article>
+
+          <article class="card-hover rounded-2xl border border-olive-200/50 bg-olive-50/70 p-6">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-olive-200/60 text-olive-700">
+              <i data-lucide="clipboard-list" class="h-6 w-6"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-olive-950">Internal and Process Baseline</h3>
+            <p class="mt-3 text-sm leading-relaxed text-olive-600">Translate security controls into recurring workflows your team can sustain.</p>
+            <ul class="mt-5 space-y-2 text-sm text-olive-700">
+              <!--<li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Realtime communication</li>-->
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>CIS v8 level 1, 2, and 3 device audits</li>
+              <li class="flex gap-2">
+                <i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>
+                <a class="inline-flex items-center gap-1.5 font-semibold text-olive-800 underline decoration-olive-300 underline-offset-4 hover:text-olive-950" href="https://techmore.github.io/TM-NMapUI-www/">
+                  Vulnerability scanning
+                  <i data-lucide="external-link" class="h-4 w-4"></i>
+                </a>
+              </li>
+              <li class="flex gap-2">
+                <i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>
+                <a class="inline-flex items-center gap-1.5 font-semibold text-olive-800 underline decoration-olive-300 underline-offset-4 hover:text-olive-950" href="https://cybersecuritypilot.org/Chrome_Moysle_googleadmin/school-mac-security-roadmap.html">
+                  Google Admin / Moysle / Mac Checklists 2026
+                  <i data-lucide="external-link" class="h-4 w-4"></i>
+                </a>
+              </li>
+              <!--<li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Project management</li>-->
+            </ul>
+          </article>
+
+          <!--
+          <article class="card-hover rounded-2xl border border-olive-200/50 bg-olive-50/70 p-6">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-olive-200/60 text-olive-700">
+              <i data-lucide="flask-conical" class="h-6 w-6"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-olive-950">Custom Solution Development</h3>
+            <p class="mt-3 text-sm leading-relaxed text-olive-600">Plan and build durable solutions for long-term security outcomes that do not fit a template.</p>
+            <ul class="mt-5 space-y-2 text-sm text-olive-700">
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Long-term project planning</li>
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Custom reporting and integrations</li>
+              <li class="flex gap-2"><i data-lucide="check" class="h-5 w-5 shrink-0 text-green-600"></i>Vendor and insurance readiness support</li>
+            </ul>
+          </article>
+        -->
+        </div>
+      </div>
+    </section>
+
+    <section id="approach" class="bg-olive-50 py-20 lg:py-28">
+      <div class="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+        <div>
+          <span class="mb-4 inline-block rounded-full bg-olive-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-olive-700">Approach</span>
+          <h2 class="font-instrument text-4xl font-semibold text-olive-950 sm:text-5xl">A framework that evolves as your environment changes.</h2>
+          <p class="mt-5 text-lg leading-relaxed text-olive-600">Cyber Security Pilot turns standards and vendor requirements into action, validation, and documentation.</p>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="rounded-2xl border border-olive-200/50 bg-white/70 p-5">
+            <i data-lucide="route" class="h-6 w-6 text-olive-700"></i>
+            <h3 class="mt-4 font-semibold text-olive-950">Clear Roadmap</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-600">Bring standards, priorities, and work queues into a single operating view.</p>
+          </div>
+          <div class="rounded-2xl border border-olive-200/50 bg-white/70 p-5">
+            <i data-lucide="shield-ellipsis" class="h-6 w-6 text-olive-700"></i>
+            <h3 class="mt-4 font-semibold text-olive-950">Posture Validation</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-600">Track whether security controls are present, current, and producing evidence.</p>
+          </div>
+          <div class="rounded-2xl border border-olive-200/50 bg-white/70 p-5">
+            <i data-lucide="users-round" class="h-6 w-6 text-olive-700"></i>
+            <h3 class="mt-4 font-semibold text-olive-950">Peer Context</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-600">Use community-informed practices without being limited by organization size or geography.</p>
+          </div>
+          <div class="rounded-2xl border border-olive-200/50 bg-white/70 p-5">
+            <i data-lucide="file-check-2" class="h-6 w-6 text-olive-700"></i>
+            <h3 class="mt-4 font-semibold text-olive-950">Evidence Ready</h3>
+            <p class="mt-2 text-sm leading-relaxed text-olive-600">Prepare recurring deliverables for leadership, vendors, and insurance conversations.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="vulnerability-scanning" class="bg-olive-900 py-20 text-cream-100 lg:py-28">
+      <div class="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
+        <span class="mb-4 inline-block rounded-full bg-cream-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cream-200">Vulnerability Scanning</span>
+        <h2 class="font-instrument text-4xl font-semibold sm:text-5xl">Scanning is handled through NMapUI.</h2>
+        <p class="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-cream-300/80">For vulnerability scanning, Cyber Security Pilot points teams to the NMapUI workflow: Nmap-powered scans, scheduling, and reporting in a focused interface.</p>
+        <a href="https://techmore.github.io/TM-NMapUI-www/" class="mt-8 inline-flex items-center gap-2.5 rounded-full bg-cream-100 px-6 py-3.5 text-sm font-semibold text-olive-900 transition hover:bg-cream-200">
+          Open NMapUI
+          <i data-lucide="external-link" class="h-4.5 w-4.5"></i>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer id="contact" class="bg-olive-950 py-12 text-cream-200/80">
+    <div class="mx-auto flex max-w-7xl flex-col gap-8 px-4 sm:px-6 lg:px-8">
+      <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="space-y-3">
+          <div class="flex items-center gap-2.5">
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-cream-200/15">
+              <i data-lucide="shield-check" class="h-4.5 w-4.5 text-cream-200"></i>
+            </span>
+            <span class="font-instrument text-lg font-semibold text-cream-100">Cyber Security Pilot</span>
+          </div>
+          <p class="text-sm text-cream-300/60">From chaos to cadence: a modern approach to cyber security.</p>
+        </div>
+        <div class="space-y-3">
+          <p class="text-sm font-semibold text-cream-100">Services</p>
+          <a href="#services" class="block text-sm text-cream-300/60 transition hover:text-cream-200">External Baseline</a>
+          <a href="#services" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Internal Baseline</a>
+          <a href="https://techmore.github.io/TM-NMapUI-www/" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Vulnerability Scanning</a>
+        </div>
+        <div class="space-y-3">
+          <p class="text-sm font-semibold text-cream-100">Approach</p>
+          <a href="#approach" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Roadmap</a>
+          <a href="#approach" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Validation</a>
+          <a href="#approach" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Evidence</a>
+        </div>
+        <div class="space-y-3">
+          <p class="text-sm font-semibold text-cream-100">Legal</p>
+          <a href="#" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Terms of Service</a>
+          <a href="#" class="block text-sm text-cream-300/60 transition hover:text-cream-200">Privacy Policy</a>
+          <a href="#" class="block text-sm text-cream-300/60 transition hover:text-cream-200">SLA</a>
+        </div>
+      </div>
+      <div class="border-t border-cream-200/10 pt-8 text-sm text-cream-300/50">
+        &copy; 2026 Cyber Security Pilot LLC.
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    lucide.createIcons();
+
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+
+    mobileMenuBtn.addEventListener('click', () => {
+      const shouldOpen = mobileMenu.classList.contains('hidden');
+      mobileMenu.classList.toggle('hidden', !shouldOpen);
+      mobileMenuBtn.innerHTML = shouldOpen
+        ? '<i data-lucide="x" class="h-6 w-6 text-olive-800"></i>'
+        : '<i data-lucide="menu" class="h-6 w-6 text-olive-800"></i>';
+      lucide.createIcons();
+    });
+
+    mobileMenu.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => {
+        mobileMenu.classList.add('hidden');
+        mobileMenuBtn.innerHTML = '<i data-lucide="menu" class="h-6 w-6 text-olive-800"></i>';
+        lucide.createIcons();
+      });
+    });
+  </script>
+</body>
+</html>

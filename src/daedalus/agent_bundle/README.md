@@ -1,0 +1,194 @@
+# Daedalus scanner kit
+
+The kit contains a curated NmapUI runtime source bundle and the Daedalus bridge.
+It excludes local NmapUI settings, customer data, credentials, and Node build
+dependencies. NmapUI runs on this machine at `http://127.0.0.1:9000`; the
+bridge only connects to that loopback service and to your Daedalus server.
+
+## Managed install on macOS
+
+Install Nmap and extract the kit in `~/Downloads`:
+
+```sh
+brew install nmap
+cd "$HOME/Downloads/daedalus-scanner-kit"
+sh install-service-macos.sh "https://your-daedalus-host" "scanner-name"
+```
+
+The installer prepares a versioned NmapUI source install, installs the bridge,
+and asks for the one-time Daedalus enrollment code without echoing it. It
+installs owner-level LaunchAgents for NmapUI and the bridge. They start at login
+and restart after a process exit. NmapUI remains bound to loopback, with
+scheduled scans and optional external enrichment disabled. The agent token,
+LaunchAgent files, database, and logs stay in the user's Application Support
+directories with owner-only permissions. Managed NmapUI data is isolated under
+`~/Library/Application Support/Daedalus/nmapui-data`; existing data under the
+legacy `~/Library/Application Support/NmapUI` directory is left untouched.
+
+The installer stops if port 9000 is already in use. Choose another local port
+with `NMAPUI_PORT=9001` before running it. If NmapUI Basic Authentication is
+enabled, set both `NMAPUI_USERNAME` and `NMAPUI_PASSWORD` in that Terminal before
+installing; the LaunchAgent files are owner-only.
+
+### Local service lifecycle
+
+From the extracted kit, use these explicit operator actions:
+
+```sh
+sh manage-service-macos.sh status
+sh manage-service-macos.sh restart
+sh manage-service-macos.sh uninstall
+sh manage-service-macos.sh restore
+```
+
+Uninstall stops only recognized Daedalus user services and removes their
+LaunchAgent files. It preserves enrollment, queued uploads and command receipts,
+scan evidence, settings, logs, installed releases, and private service backups.
+Restore recreates the original service files and requests startup using the
+preserved enrollment; it never enrolls again or changes the scanner token.
+The same current user, exact enrollment file, and original installed executables
+are required. Changed enrollment, missing releases, foreign service files, and
+modified backups are refused. Keep the private `service-resume` directory in
+Daedalus Application Support if you intend to restore.
+
+To upgrade an existing managed scanner, extract the newly downloaded kit and
+run this from its directory:
+
+```sh
+sh manage-service-macos.sh upgrade /path/to/daedalus-scanner-kit.zip
+```
+
+Upgrade is separate from enrollment. It stages versioned NmapUI and bridge
+releases, preserves the existing enrollment, settings, scan data, event spool,
+command journal, service port, and authentication environment, then switches
+the LaunchAgents and waits for NmapUI readiness. If startup fails, it restores
+the previous service descriptors and requests the old releases to start again.
+Old releases and a private descriptor backup remain available for recovery.
+
+Restart and restore report a startup request, not confirmed readiness. Check
+the local NmapUI readiness and the scanner's next portal heartbeat afterwards.
+If startup fails, the preserved files permit another restore or explicit
+restart. Use restore after uninstall instead of rerunning the enrollment
+installer. These actions manage macOS user LaunchAgents.
+
+## Managed install on Linux
+
+Use a Linux host with systemd, an active systemd user manager, Python 3.11 or
+newer, Nmap, and `unzip`. From the extracted kit, run:
+
+```sh
+sh install-service-linux.sh "https://your-daedalus-host" "scanner-name"
+```
+
+The installer prepares NmapUI, prompts for the one-time enrollment code, then
+creates two fixed systemd **user** services: `daedalus-nmapui.service` and
+`daedalus-scanner-bridge.service`. NmapUI binds only to `127.0.0.1`; the bridge
+connects outward to Daedalus. No inbound port, root service, shell command, or
+automatic software update is installed. NmapUI's local trust bypass is disabled.
+Unit files, enrollment config, and
+optional NmapUI Basic Authentication credentials are owner-only. Existing
+units or files with these names are never overwritten.
+
+Use the managed service helper for a status check or restart:
+
+```sh
+sh manage-service-linux.sh status
+sh manage-service-linux.sh restart
+```
+
+It verifies that the unit and private environment files still match their
+installation fingerprints before issuing commands to the two fixed unit
+names. Startup is tied to the user's systemd manager. On systems that stop the
+user manager at logout, an administrator may explicitly enable lingering for
+that account with `loginctl enable-linger <user>` if unattended startup is
+required. Daedalus does not change that host-wide login policy. After restart,
+check NmapUI readiness and the scanner's next portal heartbeat.
+
+The managed Linux workflow does not yet include an in-place upgrade or
+uninstaller. Keep the private enrollment config and scanner data when
+upgrading or removing its services.
+
+## Foreground install on Linux
+
+Python 3.11 or newer, Nmap, and `unzip` are required. Start NmapUI and keep it
+running:
+
+```sh
+sh install-nmapui.sh
+```
+
+Once NmapUI is ready, enroll the bridge from a second Terminal using the
+command shown in Daedalus:
+
+```sh
+sh install.sh "https://your-daedalus-host" "scanner-name"
+```
+
+The bridge installer creates a Python virtual environment and prompts for the
+single-use enrollment code. It saves the per-scanner token with owner-only
+permissions and runs in the foreground.
+
+The bridge makes outbound HTTPS requests to Daedalus and a local authenticated
+Socket.IO connection to NmapUI. It opens no inbound port and provides no remote
+shell. Workspace admins can run or cancel private-network scans, check the
+NmapUI release channel, and restart NmapUI on managed macOS installs. Restart
+requests require a fresh bridge heartbeat and are recorded in workspace audit
+history.
+
+An approved workspace admin can ask an online macOS scanner running bridge
+protocol 3 or later to check Apple's software update catalog. The check invokes
+`/usr/sbin/softwareupdate --list`, stores a bounded structured summary in
+command history, and never installs or schedules updates.
+
+## Upload recovery
+
+Scanner events are written to private local storage before upload. A portal or
+network outage keeps them queued across bridge restarts. Replay preserves each
+event's UUID and original UTC collection time; Daedalus stores a retried event
+once. Retries back off from two seconds to five minutes and send at most twenty
+events per batch. Scanner online status is updated by heartbeats, independently
+of older queued scan evidence.
+
+The bundled NmapUI announces a versioned bridge event protocol. Scan/report
+events carry the same source UUID and UTC collection time through live delivery,
+reconnect replay and SQLite recovery. A disconnected initiating browser or
+bridge does not mark a running job completed; a reconnecting bridge rejoins it.
+Older NmapUI runtimes still use the legacy raw-event path, whose timestamps are
+the bridge's receipt time and whose replays cannot be correlated with previously
+uploaded legacy records.
+
+Recovery is bounded: in-memory replay keeps at most 500 events and 8 MiB per
+active job; SQLite event replay keeps at most 200 events and 32 MiB per job.
+Bridge reconnect reads the latest 20 persisted jobs, excluding finished jobs
+older than seven days. Existing runtime maintenance retains the latest 2,000
+finished jobs by default (`NMAPUI_FINISHED_JOBS_KEEP_LATEST` configures that).
+Recovery outside these windows requires a separate history import and cannot
+reconstruct evicted events. Validation currently uses fixtures; an installed
+scanner disconnect during an active scan remains to be validated.
+
+The queue lives under Daedalus's configuration directory in `event-spool`, with
+a separate directory for each portal and scanner. Directories are owner-only
+and event files are readable only by their owner. Successful uploads remove
+their local queue entries. Permanent rejections remain as `.rejected` files for
+review and log an error; other events can continue uploading. In particular,
+results exceeding 512 KB automatically use private JSON artifact uploads.
+Artifacts retain the original full JSON, digest and collection time; approved
+workspace users can download them from the scanner event list. Artifact uploads
+are capped at 32 MiB of uncompressed JSON; larger events remain locally rejected
+for review. Saved scan result events can generate themed PDFs without another
+scan. Database backups include scanner artifacts and a digest manifest.
+The local queue is capped at 256 MiB;
+if storage is full, new events cannot be saved and the bridge logs an error.
+
+
+## Command receipts
+
+Health refresh and sanitized diagnostics work when the bridge is online even if NmapUI is disconnected. Command results use a private ordered journal, with explicit portal ID/status acknowledgements and permanent rejections retained for review. Claims are bound to an enrollment namespace derived from portal URL, scanner ID, and its token, so credentials are never included in receipt payloads. Retained claims prevent repeating side effects after restart. The journal stops accepting new commands at 16 MiB or 10,000 files; operator review is required before cleanup. A process interruption between claiming and confirming an operation leaves its outcome unconfirmed rather than re-executing it.
+
+An administrator's **Check NmapUI updates** command makes a bounded metadata request to the official NmapUI GitHub release API. Managed installs keep idle/background checks disabled; a direct operator request does not enable the idle update workflow. The command reports the release through scanner history and never installs software. Updates remain an explicit local operator action through the managed upgrade command above; the portal does not install releases remotely.
+
+Modern bundled NmapUI emits command-linked accepted/terminal receipts and replays retained outcomes. Older installations confirm only delivery. A timeout records missing confirmation, not proof that the operation stopped or failed. Managed restarts require observed reconnect and readiness before success.
+
+### Known targets and discovery
+
+NmapUI's **Scan known targets without host discovery** option is off by default. Enable it in local scanner settings when a known host blocks discovery probes. It adds Nmap's `-Pn` to discovery and subsequent scans; target profiles can inherit the global choice or explicitly override it. This may scan unresponsive addresses. Existing comprehensive report scans already use `-Pn`. **Scan-only mode** independently skips MAC/vendor enrichment. When exclusions are configured, ARP enrichment is skipped so it cannot probe excluded addresses; Nmap retains its exclusions. Completion history reports the number of discovered or explicitly selected hosts, including zero.

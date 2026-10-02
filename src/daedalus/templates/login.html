@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daedalus · Sign in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css?v=csp-theme-hero-20260929">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <a class="brand brand-large" href="/">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+      <span class="brand-wordmark"><strong>Daedalus</strong><small>Cyber Security Pilot</small></span>
+    </a>
+    <p class="eyebrow">CYBER SECURITY PILOT</p>
+    <h1>Security work, in one place.</h1>
+    <p class="muted">Sign in to your organization's private security workspace.</p>
+    {% if google_configured %}
+    <a class="button button-primary button-wide" href="/auth/google">Continue with Google</a>
+    {% else %}
+    <div class="notice">Google sign-in becomes available when OAuth credentials are configured.</div>
+    {% endif %}
+    {% if demo_mode %}
+    <div class="divider"><span>local development</span></div>
+    <form method="post" action="/dev/login">
+      <button class="button button-secondary button-wide" type="submit">Open the CSP demo workspace</button>
+    </form>
+    <form method="post" action="/dev/login/member" class="demo-member-login">
+      <button class="button button-secondary button-wide" type="submit">Open the demo member account</button>
+    </form>
+    <p class="fine-print">Use the demo member to try an access request and approve it from the CSP admin account.</p>
+    <p class="fine-print">The local demo login is restricted to a loopback server.</p>
+    {% endif %}
+  </main>
+</body>
+</html>

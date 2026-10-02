@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daedalus-scanner-bridge"
+version = "__DAEDALUS_VERSION__"
+description = "Outbound bridge between a local NmapUI service and Daedalus"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.28",
+  "python-socketio[client]>=5.13",
+]
+
+[project.scripts]
+daedalus-agent = "daedalus.agent:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["daedalus"]
