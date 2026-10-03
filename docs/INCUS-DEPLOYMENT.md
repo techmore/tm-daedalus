@@ -24,7 +24,8 @@ DAEDALUS_INCUS_HOST='operator@incus-host' uv run python scripts/deploy_incus.py
 ```
 
 The command takes a verified, SQLite-consistent off-host backup of `/data`,
-builds the allowlisted archive, verifies it again inside Incus, then prepares a
+publishes the archive only after it has been fully written, builds the
+allowlisted application archive, verifies it again inside Incus, then prepares a
 new release directory with a fresh Python 3.12 virtual environment. Runtime
 dependencies are installed with hashes from `requirements-production.txt`;
 the candidate must import the service and render a synthetic PDF before it can

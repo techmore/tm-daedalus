@@ -11,6 +11,7 @@ import io
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+import tempfile
 
 
 DATA_DIR = Path(os.environ.get("DAEDALUS_DATA_DIR", "/data"))
@@ -31,11 +32,16 @@ def main() -> int:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     database_copy = BACKUP_DIR / f"daedalus-{stamp}.db"
     archive_path = BACKUP_DIR / f"daedalus-data-{stamp}.tar.gz"
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".daedalus-data-", suffix=".tar.gz.tmp", dir=BACKUP_DIR
+    )
+    os.close(descriptor)
+    temporary_archive = Path(temporary_name)
     try:
         with sqlite3.connect(DATABASE, timeout=30) as source:
             with sqlite3.connect(database_copy) as destination:
                 source.backup(destination)
-        with tarfile.open(archive_path, "w:gz") as archive:
+        with tarfile.open(temporary_archive, "w:gz") as archive:
             manifest = []
 
             def record(path, name):
@@ -65,13 +71,12 @@ def main() -> int:
             entry.size = len(encoded)
             entry.mode = 0o600
             archive.addfile(entry, io.BytesIO(encoded))
+        temporary_archive.chmod(0o600)
+        os.replace(temporary_archive, archive_path)
     finally:
         database_copy.unlink(missing_ok=True)
+        temporary_archive.unlink(missing_ok=True)
         os.umask(previous_umask)
-    try:
-        archive_path.chmod(0o600)
-    except OSError:
-        pass
     print(archive_path.name)
     return 0
 

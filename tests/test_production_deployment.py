@@ -314,6 +314,29 @@ class ProductionConfigStartupTests(unittest.TestCase):
 
 
 class ProductionBackupTests(unittest.TestCase):
+    def test_incomplete_backup_archive_is_never_published(self):
+        with tempfile.TemporaryDirectory(prefix="daedalus-backup-failure-") as directory:
+            root = Path(directory)
+            data = root / "data"
+            backup_dir = data / "backups"
+            database = data / "daedalus.db"
+            data.mkdir()
+            with sqlite3.connect(database) as db:
+                db.execute("CREATE TABLE evidence (id INTEGER PRIMARY KEY)")
+
+            with (
+                patch.object(backup_data, "DATA_DIR", data),
+                patch.object(backup_data, "BACKUP_DIR", backup_dir),
+                patch.object(backup_data, "DATABASE", database),
+                patch.object(backup_data, "REPORTS", data / "reports"),
+                patch.object(backup_data.tarfile, "open", side_effect=OSError("disk full")),
+            ):
+                with self.assertRaisesRegex(OSError, "disk full"):
+                    backup_data.main()
+
+            self.assertEqual(list(backup_dir.iterdir()), [])
+            self.assertTrue(database.is_file())
+
     def test_archive_contains_consistent_database_and_report_files(self):
         with tempfile.TemporaryDirectory(prefix="daedalus-backup-") as directory:
             root = Path(directory)
