@@ -1190,6 +1190,17 @@
     });
     container.append(metricGrid);
 
+    var clientUsage = details.client_usage || {};
+    addMerakiDetailList(container, "Aggregate client usage", [clientUsage], function (usage) {
+      var totals = usage.usage || {};
+      var values = ["Collection: " + (usage.status || "unknown")];
+      if (usage.clients_with_usage_count !== null && usage.clients_with_usage_count !== undefined) values.push(usage.clients_with_usage_count + " clients with usage");
+      if (totals.total !== undefined) values.push("Total " + totals.total + " " + (usage.usage_unit || "units"));
+      if (totals.downstream !== undefined || totals.upstream !== undefined) values.push("Downstream " + (totals.downstream ?? "—") + " · Upstream " + (totals.upstream ?? "—"));
+      if (usage.requested_timespan_seconds) values.push("Prior " + Math.round(usage.requested_timespan_seconds / 3600) + " hours");
+      return values.join(" · ");
+    });
+
     var findings = details.findings || [];
     addMerakiDetailList(container, "Findings", findings, function (finding) {
       return [finding.status, finding.title, finding.detail].filter(Boolean).join(" · ");
@@ -1200,6 +1211,9 @@
     });
     addMerakiDetailList(container, "Assigned devices", details.devices || [], function (device) {
       return [device.name || "Unnamed device", device.model, device.status, device.product_type, device.firmware, device.network_id ? "Network " + device.network_id : ""].filter(Boolean).join(" · ");
+    });
+    addMerakiDetailList(container, "Managed topology", details.topology || [], function (topology) {
+      return [topology.network_name || "Network", topology.status || "unknown", topology.node_count + " managed nodes", topology.link_count + " links", topology.omitted_node_count + " discovered nodes omitted", topology.omitted_link_count + " links omitted", topology.reported_error_count + " reported errors", topology.scope].filter(Boolean).join(" · ");
     });
 
     var controls = details.controls || [];

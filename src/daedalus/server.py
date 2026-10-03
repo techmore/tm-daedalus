@@ -4112,8 +4112,37 @@ def meraki_report_details(
     networks, more_networks = bounded_rows("networks", 100)
     devices, more_devices = bounded_rows("devices", 200)
     controls, more_controls = bounded_rows("security_controls", 200)
+    topology, more_topology = bounded_rows("topology", 100)
     findings, more_findings = bounded_rows("findings", 100)
     warnings, more_warnings = bounded_rows("warnings", 100)
+
+    client_usage = snapshot.get("client_usage") if isinstance(snapshot.get("client_usage"), dict) else {}
+    client_usage_data = client_usage.get("data") if isinstance(client_usage.get("data"), dict) else {}
+    raw_usage = client_usage_data.get("usage") if isinstance(client_usage_data.get("usage"), dict) else {}
+
+    def safe_count(value: Any) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 1_000_000_000 else None
+
+    def safe_measure(value: Any) -> int | float | None:
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1_000_000_000_000 else None
+
+    topology_summary = []
+    for row in topology:
+        if not isinstance(row, dict):
+            continue
+        data = row.get("data") if isinstance(row.get("data"), dict) else {}
+        nodes = data.get("nodes") if isinstance(data.get("nodes"), list) else []
+        links = data.get("links") if isinstance(data.get("links"), list) else []
+        topology_summary.append({
+            "network_name": text_field(row, "network_name"),
+            "status": text_field(row, "status", 40),
+            "node_count": len(nodes),
+            "link_count": len(links),
+            "omitted_node_count": safe_count(data.get("omitted_node_count")) or 0,
+            "omitted_link_count": safe_count(data.get("omitted_link_count")) or 0,
+            "reported_error_count": safe_count(data.get("reported_error_count")) or 0,
+            "scope": text_field(data, "scope", 240),
+        })
 
     serialized_controls = []
     for control in controls:
@@ -4150,6 +4179,14 @@ def meraki_report_details(
             "firmware": text_field(item, "firmware", 100),
             "network_id": text_field(item, "networkId", 128),
         } for item in devices if isinstance(item, dict)],
+        "client_usage": {
+            "status": text_field(client_usage, "status", 40) or "not_collected",
+            "clients_with_usage_count": safe_count(client_usage_data.get("clients_with_usage_count")),
+            "usage": {key: safe_measure(raw_usage.get(key)) for key in ("total", "downstream", "upstream") if safe_measure(raw_usage.get(key)) is not None},
+            "usage_unit": text_field(client_usage_data, "usage_unit", 40),
+            "requested_timespan_seconds": safe_count(client_usage_data.get("requested_timespan_seconds")),
+        },
+        "topology": topology_summary,
         "controls": serialized_controls,
         "findings": [{
             "title": text_field(item, "title"),
@@ -4161,6 +4198,7 @@ def meraki_report_details(
             "networks": more_networks,
             "devices": more_devices,
             "controls": more_controls,
+            "topology": more_topology,
             "findings": more_findings,
             "warnings": more_warnings,
         },

@@ -233,7 +233,14 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             {"network_id": "n1", "control": "Intrusion protection", "status": "complete", "data": {"mode": "disabled"}},
             {"network_id": "n1", "control": "Malware protection", "status": "unavailable", "data": None},
         ], "findings": [{"status": "Review", "title": "Check access policy", "detail": "Review this network."}],
-            "warnings": ["One endpoint was unavailable."]}
+            "warnings": ["One endpoint was unavailable."],
+            "client_usage": {"status": "complete", "data": {"clients_with_usage_count": 7,
+                "usage": {"total": 1200, "downstream": 900, "upstream": 300},
+                "usage_unit": "kb (Meraki API)", "requested_timespan_seconds": 86400}},
+            "topology": [{"network_name": "CSP office", "status": "complete", "data": {
+                "nodes": [{"device_serial": "private-serial"}], "links": [{"link_count": 2}],
+                "omitted_node_count": 4, "omitted_link_count": 3, "reported_error_count": 1,
+                "scope": "Managed devices only."}}]}
         with (
             patch.object(server, "MerakiClient") as client_class,
             patch.object(server, "REPORTS_DIR", self.root / "reports"),
@@ -285,6 +292,12 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(details["controls"][0]["evidence_preview"], '{"mode": "disabled"}')
         self.assertEqual(details["findings"][0]["title"], "Check access policy")
         self.assertEqual(details["warnings"], ["One endpoint was unavailable."])
+        self.assertEqual(details["client_usage"]["clients_with_usage_count"], 7)
+        self.assertEqual(details["client_usage"]["usage"]["downstream"], 900)
+        self.assertEqual(details["topology"][0]["node_count"], 1)
+        self.assertEqual(details["topology"][0]["omitted_node_count"], 4)
+        self.assertNotIn("nodes", details["topology"][0])
+        self.assertNotIn("private-serial", str(details["topology"]))
         self.assertEqual(saved["previous_report_id"], first_id)
         self.assertFalse(saved["baseline"])
         self.assertEqual(saved["changes"][0]["control"], "Intrusion protection")
@@ -307,6 +320,7 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
                 "status": "complete",
                 "data": {"large_value": "x" * 1_000_000, "many_values": list(range(1000))},
             }] + [{"control": f"Control {index}", "status": "complete", "data": {}} for index in range(200)]
+            oversized_meraki["topology"] = [{"network_name": f"Network {index}", "status": "complete", "data": {"nodes": [], "links": []}} for index in range(101)]
             oversized_meraki["findings"] = [{"title": f"Finding {index}"} for index in range(101)]
             oversized_meraki["warnings"] = [f"Warning {index}" for index in range(101)]
             saved_snapshot["meraki"] = oversized_meraki
@@ -318,7 +332,8 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(len(bounded["controls"]), 200)
         self.assertEqual(len(bounded["findings"]), 100)
         self.assertEqual(len(bounded["warnings"]), 100)
-        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "findings": 1, "warnings": 1})
+        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "topology": 1, "findings": 1, "warnings": 1})
+        self.assertEqual(len(bounded["topology"]), 100)
         self.assertLessEqual(len(bounded["controls"][0]["evidence_preview"]), 3000)
         self.assertTrue(bounded["controls"][0]["evidence_truncated"])
 
