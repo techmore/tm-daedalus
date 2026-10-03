@@ -409,7 +409,7 @@
       </section>
       {% endfor %}
       <section class="tab-panel" id="tab-members">
-        <div class="page-intro"><div><p class="eyebrow">WORKSPACE ACCESS</p><h2>Members &amp; access</h2><p class="muted">Membership is approved separately for each domain. Every approved shared member has the user role.</p></div></div>
+        <div class="page-intro"><div><p class="eyebrow">WORKSPACE ACCESS</p><h2>Members &amp; access</h2><p class="muted">Membership is approved separately for each domain. Every approved shared member starts as a user. Admins can appoint a successor and transfer control; a workspace must always keep one approved admin.</p></div></div>
         <div id="member-access-note" class="security-note hidden"></div>
         <div id="membership-list" class="membership-list" aria-live="polite"><div class="empty-events">Loading workspace members…</div></div>
         {% if membership.role == 'admin' %}
@@ -454,6 +454,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261003-047" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261003-048" defer></script>
 </body>
 </html>

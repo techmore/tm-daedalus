@@ -168,6 +168,9 @@
         });
       }
     }
+    if (message.type === "membership_role_changed" && Number(message.organization_id) === Number(orgId)) {
+      window.location.reload();
+    }
   }
 
   var pendingMembershipSockets = new Map();
@@ -3304,14 +3307,38 @@
             actions.append(button);
           });
           row.append(actions);
-        } else if (role === "admin" && member.status === "approved" && member.role === "user") {
-          var revoke = document.createElement("button");
-          revoke.type = "button";
-          revoke.className = "button button-small button-quiet membership-revoke";
-          revoke.dataset.membershipRevoke = member.id;
-          revoke.dataset.membershipEmail = member.email;
-          revoke.textContent = "Remove access";
-          row.append(revoke);
+        } else if (role === "admin" && member.status === "approved") {
+          var actions = document.createElement("div");
+          actions.className = "membership-actions";
+          var roleButton = null;
+          if (member.role === "user") {
+            roleButton = document.createElement("button");
+            roleButton.dataset.membershipRole = "admin";
+            roleButton.textContent = "Promote to admin";
+          } else if (member.role === "admin" && body.approved_admin_count > 1) {
+            roleButton = document.createElement("button");
+            roleButton.dataset.membershipRole = "user";
+            roleButton.textContent = member.is_self ? "Transfer admin and switch to user" : "Change to user";
+          }
+          if (roleButton) {
+            roleButton.type = "button";
+            roleButton.className = "button button-small button-quiet";
+            roleButton.dataset.membershipId = member.id;
+            roleButton.dataset.membershipEmail = member.email;
+            roleButton.dataset.membershipSelf = String(member.is_self);
+            roleButton.disabled = !controlsEnabled;
+            actions.append(roleButton);
+          }
+          if (member.role === "user") {
+            var revoke = document.createElement("button");
+            revoke.type = "button";
+            revoke.className = "button button-small button-quiet membership-revoke";
+            revoke.dataset.membershipRevoke = member.id;
+            revoke.dataset.membershipEmail = member.email;
+            revoke.textContent = "Remove access";
+            actions.append(revoke);
+          }
+          if (actions.childElementCount) row.append(actions);
         }
         list.append(row);
       });
@@ -3484,6 +3511,33 @@
       text(document.getElementById("member-access-note"), error.message);
       document.getElementById("member-access-note").classList.remove("hidden");
       decision.disabled = false;
+    }
+  });
+
+  document.addEventListener("click", async function (event) {
+    var roleButton = event.target.closest("[data-membership-role]");
+    if (!roleButton) return;
+    var targetRole = roleButton.dataset.membershipRole;
+    var selfChange = roleButton.dataset.membershipSelf === "true";
+    var actionDescription = targetRole === "admin" ? "promote " : "change to user: ";
+    var confirmation = selfChange
+      ? "Transfer admin control to another approved member and switch your account to the user role?"
+      : "Confirm " + actionDescription + roleButton.dataset.membershipEmail + "?";
+    if (!window.confirm(confirmation)) return;
+    roleButton.disabled = true;
+    try {
+      await postJson("/api/memberships/" + roleButton.dataset.membershipId + "/role", { role: targetRole });
+      if (selfChange) {
+        window.location.reload();
+        return;
+      }
+      text(document.getElementById("member-access-note"), "Administrator access updated. The change is recorded in the workspace audit log.");
+      document.getElementById("member-access-note").classList.remove("hidden");
+      await Promise.all([loadMemberships(), loadAuditLog()]);
+    } catch (error) {
+      text(document.getElementById("member-access-note"), error.message);
+      document.getElementById("member-access-note").classList.remove("hidden");
+      roleButton.disabled = false;
     }
   });
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from starlette.websockets import WebSocketDisconnect
 
@@ -495,6 +495,117 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
                 f"/api/memberships/{admin_membership.id}/revoke"
             )
         self.assertEqual(self_remove.status_code, 409, self_remove.text)
+
+    def test_admin_can_promote_transfer_and_preserve_last_admin(self):
+        login = self.google_callback({
+            "sub": "admin-succession-requester",
+            "email": "successor@example.net",
+            "email_verified": True,
+            "name": "Workspace Successor",
+        })
+        self.assertEqual(login.status_code, 303)
+        request_access = self.client.post(
+            "/api/membership-requests", json={"domain": "cybersecuritypilot.org"}
+        )
+        self.assertEqual(request_access.status_code, 200, request_access.text)
+        with self.session_factory() as db:
+            successor = db.scalar(select(User).where(User.google_subject == "admin-succession-requester"))
+            organization = db.scalar(select(Organization).where(Organization.domain == "cybersecuritypilot.org"))
+            successor_membership = db.scalar(select(Membership).where(
+                Membership.user_id == successor.id,
+                Membership.organization_id == organization.id,
+            ))
+            original_admin = db.scalar(select(Membership).where(
+                Membership.organization_id == organization.id,
+                Membership.user_id != successor.id,
+                Membership.role == "admin",
+                Membership.status == "approved",
+            ))
+            successor_membership_id = successor_membership.id
+            original_admin_membership_id = original_admin.id
+            successor_user_id = successor.id
+            original_admin_user_id = original_admin.user_id
+
+        approved = self.admin_client.post(
+            f"/api/memberships/{successor_membership_id}/decision", json={"approve": True}
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+        self.assertEqual(approved.json()["role"], "user")
+
+        denied_promotion = self.client.post(
+            f"/api/memberships/{successor_membership_id}/role", json={"role": "admin"}
+        )
+        self.assertEqual(denied_promotion.status_code, 403)
+
+        async def assert_promotion_published(org_id, recipients, message):
+            self.assertEqual(org_id, organization.id)
+            self.assertEqual(recipients, {successor_user_id, original_admin_user_id})
+            self.assertEqual(message, {"type": "membership_list_changed"})
+            with self.session_factory() as db:
+                self.assertEqual(db.get(Membership, successor_membership_id).role, "admin")
+                self.assertIsNotNone(db.scalar(select(AuditLog).where(
+                    AuditLog.organization_id == org_id,
+                    AuditLog.action == "membership.role_changed",
+                    AuditLog.actor_user_id == original_admin_user_id,
+                )))
+
+        async def assert_successor_role_notice(org_id, target_id, message):
+            self.assertEqual(org_id, organization.id)
+            self.assertEqual(target_id, successor_user_id)
+            self.assertEqual(message, {
+                "type": "membership_role_changed",
+                "organization_id": organization.id,
+                "role": "admin",
+            })
+
+        with (
+            patch.object(server.live_hub, "publish_to_users", new_callable=AsyncMock,
+                         side_effect=assert_promotion_published) as refresh_admins,
+            patch.object(server.live_hub, "publish_to_user", new_callable=AsyncMock,
+                         side_effect=assert_successor_role_notice) as successor_notice,
+        ):
+            promoted = self.admin_client.post(
+                f"/api/memberships/{successor_membership_id}/role", json={"role": "admin"}
+            )
+        self.assertEqual(promoted.status_code, 200, promoted.text)
+        self.assertEqual(promoted.json(), {
+            "id": successor_membership_id, "role": "admin", "changed": True,
+        })
+        refresh_admins.assert_awaited_once()
+        successor_notice.assert_awaited_once()
+
+        transferred = self.admin_client.post(
+            f"/api/memberships/{original_admin_membership_id}/role", json={"role": "user"}
+        )
+        self.assertEqual(transferred.status_code, 200, transferred.text)
+        self.assertEqual(transferred.json()["role"], "user")
+        with self.session_factory() as db:
+            self.assertEqual(db.get(Membership, original_admin_membership_id).role, "user")
+            self.assertEqual(db.get(Membership, successor_membership_id).role, "admin")
+            self.assertEqual(db.scalar(select(func.count(Membership.id)).where(
+                Membership.organization_id == organization.id,
+                Membership.role == "admin",
+                Membership.status == "approved",
+            )), 1)
+        former_admin_view = self.admin_client.get("/api/memberships")
+        self.assertEqual(former_admin_view.status_code, 200, former_admin_view.text)
+        self.assertEqual([item["id"] for item in former_admin_view.json()["members"]], [original_admin_membership_id])
+        former_admin_cannot_promote = self.admin_client.post(
+            f"/api/memberships/{successor_membership_id}/role", json={"role": "admin"}
+        )
+        self.assertEqual(former_admin_cannot_promote.status_code, 403)
+
+        last_admin_demotion = self.client.post(
+            f"/api/memberships/{successor_membership_id}/role", json={"role": "user"}
+        )
+        self.assertEqual(last_admin_demotion.status_code, 409, last_admin_demotion.text)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(Membership, successor_membership_id).role, "admin")
+            self.assertEqual(db.scalar(select(func.count(Membership.id)).where(
+                Membership.organization_id == organization.id,
+                Membership.role == "admin",
+                Membership.status == "approved",
+            )), 1)
 
     def test_rotating_domain_challenge_invalidates_superseded_txt_token(self):
         created = self.admin_client.post(

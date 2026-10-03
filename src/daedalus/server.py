@@ -518,6 +518,10 @@ class MembershipDecisionRequest(BaseModel):
     approve: bool
 
 
+class MembershipRoleRequest(BaseModel):
+    role: Literal["admin", "user"]
+
+
 class ProbationOverrideRequest(BaseModel):
     reason: str = Field(min_length=8, max_length=500)
 
@@ -2421,7 +2425,7 @@ def list_workspace_memberships(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _, organization, membership = get_org_context(request, db)
+    user, organization, membership = get_org_context(request, db)
     query = (
         select(Membership, User)
         .join(User, User.id == Membership.user_id)
@@ -2431,9 +2435,15 @@ def list_workspace_memberships(
     if membership.role != "admin":
         query = query.where(Membership.user_id == membership.user_id)
     rows = db.execute(query).all()
+    approved_admin_count = db.scalar(select(func.count(Membership.id)).where(
+        Membership.organization_id == organization.id,
+        Membership.role == "admin",
+        Membership.status == "approved",
+    )) or 0
     return {
         "organization": organization.name,
         "verification_status": organization.verification_status,
+        "approved_admin_count": approved_admin_count,
         "members": [
             {
                 "id": item.id,
@@ -2441,6 +2451,7 @@ def list_workspace_memberships(
                 "email": member.email,
                 "role": item.role,
                 "status": item.status,
+                "is_self": item.user_id == user.id,
             }
             for item, member in rows
         ],
@@ -2525,6 +2536,79 @@ async def decide_membership_request(
         },
     )
     return {"id": membership.id, "status": decided_status, "role": membership.role}
+
+
+@app.post("/api/memberships/{membership_id}/role")
+async def change_workspace_membership_role(
+    membership_id: int,
+    payload: MembershipRoleRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor, organization, _ = get_org_context(request, db, admin=True)
+    if not workspace_controls_available(db, organization):
+        raise HTTPException(
+            status_code=403,
+            detail="Verify the domain or grant a 14-day probation override before changing administrator access.",
+        )
+    membership = db.get(Membership, membership_id)
+    if membership is None or membership.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Workspace membership not found")
+    if membership.status != "approved":
+        raise HTTPException(status_code=409, detail="Only an approved member can change roles")
+
+    previous_role = membership.role
+    if previous_role == payload.role:
+        return {"id": membership.id, "role": previous_role, "changed": False}
+
+    conditions = [
+        Membership.id == membership.id,
+        Membership.organization_id == organization.id,
+        Membership.status == "approved",
+        Membership.role == previous_role,
+    ]
+    if payload.role == "user" and previous_role == "admin":
+        approved_admin_count = select(func.count(Membership.id)).where(
+            Membership.organization_id == organization.id,
+            Membership.role == "admin",
+            Membership.status == "approved",
+        ).scalar_subquery()
+        conditions.append(approved_admin_count > 1)
+
+    changed = db.execute(
+        update(Membership)
+        .where(*conditions)
+        .values(role=payload.role)
+        .execution_options(synchronize_session=False)
+    )
+    if changed.rowcount != 1:
+        raise HTTPException(
+            status_code=409,
+            detail="The last approved workspace admin cannot be demoted. Promote another approved member first.",
+        )
+    user_id = membership.user_id
+    audit(db, organization.id, actor.id, "membership.role_changed", {
+        "membership_id": membership.id,
+        "user_id": user_id,
+        "from_role": previous_role,
+        "to_role": payload.role,
+    })
+    db.commit()
+
+    admin_user_ids = set(db.scalars(select(Membership.user_id).where(
+        Membership.organization_id == organization.id,
+        Membership.role == "admin",
+        Membership.status == "approved",
+    )).all())
+    await live_hub.publish_to_users(organization.id, admin_user_ids, {
+        "type": "membership_list_changed",
+    })
+    await live_hub.publish_to_user(organization.id, user_id, {
+        "type": "membership_role_changed",
+        "organization_id": organization.id,
+        "role": payload.role,
+    })
+    return {"id": membership.id, "role": payload.role, "changed": True}
 
 
 @app.post("/api/memberships/{membership_id}/revoke")
