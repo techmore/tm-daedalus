@@ -1,12 +1,12 @@
 # Integration readiness
 
-Reviewed September 30, 2026 (New York); deployment and Pages state refreshed October 2. This note contains no credential values or organization IDs.
+Reviewed October 2, 2026 (New York); production remains on application commit `741975c`; source updates through `a8ea9b5` are pushed but not deployed. This note contains no credential values or organization IDs.
 
 ## Current deployment state (October 2, 2026)
 
 The canonical portal is live at `https://daedalus.cybersecuritypilot.org/` in the `daedalus-prod` Incus container. Its application source commit is `741975c`; the public HTTPS health endpoint returns HTTP 200, the systemd service is active, and the persistent `/data` volume is mounted. The deployment release and off-host backup passed archive-manifest and SQLite verification. GitHub Pages now publishes the CSP marketing site and Daedalus overview from this repository at `https://cybersecuritypilot.org/`; Pages has workflow publishing, the custom domain, and HTTPS enforcement enabled.
 
-Commit `630a7b9` passed CI and is pushed to `main`, but is not deployed. Its release plan verified the 52-file archive; deployment stopped before backup or activation because SSH to `10.20.0.117:22` timed out and port 22 on the public IP refused connections. The existing public `/healthz` endpoint still returns HTTP 200. Production therefore remains on source commit `741975c` until the Incus SSH route is available.
+Commits `33a2c96`, `46a7902`, and `a8ea9b5` are pushed to `main`; the latest adds resource-bounded Meraki control previews. Release 038 at `46a7902` has a verified 52-file archive (receipt `validation/deployment-release038-20261002.json`). Release 039 from `a8ea9b5` is packaged and manifest-verified (receipt `validation/deployment-release039-20261002.json`); CI run `37080838372` passed on Python 3.11 and 3.12. Deployment previously stopped before backup or activation because SSH to `10.20.0.117:22` timed out and port 22 on the public IP refused connections; that same route remains the blocker, so no deployment was attempted. Public `/healthz` continues to return HTTP 200 on the existing `741975c` production source.
 
 The unconfigured `app.cybersecuritypilot.org` and `app.bfs.org` names below are historical alternate-host checks. They do not describe the canonical production portal. Real owner Google sign-in has been verified; additional-user onboarding remains open.
 
@@ -19,7 +19,7 @@ The unconfigured `app.cybersecuritypilot.org` and `app.bfs.org` names below are 
 | `../meraki/master_meraki_audit.py` and other legacy Meraki scripts | Embedded nonplaceholder candidates | Not independently verified during this review |
 | `data/daedalus.db` | One existing encrypted Meraki credential | Existing workspace grant produced completed reports 12 and 19; the credential and grant were not changed |
 
-The local portal loaded three organizations using the existing key. Only the already-approved CSP organization was selected; the two other organizations remained unauthorized. Fresh report 26 completed at 100% and compared with report 19 at zero control, coverage, inventory, or inventory-coverage changes. It covered one network and zero assigned devices; two control endpoints were unavailable and device-rich reporting remains unverified. The PDF marks an enabled wireless SSID reported as `open` for owner review. The credential and grant were unchanged, and no credentials were copied into source or config files. Receipt: `validation/csp-full-audit-20260930.json`.
+The current Meraki dashboard exposes saved networks, device metadata, findings, warnings, control status, and bounded evidence previews through a no-store workspace-scoped details API. The local portal loaded three organizations using the existing key. Only the already-approved CSP organization was selected; the two other organizations remained unauthorized. Fresh report 26 completed at 100% and compared with report 19 at zero control, coverage, inventory, or inventory-coverage changes. It covered one network and zero assigned devices; two control endpoints were unavailable and device-rich reporting remains unverified. The PDF marks an enabled wireless SSID reported as `open` for owner review. The credential and grant were unchanged, and no credentials were copied into source or config files. Receipt: `validation/csp-full-audit-20260930.json`.
 
 ## Google OAuth
 
