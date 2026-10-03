@@ -110,7 +110,8 @@ cp -f "$SCRIPT_DIR/src/daedalus/command_journal.py" "$BRIDGE_SOURCE/command_jour
 
 printf 'Daedalus one-time enrollment code: '
 "$BRIDGE_VENV/bin/daedalus-agent" --server "$DAEDALUS_SERVER" --nmapui-url "$NMAPUI_URL" \
-  --name "$AGENT_NAME" --config-path "$CONFIG_PATH" --enroll-only
+  --name "$AGENT_NAME" --config-path "$CONFIG_PATH" --enroll-only \
+  --nmapui-systemd-unit-dir "$UNIT_DIR" --nmapui-systemd-config-dir "$CONFIG_DIR"
 
 "$PYTHON_BIN" "$SCRIPT_DIR/systemd_service.py" install \
   --unit-dir "$UNIT_DIR" --config-dir "$CONFIG_DIR" \

@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,7 +9,7 @@ from unittest.mock import Mock, patch
 import httpx
 from sqlalchemy import create_engine, inspect
 
-from daedalus.agent import COMMAND_PROTOCOL_VERSION, FORWARDED_EVENTS, NmapUIBridge
+from daedalus.agent import COMMAND_PROTOCOL_VERSION, FORWARDED_EVENTS, NmapUIBridge, load_config
 from daedalus import server
 
 
@@ -32,6 +33,25 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         )
         self.addCleanup(bridge.http.close)
         return bridge
+
+    def test_linux_managed_service_config_requires_fixed_unit_and_absolute_paths(self):
+        path = self.root / "agent.json"
+        config = {
+            "server": "https://daedalus.example.org",
+            "agent_id": 7,
+            "agent_token": "local-test-token",
+            "nmapui_service_manager": "systemd-user",
+            "nmapui_service_label": "daedalus-nmapui.service",
+            "nmapui_systemd_unit_dir": str(self.root / "config/systemd/user"),
+            "nmapui_systemd_config_dir": str(self.root / "config/daedalus"),
+        }
+        path.write_text(json.dumps(config))
+        self.assertEqual(load_config(path)["nmapui_service_manager"], "systemd-user")
+
+        config["nmapui_systemd_config_dir"] = "relative/config"
+        path.write_text(json.dumps(config))
+        with self.assertRaisesRegex(RuntimeError, "invalid managed Linux service settings"):
+            load_config(path)
 
     def test_macos_update_check_parses_bounded_read_only_catalog(self):
         bridge = self.make_bridge()
@@ -299,6 +319,72 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
             "accepted",
             "Restart requested for the managed NmapUI service.",
         )
+
+    def make_linux_managed_bridge(self, label="first"):
+        unit_dir = self.root / label / "config/systemd/user"
+        config_dir = self.root / label / "config/daedalus"
+        unit_dir.mkdir(parents=True)
+        config_dir.mkdir(parents=True)
+        files = {
+            "daedalus-nmapui.env": config_dir / "daedalus-nmapui.env",
+            "daedalus-nmapui.service": unit_dir / "daedalus-nmapui.service",
+            "daedalus-scanner-bridge.service": unit_dir / "daedalus-scanner-bridge.service",
+        }
+        for name, path in files.items():
+            path.write_text(f"managed fixture {name}")
+            path.chmod(0o600)
+        ownership = {
+            "format": 1,
+            "unit_dir": str(unit_dir),
+            "files": {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in files.items()},
+        }
+        ownership_path = config_dir / ".daedalus-scanner-services.json"
+        ownership_path.write_text(json.dumps(ownership))
+        ownership_path.chmod(0o600)
+        unit_dir.chmod(0o700)
+        config_dir.chmod(0o700)
+        bridge = NmapUIBridge(
+            {
+                "agent_id": 7,
+                "server": "https://daedalus.example.org",
+                "agent_token": "local-test-token",
+                "nmapui_service_manager": "systemd-user",
+                "nmapui_service_label": "daedalus-nmapui.service",
+                "nmapui_systemd_unit_dir": str(unit_dir),
+                "nmapui_systemd_config_dir": str(config_dir),
+            },
+            "http://127.0.0.1:9000",
+        )
+        self.addCleanup(bridge.http.close)
+        return bridge, unit_dir, config_dir
+
+    def test_managed_linux_nmapui_restart_verifies_then_restarts_fixed_unit(self):
+        bridge, _unit_dir, _config_dir = self.make_linux_managed_bridge()
+        with patch("daedalus.agent.sys.platform", "linux"), patch(
+            "daedalus.agent.subprocess.run"
+        ) as run:
+            self.assertTrue(bridge._nmapui_restart_supported())
+            bridge._restart_managed_nmapui()
+
+        run.assert_called_once_with(
+            ["systemctl", "--user", "restart", "daedalus-nmapui.service"],
+            check=True, timeout=20, capture_output=True, text=True,
+        )
+
+    def test_linux_nmapui_restart_refuses_missing_or_tampered_managed_install(self):
+        bridge, _unit_dir, _config_dir = self.make_linux_managed_bridge()
+        with patch("daedalus.agent.sys.platform", "linux"):
+            bridge.config["nmapui_systemd_config_dir"] = str(self.root / "missing-config")
+            self.assertFalse(bridge._nmapui_restart_supported())
+            with self.assertRaisesRegex(RuntimeError, "not configured for managed"):
+                bridge._restart_managed_nmapui()
+
+            bridge, unit_dir, _config_dir = self.make_linux_managed_bridge("second")
+            (unit_dir / "daedalus-nmapui.service").write_text("tampered unit")
+            with patch("daedalus.agent.subprocess.run") as run:
+                with self.assertRaisesRegex(RuntimeError, "verification failed"):
+                    bridge._restart_managed_nmapui()
+            run.assert_not_called()
 
     def test_unmanaged_scanner_cannot_claim_service_restart_support(self):
         bridge = self.make_bridge()

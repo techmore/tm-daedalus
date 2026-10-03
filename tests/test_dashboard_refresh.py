@@ -134,6 +134,21 @@ assert.match(notificationEmptyMessage(), /for this workspace/);
         self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
+    def test_raw_scanner_command_history_is_admin_only(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        start = source.index('  function canViewScannerCommandHistory(')
+        end = source.index('\n  }', start) + len('\n  }')
+        function = source[start:end]
+        script = "const assert = require('node:assert/strict');\n" + function + """
+assert.equal(canViewScannerCommandHistory('admin'), true);
+assert.equal(canViewScannerCommandHistory('user'), false);
+assert.equal(canViewScannerCommandHistory(''), false);
+"""
+        result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(source, r'if \(canViewScannerCommandHistory\(role\)\) \{\s+var history = document\.createElement\("details"\)')
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_scanner_pdf_jobs_are_exposed_in_the_workspace_report_library(self):
         root = Path(__file__).parents[1]
         source = (root / 'src/daedalus/static/js/dashboard.js').read_text()

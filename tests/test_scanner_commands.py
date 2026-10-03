@@ -3,7 +3,7 @@ from datetime import timedelta
 from sqlalchemy import select, text, inspect, update
 from unittest.mock import patch
 from daedalus import server
-from daedalus.models import AgentCommand, AuditLog
+from daedalus.models import AgentCommand, AuditLog, Membership
 try:
     from . import test_cis_pdf_flow as fixtures
 except ImportError:
@@ -30,6 +30,30 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
     def result(self, agent_id, command_id, status, result="evidence"):
         return self.client.post(f"/api/agents/{agent_id}/commands/{command_id}/result",
                                 headers=self.headers, json={"status": status, "result": result})
+
+    def test_raw_command_history_is_admin_only(self):
+        agent_id, admin_id = self.create_scanner()
+        self.headers = {"Authorization": "Bearer test-scanner-token"}
+        self.client.post(f"/api/agents/{agent_id}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": False, "command_protocol_version": 1})
+        command_id = self.queue(agent_id, "collect_diagnostics")
+        delivered = self.client.get(f"/api/agents/{agent_id}/commands/next",
+                                    headers=self.headers)
+        self.assertEqual(delivered.json()["command"]["id"], command_id)
+        private_result = "diagnostic detail containing internal hostnames"
+        self.assertEqual(self.result(agent_id, command_id, "succeeded", private_result).status_code, 200)
+        admin_history = self.client.get(f"/api/agents/{agent_id}/commands")
+        self.assertEqual(admin_history.status_code, 200)
+        self.assertEqual(admin_history.json()["commands"][0]["result"], private_result)
+
+        with self.session_factory() as db:
+            membership = db.scalar(select(Membership).where(Membership.user_id == admin_id))
+            self.assertIsNotNone(membership)
+            membership.role = "user"
+            db.commit()
+
+        member_history = self.client.get(f"/api/agents/{agent_id}/commands")
+        self.assertEqual(member_history.status_code, 403, member_history.text)
 
     def test_delivery_completion_replay_and_undelivered_rejection(self):
         agent = self.ready()

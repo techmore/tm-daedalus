@@ -5197,7 +5197,7 @@ def expire_scanner_commands() -> None:
 
 @app.get("/api/agents/{agent_id}/commands")
 def list_agent_commands(agent_id: int, request: Request, limit: int = 50, db: Session = Depends(get_db)):
-    _, organization, _ = get_org_context(request, db)
+    _, organization, _ = get_org_context(request, db, admin=True)
     agent = db.get(Agent, agent_id)
     if agent is None or agent.organization_id != organization.id:
         raise HTTPException(status_code=404, detail="Scanner not found in this workspace")

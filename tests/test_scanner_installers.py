@@ -144,6 +144,12 @@ exit 0
         self.assertIn('loginctl enable-linger', response.stdout)
         commands=(Path(str(recorder)+'.systemctl')).read_text().splitlines()
         self.assertLess(commands.index('--user enable --now daedalus-nmapui.service'),commands.index('--user enable --now daedalus-scanner-bridge.service'))
+        enrollment_args = json.loads(recorder.read_text())
+        for flag, value in (
+            ('--nmapui-systemd-unit-dir', str(unit_dir)),
+            ('--nmapui-systemd-config-dir', str(self.root/'config-home/daedalus')),
+        ):
+            self.assertEqual(enrollment_args[enrollment_args.index(flag)+1], value)
 
     def test_nested_bridge_module_symlink_is_rejected_before_overwrite(self):
         kit, environment, recorder = self.foreground_fixture()

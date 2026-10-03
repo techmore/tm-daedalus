@@ -12,6 +12,7 @@ import platform
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import threading
@@ -100,6 +101,10 @@ def _diagnostics_result(evidence: dict[str, Any]) -> str:
 
 
 NMAPUI_LAUNCHD_LABEL = re.compile(r"org\.daedalus\.nmapui(?:\.[a-z0-9-]{1,40})?\Z")
+NMAPUI_SYSTEMD_UNIT = "daedalus-nmapui.service"
+NMAPUI_SYSTEMD_BRIDGE_UNIT = "daedalus-scanner-bridge.service"
+NMAPUI_SYSTEMD_ENV_FILE = "daedalus-nmapui.env"
+NMAPUI_SYSTEMD_OWNERSHIP_FILE = ".daedalus-scanner-services.json"
 FORWARDED_EVENTS = {
     "app_update_available",
     "job_status",
@@ -529,12 +534,50 @@ class NmapUIBridge:
         }
 
     def _nmapui_restart_supported(self) -> bool:
+        service_label = str(self.config.get("nmapui_service_label") or "")
+        if sys.platform == "darwin":
+            return bool(NMAPUI_LAUNCHD_LABEL.fullmatch(service_label))
+        if sys.platform != "linux" or self.config.get("nmapui_service_manager") != "systemd-user":
+            return False
+        if service_label != NMAPUI_SYSTEMD_UNIT:
+            return False
+        unit_dir = Path(str(self.config.get("nmapui_systemd_unit_dir") or ""))
+        config_dir = Path(str(self.config.get("nmapui_systemd_config_dir") or ""))
         return bool(
-            sys.platform == "darwin"
-            and NMAPUI_LAUNCHD_LABEL.fullmatch(
-                str(self.config.get("nmapui_service_label") or "")
-            )
+            unit_dir.is_absolute()
+            and config_dir.is_absolute()
+            and (unit_dir / NMAPUI_SYSTEMD_UNIT).is_file()
+            and (config_dir / NMAPUI_SYSTEMD_OWNERSHIP_FILE).is_file()
         )
+
+    def _verify_managed_linux_nmapui_install(self) -> None:
+        unit_dir = Path(str(self.config["nmapui_systemd_unit_dir"]))
+        config_dir = Path(str(self.config["nmapui_systemd_config_dir"]))
+        try:
+            if unit_dir.is_symlink() or config_dir.is_symlink() or not unit_dir.is_dir() or not config_dir.is_dir():
+                raise ValueError("Managed service directories are missing or unsafe.")
+            if stat.S_IMODE(unit_dir.stat().st_mode) != 0o700 or stat.S_IMODE(config_dir.stat().st_mode) != 0o700:
+                raise ValueError("Managed service directories have unexpected permissions.")
+            state_path = config_dir / NMAPUI_SYSTEMD_OWNERSHIP_FILE
+            if state_path.is_symlink() or not state_path.is_file() or stat.S_IMODE(state_path.stat().st_mode) != 0o600:
+                raise ValueError("Managed service ownership record is missing or unsafe.")
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            if not isinstance(state, dict):
+                raise ValueError("Managed service ownership record is invalid.")
+            expected_files = {NMAPUI_SYSTEMD_ENV_FILE, NMAPUI_SYSTEMD_UNIT, NMAPUI_SYSTEMD_BRIDGE_UNIT}
+            if state.get("format") != 1 or state.get("unit_dir") != str(unit_dir):
+                raise ValueError("Managed service ownership record does not match the installed paths.")
+            if set(state.get("files", {})) != expected_files:
+                raise ValueError("Managed service ownership record has an unexpected file set.")
+            for name in expected_files:
+                path = config_dir / name if name == NMAPUI_SYSTEMD_ENV_FILE else unit_dir / name
+                if path.is_symlink() or not path.is_file() or stat.S_IMODE(path.stat().st_mode) != 0o600:
+                    raise ValueError("A managed service file is missing or unsafe.")
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                if digest != state["files"][name]:
+                    raise ValueError("A managed service file changed after installation.")
+        except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Managed Linux service verification failed; refusing to restart NmapUI.") from exc
 
     def _check_os_updates(self) -> dict[str, Any]:
         """Run a user-requested, read-only macOS update catalog check."""
@@ -579,19 +622,21 @@ class NmapUIBridge:
         label = str(self.config.get("nmapui_service_label") or "")
         if not self._nmapui_restart_supported():
             raise RuntimeError("This scanner is not configured for managed NmapUI restarts.")
+        if sys.platform == "linux":
+            self._verify_managed_linux_nmapui_install()
         if self.sio.connected:
             self.sio.disconnect()
         self.nmapui_connected.clear()
         try:
-            subprocess.run(
-                ["/bin/launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"],
-                check=True,
-                timeout=20,
-                capture_output=True,
-                text=True,
+            command = (
+                ["systemctl", "--user", "restart", NMAPUI_SYSTEMD_UNIT]
+                if sys.platform == "linux"
+                else ["/bin/launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"]
             )
+            subprocess.run(command, check=True, timeout=20, capture_output=True, text=True)
         except (OSError, subprocess.SubprocessError) as exc:
-            raise RuntimeError("The macOS service manager could not restart NmapUI.") from exc
+            manager = "Linux systemd user service" if sys.platform == "linux" else "macOS service manager"
+            raise RuntimeError(f"The {manager} could not restart NmapUI.") from exc
 
     def _run_one_command(self) -> None:
         response = self._request(
@@ -766,8 +811,18 @@ def load_config(path: Path) -> dict[str, Any]:
         if not config.get(key):
             raise RuntimeError(f"Agent config is missing {key}.")
     service_label = config.get("nmapui_service_label")
-    if service_label is not None and not NMAPUI_LAUNCHD_LABEL.fullmatch(str(service_label)):
-        raise RuntimeError("Agent config has an invalid NmapUI service label.")
+    service_manager = config.get("nmapui_service_manager")
+    if service_manager is None:
+        if service_label is not None and not NMAPUI_LAUNCHD_LABEL.fullmatch(str(service_label)):
+            raise RuntimeError("Agent config has an invalid NmapUI service label.")
+    elif service_manager == "systemd-user":
+        paths = [config.get("nmapui_systemd_unit_dir"), config.get("nmapui_systemd_config_dir")]
+        if service_label != NMAPUI_SYSTEMD_UNIT or any(
+            not isinstance(value, str) or not Path(value).is_absolute() for value in paths
+        ):
+            raise RuntimeError("Agent config has invalid managed Linux service settings.")
+    else:
+        raise RuntimeError("Agent config has an unsupported NmapUI service manager.")
     return config
 
 
@@ -782,6 +837,8 @@ def main() -> None:
     parser.add_argument("--config", type=Path, help="Existing agent config to run")
     parser.add_argument("--config-path", type=Path, help="Where to save a newly enrolled agent config")
     parser.add_argument("--nmapui-service-label", help="Managed macOS NmapUI LaunchAgent label")
+    parser.add_argument("--nmapui-systemd-unit-dir", type=Path, help="Managed Linux systemd user unit directory")
+    parser.add_argument("--nmapui-systemd-config-dir", type=Path, help="Managed Linux service configuration directory")
     parser.add_argument("--enroll-only", action="store_true", help="Enroll and save credentials without starting the bridge")
     args = parser.parse_args()
 
@@ -790,7 +847,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
     if args.config:
-        if args.config_path or args.nmapui_service_label or args.enroll_only:
+        if args.config_path or args.nmapui_service_label or args.nmapui_systemd_unit_dir or args.nmapui_systemd_config_dir or args.enroll_only:
             parser.error("Enrollment options cannot be combined with --config")
         config = load_config(args.config)
     else:
@@ -801,10 +858,24 @@ def main() -> None:
             parser.error("An enrollment code is required")
         if args.nmapui_service_label and not NMAPUI_LAUNCHD_LABEL.fullmatch(args.nmapui_service_label):
             parser.error("--nmapui-service-label must use the org.daedalus.nmapui label namespace")
+        systemd_paths = (args.nmapui_systemd_unit_dir, args.nmapui_systemd_config_dir)
+        if any(systemd_paths) and (not all(systemd_paths) or sys.platform != "linux"):
+            parser.error("Managed systemd service options require both unit/config paths on Linux")
+        if any(systemd_paths) and any(not path.is_absolute() for path in systemd_paths if path):
+            parser.error("Managed systemd service paths must be absolute")
+        if args.nmapui_service_label and any(systemd_paths):
+            parser.error("macOS and Linux service manager options cannot be combined")
         config = enroll(args.server, args.name, code)
         config["nmapui_url"] = args.nmapui_url
         if args.nmapui_service_label:
             config["nmapui_service_label"] = args.nmapui_service_label
+        if all(systemd_paths):
+            config.update({
+                "nmapui_service_manager": "systemd-user",
+                "nmapui_service_label": NMAPUI_SYSTEMD_UNIT,
+                "nmapui_systemd_unit_dir": str(args.nmapui_systemd_unit_dir),
+                "nmapui_systemd_config_dir": str(args.nmapui_systemd_config_dir),
+            })
         path = save_config(config, int(config["agent_id"]), args.config_path)
         LOG.info(
             "Enrolled %s in %s. Credentials saved to %s.",

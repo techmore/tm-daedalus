@@ -20,6 +20,10 @@
     return Boolean(agent && agent.platform === "Darwin" && Number.isInteger(agent.command_protocol_version) && agent.command_protocol_version >= 3);
   }
 
+  function canViewScannerCommandHistory(workspaceRole) {
+    return workspaceRole === "admin";
+  }
+
   function buildCISClientConfig(body, profileSlug) {
     return "# Workspace upload key; keep this file private.\n" +
       "reporting:\n  endpoint: " + JSON.stringify(body.report_endpoint) + "\n" +
@@ -423,87 +427,89 @@
       enrollmentActions.append(disable, revokeNote);
       card.append(enrollmentActions);
     }
-    var history = document.createElement("details");
-    history.className = "agent-command-history";
-    history.open = openCommandHistories.has(agent.id);
-    var historyTitle = document.createElement("summary");
-    historyTitle.textContent = "Command history";
-    var historyBody = document.createElement("div");
-    history.append(historyTitle, historyBody);
-    history.addEventListener("toggle", async function () {
-      if (!history.open) { openCommandHistories.delete(agent.id); return; }
-      openCommandHistories.add(agent.id);
-      historyBody.textContent = "Loading command history…";
-      try {
-        var response = await fetch("/api/agents/" + agent.id + "/commands", { credentials: "same-origin" });
-        var payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || "Could not load command history");
-        historyBody.textContent = "";
-        if (!payload.commands.length) historyBody.textContent = "No commands yet.";
-        payload.commands.slice(0, 20).forEach(function (command) {
-          var entry = document.createElement("div");
-          entry.className = "command-entry";
-          var actionNames = { start_scan: "Run scan", cancel_scan: "Stop scan", restart_nmapui: "Restart NmapUI", check_nmapui_updates: "Check NmapUI updates", check_os_updates: "Check macOS updates", refresh_health: "Refresh health", collect_diagnostics: "Collect diagnostics" };
-          entry.textContent = (actionNames[command.action] || command.action) + " · " + ({queued:"Queued",delivered:"Delivered",accepted:"Accepted",succeeded:"Completed",failed:"Failed",timed_out:"Completion unconfirmed",expired:"Expired",cancelled:"Cancelled"}[command.status] || command.status);
-          var timeline = document.createElement("p");
-          timeline.className = "command-timeline";
-          timeline.textContent = commandTimeline(command);
-          entry.append(timeline);
-          if (command.result) {
-            var evidence = document.createElement("pre");
-            evidence.style.whiteSpace = "pre-wrap";
-            evidence.style.overflowWrap = "anywhere";
-            try {
-              var decoded = JSON.parse(command.result);
-              if (command.action === "collect_diagnostics" && decoded && decoded.schema_version === 1) {
-                var inventory = document.createElement("dl");
-                inventory.className = "scanner-inventory";
-                [["platform", "Operating system"], ["os_version", "OS version"], ["architecture", "Architecture"], ["cpu_count", "Logical CPUs"], ["total_memory_bytes", "Total memory"], ["data_volume_free_bytes", "Free data storage"]].forEach(function (field) {
-                  var label = document.createElement("dt"); label.textContent = field[1];
-                  var value = document.createElement("dd");
-                  var observed = decoded[field[0]];
-                  value.textContent = inventoryDisplayValue(field[0], observed);
-                  inventory.append(label, value);
-                });
-                entry.append(inventory);
-                if (decoded.operational_fields_omitted) {
-                  var limited = document.createElement("p"); limited.textContent = "Operational details were omitted to keep this receipt within its size limit."; entry.append(limited);
-                }
-              } else if (command.action === "check_os_updates" && decoded && decoded.schema_version === 1) {
-                var updateSummary = document.createElement("p");
-                var outcome = { updates_available: "Updates are available", no_updates: "No updates are available", unavailable: "Apple's update catalog is unavailable", timed_out: "The catalog check timed out", error: "The catalog check failed", unsupported: "This platform is not supported", unknown: "The catalog response could not be interpreted" };
-                updateSummary.textContent = (outcome[decoded.status] || "Update check result") + (decoded.observed_at ? " · Checked " + new Date(decoded.observed_at).toLocaleString() : "");
-                entry.append(updateSummary);
-                if (Array.isArray(decoded.updates)) {
-                  var updateList = document.createElement("ul");
-                  decoded.updates.slice(0, 5).forEach(function (update) {
-                    if (!update || typeof update.label !== "string") return;
-                    var item = document.createElement("li");
-                    var shortTitle = typeof update.title === "string" ? update.title.split(/,\s*Version:/i)[0].trim() : "";
-                    item.textContent = (shortTitle || update.label) + (shortTitle && shortTitle !== update.label ? " (" + update.label + ")" : "");
-                    updateList.append(item);
+    if (canViewScannerCommandHistory(role)) {
+      var history = document.createElement("details");
+      history.className = "agent-command-history";
+      history.open = openCommandHistories.has(agent.id);
+      var historyTitle = document.createElement("summary");
+      historyTitle.textContent = "Command history";
+      var historyBody = document.createElement("div");
+      history.append(historyTitle, historyBody);
+      history.addEventListener("toggle", async function () {
+        if (!history.open) { openCommandHistories.delete(agent.id); return; }
+        openCommandHistories.add(agent.id);
+        historyBody.textContent = "Loading command history…";
+        try {
+          var response = await fetch("/api/agents/" + agent.id + "/commands", { credentials: "same-origin" });
+          var payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || "Could not load command history");
+          historyBody.textContent = "";
+          if (!payload.commands.length) historyBody.textContent = "No commands yet.";
+          payload.commands.slice(0, 20).forEach(function (command) {
+            var entry = document.createElement("div");
+            entry.className = "command-entry";
+            var actionNames = { start_scan: "Run scan", cancel_scan: "Stop scan", restart_nmapui: "Restart NmapUI", check_nmapui_updates: "Check NmapUI updates", check_os_updates: "Check macOS updates", refresh_health: "Refresh health", collect_diagnostics: "Collect diagnostics" };
+            entry.textContent = (actionNames[command.action] || command.action) + " · " + ({queued:"Queued",delivered:"Delivered",accepted:"Accepted",succeeded:"Completed",failed:"Failed",timed_out:"Completion unconfirmed",expired:"Expired",cancelled:"Cancelled"}[command.status] || command.status);
+            var timeline = document.createElement("p");
+            timeline.className = "command-timeline";
+            timeline.textContent = commandTimeline(command);
+            entry.append(timeline);
+            if (command.result) {
+              var evidence = document.createElement("pre");
+              evidence.style.whiteSpace = "pre-wrap";
+              evidence.style.overflowWrap = "anywhere";
+              try {
+                var decoded = JSON.parse(command.result);
+                if (command.action === "collect_diagnostics" && decoded && decoded.schema_version === 1) {
+                  var inventory = document.createElement("dl");
+                  inventory.className = "scanner-inventory";
+                  [["platform", "Operating system"], ["os_version", "OS version"], ["architecture", "Architecture"], ["cpu_count", "Logical CPUs"], ["total_memory_bytes", "Total memory"], ["data_volume_free_bytes", "Free data storage"]].forEach(function (field) {
+                    var label = document.createElement("dt"); label.textContent = field[1];
+                    var value = document.createElement("dd");
+                    var observed = decoded[field[0]];
+                    value.textContent = inventoryDisplayValue(field[0], observed);
+                    inventory.append(label, value);
                   });
-                  if (updateList.childNodes.length) entry.append(updateList);
+                  entry.append(inventory);
+                  if (decoded.operational_fields_omitted) {
+                    var limited = document.createElement("p"); limited.textContent = "Operational details were omitted to keep this receipt within its size limit."; entry.append(limited);
+                  }
+                } else if (command.action === "check_os_updates" && decoded && decoded.schema_version === 1) {
+                  var updateSummary = document.createElement("p");
+                  var outcome = { updates_available: "Updates are available", no_updates: "No updates are available", unavailable: "Apple's update catalog is unavailable", timed_out: "The catalog check timed out", error: "The catalog check failed", unsupported: "This platform is not supported", unknown: "The catalog response could not be interpreted" };
+                  updateSummary.textContent = (outcome[decoded.status] || "Update check result") + (decoded.observed_at ? " · Checked " + new Date(decoded.observed_at).toLocaleString() : "");
+                  entry.append(updateSummary);
+                  if (Array.isArray(decoded.updates)) {
+                    var updateList = document.createElement("ul");
+                    decoded.updates.slice(0, 5).forEach(function (update) {
+                      if (!update || typeof update.label !== "string") return;
+                      var item = document.createElement("li");
+                      var shortTitle = typeof update.title === "string" ? update.title.split(/,\s*Version:/i)[0].trim() : "";
+                      item.textContent = (shortTitle || update.label) + (shortTitle && shortTitle !== update.label ? " (" + update.label + ")" : "");
+                      updateList.append(item);
+                    });
+                    if (updateList.childNodes.length) entry.append(updateList);
+                  }
+                  evidence.textContent = JSON.stringify(decoded, null, 2);
+                  var rawDetails = document.createElement("details");
+                  var rawSummary = document.createElement("summary");
+                  rawSummary.textContent = "Raw update catalog receipt";
+                  rawDetails.append(rawSummary, evidence);
+                  entry.append(rawDetails);
+                  historyBody.append(entry);
+                  return;
                 }
                 evidence.textContent = JSON.stringify(decoded, null, 2);
-                var rawDetails = document.createElement("details");
-                var rawSummary = document.createElement("summary");
-                rawSummary.textContent = "Raw update catalog receipt";
-                rawDetails.append(rawSummary, evidence);
-                entry.append(rawDetails);
-                historyBody.append(entry);
-                return;
               }
-              evidence.textContent = JSON.stringify(decoded, null, 2);
+              catch (_) { evidence.textContent = command.result; }
+              entry.append(evidence);
             }
-            catch (_) { evidence.textContent = command.result; }
-            entry.append(evidence);
-          }
-          historyBody.append(entry);
-        });
-      } catch (error) { historyBody.textContent = error.message; }
-    });
-    card.append(history);
+            historyBody.append(entry);
+          });
+        } catch (error) { historyBody.textContent = error.message; }
+      });
+      card.append(history);
+    }
 
     var scanHistory = document.createElement("details");
     scanHistory.className = "agent-command-history agent-run-history";
