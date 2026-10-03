@@ -4120,13 +4120,13 @@ def meraki_report_details(
         if not isinstance(control, dict):
             continue
         data = control.get("data")
-        preview = json.dumps(data, ensure_ascii=False, sort_keys=True) if data is not None else "No configuration data returned."
+        preview, preview_truncated = bounded_meraki_evidence_preview(data)
         serialized_controls.append({
             "network_name": text_field(control, "network_name"),
             "control": text_field(control, "control"),
             "status": text_field(control, "status", 40),
-            "evidence_preview": preview[:3000],
-            "evidence_truncated": len(preview) > 3000,
+            "evidence_preview": preview,
+            "evidence_truncated": preview_truncated,
         })
 
     return {
@@ -4165,6 +4165,59 @@ def meraki_report_details(
             "warnings": more_warnings,
         },
     }
+
+
+def bounded_meraki_evidence_preview(value: Any, *, max_chars: int = 3000) -> tuple[str, bool]:
+    """Project only a bounded amount of stored JSON before encoding a UI preview."""
+    state = {"nodes": 0, "truncated": False}
+
+    def bounded(item: Any, depth: int = 0) -> Any:
+        if state["nodes"] >= 256:
+            state["truncated"] = True
+            return "[preview truncated]"
+        state["nodes"] += 1
+        if depth >= 8 and isinstance(item, (dict, list)):
+            state["truncated"] = True
+            return "[preview depth limit]"
+        if isinstance(item, str):
+            if len(item) > 500:
+                state["truncated"] = True
+                return item[:500] + "…"
+            return item
+        if isinstance(item, dict):
+            result = {}
+            for index, (key, nested) in enumerate(item.items()):
+                if index >= 64 or state["nodes"] >= 256:
+                    state["truncated"] = True
+                    break
+                safe_key = str(key)[:128]
+                if len(str(key)) > 128:
+                    state["truncated"] = True
+                result[safe_key] = bounded(nested, depth + 1)
+            return result
+        if isinstance(item, list):
+            result = []
+            for nested in item[:64]:
+                if state["nodes"] >= 256:
+                    state["truncated"] = True
+                    break
+                result.append(bounded(nested, depth + 1))
+            if len(item) > len(result):
+                state["truncated"] = True
+            return result
+        if item is None or isinstance(item, (bool, int, float)):
+            return item
+        state["truncated"] = True
+        return str(type(item).__name__)
+
+    safe_value = bounded(value)
+    if value is None:
+        return "No configuration data returned.", False
+    encoded = json.dumps(safe_value, ensure_ascii=False, sort_keys=True)
+    if len(encoded) > max_chars:
+        encoded = encoded[:max_chars]
+        state["truncated"] = True
+    return encoded, bool(state["truncated"])
 
 
 @app.get("/api/meraki/reports/{report_id}/snapshot")

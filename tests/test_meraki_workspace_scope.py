@@ -295,6 +295,33 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         with self.session_factory() as db:
             self.assertEqual(db.get(ReportJob, first_id).report_snapshot["meraki"], first_snapshot)
             self.assertIn("meraki.report.changes_detected", [event.action for event in db.scalars(select(AuditLog)).all()])
+
+        with self.session_factory() as db:
+            saved_job = db.get(ReportJob, second_id)
+            saved_snapshot = dict(saved_job.report_snapshot)
+            oversized_meraki = dict(saved_snapshot["meraki"])
+            oversized_meraki["networks"] = [{"name": f"Network {index}"} for index in range(101)]
+            oversized_meraki["devices"] = [{"name": f"Device {index}"} for index in range(201)]
+            oversized_meraki["security_controls"] = [{
+                "control": "Large control",
+                "status": "complete",
+                "data": {"large_value": "x" * 1_000_000, "many_values": list(range(1000))},
+            }] + [{"control": f"Control {index}", "status": "complete", "data": {}} for index in range(200)]
+            oversized_meraki["findings"] = [{"title": f"Finding {index}"} for index in range(101)]
+            oversized_meraki["warnings"] = [f"Warning {index}" for index in range(101)]
+            saved_snapshot["meraki"] = oversized_meraki
+            saved_job.report_snapshot = saved_snapshot
+            db.commit()
+        bounded = self.client.get(f"/api/meraki/reports/{second_id}/details").json()
+        self.assertEqual(len(bounded["networks"]), 100)
+        self.assertEqual(len(bounded["devices"]), 200)
+        self.assertEqual(len(bounded["controls"]), 200)
+        self.assertEqual(len(bounded["findings"]), 100)
+        self.assertEqual(len(bounded["warnings"]), 100)
+        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "findings": 1, "warnings": 1})
+        self.assertLessEqual(len(bounded["controls"][0]["evidence_preview"]), 3000)
+        self.assertTrue(bounded["controls"][0]["evidence_truncated"])
+
         other = self._create_second_workspace()
         self.client.post("/api/workspaces/select", json={"organization_id": other})
         self.assertEqual(self.client.get(row["meraki_changes_url"]).status_code, 404)
