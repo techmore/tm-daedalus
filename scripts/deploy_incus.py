@@ -62,6 +62,20 @@ def _validate(host: str, instance: str, *, require_clean: bool = True) -> None:
     branch = _run(["git", "-C", str(ROOT), "branch", "--show-current"])
     if branch != "main":
         raise DeployError("Production deployments must come from the main branch.")
+    if require_clean:
+        local_commit = _run(["git", "-C", str(ROOT), "rev-parse", "HEAD"])
+        remote_head = _run([
+            "git", "-C", str(ROOT), "ls-remote", "--exit-code", "origin", "refs/heads/main"
+        ])
+        remote_fields = remote_head.split()
+        if (
+            len(remote_fields) != 2
+            or remote_fields[1] != "refs/heads/main"
+            or remote_fields[0] != local_commit
+        ):
+            raise DeployError(
+                "Production deploy requires HEAD to match the current origin/main commit."
+            )
 
 
 def _public_health(url: str) -> bool:

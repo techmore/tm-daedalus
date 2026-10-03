@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.deploy_incus import DeployError, deploy
+from scripts.deploy_incus import DeployError, _validate, deploy
 
 
 ROOT = Path(__file__).parents[1]
@@ -29,6 +29,33 @@ class IncusDeployTests(unittest.TestCase):
         with patch("scripts.deploy_incus._run", side_effect=[" M README.md"]):
             with self.assertRaisesRegex(DeployError, "Commit and push"):
                 deploy("operator@incus-host", "daedalus-prod", "https://portal.example/healthz")
+
+    def test_production_validation_rejects_local_commit_not_pushed_to_origin_main(self):
+        local_commit = "a" * 40
+        remote_commit = "b" * 40
+        with patch(
+            "scripts.deploy_incus._run",
+            side_effect=[
+                "",
+                "main",
+                local_commit,
+                f"{remote_commit}\trefs/heads/main",
+            ],
+        ) as command:
+            with self.assertRaisesRegex(DeployError, "match the current origin/main"):
+                _validate("operator@incus-host", "daedalus-prod")
+        self.assertEqual(command.call_count, 4)
+
+    def test_production_validation_accepts_exact_pushed_origin_main_commit(self):
+        local_commit = "a" * 40
+        with patch(
+            "scripts.deploy_incus._run",
+            side_effect=["", "main", local_commit, f"{local_commit}\trefs/heads/main"],
+        ) as command:
+            _validate("operator@incus-host", "daedalus-prod")
+        remote_lookup = command.call_args_list[-1].args[0]
+        self.assertIn("ls-remote", remote_lookup)
+        self.assertIn("origin", remote_lookup)
 
     def test_remote_helper_has_valid_bash_syntax(self):
         result = subprocess.run(
