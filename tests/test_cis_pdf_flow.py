@@ -151,7 +151,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261002-039", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261002-040", response.text)
         self.assertIn('id="cis-install-macos26"', response.text)
         self.assertIn('id="cis-device-list"', response.text)
         self.assertIn('src="/static/js/dashboard.js?', response.text)

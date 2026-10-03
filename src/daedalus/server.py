@@ -4069,6 +4069,104 @@ def meraki_report_changes(report_id: int, request: Request, db: Session = Depend
     return {"report_id": job.id, "comparison": comparison}
 
 
+@app.get("/api/meraki/reports/{report_id}/details")
+def meraki_report_details(
+    report_id: int,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+    _user, organization, _membership = get_org_context(request, db)
+    job = db.scalar(select(ReportJob).where(
+        ReportJob.id == report_id,
+        ReportJob.organization_id == organization.id,
+        ReportJob.report_type == "meraki_security",
+        ReportJob.status == "completed",
+    ))
+    if job is None:
+        raise HTTPException(status_code=404, detail="Completed Meraki report not found.")
+
+    snapshot = (job.report_snapshot or {}).get("meraki")
+    if not isinstance(snapshot, dict):
+        raise HTTPException(status_code=404, detail="Saved Meraki evidence is unavailable.")
+
+    summary = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
+    summary_fields = (
+        "network_count", "device_count", "appliance_network_count", "switch_network_count",
+        "switch_device_count", "wireless_network_count", "wireless_device_count",
+        "rf_profile_count", "rf_assignments_collected", "security_controls_collected",
+        "security_controls_unavailable", "security_controls_unsupported",
+        "topology_networks_collected", "licensing_status", "client_usage_status",
+    )
+
+    def text_field(item: dict[str, Any], key: str, limit: int = 200) -> str | None:
+        value = item.get(key)
+        return value[:limit] if isinstance(value, str) else None
+
+    def bounded_rows(key: str, limit: int) -> tuple[list[Any], int]:
+        rows = snapshot.get(key)
+        rows = rows if isinstance(rows, list) else []
+        return rows[:limit], max(0, len(rows) - limit)
+
+    networks, more_networks = bounded_rows("networks", 100)
+    devices, more_devices = bounded_rows("devices", 200)
+    controls, more_controls = bounded_rows("security_controls", 200)
+    findings, more_findings = bounded_rows("findings", 100)
+    warnings, more_warnings = bounded_rows("warnings", 100)
+
+    serialized_controls = []
+    for control in controls:
+        if not isinstance(control, dict):
+            continue
+        data = control.get("data")
+        preview = json.dumps(data, ensure_ascii=False, sort_keys=True) if data is not None else "No configuration data returned."
+        serialized_controls.append({
+            "network_name": text_field(control, "network_name"),
+            "control": text_field(control, "control"),
+            "status": text_field(control, "status", 40),
+            "evidence_preview": preview[:3000],
+            "evidence_truncated": len(preview) > 3000,
+        })
+
+    return {
+        "report_id": job.id,
+        "organization": {
+            "id": text_field(snapshot.get("organization", {}) if isinstance(snapshot.get("organization"), dict) else {}, "id"),
+            "name": text_field(snapshot.get("organization", {}) if isinstance(snapshot.get("organization"), dict) else {}, "name"),
+        },
+        "collected_at": text_field(snapshot, "collected_at", 80),
+        "summary": {key: summary.get(key) for key in summary_fields if key in summary},
+        "networks": [{
+            "name": text_field(item, "name"),
+            "product_types": [value[:80] for value in item.get("productTypes", [])[:20] if isinstance(value, str)] if isinstance(item.get("productTypes"), list) else [],
+            "time_zone": text_field(item, "timeZone", 100),
+        } for item in networks if isinstance(item, dict)],
+        "devices": [{
+            "name": text_field(item, "name"),
+            "model": text_field(item, "model", 100),
+            "status": text_field(item, "status", 40),
+            "product_type": text_field(item, "productType", 80),
+            "firmware": text_field(item, "firmware", 100),
+            "network_id": text_field(item, "networkId", 128),
+        } for item in devices if isinstance(item, dict)],
+        "controls": serialized_controls,
+        "findings": [{
+            "title": text_field(item, "title"),
+            "status": text_field(item, "status", 60),
+            "detail": text_field(item, "detail", 500),
+        } for item in findings if isinstance(item, dict)],
+        "warnings": [item[:500] for item in warnings if isinstance(item, str)],
+        "truncated": {
+            "networks": more_networks,
+            "devices": more_devices,
+            "controls": more_controls,
+            "findings": more_findings,
+            "warnings": more_warnings,
+        },
+    }
+
+
 @app.get("/api/meraki/reports/{report_id}/snapshot")
 def download_meraki_snapshot(report_id: int, request: Request, db: Session = Depends(get_db)):
     _user, organization, _membership = get_org_context(request, db)

@@ -218,16 +218,22 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self._connect_key()
         self.client.post("/api/meraki/organization-scope", json={"meraki_organization_id": "cisco-org-csp"})
         self.report_patch.stop()
-        first_snapshot = {"organization": {"id": "cisco-org-csp"}, "networks": [],
-            "devices": [{"serial": "fixture-device", "firmware": "v1", "status": "online"}], "security_controls": [
+        first_snapshot = {"organization": {"id": "cisco-org-csp"},
+            "networks": [{"id": "n1", "name": "CSP office", "productTypes": ["appliance", "wireless"]}],
+            "devices": [{"serial": "fixture-device", "name": "Edge appliance", "model": "MX fixture", "networkId": "n1", "firmware": "v1", "status": "online"}], "security_controls": [
             {"network_id": "n1", "control": "Intrusion protection", "status": "complete", "data": {"mode": "enabled"}},
             {"network_id": "n1", "control": "Malware protection", "status": "complete", "data": {"mode": "enabled"}},
         ]}
-        second_snapshot = {"organization": {"id": "cisco-org-csp"}, "networks": [],
-            "devices": [{"serial": "fixture-device", "firmware": "v2", "status": "offline"}], "security_controls": [
+        second_snapshot = {"organization": {"id": "cisco-org-csp"},
+            "summary": {"network_count": 1, "device_count": 1, "security_controls_collected": 1,
+                "security_controls_unavailable": 1, "security_controls_unsupported": 0},
+            "collected_at": "2026-10-02T12:00:00Z",
+            "networks": [{"id": "n1", "name": "CSP office", "productTypes": ["appliance", "wireless"]}],
+            "devices": [{"serial": "fixture-device", "name": "Edge appliance", "model": "MX fixture", "networkId": "n1", "firmware": "v2", "status": "offline"}], "security_controls": [
             {"network_id": "n1", "control": "Intrusion protection", "status": "complete", "data": {"mode": "disabled"}},
             {"network_id": "n1", "control": "Malware protection", "status": "unavailable", "data": None},
-        ]}
+        ], "findings": [{"status": "Review", "title": "Check access policy", "detail": "Review this network."}],
+            "warnings": ["One endpoint was unavailable."]}
         with (
             patch.object(server, "MerakiClient") as client_class,
             patch.object(server, "REPORTS_DIR", self.root / "reports"),
@@ -268,6 +274,17 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(snapshot.status_code, 200)
         self.assertEqual(snapshot.json()["meraki"], second_snapshot)
         self.assertEqual(snapshot.headers["cache-control"], "no-store")
+        details_response = self.client.get(f"/api/meraki/reports/{second_id}/details")
+        self.assertEqual(details_response.status_code, 200, details_response.text)
+        self.assertEqual(details_response.headers["cache-control"], "no-store")
+        details = details_response.json()
+        self.assertEqual(details["summary"]["device_count"], 1)
+        self.assertEqual(details["networks"][0]["name"], "CSP office")
+        self.assertEqual(details["devices"][0]["name"], "Edge appliance")
+        self.assertNotIn("serial", details["devices"][0])
+        self.assertEqual(details["controls"][0]["evidence_preview"], '{"mode": "disabled"}')
+        self.assertEqual(details["findings"][0]["title"], "Check access policy")
+        self.assertEqual(details["warnings"], ["One endpoint was unavailable."])
         self.assertEqual(saved["previous_report_id"], first_id)
         self.assertFalse(saved["baseline"])
         self.assertEqual(saved["changes"][0]["control"], "Intrusion protection")
@@ -282,6 +299,7 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.client.post("/api/workspaces/select", json={"organization_id": other})
         self.assertEqual(self.client.get(row["meraki_changes_url"]).status_code, 404)
         self.assertEqual(self.client.get(row["meraki_snapshot_url"]).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/meraki/reports/{second_id}/details").status_code, 404)
 
 
 if __name__ == "__main__":

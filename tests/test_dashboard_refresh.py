@@ -82,6 +82,16 @@ assert.equal(preferredMerakiOrganizationId([]), '');
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_meraki_reports_offer_workspace_scoped_saved_details(self):
+        root = Path(__file__).parents[1]
+        source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
+        template = (root / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertIn('/api/meraki/reports/" + encodeURIComponent(reportId) + "/details', source)
+        self.assertIn('View saved report details', source)
+        self.assertIn('evidence_preview', source)
+        self.assertIn('id="meraki-report-job-list"', template)
+        self.assertIn('meraki-detail-metrics', (root / 'src/daedalus/static/css/app.css').read_text())
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_notification_review_labels_open_the_relevant_workspace_tab(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()

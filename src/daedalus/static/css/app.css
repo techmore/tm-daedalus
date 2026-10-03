@@ -468,6 +468,21 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .report-job-actions { display: flex; align-items: center; gap: 10px; }
 .report-job-failed { color: #985747 !important; }
 .meraki-workspace { display: grid; gap: 14px; }
+.meraki-report-details { grid-column: 1 / -1; border-top: 1px solid rgba(219, 214, 176, .7); padding-top: 10px; color: var(--ink, #342f27); }
+.meraki-report-details > summary, .meraki-control-evidence > summary { cursor: pointer; font-weight: 650; }
+.meraki-report-detail-content { display: grid; gap: 14px; padding: 14px 0 4px; min-width: 0; }
+.meraki-detail-capture-time, .meraki-detail-limit-note { margin: 0; color: var(--muted, #777064); font-size: .84rem; }
+.meraki-detail-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 8px; margin: 0; }
+.meraki-detail-metrics > div { min-width: 0; padding: 10px 12px; border: 1px solid rgba(219, 214, 176, .55); border-radius: 9px; background: rgba(248, 246, 236, .7); }
+.meraki-detail-metrics dt { color: var(--muted, #777064); font-size: .75rem; }
+.meraki-detail-metrics dd { margin: 4px 0 0; font-size: 1.15rem; font-weight: 700; }
+.meraki-detail-section { min-width: 0; }
+.meraki-detail-section h4 { margin: 0 0 8px; font-family: Georgia, serif; font-size: 1.1rem; }
+.meraki-detail-section ul { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
+.meraki-detail-section li { overflow-wrap: anywhere; }
+.meraki-control-evidence { margin-top: 7px; padding: 8px 10px; border: 1px solid rgba(219, 214, 176, .5); border-radius: 8px; background: rgba(248, 246, 236, .42); }
+.meraki-control-evidence pre { max-width: 100%; max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .78rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.meraki-control-evidence small { display: block; color: var(--muted, #777064); }
 .meraki-connection-card, .meraki-org-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border: 1px solid rgba(219, 214, 176, .68); border-radius: 13px; background: var(--cream-50); }
 .meraki-connection-copy h3 { margin: 0 0 6px; font-size: 17px; }
 .meraki-connection-copy .muted, .meraki-org-toolbar .muted { margin: 0; font-size: 11px; line-height: 1.55; }
@@ -645,6 +660,7 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
   .report-toolbar { align-items: stretch; flex-direction: column; }
   .report-toolbar .button { align-self: start; }
   .report-job-card { grid-template-columns: 1fr; align-items: start; }
+  .meraki-report-details { grid-column: 1; }
   .check-record-grid, .website-summary-grid { grid-template-columns: 1fr; }
   .audit-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .site-snapshot-hero { align-items: start; flex-direction: column; }

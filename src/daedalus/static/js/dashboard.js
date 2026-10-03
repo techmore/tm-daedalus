@@ -1131,11 +1131,123 @@
   }
 
   var reportPollTimer = null;
+  var merakiDashboardDetailCache = new Map();
+  var openMerakiDashboardDetails = new Set();
 
   function matchingReportJobs(reports, reportType) {
     if (!reportType) return reports;
     var reportTypes = Array.isArray(reportType) ? reportType : [reportType];
     return reports.filter(function (job) { return reportTypes.includes(job.report_type); });
+  }
+
+  function addMerakiDetailList(container, title, values, formatRow) {
+    var section = document.createElement("section");
+    section.className = "meraki-detail-section";
+    var heading = document.createElement("h4");
+    heading.textContent = title;
+    section.append(heading);
+    if (!values || !values.length) {
+      var empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "No " + title.toLowerCase() + " recorded.";
+      section.append(empty);
+    } else {
+      var list = document.createElement("ul");
+      values.forEach(function (value) {
+        var item = document.createElement("li");
+        item.textContent = formatRow(value);
+        list.append(item);
+      });
+      section.append(list);
+    }
+    container.append(section);
+  }
+
+  function renderMerakiDashboardDetails(container, details) {
+    container.replaceChildren();
+    var heading = document.createElement("p");
+    heading.className = "meraki-detail-capture-time";
+    heading.textContent = "Captured " + dateLabel(details.collected_at) + (details.organization && details.organization.name ? " · " + details.organization.name : "");
+    container.append(heading);
+
+    var summary = details.summary || {};
+    var metrics = [
+      ["Networks", summary.network_count], ["Assigned devices", summary.device_count],
+      ["Security controls read", summary.security_controls_collected],
+      ["Controls unavailable", summary.security_controls_unavailable],
+      ["Controls unsupported", summary.security_controls_unsupported],
+      ["Switches", summary.switch_device_count], ["Wireless devices", summary.wireless_device_count],
+      ["RF profiles", summary.rf_profile_count]
+    ];
+    var metricGrid = document.createElement("dl");
+    metricGrid.className = "meraki-detail-metrics";
+    metrics.forEach(function (entry) {
+      if (entry[1] === undefined || entry[1] === null) return;
+      var cell = document.createElement("div");
+      var label = document.createElement("dt"); label.textContent = entry[0];
+      var value = document.createElement("dd"); value.textContent = String(entry[1]);
+      cell.append(label, value); metricGrid.append(cell);
+    });
+    container.append(metricGrid);
+
+    var findings = details.findings || [];
+    addMerakiDetailList(container, "Findings", findings, function (finding) {
+      return [finding.status, finding.title, finding.detail].filter(Boolean).join(" · ");
+    });
+    addMerakiDetailList(container, "Collection warnings", details.warnings || [], function (warning) { return warning; });
+    addMerakiDetailList(container, "Networks", details.networks || [], function (network) {
+      return [network.name || "Unnamed network", (network.product_types || []).join(", "), network.time_zone].filter(Boolean).join(" · ");
+    });
+    addMerakiDetailList(container, "Assigned devices", details.devices || [], function (device) {
+      return [device.name || "Unnamed device", device.model, device.status, device.product_type, device.firmware, device.network_id ? "Network " + device.network_id : ""].filter(Boolean).join(" · ");
+    });
+
+    var controls = details.controls || [];
+    var section = document.createElement("section");
+    section.className = "meraki-detail-section";
+    var controlsHeading = document.createElement("h4"); controlsHeading.textContent = "Configuration controls"; section.append(controlsHeading);
+    if (!controls.length) {
+      var emptyControls = document.createElement("p"); emptyControls.className = "muted"; emptyControls.textContent = "No control observations recorded."; section.append(emptyControls);
+    }
+    controls.forEach(function (control) {
+      var item = document.createElement("details"); item.className = "meraki-control-evidence";
+      var summaryLine = document.createElement("summary");
+      summaryLine.textContent = [control.network_name || "Organization", control.control || "Control", control.status || "unknown"].join(" · ");
+      var evidence = document.createElement("pre"); evidence.textContent = control.evidence_preview || "No evidence returned.";
+      item.append(summaryLine, evidence);
+      if (control.evidence_truncated) {
+        var boundedNote = document.createElement("small"); boundedNote.textContent = "Preview truncated. Download the JSON evidence for the complete captured data."; item.append(boundedNote);
+      }
+      section.append(item);
+    });
+    container.append(section);
+
+    var truncated = Object.keys(details.truncated || {}).filter(function (key) { return details.truncated[key] > 0; });
+    if (truncated.length) {
+      var bounded = document.createElement("p"); bounded.className = "meraki-detail-limit-note";
+      bounded.textContent = "Some sections are bounded for display. Download complete JSON evidence for full inventory and control data.";
+      container.append(bounded);
+    }
+  }
+
+  async function loadMerakiDashboardDetails(reportId, container) {
+    container.textContent = "Loading saved report details…";
+    try {
+      var cached = merakiDashboardDetailCache.get(reportId);
+      if (!cached) {
+        cached = fetch("/api/meraki/reports/" + encodeURIComponent(reportId) + "/details", {credentials: "same-origin"})
+          .then(async function (response) {
+            var body = await response.json();
+            if (!response.ok) throw new Error(body.detail || "Could not load Meraki report details");
+            return body;
+          });
+        merakiDashboardDetailCache.set(reportId, cached);
+      }
+      renderMerakiDashboardDetails(container, await cached);
+    } catch (error) {
+      merakiDashboardDetailCache.delete(reportId);
+      container.textContent = error.message;
+    }
   }
 
   function renderReportJobs(reports, listId, statusId, reportType) {
@@ -1232,6 +1344,33 @@
         actions.append(snapshot);
       }
       card.append(main, actions);
+      if (job.meraki_snapshot_url) {
+        var details = document.createElement("details");
+        details.className = "meraki-report-details";
+        details.open = openMerakiDashboardDetails.has(job.id);
+        var summary = document.createElement("summary");
+        summary.textContent = "View saved report details";
+        var detailContent = document.createElement("div");
+        detailContent.className = "meraki-report-detail-content";
+        detailContent.textContent = "Open to inspect this saved snapshot.";
+        details.append(summary, detailContent);
+        details.addEventListener("toggle", function () {
+          if (details.open) {
+            openMerakiDashboardDetails.add(job.id);
+            if (!detailContent.dataset.loaded) {
+              detailContent.dataset.loaded = "true";
+              loadMerakiDashboardDetails(job.id, detailContent);
+            }
+          } else {
+            openMerakiDashboardDetails.delete(job.id);
+          }
+        });
+        card.append(details);
+        if (details.open) {
+          detailContent.dataset.loaded = "true";
+          loadMerakiDashboardDetails(job.id, detailContent);
+        }
+      }
       list.append(card);
     });
   }
