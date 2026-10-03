@@ -13,7 +13,7 @@ from scripts.check_production_env import read_env, validate
 
 
 def check_public_host(hostname: str, *, timeout: float = 8) -> tuple[bool, str]:
-    """Check that a public hostname resolves and serves Daedalus over trusted TLS."""
+    """Check that a public hostname serves Daedalus readiness over trusted TLS."""
     try:
         socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
     except OSError:
@@ -23,13 +23,13 @@ def check_public_host(hostname: str, *, timeout: float = 8) -> tuple[bool, str]:
         hostname, 443, timeout=timeout, context=ssl.create_default_context()
     )
     try:
-        connection.request("GET", "/healthz", headers={"Host": hostname, "Connection": "close"})
+        connection.request("GET", "/readyz", headers={"Host": hostname, "Connection": "close"})
         response = connection.getresponse()
         payload = json.loads(response.read(4096))
         if (response.status == 200 and isinstance(payload, dict)
-                and payload.get("status") == "ok" and payload.get("app") == "daedalus"):
-            return True, "DNS, trusted HTTPS, and Daedalus health passed"
-        return False, "HTTPS endpoint did not return the Daedalus health response"
+                and payload.get("status") == "ready" and payload.get("app") == "daedalus"):
+            return True, "DNS, trusted HTTPS, and Daedalus readiness passed"
+        return False, "HTTPS endpoint did not return the Daedalus readiness response"
     except ssl.SSLCertVerificationError:
         return False, "TLS certificate trust or hostname verification failed"
     except (OSError, ssl.SSLError, http.client.HTTPException, ValueError):

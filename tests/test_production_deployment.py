@@ -50,7 +50,7 @@ class ProductionEnvironmentTests(unittest.TestCase):
             @staticmethod
             def read(limit):
                 self.assertLessEqual(limit, 4096)
-                return b'{"status":"ok","app":"daedalus"}'
+                return b'{"status":"ready","app":"daedalus"}'
 
         class Connection:
             def __init__(self, hostname, port, *, timeout, context):
@@ -58,7 +58,7 @@ class ProductionEnvironmentTests(unittest.TestCase):
                 test_case.assertIs(context, ssl_context)
 
             def request(self, method, path, *, headers):
-                test_case.assertEqual((method, path), ("GET", "/healthz"))
+                test_case.assertEqual((method, path), ("GET", "/readyz"))
                 test_case.assertEqual(headers["Host"], "app.example.org")
 
             @staticmethod
@@ -71,7 +71,7 @@ class ProductionEnvironmentTests(unittest.TestCase):
 
         ssl_context = object()
         with patch.object(check_public_deployment.socket, "getaddrinfo", return_value=[("ok",)]), patch.object(check_public_deployment.ssl, "create_default_context", return_value=ssl_context), patch.object(check_public_deployment.http.client, "HTTPSConnection", Connection):
-            self.assertEqual(check_public_deployment.check_public_host("app.example.org"), (True, "DNS, trusted HTTPS, and Daedalus health passed"))
+            self.assertEqual(check_public_deployment.check_public_host("app.example.org"), (True, "DNS, trusted HTTPS, and Daedalus readiness passed"))
 
     def test_public_host_check_fails_for_dns_tls_or_wrong_health_payload(self):
         with patch.object(check_public_deployment.socket, "getaddrinfo", side_effect=OSError):

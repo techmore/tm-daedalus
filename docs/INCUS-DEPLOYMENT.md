@@ -14,8 +14,8 @@ DAEDALUS_INCUS_HOST='operator@incus-host' uv run python scripts/deploy_incus.py 
 ```
 
 The plan builds and verifies the secret-free release archive but makes no
-remote changes. Production deployment refuses an uncommitted tree or a branch
-other than `main`.
+remote changes. Production deployment refuses an uncommitted tree, a branch
+other than `main`, or a local `main` that does not match `origin/main`.
 
 ## Deploy
 
@@ -33,11 +33,13 @@ are excluded from the source archive.
 
 The release becomes active through an atomic symlink switch at
 `/opt/daedalus/app`, followed by an Incus container restart. The command checks
-the systemd unit and health endpoint from inside the container and checks the
-public HTTPS endpoint. If activation or either health check fails, it switches
-back to the previous release, restarts Incus, and verifies the restored
-service. The first managed release preserves the existing application tree as
-a legacy rollback target. Prior releases are retained; disk cleanup is a
+the systemd unit and readiness endpoint from inside the container and checks the
+public HTTPS readiness endpoint. `/readyz` verifies that the database and report
+storage are usable; `/healthz` remains the lightweight process liveness check.
+If activation or either readiness check fails, the command switches back to the
+previous release, restarts Incus, and verifies the restored service. The first
+managed release preserves the existing application tree as a legacy rollback
+target. Prior releases are retained; disk cleanup is a
 separate, operator-reviewed task.
 
 `requirements-production.txt` is exported from `uv.lock`. CI regenerates and

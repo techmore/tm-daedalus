@@ -113,6 +113,29 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         untrusted_host = self.client.get("/healthz", headers={"host": "attacker.example"})
         self.assertEqual(untrusted_host.status_code, 400)
 
+    def test_readiness_checks_database_and_report_storage(self):
+        ready = self.client.get("/readyz")
+        self.assertEqual(ready.status_code, 200, ready.text)
+        self.assertEqual(ready.json(), {
+            "status": "ready",
+            "app": "daedalus",
+            "checks": {"database": "ok", "report_storage": "ok"},
+        })
+        with patch.object(server, "REPORTS_DIR", self.root / "missing" / "reports"):
+            storage_unavailable = self.client.get("/readyz")
+        self.assertEqual(storage_unavailable.status_code, 503)
+        self.assertEqual(storage_unavailable.json()["checks"]["report_storage"], "unavailable")
+
+        class UnavailableDatabase:
+            @staticmethod
+            def execute(_statement):
+                raise RuntimeError("database details must not escape")
+
+        with patch.object(server, "REPORTS_DIR", self.root / "reports"):
+            database_unavailable = server.readyz(UnavailableDatabase())
+        self.assertEqual(database_unavailable.status_code, 503)
+        self.assertEqual(database_unavailable.body, b'{"status":"not_ready","app":"daedalus","checks":{"database":"unavailable","report_storage":"ok"}}')
+
     def test_websocket_origin_must_match_portal_host_and_secure_production_scheme(self):
         matches = server.websocket_origin_matches_host
         self.assertTrue(matches("http://testserver", "testserver", production=False))

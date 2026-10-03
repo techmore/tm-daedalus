@@ -18,7 +18,7 @@ class IncusDeployTests(unittest.TestCase):
         output = io.StringIO()
         with patch("scripts.deploy_incus._run", side_effect=["", "main", "a" * 40]) as command:
             with contextlib.redirect_stdout(output):
-                result = deploy("operator@incus-host", "daedalus-prod", "https://portal.example/healthz", plan_only=True)
+                result = deploy("operator@incus-host", "daedalus-prod", "https://portal.example/readyz", plan_only=True)
 
         self.assertEqual(result, 0)
         self.assertIn("Verified release archive:", output.getvalue())
@@ -28,7 +28,7 @@ class IncusDeployTests(unittest.TestCase):
     def test_production_deploy_rejects_uncommitted_changes(self):
         with patch("scripts.deploy_incus._run", side_effect=[" M README.md"]):
             with self.assertRaisesRegex(DeployError, "Commit and push"):
-                deploy("operator@incus-host", "daedalus-prod", "https://portal.example/healthz")
+                deploy("operator@incus-host", "daedalus-prod", "https://portal.example/readyz")
 
     def test_production_validation_rejects_local_commit_not_pushed_to_origin_main(self):
         local_commit = "a" * 40

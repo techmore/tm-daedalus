@@ -25,7 +25,7 @@ else:
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTANCE_DEFAULT = "daedalus-prod"
-HEALTH_URL_DEFAULT = "https://daedalus.cybersecuritypilot.org/healthz"
+HEALTH_URL_DEFAULT = "https://daedalus.cybersecuritypilot.org/readyz"
 
 
 class DeployError(RuntimeError):
@@ -86,7 +86,7 @@ def _public_health(url: str) -> bool:
             return (
                 response.status == 200
                 and isinstance(payload, dict)
-                and payload.get("status") == "ok"
+                and payload.get("status") == "ready"
                 and payload.get("app") == "daedalus"
             )
     except (OSError, URLError, ValueError):
@@ -101,7 +101,7 @@ def _wait_for_health(host: str, instance: str, health_url: str, timeout: int = 1
                 "incus", "exec", instance, "--", "bash", "-lc",
                 "systemctl is-active --quiet daedalus && "
                 "curl -fsS -H 'Host: daedalus.cybersecuritypilot.org' "
-                "http://127.0.0.1:8000/healthz >/dev/null",
+                "http://127.0.0.1:8000/readyz >/dev/null",
             ])
             if _public_health(health_url):
                 return True

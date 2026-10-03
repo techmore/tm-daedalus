@@ -2006,6 +2006,36 @@ def healthz():
     return {"status": "ok", "app": "daedalus", "version": __version__}
 
 
+@app.get("/readyz")
+def readyz(db: Session = Depends(get_db)):
+    """Report whether the service can reach its database and save reports."""
+    database_ready = False
+    try:
+        db.execute(text("SELECT 1"))
+        database_ready = True
+    except Exception:
+        logger.warning("Readiness database probe failed")
+
+    report_storage = REPORTS_DIR if REPORTS_DIR.exists() else REPORTS_DIR.parent
+    storage_ready = (
+        report_storage.is_dir()
+        and os.access(report_storage, os.R_OK | os.W_OK | os.X_OK)
+    )
+    checks = {
+        "database": "ok" if database_ready else "unavailable",
+        "report_storage": "ok" if storage_ready else "unavailable",
+    }
+    ready = database_ready and storage_ready
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "not_ready",
+            "app": "daedalus",
+            "checks": checks,
+        },
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def login_page(request: Request, db: Session = Depends(get_db)):
     if request.session.get("user_id"):
