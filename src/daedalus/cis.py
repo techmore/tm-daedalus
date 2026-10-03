@@ -153,6 +153,25 @@ def bind_report_to_profile(report: dict[str, Any], profile: dict[str, Any]) -> N
     report["summary"]["profile_verified"] = True
 
 
+def validate_report_target_os(report: dict[str, Any], profile: dict[str, Any]) -> None:
+    """Reject reports whose reported OS major version differs from the benchmark target."""
+    benchmark = profile.get("benchmark")
+    if not isinstance(benchmark, dict) or profile.get("platform") != "macos":
+        return
+    target = benchmark.get("os_version")
+    target_match = re.match(r"^\s*(\d+)", str(target or ""))
+    if target_match is None:
+        return
+    observed = str(report.get("os_version") or "")
+    observed_match = re.search(r"(?<!\d)(\d+)(?:\.\d+)*(?!\d)", observed)
+    if observed_match is None:
+        raise CISDataError("The endpoint OS version is required for this benchmark profile.")
+    if int(observed_match.group(1)) != int(target_match.group(1)):
+        raise CISDataError(
+            "The endpoint OS major version does not match the published benchmark target."
+        )
+
+
 def apply_profile_coverage_limits(report: dict[str, Any], profile: dict[str, Any]) -> None:
     """Keep known partial benchmark procedures from becoming a full pass."""
     benchmark = profile.get("benchmark")

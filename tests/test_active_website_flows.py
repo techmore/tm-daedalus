@@ -51,6 +51,14 @@ class ActiveWebsiteFlowsTests(unittest.TestCase):
         self.assertEqual(actions.count("external_check.completed"), 1)
         self.assertEqual(len(history["runs"]), 1)
 
+    def test_dashboard_exposes_load_older_controls_for_all_external_history(self):
+        page = self.client.get("/dashboard")
+        self.assertEqual(page.status_code, 200, page.text[:500])
+        self.assertIn('data-load-older-checks="dns"', page.text)
+        self.assertIn('data-load-older-checks="web"', page.text)
+        self.assertIn('data-load-older-active="runs"', page.text)
+        self.assertIn('data-load-older-active="changes"', page.text)
+
     def test_override_and_expiry_and_member_gates(self):
         org_id, user_id = self.context()
         with self.session_factory() as db:
@@ -134,13 +142,35 @@ class ActiveWebsiteFlowsTests(unittest.TestCase):
         self.assertEqual(result["change_count"], 0)
         self.assertEqual(self.client.put("/api/external-checks/web-active/schedule", json={"enabled": True, "interval_hours": 24}).status_code, 404)
 
-    def test_history_workspace_scope_and_twelve_run_bound(self):
-        for _ in range(13):
-            self.assertEqual(self.run_check()[0].status_code, 200)
-        self.assertEqual(len(self.client.get("/api/external-checks/web-active").json()["runs"]), 12)
+    def test_history_workspace_scope_and_cursor_pagination(self):
+        for index in range(14):
+            findings = [self.finding()] if index % 2 else []
+            self.assertEqual(self.run_check(self.snapshot(findings))[0].status_code, 200)
+        first_page = self.client.get(
+            "/api/external-checks/web-active", params={"changes_limit": 12}
+        ).json()
+        self.assertEqual(len(first_page["runs"]), 12)
+        self.assertTrue(first_page["runs_has_more"])
+        older_page = self.client.get(
+            "/api/external-checks/web-active",
+            params={"runs_before": first_page["runs_next_before"]},
+        ).json()
+        self.assertEqual(len(older_page["runs"]), 2)
+        self.assertFalse(older_page["runs_has_more"])
+        self.assertEqual(older_page["runs"][0]["id"], first_page["runs"][-1]["id"] - 1)
+        self.assertEqual(older_page["latest_snapshot"], first_page["latest_snapshot"])
+        self.assertEqual(len(first_page["changes"]), 12)
+        self.assertTrue(first_page["changes_has_more"])
+        older_changes = self.client.get(
+            "/api/external-checks/web-active",
+            params={"changes_before": first_page["changes_next_before"]},
+        ).json()
+        self.assertEqual(len(older_changes["changes"]), 1)
+        self.assertFalse(older_changes["changes_has_more"])
         self.client.post("/api/workspaces", json={"name": "Other", "domain": "other-active.example"})
         history = self.client.get("/api/external-checks/web-active").json()
         self.assertEqual(history["runs"], [])
+        self.assertFalse(history["runs_has_more"])
         self.assertEqual(history["changes"], [])
         self.assertIsNone(history["latest_snapshot"])
 

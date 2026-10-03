@@ -36,6 +36,8 @@
   var verificationStatus = shell ? shell.dataset.verificationStatus : null;
   var controlsEnabled = shell ? shell.dataset.controlsEnabled === "true" : false;
   var notifiedCheckRuns = Object.create(null);
+  var externalCheckHistory = Object.create(null);
+  var activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
   var openCommandHistories = new Set();
   var openScanHistories = new Set();
   var openRunDetails = new Set();
@@ -2578,6 +2580,7 @@
     var lastRun = document.getElementById(type + "-check-last-run");
     var runList = document.getElementById(type + "-check-runs");
     var changeList = document.getElementById(type + "-check-changes");
+    var historyState = externalCheckHistory[type];
     var runs = body.runs || [];
     var latestRun = runs[0];
     if (status) {
@@ -2632,6 +2635,12 @@
       });
       if (!runs.length) appendEmpty(runList, "No check history yet.");
     }
+    var olderRunsButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="runs"]');
+    if (olderRunsButton) {
+      olderRunsButton.classList.toggle("hidden", !body.runs_has_more);
+      olderRunsButton.disabled = Boolean(historyState && historyState.loading === "runs");
+      olderRunsButton.textContent = historyState && historyState.loading === "runs" ? "Loading older runs…" : "Load older check runs";
+    }
     if (changeList) {
       changeList.replaceChildren();
       (body.changes || []).forEach(function (change) {
@@ -2670,6 +2679,12 @@
       });
       if (!(body.changes || []).length) appendEmpty(changeList, "No changes have been detected yet; the first successful run is the baseline.");
     }
+    var olderChangesButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="changes"]');
+    if (olderChangesButton) {
+      olderChangesButton.classList.toggle("hidden", !body.changes_has_more);
+      olderChangesButton.disabled = Boolean(historyState && historyState.loading === "changes");
+      olderChangesButton.textContent = historyState && historyState.loading === "changes" ? "Loading older changes…" : "Load older changes";
+    }
     if (type === "dns") renderDnsSnapshot(body.latest_snapshot);
     if (type === "web") renderWebsiteSnapshot(body.latest_snapshot);
     renderExternalCheckSchedule(type, body.schedule);
@@ -2706,6 +2721,7 @@
   function renderActiveExposure(body) {
     var status = document.getElementById("web-active-status");
     var list = document.getElementById("web-active-runs");
+    var changesList = document.getElementById("web-active-changes");
     if (!list) return;
     var runs = body.runs || [];
     if (status) {
@@ -2732,19 +2748,89 @@
       if (!(snapshot.findings || []).length) { var none = document.createElement("p"); none.className = "muted"; none.textContent = "No configured exposure signature was observed in this run. This is not a vulnerability-free assessment."; main.append(none); }
       row.append(main); list.append(row);
     });
+    if (changesList) {
+      changesList.replaceChildren();
+      (body.changes || []).forEach(function (change) {
+        var row = document.createElement("article"); row.className = "check-change-row";
+        var main = document.createElement("div"); main.className = "check-change-main";
+        var field = document.createElement("strong"); field.textContent = change.field_label || change.field_path || "Finding change";
+        var actor = document.createElement("small"); actor.textContent = "Run #" + change.run_id + " · detected by " + (change.actor || "system");
+        var values = document.createElement("div"); values.className = "check-change-values";
+        [["Previous", change.previous_value], ["Current", change.current_value]].forEach(function (pair) {
+          var box = document.createElement("div"); var label = document.createElement("span"); label.textContent = pair[0];
+          var value = document.createElement("pre"); value.textContent = displayCheckValue(pair[1]); box.append(label, value); values.append(box);
+        });
+        var time = document.createElement("time"); time.dateTime = change.detected_at || ""; time.textContent = dateLabel(change.detected_at);
+        main.append(field, actor, values); row.append(main, time); changesList.append(row);
+      });
+      if (!(body.changes || []).length) appendEmpty(changesList, "No finding changes have been detected yet; the first complete run is the baseline.");
+    }
+    var olderRuns = document.querySelector('[data-load-older-active="runs"]');
+    var olderChanges = document.querySelector('[data-load-older-active="changes"]');
+    if (olderRuns) {
+      olderRuns.classList.toggle("hidden", !body.runs_has_more);
+      olderRuns.disabled = activeExposureHistory.loading === "runs";
+      olderRuns.textContent = activeExposureHistory.loading === "runs" ? "Loading older runs…" : "Load older exposure runs";
+    }
+    if (olderChanges) {
+      olderChanges.classList.toggle("hidden", !body.changes_has_more);
+      olderChanges.disabled = activeExposureHistory.loading === "changes";
+      olderChanges.textContent = activeExposureHistory.loading === "changes" ? "Loading older changes…" : "Load older finding changes";
+    }
   }
 
-  async function loadActiveExposure() {
+  async function loadActiveExposure(olderKind) {
     if (!orgId) return;
+    if (olderKind && (!activeExposureHistory[olderKind + "HasMore"] || activeExposureHistory.loading)) return;
+    if (!olderKind) activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
+    activeExposureHistory.loading = olderKind || null;
     try {
-      var response = await fetch("/api/external-checks/web-active", { credentials: "same-origin" });
+      var params = new URLSearchParams();
+      if (olderKind === "runs") params.set("runs_before", activeExposureHistory.runsCursor);
+      if (olderKind === "changes") params.set("changes_before", activeExposureHistory.changesCursor);
+      var suffix = params.toString() ? "?" + params.toString() : "";
+      var response = await fetch("/api/external-checks/web-active" + suffix, { credentials: "same-origin" });
       var body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Could not load active check history");
-      renderActiveExposure(body);
+      if (!olderKind) {
+        activeExposureHistory.runs = body.runs || [];
+        activeExposureHistory.changes = body.changes || [];
+        activeExposureHistory.runsCursor = body.runs_next_before;
+        activeExposureHistory.changesCursor = body.changes_next_before;
+        activeExposureHistory.runsHasMore = body.runs_has_more;
+        activeExposureHistory.changesHasMore = body.changes_has_more;
+      } else if (olderKind === "runs") {
+        activeExposureHistory.runs = activeExposureHistory.runs.concat(body.runs || []);
+        activeExposureHistory.runsCursor = body.runs_next_before;
+        activeExposureHistory.runsHasMore = body.runs_has_more;
+      } else {
+        activeExposureHistory.changes = activeExposureHistory.changes.concat(body.changes || []);
+        activeExposureHistory.changesCursor = body.changes_next_before;
+        activeExposureHistory.changesHasMore = body.changes_has_more;
+      }
+      activeExposureHistory.loading = null;
+      renderActiveExposure(Object.assign({}, body, {
+        runs: activeExposureHistory.runs,
+        changes: activeExposureHistory.changes,
+        runs_has_more: activeExposureHistory.runsHasMore,
+        changes_has_more: activeExposureHistory.changesHasMore
+      }));
     } catch (error) {
+      activeExposureHistory.loading = null;
+      if (olderKind) {
+        var retryButton = document.querySelector('[data-load-older-active="' + olderKind + '"]');
+        if (retryButton) {
+          retryButton.disabled = false;
+          retryButton.textContent = olderKind === "runs" ? "Load older exposure runs" : "Load older finding changes";
+        }
+      }
       text(document.getElementById("web-active-feedback"), error.message);
     }
   }
+
+  document.querySelectorAll("[data-load-older-active]").forEach(function (button) {
+    button.addEventListener("click", function () { loadActiveExposure(button.dataset.loadOlderActive); });
+  });
 
   var activeExposureButton = document.querySelector("[data-run-active-exposure]");
   if (activeExposureButton) activeExposureButton.addEventListener("click", async function () {
@@ -2759,14 +2845,53 @@
     finally { text(activeExposureButton, original); activeExposureButton.disabled = !controlsEnabled; }
   });
 
-  async function loadExternalCheck(type) {
+  async function loadExternalCheck(type, olderKind) {
     if (!orgId || !["dns", "web"].includes(type)) return;
+    var state = externalCheckHistory[type] || { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
+    if (olderKind && (!state[olderKind + "HasMore"] || state.loading)) return;
+    if (!olderKind) state = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
+    state.loading = olderKind || null;
+    externalCheckHistory[type] = state;
     try {
-      var response = await fetch("/api/external-checks/" + type, { credentials: "same-origin" });
+      var params = new URLSearchParams();
+      if (olderKind === "runs") params.set("runs_before", state.runsCursor);
+      if (olderKind === "changes") params.set("changes_before", state.changesCursor);
+      var suffix = params.toString() ? "?" + params.toString() : "";
+      var response = await fetch("/api/external-checks/" + type + suffix, { credentials: "same-origin" });
       var body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Could not load check history");
-      renderCheckHistory(type, body);
+      if (!olderKind) {
+        state.runs = body.runs || [];
+        state.changes = body.changes || [];
+        state.runsCursor = body.runs_next_before;
+        state.changesCursor = body.changes_next_before;
+        state.runsHasMore = body.runs_has_more;
+        state.changesHasMore = body.changes_has_more;
+      } else if (olderKind === "runs") {
+        state.runs = state.runs.concat(body.runs || []);
+        state.runsCursor = body.runs_next_before;
+        state.runsHasMore = body.runs_has_more;
+      } else {
+        state.changes = state.changes.concat(body.changes || []);
+        state.changesCursor = body.changes_next_before;
+        state.changesHasMore = body.changes_has_more;
+      }
+      state.loading = null;
+      renderCheckHistory(type, Object.assign({}, body, {
+        runs: state.runs,
+        changes: state.changes,
+        runs_has_more: state.runsHasMore,
+        changes_has_more: state.changesHasMore
+      }));
     } catch (error) {
+      state.loading = null;
+      if (olderKind) {
+        var retryButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="' + olderKind + '"]');
+        if (retryButton) {
+          retryButton.disabled = false;
+          retryButton.textContent = olderKind === "runs" ? "Load older check runs" : "Load older changes";
+        }
+      }
       var target = document.getElementById(type + "-check-runs");
       if (target) {
         target.replaceChildren();
@@ -2774,6 +2899,12 @@
       }
     }
   }
+
+  document.querySelectorAll("[data-load-older-checks]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      loadExternalCheck(button.dataset.loadOlderChecks, button.dataset.pageKind);
+    });
+  });
 
   function notifyExternalCheck(message) {
     if (!message || message.run_id == null || notifiedCheckRuns[message.run_id]) return;

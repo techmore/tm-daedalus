@@ -58,6 +58,7 @@ from daedalus.cis import (
     normalize_cis_report,
     profile_checksum,
     validate_profile,
+    validate_report_target_os,
 )
 from daedalus.db import Base, SessionLocal, engine, get_db
 from daedalus.live import live_hub
@@ -2639,29 +2640,48 @@ def list_audit_log(request: Request, limit: int = 100, db: Session = Depends(get
 def external_check_history(
     check_type: str,
     request: Request,
+    runs_limit: int = 12,
+    changes_limit: int = 40,
+    runs_before: int | None = None,
+    changes_before: int | None = None,
     db: Session = Depends(get_db),
 ):
     if check_type not in {"dns", "web", "web-active"}:
         raise HTTPException(status_code=404, detail="Unknown external check")
     _, organization, _ = get_org_context(request, db)
-    run_rows = db.execute(
+    runs_page_size = max(1, min(runs_limit, 100))
+    changes_page_size = max(1, min(changes_limit, 100))
+    run_query = (
         select(ExternalCheckRun, User)
         .outerjoin(User, User.id == ExternalCheckRun.triggered_by_user_id)
         .where(
             ExternalCheckRun.organization_id == organization.id,
             ExternalCheckRun.check_type == check_type,
         )
-        .order_by(ExternalCheckRun.id.desc())
-        .limit(12)
+    )
+    if runs_before is not None:
+        run_query = run_query.where(ExternalCheckRun.id < max(1, runs_before))
+    run_rows = db.execute(
+        run_query.order_by(ExternalCheckRun.id.desc()).limit(runs_page_size + 1)
     ).all()
+    runs_has_more = len(run_rows) > runs_page_size
+    run_rows = run_rows[:runs_page_size]
     recent_runs = [serialize_external_run(run, actor) for run, actor in run_rows]
-    latest_snapshot = next(
-        (
-            run["snapshot"]
-            for run in recent_runs
-            if run["status"] in {"completed", "completed_with_warnings"} and run["snapshot"]
-        ),
-        None,
+    latest_snapshot_row = db.execute(
+        select(ExternalCheckRun, User)
+        .outerjoin(User, User.id == ExternalCheckRun.triggered_by_user_id)
+        .where(
+            ExternalCheckRun.organization_id == organization.id,
+            ExternalCheckRun.check_type == check_type,
+            ExternalCheckRun.status.in_(["completed", "completed_with_warnings"]),
+            ExternalCheckRun.snapshot.is_not(None),
+        )
+        .order_by(ExternalCheckRun.id.desc())
+        .limit(1)
+    ).first()
+    latest_snapshot = (
+        serialize_external_run(*latest_snapshot_row)["snapshot"]
+        if latest_snapshot_row else None
     )
     schedule = db.scalar(
         select(ExternalCheckSchedule).where(
@@ -2669,7 +2689,7 @@ def external_check_history(
             ExternalCheckSchedule.check_type == check_type,
         )
     )
-    change_rows = db.execute(
+    change_query = (
         select(ExternalCheckChange, ExternalCheckRun, User)
         .join(ExternalCheckRun, ExternalCheckRun.id == ExternalCheckChange.run_id)
         .outerjoin(User, User.id == ExternalCheckRun.triggered_by_user_id)
@@ -2677,15 +2697,22 @@ def external_check_history(
             ExternalCheckChange.organization_id == organization.id,
             ExternalCheckChange.check_type == check_type,
         )
-        .order_by(ExternalCheckChange.id.desc())
-        .limit(40)
+    )
+    if changes_before is not None:
+        change_query = change_query.where(ExternalCheckChange.id < max(1, changes_before))
+    change_rows = db.execute(
+        change_query.order_by(ExternalCheckChange.id.desc()).limit(changes_page_size + 1)
     ).all()
+    changes_has_more = len(change_rows) > changes_page_size
+    change_rows = change_rows[:changes_page_size]
     return {
         "check_type": check_type,
         "domain": organization.domain,
         "schedule": serialize_external_schedule(schedule, check_type),
         "latest_snapshot": latest_snapshot,
         "runs": recent_runs,
+        "runs_has_more": runs_has_more,
+        "runs_next_before": run_rows[-1][0].id if runs_has_more and run_rows else None,
         "changes": [
             {
                 "id": change.id,
@@ -2701,6 +2728,8 @@ def external_check_history(
             }
             for change, run, actor in change_rows
         ],
+        "changes_has_more": changes_has_more,
+        "changes_next_before": change_rows[-1][0].id if changes_has_more and change_rows else None,
     }
 
 
@@ -3448,6 +3477,7 @@ async def receive_cis_report(
             if profile is None:
                 raise CISDataError("The report profile and version must match a published workspace profile.")
             bind_report_to_profile(normalized, profile.content)
+            validate_report_target_os(normalized, profile.content)
             apply_profile_coverage_limits(normalized, profile.content)
     except CISDataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -29,9 +29,20 @@ from daedalus.models import (
     User,
 )
 from daedalus import server
+from daedalus.cis import CISDataError, validate_report_target_os
 
 
 class CISReportPDFFlowTests(unittest.TestCase):
+    def test_cis_profile_report_requires_matching_target_os_major_version(self):
+        profile = server.load_macos26_starter_profiles()[0]
+        for os_version in ("macOS 26.0.1", "26.4"):
+            with self.subTest(os_version=os_version):
+                validate_report_target_os({"os_version": os_version}, profile)
+        for os_version in ("macOS 15", "", "unknown"):
+            with self.subTest(os_version=os_version):
+                with self.assertRaises(CISDataError):
+                    validate_report_target_os({"os_version": os_version}, profile)
+
     def test_demo_cis_client_download_requires_workspace_login(self):
         self.client.cookies.clear()
         self.assertEqual(self.client.get("/api/cis/client-package/download").status_code, 401)
@@ -151,7 +162,10 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261002-040", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261002-041", response.text)
+        self.assertIn('data-load-older-checks="dns"', response.text)
+        self.assertIn('data-load-older-checks="web"', response.text)
+        self.assertIn('data-load-older-active="changes"', response.text)
         self.assertIn('id="cis-install-macos26"', response.text)
         self.assertIn('id="cis-device-list"', response.text)
         self.assertIn('src="/static/js/dashboard.js?', response.text)
@@ -655,36 +669,42 @@ class CISReportPDFFlowTests(unittest.TestCase):
             server.BASE_URL + "/api/cis/client/profiles",
         )
 
+        report_headers = {
+            "X-API-Key": api_key,
+            "X-Device-UUID": "TEST-PRIVATE-SERIAL-1234",
+            "X-Report-ID": "TEST-PRIVATE-SERIAL-1234-run-001",
+        }
+        report_payload = {
+            "api_key": api_key,
+            "domain": "untrusted.invalid",
+            "device_uuid": "TEST-PRIVATE-SERIAL-1234",
+            "report_id": "TEST-PRIVATE-SERIAL-1234-run-001",
+            "report_info": {
+                "timestamp": "2026-09-29T12:00:00Z",
+                "cis_benchmark_version": "1.0",
+            },
+            "profile_slug": level_one_slug,
+            "profile_version": "1.1.0-r2",
+            "system_info": {
+                "hostname": "Demo Mac",
+                "serial_number": "TEST-PRIVATE-SERIAL-1234",
+                "os_version": "macOS 15",
+                "ip_addresses": ["10.0.0.5"],
+            },
+            "results": [
+                {**check, "status": "fail" if check["id"] == "system_settings_firewall_stealth_mode_enable" else "manual",
+                 "details": "Fixture evidence"}
+                for check in server.load_macos26_starter_profiles()[0]["checks"]
+            ],
+        }
+        incompatible = self.client.post(
+            "/api/cis/report", headers=report_headers, json=report_payload
+        )
+        self.assertEqual(incompatible.status_code, 422, incompatible.text)
+        self.assertIn("OS major version", incompatible.json()["detail"])
+        report_payload["system_info"]["os_version"] = "macOS 26.0.1"
         received = self.client.post(
-            "/api/cis/report",
-            headers={
-                "X-API-Key": api_key,
-                "X-Device-UUID": "TEST-PRIVATE-SERIAL-1234",
-                "X-Report-ID": "TEST-PRIVATE-SERIAL-1234-run-001",
-            },
-            json={
-                "api_key": api_key,
-                "domain": "untrusted.invalid",
-                "device_uuid": "TEST-PRIVATE-SERIAL-1234",
-                "report_id": "TEST-PRIVATE-SERIAL-1234-run-001",
-                "report_info": {
-                    "timestamp": "2026-09-29T12:00:00Z",
-                    "cis_benchmark_version": "1.0",
-                },
-                "profile_slug": level_one_slug,
-                "profile_version": "1.1.0-r2",
-                "system_info": {
-                    "hostname": "Demo Mac",
-                    "serial_number": "TEST-PRIVATE-SERIAL-1234",
-                    "os_version": "macOS 15",
-                    "ip_addresses": ["10.0.0.5"],
-                },
-                "results": [
-                    {**check, "status": "fail" if check["id"] == "system_settings_firewall_stealth_mode_enable" else "manual",
-                     "details": "Fixture evidence"}
-                    for check in server.load_macos26_starter_profiles()[0]["checks"]
-                ],
-            },
+            "/api/cis/report", headers=report_headers, json=report_payload
         )
         self.assertEqual(received.status_code, 200, received.text)
         cis_report_id = received.json()["report_id"]

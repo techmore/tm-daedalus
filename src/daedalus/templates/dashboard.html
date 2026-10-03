@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261002-038">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261002-041">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -370,12 +370,18 @@
             {% if membership.role == 'admin' %}<button class="button button-secondary" type="button" data-run-active-exposure {% if not workspace_controls_enabled %}disabled{% endif %}>Run bounded exposure check</button>{% endif %}</div>
             <p class="muted" id="web-active-feedback" aria-live="polite"></p>
             <div class="check-run-list" id="web-active-runs" aria-live="polite"><div class="empty-events">No active check history yet.</div></div>
+            <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-active="runs">Load older exposure runs</button>
+            <div class="section-heading check-subheading"><div><p class="eyebrow">EXPOSURE DIFFERENCES</p><h4>Finding history</h4></div></div>
+            <div class="check-change-list" id="web-active-changes" aria-live="polite"><div class="empty-events">No exposure changes have been recorded.</div></div>
+            <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-active="changes">Load older finding changes</button>
           </section>
           {% endif %}
           <div class="section-heading check-subheading"><div><p class="eyebrow">PERSISTED RUNS</p><h3>Check history</h3></div></div>
           <div class="check-run-list" id="{{ key }}-check-runs" aria-live="polite"><div class="empty-events">No check history yet.</div></div>
+          <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="runs">Load older check runs</button>
           <div class="section-heading check-subheading"><div><p class="eyebrow">DETECTED DIFFERENCES</p><h3>Change history</h3></div></div>
           <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
+          <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="changes">Load older changes</button>
         </section>
         {% elif key == 'reports' %}
         <section class="report-library">
@@ -448,6 +454,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261002-040" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261002-041" defer></script>
 </body>
 </html>
