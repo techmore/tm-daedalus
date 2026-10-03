@@ -315,6 +315,10 @@ class ProductionConfigStartupTests(unittest.TestCase):
 
 class ProductionBackupTests(unittest.TestCase):
     def test_incomplete_backup_archive_is_never_published(self):
+        def write_partial_archive(path, _mode):
+            Path(path).write_bytes(b"partial gzip stream")
+            raise OSError("disk full")
+
         with tempfile.TemporaryDirectory(prefix="daedalus-backup-failure-") as directory:
             root = Path(directory)
             data = root / "data"
@@ -329,7 +333,7 @@ class ProductionBackupTests(unittest.TestCase):
                 patch.object(backup_data, "BACKUP_DIR", backup_dir),
                 patch.object(backup_data, "DATABASE", database),
                 patch.object(backup_data, "REPORTS", data / "reports"),
-                patch.object(backup_data.tarfile, "open", side_effect=OSError("disk full")),
+                patch.object(backup_data.tarfile, "open", side_effect=write_partial_archive),
             ):
                 with self.assertRaisesRegex(OSError, "disk full"):
                     backup_data.main()
@@ -366,6 +370,7 @@ class ProductionBackupTests(unittest.TestCase):
             archive_path = backup_dir / output.getvalue().strip()
             self.assertTrue(archive_path.is_file())
             self.assertEqual(stat.S_IMODE(archive_path.stat().st_mode), 0o600)
+            self.assertEqual([path.name for path in backup_dir.iterdir()], [archive_path.name])
             verify_archive(archive_path)
             with tarfile.open(archive_path, "r:gz") as archive:
                 names = set(archive.getnames())
