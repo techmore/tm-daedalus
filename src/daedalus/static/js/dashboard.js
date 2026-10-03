@@ -1043,73 +1043,105 @@
     });
   }
 
+  function liveReconnectDelay(attempt) {
+    return Math.min(1000 * Math.pow(2, Math.max(0, attempt)), 30000);
+  }
+
   if (orgId) {
     var scheme = location.protocol === "https:" ? "wss://" : "ws://";
-    var socket = new WebSocket(scheme + location.host + "/ws/live?organization_id=" + orgId);
+    var liveUrl = scheme + location.host + "/ws/live?organization_id=" + encodeURIComponent(orgId);
+    var socket = null;
+    var reconnectTimer = null;
+    var heartbeatTimer = null;
+    var reconnectAttempt = 0;
     var liveLabel = document.getElementById("live-label");
     var connectionPill = document.querySelector(".connection-pill");
-    socket.addEventListener("open", function () {
-      text(liveLabel, "Live updates connected");
-      connectionPill.classList.add("connected");
-    });
-    socket.addEventListener("message", function (event) {
-      var message = {};
-      try { message = JSON.parse(event.data); } catch (_error) { /* ignore malformed live payload */ }
-      handleMembershipLiveMessage(message);
-      if (message.type === "external_check_finished") {
-        loadExternalCheck(message.check_type);
-        loadNotifications();
-        if (role === "admin") loadAuditLog();
-        notifyExternalCheck(message);
-      }
-      if (message.type === "external_check_schedule_updated") {
-        var schedule = message.schedule || {};
-        if (activeTab === schedule.check_type) loadExternalCheck(schedule.check_type);
-        if (role === "admin") loadAuditLog();
-      }
-      if (message.type === "meraki_report_finished") {
-        loadReports();
-        loadNotifications();
-        if (role === "admin") loadAuditLog();
-        var merakiToast = document.getElementById("check-toast");
-        if (merakiToast) {
-          var merakiNotice = message.baseline ? "Meraki report saved as the comparison baseline." : "Meraki report finished: " + (message.changed_control_count || 0) + " control change(s), " + (message.coverage_change_count || 0) + " coverage change(s), " + (message.inventory_change_count || 0) + " inventory change(s).";
-          text(merakiToast, merakiNotice);
-          merakiToast.classList.remove("hidden");
-          window.clearTimeout(merakiToast.hideTimer);
-          merakiToast.hideTimer = window.setTimeout(function () { merakiToast.classList.add("hidden"); }, 9000);
+    function connectLiveSocket() {
+      if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return;
+      var currentSocket = new WebSocket(liveUrl);
+      socket = currentSocket;
+      currentSocket.addEventListener("open", function () {
+        if (socket !== currentSocket) return;
+        reconnectAttempt = 0;
+        text(liveLabel, "Live updates connected");
+        connectionPill.classList.add("connected");
+      });
+      currentSocket.addEventListener("message", function (event) {
+        var message = {};
+        try { message = JSON.parse(event.data); } catch (_error) { /* ignore malformed live payload */ }
+        handleMembershipLiveMessage(message);
+        if (message.type === "external_check_finished") {
+          loadExternalCheck(message.check_type);
+          loadNotifications();
+          if (role === "admin") loadAuditLog();
+          notifyExternalCheck(message);
         }
-      }
-      if (message.type === "cis_report_received") {
-        if (activeTab === "cis") loadCIS();
-        loadNotifications();
-        if (role === "admin") loadAuditLog();
-        notifyCISReport(message);
-      }
-      if (message.type === "scanner_comparison_detected" && message.meaningful_change_count > 0 && !notifiedScannerComparisons.has(message.comparison_id)) {
-        notifiedScannerComparisons.add(message.comparison_id);
-        loadNotifications();
-        var scannerToast = document.getElementById("check-toast");
-        if (scannerToast) {
-          text(scannerToast, "Scanner " + message.agent_id + ": " + message.meaningful_change_count + " observed changes. Review Saved scan comparisons for the recorded evidence.");
-          scannerToast.classList.remove("hidden");
-          window.clearTimeout(scannerToast.hideTimer);
-          scannerToast.hideTimer = window.setTimeout(function () { scannerToast.classList.add("hidden"); }, 9000);
+        if (message.type === "external_check_schedule_updated") {
+          var schedule = message.schedule || {};
+          if (activeTab === schedule.check_type) loadExternalCheck(schedule.check_type);
+          if (role === "admin") loadAuditLog();
         }
-      }
-      if (message.type === "scan_event" && message.event_name === "app_update_available") {
-        notifyScannerUpdate(message.payload || {});
-      }
-      refresh();
+        if (message.type === "meraki_report_finished") {
+          loadReports();
+          loadNotifications();
+          if (role === "admin") loadAuditLog();
+          var merakiToast = document.getElementById("check-toast");
+          if (merakiToast) {
+            var merakiNotice = message.baseline ? "Meraki report saved as the comparison baseline." : "Meraki report finished: " + (message.changed_control_count || 0) + " control change(s), " + (message.coverage_change_count || 0) + " coverage change(s), " + (message.inventory_change_count || 0) + " inventory change(s).";
+            text(merakiToast, merakiNotice);
+            merakiToast.classList.remove("hidden");
+            window.clearTimeout(merakiToast.hideTimer);
+            merakiToast.hideTimer = window.setTimeout(function () { merakiToast.classList.add("hidden"); }, 9000);
+          }
+        }
+        if (message.type === "cis_report_received") {
+          if (activeTab === "cis") loadCIS();
+          loadNotifications();
+          if (role === "admin") loadAuditLog();
+          notifyCISReport(message);
+        }
+        if (message.type === "scanner_comparison_detected" && message.meaningful_change_count > 0 && !notifiedScannerComparisons.has(message.comparison_id)) {
+          notifiedScannerComparisons.add(message.comparison_id);
+          loadNotifications();
+          var scannerToast = document.getElementById("check-toast");
+          if (scannerToast) {
+            text(scannerToast, "Scanner " + message.agent_id + ": " + message.meaningful_change_count + " observed changes. Review Saved scan comparisons for the recorded evidence.");
+            scannerToast.classList.remove("hidden");
+            window.clearTimeout(scannerToast.hideTimer);
+            scannerToast.hideTimer = window.setTimeout(function () { scannerToast.classList.add("hidden"); }, 9000);
+          }
+        }
+        if (message.type === "scan_event" && message.event_name === "app_update_available") {
+          notifyScannerUpdate(message.payload || {});
+        }
+        refresh();
+      });
+      currentSocket.addEventListener("close", function () {
+        if (socket !== currentSocket) return;
+        socket = null;
+        if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+        text(liveLabel, "Reconnecting to live updates");
+        connectionPill.classList.remove("connected");
+        if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+        var delay = liveReconnectDelay(reconnectAttempt);
+        reconnectAttempt += 1;
+        reconnectTimer = window.setTimeout(function () {
+          reconnectTimer = null;
+          connectLiveSocket();
+        }, delay);
+      });
+      heartbeatTimer = window.setInterval(function () {
+        if (socket === currentSocket && currentSocket.readyState === WebSocket.OPEN) currentSocket.send("ping");
+      }, 20000);
+    }
+    connectLiveSocket();
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden || (socket && socket.readyState !== WebSocket.CLOSED)) return;
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      connectLiveSocket();
     });
-    socket.addEventListener("close", function () {
-      text(liveLabel, "Reconnecting to live updates");
-      connectionPill.classList.remove("connected");
-      window.setTimeout(function () { window.location.reload(); }, 5000);
-    });
-    window.setInterval(function () {
-      if (socket.readyState === WebSocket.OPEN) socket.send("ping");
-    }, 20000);
   }
 
   function showError(target, message) {

@@ -6,6 +6,27 @@ from pathlib import Path
 
 class DashboardRefreshTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
+    def test_live_feed_reconnect_backoff_is_bounded_without_reloading_dashboard(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        start = source.index('  function liveReconnectDelay(')
+        end = source.index('\n  if (orgId) {', start)
+        reconnect = source[start:end]
+        script = "const assert = require('node:assert/strict');\n" + reconnect + """
+assert.equal(liveReconnectDelay(-1), 1000);
+assert.equal(liveReconnectDelay(0), 1000);
+assert.equal(liveReconnectDelay(1), 2000);
+assert.equal(liveReconnectDelay(2), 4000);
+assert.equal(liveReconnectDelay(5), 30000);
+assert.equal(liveReconnectDelay(100), 30000);
+"""
+        result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        live_block = source[end:source.index('\n  function showError(', end)]
+        self.assertIn('connectLiveSocket();', live_block)
+        self.assertIn('currentSocket.readyState === WebSocket.OPEN', live_block)
+        self.assertNotIn('window.location.reload()', live_block)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_active_dashboard_navigation_is_exposed_as_the_current_page(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         start = source.index('  function activateTab(')
