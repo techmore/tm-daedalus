@@ -659,8 +659,11 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         self.assertEqual(grant_notice["source_type"], "probation_override_granted")
         self.assertEqual(grant_notice["reason"], "access_override")
         self.assertEqual(grant_notice["tab"], "members")
-        self.assertIn("14-day probation override", grant_notice["summary"])
-        self.assertIn("Local scanner integration validation", grant_notice["summary"])
+        self.assertIn("temporary 14-day probation override", grant_notice["summary"])
+        self.assertNotIn("Local scanner integration validation", grant_notice["summary"])
+        audit_events = self.admin_client.get("/api/audit-log").json()["events"]
+        grant_audit = next(event for event in audit_events if event["action"] == "probation_override.granted")
+        self.assertEqual(grant_audit["details"]["reason"], "Local scanner integration validation")
         with self.session_factory() as db:
             stored_override = db.get(server.ProbationOverride, override.json()["id"])
             self.assertAlmostEqual(
@@ -711,6 +714,7 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         shared_inbox = self.client.get("/api/notifications").json()["notifications"]
         self.assertEqual(len(shared_inbox), 1)
         self.assertEqual(shared_inbox[0]["source_type"], "probation_override_granted")
+        self.assertNotIn("Local scanner integration validation", shared_inbox[0]["summary"])
 
         with patch.object(server.live_hub, "publish", new_callable=AsyncMock) as publish_notice:
             revoked = self.admin_client.post(

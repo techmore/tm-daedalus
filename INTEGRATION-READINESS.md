@@ -16,7 +16,7 @@ The CSP Mac scanner is now configured to report to the canonical production port
 
 ## Probation override inbox notices
 
-Current source now creates a durable workspace inbox notice when an administrator grants or revokes a probation override. Notices record the actor, reason, expiry or revocation and link to Members & access. Connected dashboard clients refresh the inbox and administrator audit log live. Tests cover grant/revoke, approved shared-user visibility, workspace isolation, and post-commit WebSocket notification. This change is not yet deployed to Release 044; its commit and CI validation are pending. Production SSH currently requires a Tailscale additional-authorization approval before a fresh deployment can start.
+Current source now creates a durable workspace inbox notice when an administrator grants or revokes a probation override. Shared members see the actor, expiry or revocation and a link to Members & access; the free-text reason stays in the admin-only audit log. Connected dashboard clients refresh the inbox and administrator audit log live. Tests cover grant/revoke, reason visibility by role, workspace isolation, and post-commit WebSocket notification. This change is not yet deployed to Release 044; its commit and CI validation are pending. Production SSH currently requires a Tailscale additional-authorization approval before a fresh deployment can start.
 
 ## CIS macOS endpoint reporting
 

@@ -853,7 +853,6 @@ def record_probation_override_notification(
     override_id: int,
     action: str,
     actor_name: str,
-    reason: str,
     detected_at: datetime,
     expires_at: datetime,
 ) -> bool:
@@ -872,14 +871,12 @@ def record_probation_override_notification(
     if action == "granted":
         title = "Temporary probation override granted"
         summary = (
-            f"{actor} granted a 14-day probation override through {expires_at.isoformat()}Z. "
-            f"Reason: {reason.strip()}"
+            f"{actor} granted a temporary 14-day probation override through {expires_at.isoformat()}Z."
         )
     else:
         title = "Temporary probation override revoked"
         summary = (
-            f"{actor} revoked the probation override before its scheduled expiry. "
-            f"Original reason: {reason.strip()}"
+            f"{actor} revoked the probation override before its scheduled expiry."
         )
     try:
         with db.begin_nested():
@@ -2651,7 +2648,6 @@ async def grant_probation_override(
         override_id=override.id,
         action="granted",
         actor_name=user.display_name or user.email,
-        reason=override.reason,
         detected_at=now,
         expires_at=override.expires_at,
     )
@@ -2712,7 +2708,6 @@ async def revoke_probation_override(
         override_id=override.id,
         action="revoked",
         actor_name=user.display_name or user.email,
-        reason=override.reason,
         detected_at=now,
         expires_at=override.expires_at,
     )
