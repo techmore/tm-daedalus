@@ -640,12 +640,27 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         )
         self.assertEqual(approval_before_proof.status_code, 403)
 
-        override = self.admin_client.post(
-            f"/api/workspaces/{workspace['organization_id']}/probation-overrides",
-            json={"reason": "Local scanner integration validation"},
-        )
+        with patch.object(server.live_hub, "publish", new_callable=AsyncMock) as publish_notice:
+            override = self.admin_client.post(
+                f"/api/workspaces/{workspace['organization_id']}/probation-overrides",
+                json={"reason": "Local scanner integration validation"},
+            )
         self.assertEqual(override.status_code, 200, override.text)
         self.assertTrue(override.json()["active"])
+        publish_notice.assert_awaited_once_with(
+            workspace["organization_id"],
+            {
+                "type": "workspace_notification_created",
+                "source_type": "probation_override_granted",
+                "source_id": override.json()["id"],
+            },
+        )
+        grant_notice = self.admin_client.get("/api/notifications").json()["notifications"][0]
+        self.assertEqual(grant_notice["source_type"], "probation_override_granted")
+        self.assertEqual(grant_notice["reason"], "access_override")
+        self.assertEqual(grant_notice["tab"], "members")
+        self.assertIn("14-day probation override", grant_notice["summary"])
+        self.assertIn("Local scanner integration validation", grant_notice["summary"])
         with self.session_factory() as db:
             stored_override = db.get(server.ProbationOverride, override.json()["id"])
             self.assertAlmostEqual(
@@ -689,10 +704,33 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             self.assertEqual(approved_membership.status, "approved")
             self.assertEqual(approved_membership.role, "user")
 
-        revoked = self.admin_client.post(
-            f"/api/workspaces/{workspace['organization_id']}/probation-overrides/{override.json()['id']}/revoke"
+        selected_shared_workspace = self.client.post(
+            "/api/workspaces/select", json={"organization_id": workspace["organization_id"]}
         )
+        self.assertEqual(selected_shared_workspace.status_code, 200, selected_shared_workspace.text)
+        shared_inbox = self.client.get("/api/notifications").json()["notifications"]
+        self.assertEqual(len(shared_inbox), 1)
+        self.assertEqual(shared_inbox[0]["source_type"], "probation_override_granted")
+
+        with patch.object(server.live_hub, "publish", new_callable=AsyncMock) as publish_notice:
+            revoked = self.admin_client.post(
+                f"/api/workspaces/{workspace['organization_id']}/probation-overrides/{override.json()['id']}/revoke"
+            )
         self.assertEqual(revoked.status_code, 200, revoked.text)
+        publish_notice.assert_awaited_once_with(
+            workspace["organization_id"],
+            {
+                "type": "workspace_notification_created",
+                "source_type": "probation_override_revoked",
+                "source_id": override.json()["id"],
+            },
+        )
+        workspace_notices = self.admin_client.get("/api/notifications").json()["notifications"]
+        self.assertEqual(
+            {notice["source_type"] for notice in workspace_notices},
+            {"probation_override_granted", "probation_override_revoked"},
+        )
+        self.assertTrue(any("revoked the probation override" in notice["summary"] for notice in workspace_notices))
         override_history = self.admin_client.get(
             f"/api/workspaces/{workspace['organization_id']}/probation-overrides"
         )

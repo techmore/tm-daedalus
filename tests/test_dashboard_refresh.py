@@ -125,6 +125,7 @@ assert.equal(notificationReviewLabel('web'), 'Review website');
 assert.equal(notificationReviewLabel('meraki'), 'Review Meraki');
 assert.equal(notificationReviewLabel('cis'), 'Review CIS');
 assert.equal(notificationReviewLabel('scanners'), 'Review scanners');
+assert.equal(notificationReviewLabel('members'), 'Review access');
 assert.equal(notificationReviewLabel('unknown'), 'Review website');
 assert.match(notificationEmptyMessage(), /security changes, warnings, or audit notices/);
 assert.match(notificationEmptyMessage(), /for this workspace/);

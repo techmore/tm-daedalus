@@ -846,6 +846,58 @@ def record_meraki_report_notification(
         return False
 
 
+def record_probation_override_notification(
+    db: Session,
+    *,
+    organization_id: int,
+    override_id: int,
+    action: str,
+    actor_name: str,
+    reason: str,
+    detected_at: datetime,
+    expires_at: datetime,
+) -> bool:
+    """Persist a workspace-wide notice when temporary access controls change."""
+    if action not in {"granted", "revoked"}:
+        return False
+    source_type = f"probation_override_{action}"
+    if db.scalar(select(WorkspaceNotification.id).where(
+        WorkspaceNotification.organization_id == organization_id,
+        WorkspaceNotification.source_type == source_type,
+        WorkspaceNotification.source_id == override_id,
+    )) is not None:
+        return False
+
+    actor = actor_name.strip()[:120] or "A workspace administrator"
+    if action == "granted":
+        title = "Temporary probation override granted"
+        summary = (
+            f"{actor} granted a 14-day probation override through {expires_at.isoformat()}Z. "
+            f"Reason: {reason.strip()}"
+        )
+    else:
+        title = "Temporary probation override revoked"
+        summary = (
+            f"{actor} revoked the probation override before its scheduled expiry. "
+            f"Original reason: {reason.strip()}"
+        )
+    try:
+        with db.begin_nested():
+            db.add(WorkspaceNotification(
+                organization_id=organization_id,
+                source_type=source_type,
+                source_id=override_id,
+                title=title,
+                summary=summary[:1000],
+                reason="access_override",
+                detected_at=detected_at,
+            ))
+            db.flush()
+        return True
+    except IntegrityError:
+        return False
+
+
 def record_cis_report_notification(
     db: Session,
     *,
@@ -2547,7 +2599,7 @@ def list_probation_overrides(
 
 
 @app.post("/api/workspaces/{organization_id}/probation-overrides")
-def grant_probation_override(
+async def grant_probation_override(
     organization_id: int,
     payload: ProbationOverrideRequest,
     request: Request,
@@ -2593,7 +2645,23 @@ def grant_probation_override(
             "duration_days": 14,
         },
     )
+    notification_created = record_probation_override_notification(
+        db,
+        organization_id=organization.id,
+        override_id=override.id,
+        action="granted",
+        actor_name=user.display_name or user.email,
+        reason=override.reason,
+        detected_at=now,
+        expires_at=override.expires_at,
+    )
     db.commit()
+    if notification_created:
+        await live_hub.publish(organization.id, {
+            "type": "workspace_notification_created",
+            "source_type": "probation_override_granted",
+            "source_id": override.id,
+        })
     return {
         "id": override.id,
         "active": True,
@@ -2604,7 +2672,7 @@ def grant_probation_override(
 
 
 @app.post("/api/workspaces/{organization_id}/probation-overrides/{override_id}/revoke")
-def revoke_probation_override(
+async def revoke_probation_override(
     organization_id: int,
     override_id: int,
     request: Request,
@@ -2638,7 +2706,23 @@ def revoke_probation_override(
         "probation_override.revoked",
         {"override_id": override.id, "granted_by_user_id": override.granted_by_user_id},
     )
+    notification_created = record_probation_override_notification(
+        db,
+        organization_id=organization.id,
+        override_id=override.id,
+        action="revoked",
+        actor_name=user.display_name or user.email,
+        reason=override.reason,
+        detected_at=now,
+        expires_at=override.expires_at,
+    )
     db.commit()
+    if notification_created:
+        await live_hub.publish(organization.id, {
+            "type": "workspace_notification_created",
+            "source_type": "probation_override_revoked",
+            "source_id": override.id,
+        })
     return {"id": override.id, "active": False, "revoked_at": now.isoformat() + "Z"}
 
 
@@ -2810,6 +2894,9 @@ def list_workspace_notifications(
                     "meraki" if notification.source_type == "meraki_report"
                     else "cis" if notification.source_type == "cis_report"
                     else "scanners" if notification.source_type == "scanner_comparison"
+                    else "members" if notification.source_type in {
+                        "probation_override_granted", "probation_override_revoked"
+                    }
                     else "dns" if notification.title.startswith("DNS and email")
                     else "web"
                 ),

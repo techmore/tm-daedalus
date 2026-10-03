@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -14,6 +15,31 @@ ROOT = Path(__file__).parents[1]
 
 
 class IncusDeployTests(unittest.TestCase):
+    def _deploy_with_mocked_release(self, ssh_side_effect, health_results):
+        temporary_directory = tempfile.TemporaryDirectory(prefix="daedalus-deploy-test-")
+        self.addCleanup(temporary_directory.cleanup)
+
+        def create_bundle(_root, archive):
+            Path(archive).write_bytes(b"verified release fixture")
+            return {"file_count": 52}
+
+        output = io.StringIO()
+        errors = io.StringIO()
+        with (
+            patch("scripts.deploy_incus._validate"),
+            patch("scripts.deploy_incus._run", side_effect=["a" * 40, "", ""]),
+            patch("scripts.deploy_incus.build_bundle", side_effect=create_bundle),
+            patch("scripts.deploy_incus.verify_bundle"),
+            patch("scripts.deploy_incus.subprocess.run", return_value=subprocess.CompletedProcess([], 0)),
+            patch("scripts.deploy_incus._ssh", side_effect=ssh_side_effect) as ssh,
+            patch("scripts.deploy_incus._wait_for_health", side_effect=health_results),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            with self.assertRaises(DeployError) as failure:
+                deploy("operator@incus-host", "daedalus-prod", "https://portal.example/readyz")
+        return failure.exception, ssh.call_args_list, output.getvalue(), errors.getvalue()
+
     def test_plan_builds_a_verified_release_without_remote_commands(self):
         output = io.StringIO()
         with patch("scripts.deploy_incus._run", side_effect=["", "main", "a" * 40]) as command:
@@ -56,6 +82,37 @@ class IncusDeployTests(unittest.TestCase):
         remote_lookup = command.call_args_list[-1].args[0]
         self.assertIn("ls-remote", remote_lookup)
         self.assertIn("origin", remote_lookup)
+
+    def test_failed_release_health_check_restores_previous_release_and_cleans_staging(self):
+        failure, calls, output, errors = self._deploy_with_mocked_release(
+            ssh_side_effect=None,
+            health_results=[False, True],
+        )
+
+        self.assertIn("previous release was restored and is healthy", str(failure))
+        self.assertIn("Restoring the previous source release", errors)
+        remote_phases = [call.args[1][6] for call in calls if len(call.args[1]) > 6 and call.args[1][0] == "incus" and call.args[1][5].endswith("deploy-remote.sh")]
+        self.assertEqual(remote_phases, ["prepare", "activate", "rollback", "cleanup"])
+        self.assertIn("Verified release archive: 52 files", output)
+
+    def test_failed_rollback_retains_remote_recovery_files(self):
+        def fail_rollback(_host, command):
+            if "rollback" in command:
+                raise DeployError("rollback command failed")
+            return ""
+
+        failure, calls, _output, errors = self._deploy_with_mocked_release(
+            ssh_side_effect=fail_rollback,
+            health_results=[False],
+        )
+
+        self.assertIn("automatic rollback could not be verified", str(failure))
+        self.assertIn("Restoring the previous source release", errors)
+        remote_phases = [call.args[1][6] for call in calls if len(call.args[1]) > 6 and call.args[1][0] == "incus" and call.args[1][5].endswith("deploy-remote.sh")]
+        self.assertEqual(remote_phases, ["prepare", "activate", "rollback"])
+        host_cleanup = calls[-1].args[1]
+        self.assertEqual(host_cleanup[0], "rm")
+        self.assertNotIn("/tmp/daedalus-deploy-remote.sh", host_cleanup)
 
     def test_remote_helper_has_valid_bash_syntax(self):
         result = subprocess.run(

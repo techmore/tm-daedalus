@@ -1100,6 +1100,10 @@
           if (role === "admin") loadAuditLog();
           notifyCISReport(message);
         }
+        if (message.type === "workspace_notification_created") {
+          loadNotifications();
+          if (role === "admin") loadAuditLog();
+        }
         if (message.type === "scanner_comparison_detected" && message.meaningful_change_count > 0 && !notifiedScannerComparisons.has(message.comparison_id)) {
           notifiedScannerComparisons.add(message.comparison_id);
           loadNotifications();
@@ -3362,7 +3366,8 @@
       web: "Review website",
       meraki: "Review Meraki",
       cis: "Review CIS",
-      scanners: "Review scanners"
+      scanners: "Review scanners",
+      members: "Review access"
     };
     return labels[tab] || "Review website";
   }

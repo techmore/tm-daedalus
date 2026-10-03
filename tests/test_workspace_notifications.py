@@ -1,6 +1,7 @@
 import unittest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import create_engine, inspect, select
+from fastapi.testclient import TestClient
 from daedalus.db import Base
 from daedalus import server
 from daedalus.models import (
@@ -49,6 +50,36 @@ class WorkspaceNotificationTests(unittest.TestCase):
             self.assertTrue(inspect(engine).has_table("workspace_notification_reads"))
         finally:
             engine.dispose()
+
+    def test_probation_notice_is_scoped_to_the_selected_workspace(self):
+        other = TestClient(server.app)
+        try:
+            self.assertEqual(other.post("/dev/login", follow_redirects=False).status_code, 303)
+            created = other.post(
+                "/api/workspaces",
+                json={"name": "Other Workspace", "domain": "other-notices.example"},
+            )
+            self.assertEqual(created.status_code, 200, created.text)
+            other_id = created.json()["organization_id"]
+            with self.session_factory() as db:
+                db.add(WorkspaceNotification(
+                    organization_id=other_id,
+                    source_type="probation_override_granted",
+                    source_id=991,
+                    title="Temporary probation override granted",
+                    summary="Other Workspace administrator granted a 14-day override.",
+                    reason="access_override",
+                    detected_at=server.utcnow(),
+                ))
+                db.commit()
+
+            self.assertEqual(self.client.get("/api/notifications").json()["notifications"], [])
+            notices = other.get("/api/notifications").json()["notifications"]
+            self.assertEqual(len(notices), 1)
+            self.assertEqual(notices[0]["source_id"], 991)
+            self.assertEqual(notices[0]["tab"], "members")
+        finally:
+            other.close()
 
     def test_baseline_and_failed_runs_do_not_create_notices_but_change_does(self):
         baseline = {"domain": "cybersecuritypilot.org", "records": {"A": ["192.0.2.1"]}, "resolver_errors": {}}
