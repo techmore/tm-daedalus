@@ -10,6 +10,10 @@ Commits through `3f47616` are pushed to `main`. Release 044 is active in `daedal
 
 The unconfigured `app.cybersecuritypilot.org` and `app.bfs.org` names below are historical alternate-host checks. They do not describe the canonical production portal. Real owner Google sign-in has been verified; additional-user onboarding remains open.
 
+## CIS macOS endpoint reporting
+
+A read-only production database check found the CSP workspace has both macOS 26 Tahoe profile revisions (`1.1.0-r2`) published, with **zero CIS devices and zero CIS reports**. The `bfs.org` workspace currently has no CIS profiles, devices, or reports. Profile publication is live; endpoint distribution/check-in is not yet validated. Production disables the unsigned demo client download endpoint, and a signed/notarized distributable client has not been provisioned. macOS 26 execution and connected-volume FileVault coverage remain open.
+
 ## Cisco Meraki
 
 | Source | Classification | Read-only verification |
