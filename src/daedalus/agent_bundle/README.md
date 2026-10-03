@@ -140,6 +140,15 @@ protocol 3 or later to check Apple's software update catalog. The check invokes
 `/usr/sbin/softwareupdate --list`, stores a bounded structured summary in
 command history, and never installs or schedules updates.
 
+When an admin narrows a scanner's approved CIDRs, Daedalus cancels queued scans
+outside the new scope. For already-delivered scans, it requests `cancel_scan`
+only when the scanner is online and every active scan is out of scope; NmapUI's
+cancel action stops all active scans on that scanner. Mixed-scope jobs are left
+running to avoid stopping an in-scope scan. A queued cancellation is best-effort
+and does not mark scans stopped: the original scan command remains unconfirmed
+until the scanner reports its terminal result. Offline scanners cannot receive
+the request. Each decision is recorded in workspace audit history.
+
 ## Upload recovery
 
 Scanner events are written to private local storage before upload. A portal or

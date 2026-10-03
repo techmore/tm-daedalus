@@ -5223,6 +5223,7 @@ def update_agent_network_scope(
         raise HTTPException(status_code=404, detail="Scanner not found in this workspace")
     agent.authorized_networks = payload.authorized_networks
     now = utcnow()
+    expire_scanner_commands_in_session(db, agent_id=agent.id, now=now)
     cancelled_count = 0
     queued = db.scalars(select(AgentCommand).where(
         AgentCommand.organization_id == organization.id,
@@ -5245,24 +5246,72 @@ def update_agent_network_scope(
         AgentCommand.status.in_(("delivered", "accepted")),
         AgentCommand.action == "start_scan",
     )).all()
-    unconfirmed_active_count = 0
+    out_of_scope_active: list[AgentCommand] = []
+    in_scope_active: list[AgentCommand] = []
     for command in active:
         try:
             scan_target_within_agent_scope(command.target or "", agent.authorized_networks)
         except ValueError:
-            unconfirmed_active_count += 1
+            out_of_scope_active.append(command)
+        else:
+            in_scope_active.append(command)
+
+    cancellation_request_queued_count = 0
+    cancellation_request_skipped_offline_count = 0
+    cancellation_request_skipped_mixed_scope_count = 0
+    if out_of_scope_active and not in_scope_active:
+        latest_affected_scan_at = max(command.created_at for command in out_of_scope_active)
+        prior_request = db.scalar(select(AgentCommand.id).where(
+            AgentCommand.organization_id == organization.id,
+            AgentCommand.agent_id == agent.id,
+            AgentCommand.action == "cancel_scan",
+            AgentCommand.created_at >= latest_affected_scan_at,
+        ).limit(1))
+        if prior_request is None and agent_bridge_online(agent, now=now):
+            cancellation = AgentCommand(
+                organization_id=organization.id,
+                agent_id=agent.id,
+                action="cancel_scan",
+                target=None,
+                status="queued",
+                created_by_user_id=user.id,
+                result=None,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(cancellation)
+            db.flush()
+            audit(db, organization.id, user.id, "scanner.scope_cancel_requested", {
+                "agent_id": agent.id,
+                "cancel_command_id": cancellation.id,
+                "affected_scan_command_ids": [command.id for command in out_of_scope_active],
+                "confirmed_stopped": False,
+            })
+            cancellation_request_queued_count = 1
+        elif prior_request is None:
+            cancellation_request_skipped_offline_count = 1
+    elif out_of_scope_active and in_scope_active:
+        # cancel_scan applies to every scan currently running in NmapUI. Avoid
+        # stopping an in-scope scan to enforce a change to another scan's scope.
+        cancellation_request_skipped_mixed_scope_count = 1
     audit(db, organization.id, user.id, "scanner.network_scope.updated", {
         "agent_id": agent.id,
         "authorized_networks": agent.authorized_networks,
         "cancelled_queued_scan_count": cancelled_count,
-        "unconfirmed_active_scan_count": unconfirmed_active_count,
+        "unconfirmed_active_scan_count": len(out_of_scope_active),
+        "cancellation_request_queued_count": cancellation_request_queued_count,
+        "cancellation_request_skipped_offline_count": cancellation_request_skipped_offline_count,
+        "cancellation_request_skipped_mixed_scope_count": cancellation_request_skipped_mixed_scope_count,
     })
     db.commit()
     return {
         "agent_id": agent.id,
         "authorized_networks": agent.authorized_networks,
         "cancelled_queued_scan_count": cancelled_count,
-        "unconfirmed_active_scan_count": unconfirmed_active_count,
+        "unconfirmed_active_scan_count": len(out_of_scope_active),
+        "cancellation_request_queued_count": cancellation_request_queued_count,
+        "cancellation_request_skipped_offline_count": cancellation_request_skipped_offline_count,
+        "cancellation_request_skipped_mixed_scope_count": cancellation_request_skipped_mixed_scope_count,
     }
 
 

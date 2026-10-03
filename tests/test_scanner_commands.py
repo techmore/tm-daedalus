@@ -1,6 +1,6 @@
 import unittest
 from datetime import timedelta
-from sqlalchemy import select, text, inspect, update
+from sqlalchemy import func, select, text, inspect, update
 from unittest.mock import patch
 from daedalus import server
 from daedalus.models import AgentCommand, AuditLog, Membership
@@ -320,8 +320,127 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
         })
         self.assertEqual(narrowed.status_code, 200, narrowed.text)
         self.assertEqual(narrowed.json()["unconfirmed_active_scan_count"], 1)
+        self.assertEqual(narrowed.json()["cancellation_request_queued_count"], 1)
         with self.session_factory() as db:
             self.assertEqual(db.get(AgentCommand, command_id).status, "delivered")
+            cancel = db.scalar(select(AgentCommand).where(
+                AgentCommand.agent_id == agent, AgentCommand.action == "cancel_scan"))
+            self.assertIsNotNone(cancel)
+            self.assertEqual(cancel.status, "queued")
+            audit_row = db.scalar(select(AuditLog).where(AuditLog.action == "scanner.scope_cancel_requested"))
+            self.assertEqual(audit_row.details["affected_scan_command_ids"], [command_id])
+
+    def test_scope_update_cancellation_is_idempotent_and_scan_terminal_result_remains_authoritative(self):
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            db.get(server.Agent, agent).authorized_networks = ["127.0.0.0/24"]
+            db.commit()
+        queued = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.0/24",
+        })
+        scan_id = queued.json()["id"]
+        self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers)
+        payload = {"authorized_networks": ["127.0.0.1/32"]}
+        first = self.client.put(f"/api/agents/{agent}/network-scope", json=payload)
+        second = self.client.put(f"/api/agents/{agent}/network-scope", json=payload)
+        self.assertEqual(first.json()["cancellation_request_queued_count"], 1)
+        self.assertEqual(second.json()["cancellation_request_queued_count"], 0)
+        with self.session_factory() as db:
+            cancellations = db.scalars(select(AgentCommand).where(
+                AgentCommand.agent_id == agent, AgentCommand.action == "cancel_scan")).all()
+            self.assertEqual(len(cancellations), 1)
+            self.assertEqual(db.get(AgentCommand, scan_id).status, "delivered")
+        cancellation = self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers).json()["command"]
+        self.assertEqual(cancellation["action"], "cancel_scan")
+        self.assertEqual(self.result(agent, cancellation["id"], "succeeded", "Cancellation confirmed").status_code, 200)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(AgentCommand, scan_id).status, "delivered")
+        self.assertEqual(self.result(agent, scan_id, "succeeded", "Scan terminal result").status_code, 200)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(AgentCommand, scan_id).status, "succeeded")
+
+    def test_scope_update_does_not_cancel_in_scope_active_scan(self):
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            db.get(server.Agent, agent).authorized_networks = ["127.0.0.0/24"]
+            db.commit()
+        scan = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.0/24",
+        }).json()
+        self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers)
+        narrowed = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": ["127.0.0.0/24"],
+        })
+        self.assertEqual(narrowed.status_code, 200, narrowed.text)
+        self.assertEqual(narrowed.json()["unconfirmed_active_scan_count"], 0)
+        self.assertEqual(narrowed.json()["cancellation_request_queued_count"], 0)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(AgentCommand, scan["id"]).status, "delivered")
+            self.assertEqual(db.scalar(select(func.count(AgentCommand.id)).where(
+                AgentCommand.agent_id == agent, AgentCommand.action == "cancel_scan")), 0)
+
+    def test_scope_update_offline_scanner_is_not_reported_as_cancelled(self):
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            saved = db.get(server.Agent, agent)
+            saved.authorized_networks = ["127.0.0.0/24"]
+            db.commit()
+        scan = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.0/24",
+        }).json()
+        self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers)
+        with self.session_factory() as db:
+            saved = db.get(server.Agent, agent)
+            saved.last_seen_at = server.utcnow() - timedelta(minutes=5)
+            db.commit()
+        narrowed = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": ["127.0.0.1/32"],
+        })
+        self.assertEqual(narrowed.status_code, 200, narrowed.text)
+        self.assertEqual(narrowed.json()["unconfirmed_active_scan_count"], 1)
+        self.assertEqual(narrowed.json()["cancellation_request_skipped_offline_count"], 1)
+        self.assertEqual(narrowed.json()["cancellation_request_queued_count"], 0)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(AgentCommand, scan["id"]).status, "delivered")
+            self.assertEqual(db.scalar(select(func.count(AgentCommand.id)).where(
+                AgentCommand.agent_id == agent, AgentCommand.action == "cancel_scan")), 0)
+
+    def test_scope_update_does_not_cancel_all_jobs_when_active_scans_have_mixed_scope(self):
+        agent = self.ready(protocol=2)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"nmapui_connected": True, "command_protocol_version": 2})
+        with self.session_factory() as db:
+            db.get(server.Agent, agent).authorized_networks = ["127.0.0.0/24"]
+            db.commit()
+        out_of_scope = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.0/24",
+        }).json()["id"]
+        first_delivery = self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers).json()["command"]
+        self.assertEqual(first_delivery["id"], out_of_scope)
+        self.assertEqual(self.result(agent, out_of_scope, "accepted").status_code, 200)
+        in_scope = self.client.post(f"/api/agents/{agent}/commands", json={
+            "action": "start_scan", "target": "127.0.0.1/32",
+        }).json()["id"]
+        second_delivery = self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers).json()["command"]
+        self.assertEqual(second_delivery["id"], in_scope)
+        narrowed = self.client.put(f"/api/agents/{agent}/network-scope", json={
+            "authorized_networks": ["127.0.0.1/32"],
+        })
+        self.assertEqual(narrowed.status_code, 200, narrowed.text)
+        self.assertEqual(narrowed.json()["unconfirmed_active_scan_count"], 1)
+        self.assertEqual(narrowed.json()["cancellation_request_queued_count"], 0)
+        self.assertEqual(narrowed.json()["cancellation_request_skipped_mixed_scope_count"], 1)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(AgentCommand, out_of_scope).status, "accepted")
+            self.assertEqual(db.get(AgentCommand, in_scope).status, "delivered")
+            self.assertEqual(db.scalar(select(func.count(AgentCommand.id)).where(
+                AgentCommand.agent_id == agent, AgentCommand.action == "cancel_scan")), 0)
 
     def test_enrollment_code_binds_scanner_name_and_network_scope(self):
         enrollment = self.client.post("/api/enrollment-tokens", json={

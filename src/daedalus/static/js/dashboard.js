@@ -938,7 +938,10 @@
         ? "Scope saved. " + body.authorized_networks.length + " network(s) approved."
         : "Scope cleared. Scans are disabled until a network is approved.";
       if (body.cancelled_queued_scan_count) message += " Cancelled " + body.cancelled_queued_scan_count + " queued scan(s) outside the new scope.";
-      if (body.unconfirmed_active_scan_count) message += " " + body.unconfirmed_active_scan_count + " already-delivered scan(s) may continue until the scanner reports completion.";
+      if (body.cancellation_request_queued_count) message += " Requested cancellation for " + body.unconfirmed_active_scan_count + " already-delivered scan(s). This is best-effort; their status remains unconfirmed until the scanner reports a terminal result.";
+      else if (body.cancellation_request_skipped_offline_count) message += " " + body.unconfirmed_active_scan_count + " already-delivered scan(s) remain unconfirmed; the scanner is offline, so cancellation could not be requested.";
+      else if (body.cancellation_request_skipped_mixed_scope_count) message += " " + body.unconfirmed_active_scan_count + " out-of-scope scan(s) remain unconfirmed. Cancellation was not requested because NmapUI also has an in-scope active scan.";
+      else if (body.unconfirmed_active_scan_count) message += " " + body.unconfirmed_active_scan_count + " scan(s) remain unconfirmed; an earlier cancellation request may still be pending.";
       scannerScopeFeedback.set(agentId, message);
       await refresh();
     } catch (error) {
