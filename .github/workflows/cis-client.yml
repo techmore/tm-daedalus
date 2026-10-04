@@ -62,6 +62,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/cis-tahoe-platform.xcresult" \
             CODE_SIGNING_ALLOWED=NO
           test -s "$RUNNER_TEMP/cis-tahoe-platform-receipt.json"
+          python3 scripts/verify_cis_platform_receipt.py "$RUNNER_TEMP/cis-tahoe-platform-receipt.json"
 
       - name: Retain real platform assessment evidence
         if: always()
