@@ -1530,7 +1530,7 @@
     list.replaceChildren();
     if (!reports.length) {
       var reportTypes = Array.isArray(reportType) ? reportType : [reportType];
-      var emptyMessage = reportType === "meraki_security"
+      var emptyMessage = Array.isArray(reportType) ? "No reports in these topics have been generated for this workspace yet." : reportType === "meraki_security"
         ? "No Meraki reports have been generated for this workspace yet."
         : (reportType === "cis_endpoint"
           ? "No CIS endpoint PDFs have been generated for this workspace yet."
@@ -1664,6 +1664,7 @@
       var reports = body.reports || [];
       renderReportJobs(reports, "report-job-list", "report-library-status", "external_posture");
       renderReportJobs(reports, "scanner-report-job-list", "scanner-report-library-status", "scanner_results");
+      renderReportJobs(reports, "posture-report-job-list", "posture-report-library-status", ["meraki_security", "cis_endpoint"]);
       renderReportJobs(reports, "meraki-report-job-list", "meraki-report-library-status", "meraki_security");
       renderReportJobs(reports, "cis-pdf-job-list", "cis-pdf-library-status", "cis_endpoint");
       if ((activeTab === "reports" || activeTab === "meraki" || activeTab === "cis") && reports.some(function (job) {
@@ -1672,7 +1673,7 @@
         reportPollTimer = window.setTimeout(loadReports, 900);
       }
     } catch (error) {
-      ["report-job-list", "scanner-report-job-list", "meraki-report-job-list", "cis-pdf-job-list"].forEach(function (id) {
+      ["report-job-list", "scanner-report-job-list", "posture-report-job-list", "meraki-report-job-list", "cis-pdf-job-list"].forEach(function (id) {
         var list = document.getElementById(id);
         if (list) {
           list.replaceChildren();
@@ -1681,6 +1682,7 @@
       });
       text(document.getElementById("report-library-status"), "Could not load reports.");
       text(document.getElementById("scanner-report-library-status"), "Could not load reports.");
+      text(document.getElementById("posture-report-library-status"), "Could not load reports.");
       text(document.getElementById("meraki-report-library-status"), "Could not load reports.");
       text(document.getElementById("cis-pdf-library-status"), "Could not load reports.");
     }

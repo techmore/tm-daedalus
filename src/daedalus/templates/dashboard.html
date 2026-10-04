@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-075">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-076">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -401,19 +401,25 @@
         </section>
         {% elif key == 'reports' %}
         <section class="report-library">
-          <div class="report-toolbar">
-            <div>
-              <span class="check-status" id="report-library-status">Reports are scoped to this workspace.</span>
-              <p class="muted">Generate a point-in-time PDF from the latest saved DNS, email, and website results.</p>
-            </div>
-            <button class="button button-primary" type="button" data-generate-report>Generate posture PDF</button>
-          </div>
-          <p class="check-scope-note">The PDF uses saved check snapshots and their recorded differences. It does not start new scans or include API credentials.</p>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">DOMAIN HEALTH</p><h3>DNS, email &amp; website reports</h3></div></div>
+          <span class="check-status" id="report-library-status" aria-live="polite">Reports are scoped to this workspace.</span>
           <div class="report-job-list" id="report-job-list" aria-live="polite"><div class="empty-events">Loading workspace reports…</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">INTERNAL NETWORK</p><h3>NmapUI scan reports</h3></div></div>
           <p class="muted">Full-run PDFs use the scanner's saved event history. Generation progress and finished downloads stay with this workspace.</p>
           <span class="check-status" id="scanner-report-library-status" aria-live="polite">Reports are scoped to this workspace.</span>
           <div class="report-job-list" id="scanner-report-job-list" aria-live="polite"><div class="empty-events">Loading scanner reports…</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">NETWORK &amp; ENDPOINT POSTURE</p><h3>Meraki &amp; endpoint reports</h3></div></div>
+          <span class="check-status" id="posture-report-library-status" aria-live="polite">Reports are scoped to this workspace.</span>
+          <div class="report-job-list" id="posture-report-job-list" aria-live="polite"><div class="empty-events">Loading network and endpoint reports…</div></div>
+          <details class="topic-secondary"><summary>Create a domain health report</summary>
+          <div class="report-toolbar">
+            <div>
+              <p class="muted">Generate a point-in-time PDF from the latest saved DNS, email, and website results.</p>
+            </div>
+            <button class="button button-primary" type="button" data-generate-report>Generate posture PDF</button>
+          </div>
+          <p class="check-scope-note">The PDF uses saved check snapshots and their recorded differences. It does not start new scans or include API credentials.</p>
+          </details>
         </section>
         {% else %}
         <div class="module-placeholder">
@@ -470,6 +476,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-075" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-076" defer></script>
 </body>
 </html>

@@ -6,6 +6,14 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_report_library_includes_all_topics_before_creation(self):
+        root = Path(__file__).parents[1]
+        template = (root / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertLess(template.index('id="posture-report-job-list"'), template.index('data-generate-report'))
+        source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
+        self.assertIn('renderReportJobs(reports, "posture-report-job-list", "posture-report-library-status", ["meraki_security", "cis_endpoint"])', source)
+        self.assertIn('"posture-report-job-list", "meraki-report-job-list"', source)
+
     def test_endpoint_topic_groups_results_and_changes_before_setup(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         section = template.split('<section class="cis-workspace">', 1)[1].split("{% elif key in ['dns', 'web'] %}", 1)[0]
