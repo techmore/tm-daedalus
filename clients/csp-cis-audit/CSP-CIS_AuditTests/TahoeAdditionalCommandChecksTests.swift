@@ -13,6 +13,38 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyPermissionCountsCannotEstablishApprovedAccess() {
+        let check = CISCheck(id: "permissions", category: "macos", description: "Approved apps")
+        let results = [MacOSHardwareChecks.checkCameraAccess(check: check),
+            MacOSHardwareChecks.checkMicrophoneAccess(check: check),
+            MacOSHardwareChecks.checkScreenRecordingAccess(check: check),
+            MacOSHardwareChecks.checkAutomationAccess(check: check),
+            MacOSHardwareChecks.checkFullDiskAccess(check: check)]
+        for result in results {
+            #expect(result.status == "manual")
+            #expect(result.details.contains("approval list"))
+            #expect(result.details.contains("No permission was reset or changed"))
+        }
+        #expect(MacOSHardwareChecks.checkUSBRestrictedMode(check: check).status == "manual")
+        #expect(MacOSHardwareChecks.checkUSBRestrictedMode(check: check).details.contains("smartcard DisabledTokens preference does not establish"))
+    }
+
+    @Test func legacyBluetoothRequiresCanonicalSuccessfulPreference() {
+        let check = CISCheck(id: "bluetooth", category: "macos", description: "Disabled")
+        func status(_ evidence: MacOSChecks.CommandEvidence) -> String {
+            MacOSHardwareChecks.checkBluetoothDisabled(check: check) { path, arguments in
+                #expect(path == "/usr/bin/defaults")
+                #expect(arguments == ["read", "/Library/Preferences/com.apple.Bluetooth", "ControllerPowerState"])
+                return evidence
+            }.status
+        }
+        #expect(status(.init(output: "0")) == "pass")
+        #expect(status(.init(output: "1")) == "fail")
+        for evidence in [MacOSChecks.CommandEvidence(output: "error 100"), .init(output: ""), .init(output: "10"), .init(output: "0", exitCode: 1), .init(output: "0", error: "denied"), .init(output: "0", unavailable: "timeout")] {
+            #expect(status(evidence) == "manual")
+        }
+    }
+
     @Test func legacyDeferralCountCannotEstablishDayBasedCompliance() {
         let check = CISCheck(id: "deferrals", category: "macos", description: "Defer no more than 30 days")
         let result = MacOSUpdateChecks.checkSoftwareUpdateDeferment(check: check)
