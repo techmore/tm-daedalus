@@ -53,7 +53,7 @@
           <strong>{{ user.display_name or user.email }}</strong>
           <small>{{ membership.role if membership else 'No workspace access' }}</small>
         </div>
-        <form method="post" action="/logout">
+        <a href="/account/keys">Access keys</a><form method="post" action="/logout">
           <button class="icon-button" type="submit" title="Sign out" aria-label="Sign out">↪</button>
         </form>
       </div>

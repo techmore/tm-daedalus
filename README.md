@@ -71,7 +71,6 @@ For a private local demo archive, run `sh clients/csp-cis-audit/scripts/build-lo
 
 See the [Daedalus project overview](site/daedalus.html) for the feature map, architecture, and current scope. The application is an active pilot; the overview distinguishes implemented workflows from hosting and operational work that remains.
 
-## License and contributions
 
 ## Nikto website audits
 
@@ -99,3 +98,9 @@ See the [official Nikto options](https://github.com/sullo/nikto/blob/main/docume
 ## License and contributions
 
 This repository does not yet define a license or contribution policy. Contact Cyber Security Pilot before reusing or redistributing the software.
+
+## Personal access keys
+
+Signed-in users can manage workspace-bound keys from **Access keys** in the dashboard. Keys are shown once, stored as SHA-256 hashes, expire in 1–90 days, and retain the user's live membership and role. Use `Authorization: Bearer <key>` for API requests, or the access-key form on the sign-in page. Revocation invalidates key sessions and closes their live connection within five seconds. Key sessions cannot issue more keys or select another workspace; use Google sign-in for those actions.
+
+Host operators can explicitly provision the named Codex operator for an existing verified domain with `python -m daedalus.operator_key --domain cybersecuritypilot.org --output /private/new-key.json`. The command refuses an existing output file and writes mode 0600; it never prints the token. This service identity has an audited admin membership solely in that domain, with a 30-day key. It does not impersonate a Google user.

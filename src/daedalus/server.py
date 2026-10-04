@@ -85,6 +85,7 @@ from daedalus.models import (
     ScanEvent,
     ScannerRunComparison,
     User,
+    UserAPIKey,
     WorkspaceNotification,
     WorkspaceNotificationRead,
 )
@@ -537,10 +538,41 @@ class ExternalCheckScheduleInput(BaseModel):
     interval_hours: Literal[24, 168] = 24
 
 
+def validate_user_key(db: Session, key: UserAPIKey | None) -> UserAPIKey:
+    if key is None or key.revoked_at is not None or key.expires_at <= utcnow():
+        raise HTTPException(status_code=401, detail="Invalid or expired access key")
+    membership = db.scalar(select(Membership).where(
+        Membership.user_id == key.user_id,
+        Membership.organization_id == key.organization_id,
+        Membership.status == "approved",
+    ))
+    if membership is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired access key")
+    return key
+
+
 def get_session_user(request: Request, db: Session) -> User:
-    user_id = request.session.get("user_id")
+    authorization = request.headers.get("authorization")
+    key = None
+    if authorization is not None:
+        if not authorization.startswith("Bearer dd_user_") or len(authorization) > 200:
+            raise HTTPException(status_code=401, detail="Invalid access key")
+        key = validate_user_key(db, db.scalar(select(UserAPIKey).where(
+            UserAPIKey.token_hash == token_digest(authorization[7:])
+        )))
+        user_id = key.user_id
+    elif request.session.get("api_key_id"):
+        key = validate_user_key(db, db.get(UserAPIKey, request.session["api_key_id"]))
+        user_id = key.user_id
+    else:
+        user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
+    if key is not None:
+        request.session["organization_id"] = key.organization_id
+        request.state.user_api_key = key
+        if request.url.path in {"/api/workspaces", "/api/workspaces/select", "/api/membership-requests", "/api/my-workspaces"}:
+            raise HTTPException(status_code=403, detail="Access key is limited to its workspace")
     user = db.get(User, int(user_id))
     if user is None:
         request.session.clear()
@@ -2118,6 +2150,71 @@ def login_page(request: Request, db: Session = Depends(get_db)):
             "google_configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
         },
     )
+
+
+class UserKeyInput(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    expires_days: int = Field(default=30, ge=1, le=90)
+
+
+class TokenLoginInput(BaseModel):
+    token: str = Field(min_length=40, max_length=200)
+
+
+@app.post("/auth/token")
+def token_login(payload: TokenLoginInput, request: Request, db: Session = Depends(get_db)):
+    key = validate_user_key(db, db.scalar(select(UserAPIKey).where(
+        UserAPIKey.token_hash == token_digest(payload.token)
+    )))
+    request.session.clear()
+    request.session.update(user_id=key.user_id, organization_id=key.organization_id, api_key_id=key.id)
+    audit(db, key.organization_id, key.user_id, "user_key.login", {"key_id": key.id})
+    db.commit()
+    response = JSONResponse({"redirect": "/dashboard"})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/account/keys", response_class=HTMLResponse)
+def user_keys_page(request: Request, db: Session = Depends(get_db)):
+    user, org, _ = get_org_context(request, db)
+    return templates.TemplateResponse(request, "user_keys.html", {"user": user, "organization": org})
+
+
+@app.get("/api/user-keys")
+def list_user_keys(request: Request, db: Session = Depends(get_db)):
+    user, org, _ = get_org_context(request, db)
+    keys = db.scalars(select(UserAPIKey).where(UserAPIKey.user_id == user.id, UserAPIKey.organization_id == org.id)).all()
+    return {"keys": [{"id": k.id, "name": k.name, "expires_at": iso_utc(k.expires_at), "revoked_at": iso_utc(k.revoked_at)} for k in keys]}
+
+
+@app.post("/api/user-keys")
+def create_user_key(payload: UserKeyInput, request: Request, db: Session = Depends(get_db)):
+    user, org, _ = get_org_context(request, db)
+    if getattr(request.state, "user_api_key", None) is not None:
+        raise HTTPException(status_code=403, detail="Use Google sign-in to create access keys")
+    token = "dd_user_" + secrets.token_urlsafe(48)
+    key = UserAPIKey(user_id=user.id, organization_id=org.id, name=payload.name,
+        token_hash=token_digest(token), created_at=utcnow(), expires_at=utcnow()+timedelta(days=payload.expires_days))
+    db.add(key)
+    db.flush()
+    audit(db, org.id, user.id, "user_key.created", {"key_id": key.id, "name": key.name})
+    db.commit()
+    response = JSONResponse({"id": key.id, "token": token, "expires_at": iso_utc(key.expires_at)})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.delete("/api/user-keys/{key_id}")
+def revoke_user_key(key_id: int, request: Request, db: Session = Depends(get_db)):
+    user, org, _ = get_org_context(request, db)
+    key = db.get(UserAPIKey, key_id)
+    if key is None or key.user_id != user.id or key.organization_id != org.id:
+        raise HTTPException(status_code=404, detail="Access key not found")
+    key.revoked_at = utcnow()
+    audit(db, org.id, user.id, "user_key.revoked", {"key_id": key.id})
+    db.commit()
+    return {"status": "revoked"}
 
 
 @app.post("/dev/login")
@@ -6173,6 +6270,14 @@ async def live_updates(websocket: WebSocket):
         await websocket.close(code=4401)
         return
     with SessionLocal() as db:
+        if session.get("api_key_id"):
+            try:
+                key = validate_user_key(db, db.get(UserAPIKey, session["api_key_id"]))
+                if key.user_id != int(user_id) or key.organization_id != int(organization_id):
+                    raise HTTPException(status_code=403)
+            except HTTPException:
+                await websocket.close(code=4401)
+                return
         membership = db.scalar(
             select(Membership).where(
                 Membership.user_id == int(user_id),
@@ -6217,8 +6322,22 @@ async def live_updates(websocket: WebSocket):
         )
     try:
         while True:
-            await websocket.receive_text()
+            if session.get("api_key_id"):
+                with SessionLocal() as db:
+                    try:
+                        validate_user_key(db, db.get(UserAPIKey, session["api_key_id"]))
+                    except HTTPException:
+                        await websocket.close(code=4401)
+                        break
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=5)
+                except TimeoutError:
+                    continue
+            else:
+                await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
         live_hub.disconnect(organization_id_int, websocket)
 
 

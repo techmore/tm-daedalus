@@ -23,6 +23,11 @@
     {% else %}
     <div class="notice">Google sign-in becomes available when OAuth credentials are configured.</div>
     {% endif %}
+    <details><summary>Sign in with an access key</summary>
+      <form id="token-login"><label>Access key <input name="token" type="password" autocomplete="off" required maxlength="200"></label><button class="button button-secondary" type="submit">Sign in</button></form>
+      <p id="key-feedback" aria-live="polite"></p>
+    </details>
+    <script src="/static/js/user_keys.js" defer></script>
     {% if demo_mode %}
     <div class="divider"><span>local development</span></div>
     <form method="post" action="/dev/login">

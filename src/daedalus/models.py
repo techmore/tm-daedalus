@@ -20,6 +20,18 @@ class User(Base):
     memberships: Mapped[list["Membership"]] = relationship(back_populates="user")
 
 
+class UserAPIKey(Base):
+    __tablename__ = "user_api_keys"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class Organization(Base):
     __tablename__ = "organizations"
     __table_args__ = (UniqueConstraint("domain", name="uq_organization_domain"),)
