@@ -1,5 +1,15 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 063: current evidence first
+
+Production application commit **70b6571eef69ebea2a07496211c81c0af78648f9** is active and healthy. The 58-file archive SHA-256 is **fdf8247d6301570ef6efd953c5f88aa5a6a4455abffbe66ba31cd89f4deda156**; verified off-host backup: daedalus-data-20261004T045749Z.tar.gz. All **435 tests and 90 subtests** passed. Python CI 37178474507 and managed Linux scanner/recovery CI 37178474579 both passed.
+
+The overview now starts with five workspace-scoped assessment cards: DNS/email, website, scanners, CIS and Meraki. Each shows saved evidence, an assessment state, capture date when available, and a direct topic link. Scanner counters are collapsed below these cards. No combined security score is inferred. Latest failed/running DNS or website attempts retain the previous completed evidence; deeper website audit evidence has its own date. Rendering preserves focused cards and rejects stale responses.
+
+Authenticated production validation confirmed the no-store posture endpoint, current assets, section order and removal of the old decorative hero. CSP evidence currently shows unpublished SPF/DMARC and five unknown DNS lookups; HTTPS 200, six absent selected headers and six deeper-audit observations; one of two scanners online with no approved ranges; CIS not assessed; and a dated Meraki report containing one network and zero assigned devices. Private receipt: /data/codex-overview-validation-20261004.json. These are evidence summaries, not declarations of compliance or complete audit coverage.
+
+Browser visual QA remains pending return of the existing review session. Full-project completion remains open, including the previously recorded client, network coverage and operational validation gaps.
+
 ## October 4, 2026 — Release 062 and repeat-audit comparison
 
 Production commit **3eed1aafd3bbfe5cd6853091e6584b7d7c1707fa** is active and healthy. Release archive: 58 files, SHA-256 **01368371378dd8adaaf37f166e79eeadfc15007ee19d575cfd7e443bc77b4bed**. Verified off-host backup: daedalus-data-20261004T043650Z.tar.gz. All **429 tests and 90 subtests** passed locally. Python CI 37177490712 and real managed Linux scanner/recovery CI 37177490710 both passed. The preceding grouped-review source passed managed Linux CI 37177228216.
