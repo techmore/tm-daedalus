@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.websockets import WebSocketDisconnect
 
@@ -186,6 +186,67 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
                 self.assertEqual(len(events),1)
         finally:
             for client in clients: client.close()
+
+    def test_concurrent_revoked_access_requests_publish_one_new_request(self):
+        self.google_callback({'sub':'revoked-requester','email':'revoked@outside.example','email_verified':True,'name':'Requesting User'})
+        with self.session_factory() as db:
+            requester = db.scalar(select(User).where(User.google_subject == 'revoked-requester'))
+            org = db.scalar(select(Organization).where(Organization.domain == 'cybersecuritypilot.org'))
+            requester_id, org_id = requester.id, org.id
+            db.add(Membership(user_id=requester_id, organization_id=org_id, role='admin', status='revoked', created_at=server.utcnow()))
+            db.commit()
+        barrier = threading.Barrier(2)
+        original_execute = Session.execute
+        def synchronized_execute(db, statement, *args, **kwargs):
+            if getattr(statement, 'is_update', False) and statement.table.name == Membership.__tablename__:
+                barrier.wait(timeout=5)
+            return original_execute(db, statement, *args, **kwargs)
+        clients = [TestClient(server.app), TestClient(server.app)]
+        for client in clients:
+            client.cookies.update(self.client.cookies)
+        try:
+            with patch.object(Session, 'execute', synchronized_execute), patch.object(server.live_hub, 'publish_to_users', new_callable=AsyncMock) as publish:
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    responses = list(pool.map(lambda client: client.post('/api/membership-requests', json={'domain':'cybersecuritypilot.org'}), clients))
+            self.assertEqual([response.status_code for response in responses], [200, 200])
+            self.assertTrue(all(response.json()['status'] == 'pending' for response in responses))
+            publish.assert_awaited_once()
+            with self.session_factory() as db:
+                membership = db.scalar(select(Membership).where(Membership.user_id == requester_id, Membership.organization_id == org_id))
+                self.assertEqual((membership.status, membership.role), ('pending', 'user'))
+                self.assertEqual(db.scalar(select(func.count(AuditLog.id)).where(AuditLog.action == 'membership.requested', AuditLog.actor_user_id == requester_id)), 1)
+        finally:
+            for client in clients:
+                client.close()
+
+    def test_rejoining_does_not_overwrite_a_concurrent_approval(self):
+        self.google_callback({'sub':'approved-race-requester','email':'approved@outside.example','email_verified':True,'name':'Requesting User'})
+        with self.session_factory() as db:
+            user = db.scalar(select(User).where(User.google_subject == 'approved-race-requester'))
+            org = db.scalar(select(Organization).where(Organization.domain == 'cybersecuritypilot.org'))
+            membership = Membership(user_id=user.id, organization_id=org.id, role='user', status='revoked', created_at=server.utcnow())
+            db.add(membership)
+            db.commit()
+            membership_id, user_id = membership.id, user.id
+        original_execute = Session.execute
+        approved = False
+        def approve_before_update(db, statement, *args, **kwargs):
+            nonlocal approved
+            if not approved and getattr(statement, 'is_update', False) and statement.table.name == Membership.__tablename__:
+                approved = True
+                with self.session_factory() as approval_db:
+                    original_execute(approval_db, update(Membership).where(Membership.id == membership_id).values(status='approved', role='admin'))
+                    approval_db.commit()
+            return original_execute(db, statement, *args, **kwargs)
+        with patch.object(Session, 'execute', approve_before_update), patch.object(server.live_hub, 'publish_to_users', new_callable=AsyncMock) as publish:
+            response = self.client.post('/api/membership-requests', json={'domain':'cybersecuritypilot.org'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'approved')
+        publish.assert_not_awaited()
+        with self.session_factory() as db:
+            membership = db.get(Membership, membership_id)
+            self.assertEqual((membership.status, membership.role), ('approved', 'admin'))
+            self.assertEqual(db.scalar(select(func.count(AuditLog.id)).where(AuditLog.action == 'membership.requested', AuditLog.actor_user_id == user_id)), 0)
 
     def test_membership_request_and_decision_publish_after_commit_to_scoped_recipients(self):
         login = self.google_callback(

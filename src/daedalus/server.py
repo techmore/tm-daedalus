@@ -2618,8 +2618,20 @@ async def request_workspace_membership(
             return {"status": "approved", "organization": organization.name}
         if membership.status == "pending":
             return {"status": "pending", "organization": organization.name}
-        membership.status = "pending"
-        membership.role = "user"
+        existing_membership_id = membership.id
+        changed = db.execute(
+            update(Membership)
+            .where(Membership.id == existing_membership_id, Membership.status == membership.status)
+            .values(status="pending", role="user")
+            .execution_options(synchronize_session=False)
+        )
+        if changed.rowcount != 1:
+            db.rollback()
+            saved = db.get(Membership, existing_membership_id)
+            if saved is not None and saved.status in {"pending", "approved"}:
+                return {"status": saved.status, "organization": organization.name}
+            raise HTTPException(status_code=409, detail="Workspace access changed during this request. Refresh and try again.")
+        db.refresh(membership)
     else:
         membership = Membership(
             user_id=user.id,

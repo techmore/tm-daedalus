@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — concurrent workspace rejoin requests
+
+Existing revoked memberships now return to pending through a conditional database update. Concurrent rejoin requests create one membership request audit and one scoped admin notification, and the pending membership has the user role. If an approval wins the race, its approved status and role remain intact. A changed/deleted membership that cannot be resolved returns HTTP 409 instead of being silently overwritten.
+
+Forced-race fixtures validate both simultaneous rejoin requests and an approval between the initial read and conditional write. These are isolated fixture users, not additional live-human OAuth onboarding evidence. The full local suite passed **488 tests and 98 subtests**. Production subnet validation, trusted CIS distribution, macOS 26 execution, browser visual review and the rest of the original project scope remain open.
+
+
 ## October 4, 2026 — live browser evidence correction
 
 Client source **1d5e7152780a28489f8e6c6bf6b8f9dcc3c53ae1** removes presumed defaults from 23 Chrome and 16 Safari guard branches, plus five Safari AutoFill routines. Missing, unreadable or incorrectly typed preferences remain manual. Explicit observed values still follow the existing checks; this does not establish that every legacy preference mapping matches current browser policy. All **73 local client unit tests** passed, including absent-preference fixtures across 33 Chrome and 23 Safari dispatch paths. The backend suite passed **485 tests and 98 subtests**; [Python CI run 37188941425](https://github.com/techmore/tm-daedalus/actions/runs/37188941425) passed.
