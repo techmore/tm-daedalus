@@ -1,5 +1,13 @@
 # Integration readiness
 
+## October 4, 2026 — Release 065: independent CIS validation credentials
+
+Production application commit **8ad1fefe928e5f1928e2886334a164f7b0e552e2** is active and healthy. The 58-file archive SHA-256 is **6b8dbedd765a2cae45a81d05e426c8fdb0ba006deb00f1eadddfcce301a86a77**; verified off-host backup: daedalus-data-20261004T053210Z.tar.gz. All **438 tests and 90 subtests** passed locally; current CI has not yet been confirmed.
+
+CIS profile downloads and report uploads now accept existing revocable user access keys through the client's X-API-Key header. These keys retain their workspace binding and current approved membership checks; revocation, expiry and membership removal reject both endpoints. Tests uploaded a complete saved report, excluded a second workspace's profile and proved that revoking the user key leaves the shared CIS key valid. This enables independent endpoint validation without rotating the existing workspace deployment credential. User keys retain the owner's dashboard/API privileges and require private handling and renewal; they are not dedicated upload-only credentials.
+
+Actual production catalog access using the CSP operator user key returned only the two CSP Tahoe profile revisions, with no shared-key mutation. Receipt: /data/codex-cis-user-key-validation-20261004.json. A real production endpoint report is still pending; the available Mac runs macOS 27 and cannot execute the Tahoe profiles. No compliance score or production client deployment is inferred from the catalog check.
+
 ## October 4, 2026 — CIS security-auditing implementation checkpoint
 
 Source commit **8e8c0de2086a7920d704e98492460467e0b2110b** adds the bundled read-only **audit_auditd_enabled** Tahoe check. It checks the exact system audit service, regular audit_control file metadata and kernel audit condition with fixed executables/arguments. An explicit disabled service or kernel condition fails; inaccessible, unsupported or ambiguous evidence remains manual. No audit settings are modified and raw service/kernel output is not uploaded. The rule follows the pinned NIST mSCP Tahoe revision already used by the profiles.
