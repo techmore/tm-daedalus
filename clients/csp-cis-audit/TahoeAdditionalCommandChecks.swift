@@ -6,7 +6,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -50,6 +50,40 @@ extension MacOSChecks {
              "os_safari_show_status_bar_enabled",
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
+
+        case "audit_auditd_enabled":
+            let service = command("/bin/launchctl", ["print", "system/com.apple.auditd"])
+            guard service.unavailable == nil else {
+                return result("manual", "The audit service query was unavailable.")
+            }
+            if service.exitCode != 0 && service.error.contains("Could not find service")
+                && service.error.contains("com.apple.auditd") {
+                return result("fail", "The required audit service was not found in the system launchd domain.")
+            }
+            guard usable(service), service.output.range(
+                of: "(?m)^system/com\\.apple\\.auditd\\s*=\\s*\\{", options: .regularExpression
+            ) != nil else {
+                return result("manual", "The system domain did not provide unambiguous audit service evidence.")
+            }
+            let metadata = command("/usr/bin/stat", ["-f", "%HT", "/etc/security/audit_control"])
+            guard usable(metadata), metadata.output.trimmingCharacters(in: .whitespacesAndNewlines) == "Regular File" else {
+                return result("manual", "audit_control is absent, inaccessible or not a regular file; auditing was not inferred.")
+            }
+            let condition = command("/usr/sbin/audit", ["-c"])
+            guard usable(condition) else {
+                return result("manual", "The kernel audit condition could not be read with current permissions.")
+            }
+            var value = condition.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if value.hasPrefix("audit condition: ") {
+                value = String(value.dropFirst("audit condition: ".count))
+            }
+            if value == "AUC_AUDITING" {
+                return result("pass", "The audit service and regular audit_control file are present, and the kernel explicitly reports auditing enabled.")
+            }
+            if ["AUC_NOAUDIT", "AUC_DISABLED"].contains(value) {
+                return result("fail", "The kernel explicitly reports auditing disabled.")
+            }
+            return result("manual", "The kernel audit condition was unrecognized or ambiguous.")
 
         case "system_settings_guest_access_smb_disable":
             let evidence = command("/usr/sbin/sysadminctl", ["-smbGuestAccess", "status"])

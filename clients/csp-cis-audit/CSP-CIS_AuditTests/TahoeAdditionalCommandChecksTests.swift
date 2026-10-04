@@ -13,6 +13,46 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
+        let rule = "audit_auditd_enabled"
+        func check(_ condition: MacOSChecks.CommandEvidence) -> String {
+            evaluate(rule) { executable, arguments in
+                switch executable {
+                case "/bin/launchctl":
+                    #expect(arguments == ["print", "system/com.apple.auditd"])
+                    return .init(output: "system/com.apple.auditd = {\n}")
+                case "/usr/bin/stat":
+                    #expect(arguments == ["-f", "%HT", "/etc/security/audit_control"])
+                    return .init(output: "Regular File\n")
+                default:
+                    #expect(executable == "/usr/sbin/audit" && arguments == ["-c"])
+                    return condition
+                }
+            }
+        }
+        #expect(check(.init(output: "AUC_AUDITING\n")) == "pass")
+        #expect(check(.init(output: "audit condition: AUC_AUDITING\n")) == "pass")
+        #expect(check(.init(output: "AUC_NOAUDIT\n")) == "fail")
+        #expect(check(.init(output: "AUC_DISABLED\n")) == "fail")
+        #expect(check(.init(output: "AUC_AUDITING\nAUC_NOAUDIT")) == "manual")
+        #expect(check(.init(error: "permission denied", exitCode: 1)) == "manual")
+        #expect(run(rule, .init(error: "Could not find service com.apple.auditd", exitCode: 113)) == "fail")
+        #expect(run(rule, .init(error: "permission denied", exitCode: 1)) == "manual")
+    }
+
+    @Test func auditingDoesNotInferFilePresenceOrKernelState() {
+        for metadata in [MacOSChecks.CommandEvidence(output: "Symbolic Link"),
+                         .init(error: "permission denied", exitCode: 1), .init(output: "")] {
+            let status = evaluate("audit_auditd_enabled") { executable, _ in
+                if executable == "/bin/launchctl" { return .init(output: "system/com.apple.auditd = {\n}") }
+                #expect(executable == "/usr/bin/stat")
+                return metadata
+            }
+            #expect(status == "manual")
+        }
+        #expect(run("audit_auditd_enabled", .init(output: "system/com.apple.other = {}")) == "manual")
+    }
+
     @Test func xprotectRequiresBothDistinctEnabledModes() {
         let rule = "os_anti_virus_installed"
         #expect(run(rule, .init(output: "launch scans: enabled\nbackground scans: enabled\n")) == "pass")
