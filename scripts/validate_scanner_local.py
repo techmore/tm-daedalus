@@ -513,7 +513,7 @@ raise SystemExit(completed.returncode)
             if (root / "portal.db").exists():
                 with sqlite3.connect(root / "portal.db") as db:
                     failure["command_states"] = [dict(zip(["action", "status", "delivered_at", "completed_at"], row)) for row in db.execute("SELECT action,status,delivered_at,completed_at FROM agent_commands")]
-                    safe_reasons = {"The scan request was rate limited.", "A scan job is already running for this client", "Invalid scan target.", "Missing scan target.", "NmapUI restarted before this command completed."}
+                    safe_reasons = {"The scan request was rate limited.", "A scan job is already running for this client", "Invalid scan target.", "Missing scan target.", "NmapUI restarted before this command completed.", "The Linux systemd user service could not restart NmapUI.", "Managed Linux service verification failed; refusing to restart NmapUI."}
                     failure["command_failure_reasons"] = [result if result in safe_reasons else "Other command failure (details withheld)" for (result,) in db.execute("SELECT result FROM agent_commands WHERE status='failed'")]
                     failure["saved_event_names"] = [row[0] for row in db.execute("SELECT event_name FROM scan_events")]
                     failure["command_acknowledgement_states"] = [json.loads(row[0]).get("status") for row in db.execute("SELECT details FROM audit_logs WHERE action='scanner.command_result_reported'")]

@@ -150,6 +150,8 @@ exit 0
         self.assertTrue(all(unit.is_file() for unit in units))
         self.assertIn('NMAPUI_TRUST_LOCAL_UI="false"', units[0].read_text())
         self.assertIn('Environment=XDG_CONFIG_HOME=' + systemd_service._environment_quote(str(config.parent.parent), 'fixture'), units[1].read_text())
+        self.assertIn(f'Environment=XDG_RUNTIME_DIR="/run/user/{os.getuid()}"', units[1].read_text())
+        self.assertIn(f'Environment=DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/{os.getuid()}/bus"', units[1].read_text())
         self.assertNotIn(environment['NMAPUI_PASSWORD'], ''.join(unit.read_text() for unit in units))
         self.assertIn('loginctl enable-linger', response.stdout)
         commands=(Path(str(recorder)+'.systemctl')).read_text().splitlines()
