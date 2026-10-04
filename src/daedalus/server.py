@@ -2629,7 +2629,17 @@ async def request_workspace_membership(
             created_at=utcnow(),
         )
         db.add(membership)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        saved = db.scalar(select(Membership).where(
+            Membership.user_id == user.id,
+            Membership.organization_id == organization.id,
+        ))
+        if saved is not None and saved.status in {"pending", "approved"}:
+            return {"status": saved.status, "organization": organization.name}
+        raise HTTPException(status_code=409, detail="Workspace access changed during this request. Refresh and try again.") from exc
     membership_id = membership.id
     audit(
         db,

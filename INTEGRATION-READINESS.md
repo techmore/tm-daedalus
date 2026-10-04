@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — concurrent workspace access request handling
+
+Concurrent first access requests from the same user/domain can collide with the membership uniqueness constraint. The request handler now rolls back the losing insert and returns the already-saved pending/approved status; other changed-access cases return HTTP 409. This preserves the pending user role and avoids a duplicate membership request audit or admin notification.
+
+A forced-race fixture synchronizes two independent HTTP clients at membership insertion. Both responses return pending successfully, exactly one user-role membership and one membership.requested audit entry persist, and the scoped admin notification publishes once. This is concurrency validation with a fixture OAuth profile, not new real-human Google onboarding evidence. Existing domain independence, approval and admin succession requirements remain intact; broader live onboarding validation remains open.
+
+
 ## October 4, 2026 — production linked dependency validation
 
 Source **edeb6505f4c316b00b0be2a0e6ac8d524bd8d0a2** is deployed to Incus; internal/public health checks and off-host backup verification passed. Actual website check **53** completed with two external scripts, one external stylesheet, zero HTTP dependencies, zero declared integrity attributes and three missing script/style integrity attributes. Four external hosts were retained. These are root-HTML metadata observations, not validated hashes or a vendor-security assessment.

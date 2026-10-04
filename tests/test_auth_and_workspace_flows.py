@@ -1,11 +1,13 @@
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.websockets import WebSocketDisconnect
 
 from daedalus import server
@@ -152,6 +154,38 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             with self.subTest(origin=origin, host=host):
                 self.assertFalse(matches(origin, host, production=True))
         self.assertFalse(matches("http://app.example.org", "app.example.org", production=True))
+
+    def test_concurrent_access_requests_return_one_pending_membership_and_notice(self):
+        login=self.google_callback({'sub':'concurrent-requester','email':'requester@outside.example','email_verified':True,'name':'Requesting User'})
+        self.assertEqual(login.status_code,303)
+        barrier=threading.Barrier(2)
+        original_flush=Session.flush
+        def synchronized_flush(db,*args,**kwargs):
+            if any(isinstance(row,Membership) for row in db.new):
+                barrier.wait(timeout=5)
+            return original_flush(db,*args,**kwargs)
+        clients=[TestClient(server.app),TestClient(server.app)]
+        for client in clients:
+            client.cookies.update(self.client.cookies)
+        try:
+            with patch.object(Session,'flush',synchronized_flush), patch.object(server.live_hub,'publish_to_users',new_callable=AsyncMock) as publish:
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    futures=[pool.submit(client.post,'/api/membership-requests',json={'domain':'cybersecuritypilot.org'}) for client in clients]
+                    responses=[future.result(timeout=15) for future in futures]
+            self.assertEqual([response.status_code for response in responses],[200,200])
+            self.assertTrue(all(response.json()['status']=='pending' for response in responses))
+            publish.assert_awaited_once()
+            with self.session_factory() as db:
+                requester=db.scalar(select(User).where(User.google_subject=='concurrent-requester'))
+                org=db.scalar(select(Organization).where(Organization.domain=='cybersecuritypilot.org'))
+                memberships=db.scalars(select(Membership).where(Membership.user_id==requester.id,Membership.organization_id==org.id)).all()
+                self.assertEqual(len(memberships),1)
+                self.assertEqual(memberships[0].role,'user')
+                self.assertEqual(memberships[0].status,'pending')
+                events=db.scalars(select(AuditLog).where(AuditLog.action=='membership.requested',AuditLog.actor_user_id==requester.id)).all()
+                self.assertEqual(len(events),1)
+        finally:
+            for client in clients: client.close()
 
     def test_membership_request_and_decision_publish_after_commit_to_scoped_recipients(self):
         login = self.google_callback(
