@@ -1,5 +1,15 @@
 # Integration readiness
 
+## October 4, 2026 — Release 067: repeat CIS history, notice and visible review counts
+
+Production application commit **3b3b0f16bcbf30817713f59cc05cd338262ae72e** is active and healthy. Archive: 58 files, SHA-256 **7bbe095e25092d9b5d4dfa4927a210ef357a78eb98ea3d5f50402a148addcc9c**; verified off-host backup: daedalus-data-20261004T055456Z.tar.gz. All **440 backend tests and 90 subtests** passed locally. Full client CI **37181000414** passed its configured suite (67 passing case records, zero failures), release-script syntax check and demo-package build. Current release backend/scanner CI remains unconfirmed.
+
+Rebuilt and ran the corrected local CSP starter client against production. Actual report **2**, collected **2026-10-04T05:52:08Z**, saved all 154 results with profile verification and the same device identity: 36 pass, 82 fail, 19 manual, 17 error, observed pass rate **23.38%**. An independent status-map comparison of actual reports 1 and 2 exactly matched all **11** saved differences: ten old definitive statuses became manual, while the old audit-service false pass became fail. These reflect checker corrections, not Mac remediation. Exactly one dated source-report notification **9** was saved at **2026-10-04T05:52:09.057259Z**. Receipt: /data/codex-cis-repeat-validation-20261004.json.
+
+The overview now labels the area Endpoint checks and surfaces the latest report's failed/manual/error counts beside its pass rate. Nonzero or unknown counts request review; raw endpoint names/evidence stay out of the summary. The authenticated production endpoint confirmed state attention and 82 failed / 19 manual / 17 errors for report 2. This is the latest endpoint report, not a fleet compliance score.
+
+Stopped the temporary client (exit 143) and removed its private key configs. Device presence reflects the existing 36-hour report-recency window, not a running app after test cleanup. Real macOS 26 execution, persistent trusted CIS distribution, remaining check semantics, approved VLAN scanning, browser visual review and the other full-project requirements remain open.
+
 ## October 4, 2026 — Grouped legacy audit-policy corrections
 
 Client source **7792fb3900e14189b86650cec728c8a44781354d** replaces seven sudo/grep flag checkers and the retention checker with a shared bounded no-follow read of the fixed audit_control file. Exact field/class parsing replaces substring matches on merged stdout/stderr. Missing, unreadable, duplicate, unknown or prefixed selections remain manual; explicit unmatched class criteria fail. Administrative, authentication, login, network and process selections use the macOS audit_class definitions. Results describe the CSP class-selection criterion and do not claim complete event coverage or kernel activation. Retention recognizes the documented case-sensitive age units (s, h, d, y) and the existing seven-day CSP criterion; unsupported and combined age/size policies require manual review. No file contents are uploaded or configuration changed.
