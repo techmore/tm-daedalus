@@ -125,6 +125,7 @@ const document={createElement:tag=>new Node(tag)};
 const role='admin',controlsEnabled=true;
 const openScannerControls=new Set(),openCommandHistories=new Set(),openScanHistories=new Set(),openComparisonHistories=new Set();
 const scannerNetworkInputs=new Map(),scannerScopeFeedback=new Map(),scannerTargets=new Map(),scannerSkipDiscovery=new Map();
+function loadSavedScannerAssessment(){}
 function canViewScannerCommandHistory(){return true;} function supportsMacOSUpdateCheck(){return false;}
 function flatten(n){return [n,...n.children.flatMap(flatten)];}
 """ + renderer + """
@@ -291,6 +292,25 @@ assert.equal(diagnostics.tag,'details');
 assert.match(diagnostics.children.at(-1).textContent,/unknown, not missing/);
 assert.equal(resolution.children[1].children[1].value,'Unknown');
 renderDnsSnapshot(null);assert.equal(grid.children.length,1);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_scanner_saved_summary_keeps_unknowns_and_scope_limits(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function renderSavedScannerAssessment('):source.index('  function loadSavedScannerAssessment(')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(){this.children=[];}append(...n){this.children.push(...n);}replaceChildren(){this.children=[];}}
+const document={createElement:()=>new Node()};function appendEmpty(n,v){n.append(v);}function dateLabel(v){return v||'Unknown';}
+function makeAuditMetric(label,value,detail,state){return {label,value,detail,state};}
+""" + helper + """
+const host=new Node();renderSavedScannerAssessment(host,{run:{status:'failed'},observations:null,reason:'Latest result malformed'});
+assert.equal(host.children.at(-1),'Latest result malformed');
+renderSavedScannerAssessment(host,{run:{status:'completed',last_occurred_at:'saved'},observations:{host_count:1,open_port_count:0,unknown_port_state_count:2,collected_at:'collected',covered_targets:null}});
+assert.equal(host.children[2].children[1].state,'neutral');assert.equal(host.children[2].children[2].state,'attention');
+assert.match(host.children[3].textContent,/coverage was not explicitly reported/);assert.match(host.children[3].textContent,/do not establish coverage/);
+renderSavedScannerAssessment(host,{run:null});assert.equal(host.children.length,2);
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)

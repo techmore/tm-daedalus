@@ -36,6 +36,26 @@ class ScannerRunTests(unittest.TestCase):
     def send(self, envelope):
         return self.client.post(f"/api/agents/{self.agent}/events", headers=self.headers, json=envelope)
 
+    def test_latest_assessment_keeps_observations_separate_from_completion(self):
+        self.setup_scanner()
+        path = f"/api/agents/{self.agent}/assessment"
+        self.assertEqual(self.client.get(path).json()["state"], "not_assessed")
+        event = self.send(self.envelope("deep_scan_results", {"hosts": [{"ip": "127.0.0.1", "ports": [{"port": 22, "protocol": "tcp", "state": "open"}, {"port": 443, "protocol": "tcp"}]}], "covered_targets": ["127.0.0.1/32"]})).json()
+        data = self.client.get(path).json()
+        self.assertEqual(data["state"], "attention")
+        self.assertEqual(data["observations"]["host_count"], 1)
+        self.assertEqual(data["observations"]["open_port_count"], 1)
+        self.assertEqual(data["observations"]["unknown_port_state_count"], 1)
+        self.assertEqual(data["observations"]["result_event_id"], event["event_id"])
+        self.assertFalse(data["observations"]["coverage_complete"])
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        self.assertEqual(self.client.get(path).json()["state"], "recorded")
+        self.send(self.envelope("deep_scan_results", {"hosts": "malformed"}))
+        invalid = self.client.get(path).json()
+        self.assertIsNone(invalid["observations"])
+        self.assertIn("earlier results were not substituted", invalid["reason"])
+        self.assertEqual(self.client.get('/api/agents/999999/assessment').status_code, 404)
+
     def test_explicit_grouping_legacy_unknown_and_terminal_evidence(self):
         self.setup_scanner()
         self.assertEqual(self.send(self.envelope()).status_code, 200)
@@ -78,6 +98,7 @@ class ScannerRunTests(unittest.TestCase):
         detail = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
         self.assertTrue(detail["events"][0]["artifact_download_url"])
         self.client.post("/api/workspaces", json={"name": "Other", "domain": "other-scan-fixture.example"})
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/assessment").status_code, 404)
         self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs").status_code, 404)
         self.assertEqual(self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}").status_code, 404)
 

@@ -6296,6 +6296,50 @@ def scoped_scanner(request: Request, db: Session, agent_id: int) -> Agent:
     return agent
 
 
+@app.get("/api/agents/{agent_id}/assessment")
+def scanner_assessment(agent_id: int, request: Request, db: Session = Depends(get_db)):
+    from daedalus.scanner_comparison import normalize_snapshot
+    agent = scoped_scanner(request, db, agent_id)
+    occurred = func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at)
+    job_id = db.scalar(select(ScanEvent.source_job_id).where(
+        ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
+        ScanEvent.source_job_type == "scan", ScanEvent.source_job_id.is_not(None),
+    ).group_by(ScanEvent.source_job_id).order_by(func.max(occurred).desc(), func.max(ScanEvent.id).desc()).limit(1))
+    if job_id is None:
+        return {"state": "not_assessed", "run": None, "observations": None}
+    run = scanner_run_summary(db, agent, job_id)
+    response = {"state": "attention", "run": run, "observations": None}
+    if run["group_metadata_conflict"]:
+        response["reason"] = "Saved run metadata conflicts."
+        return response
+    event = db.scalar(select(ScanEvent).options(defer(ScanEvent.payload)).where(
+        ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
+        ScanEvent.source_job_id == job_id, ScanEvent.event_name == "deep_scan_results",
+    ).order_by(occurred.desc(), ScanEvent.id.desc()).limit(1))
+    if event is None:
+        response["reason"] = "Latest run has no saved detailed results."
+        return response
+    if event.artifact_size_bytes and event.artifact_size_bytes > 8 * 1024 * 1024:
+        response["reason"] = "Latest detailed results exceed the summary size limit; review the saved artifact."
+        return response
+    try:
+        snapshot = normalize_snapshot(load_scanner_event_payload(event))
+    except (TypeError, ValueError):
+        response["reason"] = "Latest detailed results cannot be interpreted; earlier results were not substituted."
+        return response
+    ports = [port for host in snapshot["hosts"].values() for port in host["ports"].values()]
+    response["observations"] = {
+        "host_count": len(snapshot["hosts"]),
+        "open_port_count": sum(port["state"] == "open" for port in ports),
+        "unknown_port_state_count": sum(port["state"] is None for port in ports),
+        "covered_targets": snapshot["covered_targets"],
+        "result_event_id": event.id, "collected_at": iso_utc(event.occurred_at or event.created_at),
+        "coverage_complete": False,
+    }
+    response["state"] = "recorded" if run["status"] == "completed" else "attention"
+    return response
+
+
 @app.get("/api/agents/{agent_id}/runs")
 def list_scanner_runs(agent_id: int, request: Request, limit: int = 20, db: Session = Depends(get_db)):
     agent = scoped_scanner(request, db, agent_id)

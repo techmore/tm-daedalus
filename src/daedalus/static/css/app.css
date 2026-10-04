@@ -856,3 +856,7 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .dns-evidence-group { min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--card-line); }
 .dns-evidence-group > .topic-group-heading { margin-top: 0; }
 .dns-evidence-group > .topic-secondary { margin: 12px 0 0; padding: 12px 0; background: transparent; border: 0; border-top: 1px solid var(--card-line); border-radius: 0; }
+
+.scanner-saved-assessment { padding: 14px 0; border-top: 1px solid var(--card-line); border-bottom: 1px solid var(--card-line); margin: 16px 0; }
+.scanner-saved-assessment h4 { margin: 0 0 10px; color: var(--brown-900); }
+.scanner-saved-assessment .audit-metric-grid { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }

@@ -546,3 +546,8 @@ Domain resolution and email protection now each retain their visible summary met
 ### 2026-10-04 — Production DNS topic grouping release
 
 Source 748131a is active on Incus. Internal/public readiness passed; off-host backup daedalus-data-20261004T102041Z.tar.gz was verified. Full suite: 516 passed and 104 subtests. Authenticated production HTML/JavaScript checks confirm asset version 093, domain/email evidence groups and the diagnostics drawer. These are deployment and renderer checks; browser visual acceptance remains open.
+
+
+### 2026-10-04 — Saved network observations per scanner
+
+Scanner cards now show the latest scan status and saved detailed-result counts (hosts, explicitly open ports, missing port states) before controls. Workspace-scoped assessment API selects the latest scan and latest detailed event without falling back to older malformed results; result artifacts retain size/digest validation and an 8 MiB summary bound. Metadata conflicts, absent detail and uninterpretable results remain unavailable. Counts are observations, not confirmed vulnerabilities or complete approved-range coverage. Renderer checks preserve unknown states and scope limits; scanner fixtures verify completion distinction, exact result identity, malformed-result handling and cross-workspace 404. Full suite: 518 tests and 104 subtests; scanner targeted suite 12 passed after the additional isolation assertion. Browser visual acceptance remains pending.

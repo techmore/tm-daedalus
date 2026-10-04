@@ -353,6 +353,48 @@
     host.append(metrics, note);
   }
 
+  var scannerAssessmentCache = new Map();
+  function renderSavedScannerAssessment(host, body) {
+    host.replaceChildren();
+    var heading = document.createElement("h4"); heading.textContent = "Latest saved network observations";
+    host.append(heading);
+    if (!body || !body.run) { appendEmpty(host, "No saved scan assessment yet."); return; }
+    var context = document.createElement("p"); context.className = "muted";
+    context.textContent = "Latest scan: " + String(body.run.status || "unknown") + " · " + dateLabel(body.run.last_occurred_at);
+    host.append(context);
+    if (!body.observations) { appendEmpty(host, body.reason || "Detailed observations are unavailable."); return; }
+    var observation = body.observations;
+    var metrics = document.createElement("div"); metrics.className = "audit-metric-grid";
+    metrics.append(
+      makeAuditMetric("Hosts observed", String(observation.host_count), "Saved detailed results", "neutral"),
+      makeAuditMetric("Open ports observed", String(observation.open_port_count), "Explicitly open; requires contextual review", "neutral"),
+      makeAuditMetric("Unknown port states", String(observation.unknown_port_state_count), "No state reported for these observations", observation.unknown_port_state_count ? "attention" : "neutral")
+    );
+    var note = document.createElement("p"); note.className = "check-scope-note";
+    note.textContent = "Results collected " + dateLabel(observation.collected_at) + ". " +
+      (Array.isArray(observation.covered_targets) ? "Reported targets: " + observation.covered_targets.join(", ") + ". " : "Target coverage was not explicitly reported. ") +
+      "These observations do not establish coverage of every approved range or confirm vulnerabilities.";
+    host.append(metrics, note);
+  }
+
+  function loadSavedScannerAssessment(host, agentId) {
+    var cached = scannerAssessmentCache.get(agentId);
+    if (!cached || Date.now() - cached.at >= 30000) {
+      var promise = fetch("/api/agents/" + agentId + "/assessment", {credentials: "same-origin"}).then(async function (response) {
+        var body = await response.json();
+        if (!response.ok) throw new Error("Saved scan summary unavailable.");
+        return body;
+      });
+      cached = {at: Date.now(), promise: promise};
+      scannerAssessmentCache.set(agentId, cached);
+      if (scannerAssessmentCache.size > 100) scannerAssessmentCache.delete(scannerAssessmentCache.keys().next().value);
+    }
+    cached.promise.then(function (body) { renderSavedScannerAssessment(host, body); }).catch(function () {
+      host.replaceChildren(); appendEmpty(host, "Saved scan summary could not be refreshed. Review scan history or try again.");
+      if (scannerAssessmentCache.get(agentId) === cached) scannerAssessmentCache.delete(agentId);
+    });
+  }
+
   function makeAgentCard(agent, domain) {
     var card = document.createElement("article");
     card.className = "agent-card";
@@ -406,6 +448,10 @@
       ? "Approved networks: " + authorizedNetworks.join(", ")
       : "No approved network scope. This scanner cannot receive scan commands until an admin assigns a CIDR.";
     card.append(scopeSummary);
+    var savedAssessment = document.createElement("section"); savedAssessment.className = "scanner-saved-assessment";
+    savedAssessment.textContent = "Loading saved network observations…";
+    card.append(savedAssessment);
+    loadSavedScannerAssessment(savedAssessment, agent.id);
 
     var controlDetails = document.createElement("details");
     controlDetails.className = "topic-secondary scanner-controls";
