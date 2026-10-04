@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import math
 from datetime import UTC, datetime
 from html import escape
 from typing import Any
@@ -1048,11 +1049,11 @@ def build_cis_endpoint_pdf(report_snapshot: dict[str, Any]) -> bytes:
         Spacer(1, 10),
         _paragraph(
             "This is a point-in-time snapshot of the checks submitted by the enrolled CSP endpoint. "
-            "The pass rate includes manual checks and is not a CIS attestation. Daedalus does not retain "
+            "The pass rate includes manual and error results in its denominator. These results remain unassessed; the pass rate is not a CIS attestation. Daedalus does not retain "
             "the device serial number, IP address list, or full system inventory.",
             styles["CISReportBody"],
         ),
-        Paragraph("Compliance summary", styles["CISReportSection"]),
+        Paragraph("Assessment summary", styles["CISReportSection"]),
     ]
     if benchmark:
         source_note = " ".join(
@@ -1070,13 +1071,22 @@ def build_cis_endpoint_pdf(report_snapshot: dict[str, Any]) -> bytes:
         _paragraph("Measure", styles["CISReportHeader"]),
         _paragraph("Observed", styles["CISReportHeader"]),
     ]]
+    def reported_count(values: dict[str, Any], key: str) -> str:
+        value = values.get(key)
+        return str(value) if type(value) is int and value >= 0 else "Not reported"
+
+    passed, failed, total = (summary.get(key) for key in ("pass", "fail", "total"))
+    coverage = f"{passed + failed}/{total} checks have pass or fail results" if all(type(value) is int and value >= 0 for value in (passed, failed, total)) and passed + failed <= total else "Not reported"
+    score = summary.get("score")
+    score_label = f"{score}%" if type(score) in (int, float) and math.isfinite(score) and 0 <= score <= 100 else "Not reported"
     for label, value in (
-        ("Pass rate", f"{summary.get('score', 0)}%"),
-        ("Total checks", summary.get("total", len(results))),
-        ("Passed", summary.get("pass", 0)),
-        ("Failed", summary.get("fail", 0)),
-        ("Manual review", summary.get("manual", 0)),
-        ("Errors", summary.get("error", 0)),
+        ("Pass rate", score_label),
+        ("Assessment coverage", coverage),
+        ("Total checks", reported_count(summary, "total")),
+        ("Passed", reported_count(summary, "pass")),
+        ("Failed", reported_count(summary, "fail")),
+        ("Manual review", reported_count(summary, "manual")),
+        ("Errors", reported_count(summary, "error")),
     ):
         summary_rows.append([
             _paragraph(label, styles["CISReportCell"]),
@@ -1084,11 +1094,12 @@ def build_cis_endpoint_pdf(report_snapshot: dict[str, Any]) -> bytes:
         ])
     for category, values in sorted(category_summary.items()):
         if isinstance(values, dict):
+            category_label = {'macos': 'macOS', 'chrome': 'Chrome', 'safari': 'Safari'}.get(category, category.title())
             summary_rows.append([
-                _paragraph(f"{category.title()} checks", styles["CISReportCell"]),
+                _paragraph(f"{category_label} checks", styles["CISReportCell"]),
                 _paragraph(
-                    f"{values.get('pass', 0)}/{values.get('total', 0)} passed · "
-                    f"{values.get('score', 0)}%",
+                    f"{reported_count(values, 'pass')} pass · {reported_count(values, 'fail')} fail · "
+                    f"{reported_count(values, 'manual')} manual · {reported_count(values, 'error')} error",
                     styles["CISReportCell"],
                 ),
             ])
@@ -1098,7 +1109,7 @@ def build_cis_endpoint_pdf(report_snapshot: dict[str, Any]) -> bytes:
     if results:
         result_rows = [[
             _paragraph("Check", styles["CISReportHeader"]),
-            _paragraph("Category", styles["CISReportHeader"]),
+            _paragraph("Area", styles["CISReportHeader"]),
             _paragraph("CIS ID", styles["CISReportHeader"]),
             _paragraph("Status", styles["CISReportHeader"]),
             _paragraph("Description", styles["CISReportHeader"]),

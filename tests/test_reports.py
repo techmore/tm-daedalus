@@ -16,6 +16,32 @@ from daedalus.reports import (
 )
 
 
+class CISEndpointSummaryTests(unittest.TestCase):
+    def test_unassessed_categories_show_counts_and_coverage_instead_of_zero_percent(self):
+        from unittest.mock import patch
+        from daedalus import reports
+        snapshot = {'cis': {'summary': {'total':4, 'pass':1, 'fail':1, 'manual':1, 'error':1, 'score':25,
+            'categories': {'chrome': {'total':2, 'pass':0, 'fail':0, 'manual':1, 'error':1, 'score':0}}}, 'results':[]}}
+        with patch.object(reports, '_paragraph', wraps=reports._paragraph) as paragraphs:
+            pdf = reports.build_cis_endpoint_pdf(snapshot)
+        values = [str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertIn('2/4 checks have pass or fail results', values)
+        self.assertIn('0 pass · 0 fail · 1 manual · 1 error', values)
+        self.assertNotIn('0/2 passed · 0%', values)
+        self.assertTrue(any('manual and error results in its denominator' in value for value in values))
+
+    def test_incomplete_category_metadata_does_not_invent_zero_counts(self):
+        from unittest.mock import patch
+        from daedalus import reports
+        with patch.object(reports, '_paragraph', wraps=reports._paragraph) as paragraphs:
+            reports.build_cis_endpoint_pdf({'cis': {'summary': {'categories': {'chrome': {}}}}})
+        values = [str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertIn('Not reported pass · Not reported fail · Not reported manual · Not reported error', values)
+        self.assertNotIn('0%', values)
+        self.assertNotIn('0', values)
+
+
 class ExternalPostureReportTests(unittest.TestCase):
     def test_bounded_exposure_heading_and_complete_probe_list_stay_together(self):
         from daedalus import reports

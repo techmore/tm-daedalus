@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — endpoint PDF coverage summary and visual review
+
+All **12 pages** of actual endpoint PDF 35 were rendered and visually inspected. Its tables were readable, but the Category heading broke across lines and category percentages obscured that browser checks were unassessed. Future PDFs use an Area header, an Assessment summary with explicit assessed coverage, and pass/fail/manual/error counts per area. The pass-rate denominator explains both manual and error results; missing summary metadata is labeled Not reported instead of inventing zeroes.
+
+The revised renderer was applied to PDF 35’s exact frozen snapshot. All **12 revised pages** were rendered and visually reviewed; no clipping or overlap was found. Its first page identifies **74/154 checks assessed**, Chrome 33 manual and Safari 23 manual, alongside the saved overall counts. Original PDF 35 and endpoint report 3 remain unchanged. The full local suite passed **501 tests and 98 subtests**, including unassessed category counts and missing summary metadata. This is PDF review, not browser dashboard visual approval or macOS 26 conformance.
+
+
 ## October 4, 2026 — report worker claims and failure delivery
 
 Report generation now conditionally claims only queued jobs. Duplicate worker invocations cannot render the same job, and invoking a completed or failed job does not rewrite its artifact or saved snapshot. Requesting another PDF creates a new job through the existing workflow.
