@@ -486,3 +486,8 @@ Added append-only VendorReview entries and workspace-scoped GET/POST /api/vendor
 ### 2026-10-04 — Vendor review dashboard connection
 
 Website dependency evidence now includes saved decisions, a rationale form for admins, and paginated history. Each form explicitly names its saved inventory run. A newer inventory does not silently retarget a draft; failed submissions retain their UUID for safe retry. Review entries render literal text, and refreshes preserve drafts and expanded history. Feedback is inline. Human decisions do not establish provider security and are not carried to a later inventory automatically. Node fixtures validate draft retention across new evidence, UUID reuse after failure, successful save/reset, and literal HTML-like rationale rendering. Production validation and browser visual review remain pending.
+
+
+### 2026-10-04 — Production vendor review workflow validation
+
+Source f14337e is deployed on Incus; health checks and verified off-host backup passed. Full suite: 511 tests, 104 subtests. Authenticated production dashboard includes version-091 controls. Saved website inventory 54 received review 1 (monitor) at 2026-10-04T09:50:33.395962Z, explicitly labeled workflow validation pending owner review and not a provider-security approval. An identical retry returned the same ID with created=false; history and read-only database inspection confirmed exactly one stored request row. Private receipt: /data/codex-vendor-review-live-validation-20261004.json. Browser visual review, automated provider assessment and review inclusion in frozen PDF reports remain outstanding.
