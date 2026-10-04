@@ -396,6 +396,72 @@ class ProductionBackupTests(unittest.TestCase):
                 self.assertEqual(db.execute("SELECT value FROM evidence").fetchone()[0], "saved")
 
 
+class BackupDescriptorTests(unittest.TestCase):
+    def test_path_replacement_hashes_archived_original_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'report.pdf'
+            path.write_bytes(b'original report')
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode='w') as archive:
+                original_add = archive.addfile
+                def replace(entry, source):
+                    path.rename(path.with_suffix('.old'))
+                    path.write_bytes(b'replacement report')
+                    original_add(entry, source)
+                with patch.object(archive, 'addfile', side_effect=replace):
+                    manifest = backup_data.archive_file(archive, path, 'reports/report.pdf')
+            with tarfile.open(fileobj=io.BytesIO(output.getvalue())) as archive:
+                saved = archive.extractfile('reports/report.pdf').read()
+            self.assertEqual(saved, b'original report')
+            self.assertEqual(manifest['sha256'], hashlib.sha256(saved).hexdigest())
+
+    def test_file_growth_is_bounded_to_archived_size(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'report.pdf'
+            path.write_bytes(b'original')
+            output = io.BytesIO()
+            with tarfile.open(fileobj=output, mode='w') as archive:
+                original_add = archive.addfile
+                def grow(entry, source):
+                    with path.open('ab') as target:
+                        target.write(b'new bytes')
+                    original_add(entry, source)
+                with patch.object(archive, 'addfile', side_effect=grow):
+                    manifest = backup_data.archive_file(archive, path, 'reports/report.pdf')
+            with tarfile.open(fileobj=io.BytesIO(output.getvalue())) as archive:
+                saved = archive.extractfile('reports/report.pdf').read()
+            self.assertEqual(saved, b'original')
+            self.assertEqual(manifest['size_bytes'], len(saved))
+            self.assertEqual(manifest['sha256'], hashlib.sha256(saved).hexdigest())
+
+    def test_truncated_source_refuses_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'report.pdf'
+            path.write_bytes(b'original')
+            with tarfile.open(fileobj=io.BytesIO(), mode='w') as archive:
+                original_add = archive.addfile
+                def shrink(entry, source):
+                    path.write_bytes(b'x')
+                    original_add(entry, source)
+                with patch.object(archive, 'addfile', side_effect=shrink):
+                    with self.assertRaises((OSError, ValueError)):
+                        backup_data.archive_file(archive, path, 'reports/report.pdf')
+
+    def test_symlink_and_fifo_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / 'real.pdf'
+            target.write_bytes(b'real')
+            link = root / 'link.pdf'
+            link.symlink_to(target)
+            fifo = root / 'pipe'
+            os.mkfifo(fifo)
+            with tarfile.open(fileobj=io.BytesIO(), mode='w') as archive:
+                for path in (link, fifo):
+                    with self.subTest(path=path.name), self.assertRaises((OSError, ValueError)):
+                        backup_data.archive_file(archive, path, path.name)
+
+
 class ProductionRestoreTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="daedalus-restore-fixture-")

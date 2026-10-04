@@ -12,6 +12,61 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 import tempfile
+import stat
+
+
+def archive_file(archive, path: Path, name: str) -> dict:
+    """Hash the exact bounded descriptor bytes consumed by the tar writer."""
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("Backup sources must be regular files.")
+        digest = hashlib.sha256()
+        remaining = metadata.st_size
+
+        class Reader:
+            def read(self, size):
+                nonlocal remaining
+                requested = min(size, remaining)
+                blocks = []
+                collected = 0
+                while collected < requested:
+                    block = os.read(descriptor, requested - collected)
+                    if not block:
+                        break
+                    blocks.append(block)
+                    collected += len(block)
+                data = b"".join(blocks)
+                digest.update(data)
+                remaining -= len(data)
+                return data
+
+        entry = tarfile.TarInfo(name)
+        entry.size = metadata.st_size
+        entry.mode = 0o600
+        entry.mtime = metadata.st_mtime
+        archive.addfile(entry, Reader())
+        if remaining:
+            raise ValueError("A backup source was truncated during archiving.")
+        return {"path": name, "size_bytes": metadata.st_size, "sha256": digest.hexdigest()}
+    finally:
+        os.close(descriptor)
+
+
+def archive_tree(archive, root: Path, prefix: str, *, pattern: str = "*") -> list[dict]:
+    if not root.exists() and not root.is_symlink():
+        return []
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("Backup directories must be real directories.")
+    manifest = []
+    for path in sorted(root.rglob(pattern)):
+        if path.is_symlink():
+            raise ValueError("Backup sources must not contain symbolic links.")
+        if path.is_dir():
+            continue
+        manifest.append(archive_file(archive, path, prefix + "/" + path.relative_to(root).as_posix()))
+    return manifest
 
 
 DATA_DIR = Path(os.environ.get("DAEDALUS_DATA_DIR", "/data"))
@@ -42,30 +97,10 @@ def main() -> int:
             with sqlite3.connect(database_copy) as destination:
                 source.backup(destination)
         with tarfile.open(temporary_archive, "w:gz") as archive:
-            manifest = []
-
-            def record(path, name):
-                digest = hashlib.sha256()
-                with path.open("rb") as source:
-                    for block in iter(lambda: source.read(1024 * 1024), b""):
-                        digest.update(block)
-                manifest.append({"path": name, "size_bytes": path.stat().st_size, "sha256": digest.hexdigest()})
-
-            archive.add(database_copy, arcname="daedalus.db")
-            record(database_copy, "daedalus.db")
-            if REPORTS.is_dir():
-                archive.add(REPORTS, arcname="reports")
-                for path in sorted(REPORTS.rglob("*")):
-                    if path.is_file() and not path.is_symlink():
-                        record(path, "reports/" + str(path.relative_to(REPORTS)))
+            manifest = [archive_file(archive, database_copy, "daedalus.db")]
+            manifest.extend(archive_tree(archive, REPORTS, "reports"))
             artifacts = DATA_DIR / "scanner-artifacts"
-            if artifacts.is_dir() and not artifacts.is_symlink():
-                archive.add(artifacts, arcname="scanner-artifacts", recursive=False)
-                for path in sorted(artifacts.rglob("*.json")):
-                    if path.is_file() and not path.is_symlink():
-                        name = "scanner-artifacts/" + str(path.relative_to(artifacts))
-                        archive.add(path, arcname=name, recursive=False)
-                        record(path, name)
+            manifest.extend(archive_tree(archive, artifacts, "scanner-artifacts", pattern="*.json"))
             encoded = json.dumps({"version": 1, "created_at": stamp, "files": manifest}, sort_keys=True, indent=2).encode()
             entry = tarfile.TarInfo("manifest.json")
             entry.size = len(encoded)
