@@ -11,6 +11,26 @@ import Testing
 
 struct CSP_CIS_AuditTests {
 
+    @Test func legacyAuditCheckDoesNotPassOnErrorTextMentioningAuditd() {
+        let check = CISCheck(id: "macos_22", category: "macos", description: "Ensure security auditing is enabled")
+        let error = MacOSSystemChecks.checkSecurityAuditingEnabled(check: check) { _, _ in
+            .init(error: "Could not find service com.apple.auditd", exitCode: 113)
+        }
+        #expect(error.status == "fail")
+        #expect(error.check.id == "macos_22")
+        let denied = MacOSSystemChecks.checkSecurityAuditingEnabled(check: check) { _, _ in
+            .init(error: "permission denied: com.apple.auditd", exitCode: 1)
+        }
+        #expect(denied.status == "manual")
+        let enabled = MacOSSystemChecks.checkSecurityAuditingEnabled(check: check) { executable, _ in
+            if executable == "/bin/launchctl" { return .init(output: "system/com.apple.auditd = {}") }
+            if executable == "/usr/bin/stat" { return .init(output: "Regular File") }
+            return .init(output: "audit condition: AUC_AUDITING")
+        }
+        #expect(enabled.status == "pass")
+        #expect(enabled.check.id == "macos_22")
+    }
+
     @Test func legacyAutomaticLoginDoesNotInferStateOrDiscloseAccountNames() {
         let check = CISCheck(id: "macos_13", category: "macos", description: "Ensure Automatic Login is disabled")
         for value in [nil, "", " ", NSNumber(value: true), ["unexpected"]] as [Any?] {

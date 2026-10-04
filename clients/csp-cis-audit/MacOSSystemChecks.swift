@@ -154,29 +154,13 @@ struct MacOSSystemChecks {
     // MARK: - Security Auditing
     
     // Check if security auditing is enabled
-    static func checkSecurityAuditingEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/bin/launchctl"
-        process.arguments = ["list", "com.apple.auditd"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check security auditing: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("com.apple.auditd") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing is NOT enabled.")
-        }
+    static func checkSecurityAuditingEnabled(
+        check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        MacOSChecks.checkAuditServiceEnabled(check: check, command: command)
     }
-    
+
     // Check if security auditing flags are configured for startup and time changes
     static func checkAuditFlagsStartup(check: CISCheck) -> CheckResult {
         let process = Process()
