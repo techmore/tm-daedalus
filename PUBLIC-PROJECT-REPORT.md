@@ -1,5 +1,15 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 066: actual production CIS endpoint report
+
+Production application commit **1341e8e9033ed33174d8ddfd2546210a59852b85** is active and healthy. Archive: 58 files, SHA-256 **c4857a02bb2f94a838a828a7b841e150499723ae4e755d015ea3adb3c787fe82**; verified off-host backup: daedalus-data-20261004T053756Z.tar.gz. The 438-test/90-subtest suite passed for the wording fix before adding its new regression test; that regression test then passed separately. Current release CI remains unconfirmed.
+
+Built and ran the local CSP client against production using the operator's workspace-bound user key, without rotating the shared CIS key. Published the compatible legacy **csp-macos-browser-baseline 1.0.0** and saved actual endpoint report **1**, collected **2026-10-04T05:34:37Z** on macOS **27.0.1**: 154 results, 38 pass, 90 fail, 9 manual, 17 error, observed checklist pass rate **24.68%**, profile_verified true. Errors include time-limited legacy checks; some legacy failures report missing preference evidence as configuration failures. These saved statuses require checker validation and must not be treated as 90 confirmed security findings or Tahoe compliance. This proves live collection, upload and storage, not all legacy check semantics.
+
+PDF job **29** completed, but visual/content review found misleading unchanged-settings wording when no prior report existed. The renderer now states that absent recorded differences do not prove settings unchanged. Corrected production PDF job **30** completed and downloaded. All eight pages were validated: pages 1–7 match the reviewed original renders exactly; revised page 8 was inspected. Private receipt: /data/codex-cis-production-validation-20261004.json. Local corrected artifact: validation/cis-production-20261004/endpoint-report-corrected.pdf.
+
+Stopped the temporary local client (exit 143), removed both temporary access-key configs and retained production evidence. This is not a persistent production CIS deployment. Repeat-report comparison, real macOS 26 execution, remaining manual checks, trusted signing/notarization and the other full-project requirements remain open.
+
 ## October 4, 2026 — Release 065: independent CIS validation credentials
 
 Production application commit **8ad1fefe928e5f1928e2886334a164f7b0e552e2** is active and healthy. The 58-file archive SHA-256 is **6b8dbedd765a2cae45a81d05e426c8fdb0ba006deb00f1eadddfcce301a86a77**; verified off-host backup: daedalus-data-20261004T053210Z.tar.gz. All **438 tests and 90 subtests** passed locally; current CI has not yet been confirmed.
