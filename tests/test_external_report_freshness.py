@@ -33,7 +33,7 @@ class ExternalReportFreshnessTests(unittest.TestCase):
         organization = organization or self.organization
         run = ExternalCheckRun(organization_id=organization.id, domain=organization.domain,
             check_type=check_type, status=status, started_at=self.now,
-            completed_at=None if status == "running" else self.now + timedelta(seconds=2),
+            completed_at=None if status in ("running", "queued") else self.now + timedelta(seconds=2),
             error_summary="fixture failure" if status == "failed" else None,
             snapshot={"records": {"A": ["192.0.2.1"]}} if status.startswith("completed") else {"partial": "must not duplicate"})
         self.db.add(run)
@@ -49,7 +49,7 @@ class ExternalReportFreshnessTests(unittest.TestCase):
             run_id=baseline.id, check_type="dns", field_path="records.A",
             previous_value=[], current_value=["192.0.2.1"], detected_at=self.now))
         self.db.commit()
-        for status in ("failed", "running"):
+        for status in ("failed", "running", "queued", "cancelled"):
             with self.subTest(status=status):
                 latest = self.add_run(status)
                 check = self.capture()["checks"]["dns"]
@@ -59,7 +59,7 @@ class ExternalReportFreshnessTests(unittest.TestCase):
                 self.assertEqual(check["latest_attempt"], {
                     "id": latest.id, "status": status, "started_at": "2026-09-29T12:00:00Z",
                     "queued_at": None, "collection_started_at": None,
-                    "completed_at": None if status == "running" else "2026-09-29T12:00:02Z",
+                    "completed_at": None if status in ("running", "queued") else "2026-09-29T12:00:02Z",
                     "error_summary": "fixture failure" if status == "failed" else None})
 
     def test_latest_attempt_without_successful_baseline_and_empty_type(self):

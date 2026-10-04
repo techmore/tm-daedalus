@@ -163,8 +163,11 @@ def _append_latest_attempt(story: list[Any], check: dict[str, Any], styles: dict
     if not isinstance(attempt, dict) or attempt.get("id") == saved.get("id"):
         return
     status = attempt.get("status") or "unknown"
+    timing = (f"queued {_time_text(attempt['queued_at'])}" if attempt.get("queued_at") else f"started {_time_text(attempt.get('started_at'))}")
+    if attempt.get("collection_started_at"):
+        timing += f" · collection started {_time_text(attempt['collection_started_at'])}"
     story.append(_paragraph(
-        f"Latest attempt #{attempt.get('id')}: {status} · started {_time_text(attempt.get('started_at'))}. "
+        f"Latest attempt #{attempt.get('id')}: {status} · {timing}. "
         + (f"Evidence below is from saved successful run #{saved.get('id')}." if saved else "No successful evidence is available."),
         styles["body"],
     ))
@@ -668,6 +671,7 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
     if nikto.get("run") or nikto.get("latest_attempt"):
         story.append(Spacer(1, 12))
         story.append(Paragraph("Nikto website audit", styles["section"]))
+        _append_latest_attempt(story, nikto, styles)
         run = nikto.get("run") or nikto.get("latest_attempt") or {}
         snapshot = run.get("snapshot") or {}
         run_time = run.get("completed_at") or run.get("started_at")

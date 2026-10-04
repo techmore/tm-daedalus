@@ -193,6 +193,19 @@ class NiktoFlowsTests(unittest.TestCase):
         with self.session_factory() as db:
             self.assertEqual(db.get(ExternalCheckRun,queued['id']).status,'queued')
 
+    def test_pdf_keeps_completed_nikto_evidence_and_newer_cancelled_attempt(self):
+        from daedalus import reports
+        check={'run':{'id':51,'status':'completed_with_warnings','completed_at':'2026-10-04T07:47:52Z','snapshot':self.snapshot([{'test_id':'999100','method':'GET','path':'/trace.axd','description':'Infrastructure header observation'}])},
+            'latest_attempt':{'id':52,'status':'cancelled','queued_at':'2026-10-04T07:49:23Z','started_at':'2026-10-04T07:49:23Z','collection_started_at':None,'error_summary':'Cancelled before collection'}}
+        with patch.object(reports,'_paragraph',wraps=reports._paragraph) as paragraphs:
+            pdf=reports.build_external_posture_pdf({'domain':'cybersecuritypilot.org','checks':{'web-nikto':check}})
+        values=[str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertTrue(pdf.startswith(b'%PDF-'))
+        self.assertTrue(any('Latest attempt #52: cancelled' in value and 'queued Oct 4' in value for value in values))
+        self.assertTrue(any('saved successful run #51' in value for value in values))
+        self.assertTrue(any('Infrastructure header observation' in value for value in values))
+        self.assertFalse(any('collection started' in value.lower() for value in values))
+
     def test_queued_pdf_does_not_describe_collection_as_started(self):
         from daedalus import reports
         with patch.object(reports, '_paragraph', wraps=reports._paragraph) as paragraphs:
