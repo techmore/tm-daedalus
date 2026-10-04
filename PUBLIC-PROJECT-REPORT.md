@@ -1,5 +1,12 @@
 # Daedalus project report
 
+## October 4, 2026 — fresh production posture PDF review
+
+Actual production posture report **33** completed and downloaded successfully. All seven pages were rendered and reviewed. The Nikto section explicitly shows latest cancelled attempt 52 and retained successful evidence from completed-with-warnings run 51, including all six observations. The PDF also retains DNS unknown lookup states, saved website response/header evidence and bounded exposure scope. Private generation receipt: /data/codex-posture-freshness-validation-20261004.json.
+
+Review found a pagination issue: the last Nikto observation spilled onto a mostly empty page. The renderer now starts the Nikto assessment on its own page and keeps each observation heading with its description. The exact frozen production snapshot was rendered locally with this change; all seven pages were reviewed, with the full Nikto assessment together. Local validation artifact: validation/posture-grouped-20261004.pdf. Production deployment of this pagination refinement is pending.
+
+
 ## October 4, 2026 — production website queue completion and cancellation
 
 Actual queued audit **51** completed with warnings at **07:47:52.706903 UTC**, after **601,780 ms** of collection. Six observations were retained. The single newly recorded comparison is an uncommon x-origin-cache header observed at /trace.axd; it is infrastructure metadata, not proof of exposed ASP.NET trace data. Coverage remains unconfirmed, test exhaustion is not established, and missing observations do not prove resolution. One persistent changes_and_warnings notice was verified against its saved run. Private receipt: /data/codex-nikto-queue-validation-20261004.json.

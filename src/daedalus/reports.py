@@ -10,7 +10,7 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import KeepTogether, LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, LongTable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from daedalus.email_policy import analyze_email_auth
 
@@ -669,7 +669,7 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
         _append_active_website(story, checks.get("web-active") or {}, styles)
     nikto = checks.get("web-nikto") or {}
     if nikto.get("run") or nikto.get("latest_attempt"):
-        story.append(Spacer(1, 12))
+        story.append(PageBreak())
         story.append(Paragraph("Nikto website audit", styles["section"]))
         _append_latest_attempt(story, nikto, styles)
         run = nikto.get("run") or nikto.get("latest_attempt") or {}
@@ -689,9 +689,10 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
             story.append(_paragraph(run["error_summary"], styles["body"]))
         findings = snapshot.get("findings") or []
         for finding in findings[:100]:
-            story.append(_paragraph(f"Nikto test {finding.get('test_id')} · {finding.get('method')} {finding.get('path')}", styles["body"]))
+            observation = [_paragraph(f"Nikto test {finding.get('test_id')} · {finding.get('method')} {finding.get('path')}", styles["body"])]
             if finding.get("description"):
-                story.append(_paragraph(finding["description"], styles["small"]))
+                observation.append(_paragraph(finding["description"], styles["small"]))
+            story.append(KeepTogether(observation))
         if len(findings) > 100:
             story.append(_paragraph("Only the first 100 observations are included; the dashboard retains the complete saved set.", styles["small"]))
         if not findings and snapshot:
