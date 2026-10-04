@@ -536,3 +536,8 @@ The legacy root collector now uses bounded directory reads and does not infer di
 ### 2026-10-04 — Real revised legacy session audit
 
 Private source ab5b073 client build on macOS 27.0.1 uploaded production report 5: 154 checks, 23 pass, 41 fail, 85 manual, 5 errors; 14.94% pass rate and 41.56% assessment coverage. Production comparison retained seven transitions to manual (six formerly failed and one formerly passed); browser classifications remained unchanged. These are corrected evidence classifications, not device remediation or macOS 26 proof. The owned client process was stopped and its matching temporary configuration removed. Local ignored receipt: validation/cis-session-evidence-local-20261004/live-receipt.json. Public trusted distribution and supported root-state assessment remain unfinished.
+
+
+### 2026-10-04 — DNS evidence grouped by assessment topic
+
+Domain resolution and email protection now each retain their visible summary metrics followed by a separate collapsed record drawer. Resolver lookup details, coverage errors and upstream DNSSEC observations share a diagnostic drawer. Unknown lookup state remains visible in summary metrics; failures are not recast as absent records. A renderer fixture verifies topic-to-record placement, collapsed detail semantics, unknown resolution state and empty-snapshot handling. Dashboard/refresh suite: 39 passed. Visual browser acceptance remains pending.

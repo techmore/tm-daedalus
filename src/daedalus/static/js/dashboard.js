@@ -2827,15 +2827,28 @@
     var mailHeading = document.createElement("h3");
     mailHeading.className = "topic-group-heading";
     mailHeading.textContent = "Email routing & protection";
-    grid.append(networkHeading, networkMetrics, mailHeading, summary);
-    var recordDetails = document.createElement("details");
-    recordDetails.className = "topic-secondary";
-    var recordHeading = document.createElement("summary"); recordHeading.textContent = "DNS & email record evidence";
-    recordDetails.append(recordHeading);
-    recordDetails.append(makeAuditTable("DNS record inventory", "@ is the root of " + (snapshot.domain || "the workspace domain") + "; www records are checked separately.", inventoryRows));
-    recordDetails.append(makeAuditTable("Email routing and authentication", "MX, SPF, DMARC, and the common DKIM selectors checked by Daedalus. Names are relative to the domain.", authRows));
-
-    grid.append(recordDetails);
+    function evidenceGroup(id, heading, metrics, label, table) {
+      var group = document.createElement("section");
+      group.className = "dns-evidence-group";
+      heading.id = id;
+      group.setAttribute("aria-labelledby", id);
+      var details = document.createElement("details");
+      details.className = "topic-secondary";
+      var disclosure = document.createElement("summary"); disclosure.textContent = label;
+      details.append(disclosure, table);
+      group.append(heading, metrics, details);
+      return group;
+    }
+    grid.append(
+      evidenceGroup("dns-resolution-group", networkHeading, networkMetrics, "Domain record evidence",
+        makeAuditTable("DNS record inventory", "@ is the root of " + (snapshot.domain || "the workspace domain") + "; www records are checked separately.", inventoryRows)),
+      evidenceGroup("dns-email-group", mailHeading, summary, "Email record evidence",
+        makeAuditTable("Email routing and authentication", "MX, SPF, DMARC, and the common DKIM selectors checked by Daedalus. Names are relative to the domain.", authRows))
+    );
+    var diagnostics = document.createElement("details");
+    diagnostics.className = "topic-secondary";
+    var diagnosticHeading = document.createElement("summary"); diagnosticHeading.textContent = "Resolver diagnostics & lookup coverage";
+    diagnostics.append(diagnosticHeading);
     if (snapshot.query_observations) {
       var lookupDetails = document.createElement("details");
       lookupDetails.className = "agent-command-history";
@@ -2856,14 +2869,14 @@
         return {type: observation.record_type, name: observation.query_name, value: "Remaining TTL: " + ttl + "; canonical name: " + (observation.canonical_name || "Unknown") + "; upstream AD: " + ad, present: null, statusText: String(observation.status || "unknown").replace(/_/g, " ")};
       });
       lookupDetails.append(makeAuditTable("Per-query observations", "TTL is the remaining resolver cache lifetime, not necessarily the configured authoritative TTL. TTL-only changes do not trigger alerts. AD is an upstream assertion, not local chain validation.", lookupRows));
-      grid.append(lookupDetails);
+      diagnostics.append(lookupDetails);
     }
     if (snapshot.dnssec_observations) {
       var dnssecNote = document.createElement("p");
       dnssecNote.className = "audit-inline-warning";
       var assessmentLabels = {lookup_incomplete: "Lookup incomplete", records_observed: "Signing records observed", no_records_observed: "No signing records observed"};
       dnssecNote.textContent = "DNSSEC: " + (assessmentLabels[snapshot.dnssec_observations.assessment] || "Unknown") + ". Upstream resolver flags are observations; the DNSSEC chain was not validated locally.";
-      grid.append(dnssecNote);
+      diagnostics.append(dnssecNote);
     }
     if (Object.keys(errors).length) {
       var warning = document.createElement("p");
@@ -2872,8 +2885,9 @@
       var visibleFailures = failedLookups.slice(0, 6).join(", ");
       if (failedLookups.length > 6) visibleFailures += ", and " + (failedLookups.length - 6) + " more";
       warning.textContent = "Could not verify: " + visibleFailures + ". These results are unknown, not missing records.";
-      grid.prepend(warning);
+      diagnostics.append(warning);
     }
+    if (diagnostics.children.length > 1) grid.append(diagnostics);
   }
 
   var vendorReviewContext = null, vendorReviewSequence = 0, vendorReviewPending = null;

@@ -264,6 +264,37 @@ notifyExternalCheck({run_id:3,status:'failed',check_type:'dns',source:'schedule'
         self.assertLess(evidence.index('<summary>Browser security policy evidence</summary>'), evidence.index('id="web-header-grid"'))
         self.assertNotIn('<details open', evidence)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_dns_renderer_keeps_record_drawers_with_their_topic(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function renderDnsSnapshot('):source.index('  var vendorReviewContext =')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(tag='div'){this.tag=tag;this.children=[];this.attributes={};}append(...n){this.children.push(...n);}replaceChildren(){this.children=[];}setAttribute(k,v){this.attributes[k]=v;}}
+const grid=new Node();const document={getElementById:()=>grid,createElement:tag=>new Node(tag)};
+function appendEmpty(n,v){n.append(v);}function uncheckedRecordRow(t,n){return {type:t,name:n};}
+function rowsForRecord(t,n,v,e){return [{type:t,name:n,value:v,error:e}];}
+function makeAuditMetric(label,value,detail,state){return {label,value,detail,state};}
+function emailAuthenticationMetrics(){return [{label:'SPF',value:'Unknown',detail:'fixture',state:'attention'},{label:'DMARC',value:'Unknown',detail:'fixture',state:'attention'}];}
+function makeAuditTable(title,note,rows){return {title,note,rows};}
+""" + helper + """
+renderDnsSnapshot({domain:'example.org',records:{A:['192.0.2.1'],AAAA:[],CNAME:[],MX:['mail.example.org'],SPF:[],DMARC:[],DKIM:{}},resolver_errors:{'www A':'SERVFAIL'},dnssec_observations:{assessment:'lookup_incomplete'}});
+assert.equal(grid.children.length,3);
+const [resolution,email,diagnostics]=grid.children;
+assert.equal(resolution.attributes['aria-labelledby'],'dns-resolution-group');
+assert.equal(email.attributes['aria-labelledby'],'dns-email-group');
+assert.equal(resolution.children[2].tag,'details');assert.equal(email.children[2].tag,'details');
+assert.equal(resolution.children[2].children[0].textContent,'Domain record evidence');
+assert.equal(email.children[2].children[0].textContent,'Email record evidence');
+assert.ok(resolution.children[2].children[1].rows.every(r=>r.type!=='MX'));
+assert.ok(email.children[2].children[1].rows.some(r=>r.type==='MX'));
+assert.equal(diagnostics.tag,'details');
+assert.match(diagnostics.children.at(-1).textContent,/unknown, not missing/);
+assert.equal(resolution.children[1].children[1].value,'Unknown');
+renderDnsSnapshot(null);assert.equal(grid.children.length,1);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_external_topics_put_assessment_before_records_and_controls(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()
@@ -271,7 +302,8 @@ notifyExternalCheck({run_id:3,status:'failed',check_type:'dns',source:'schedule'
         self.assertLess(template.index('id="{{ key }}-priority-title"'), template.index('id="web-summary-grid"'))
         self.assertLess(template.index('id="{{ key }}-priority-title"'), template.index('<summary>Exposure findings'))
         source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
-        self.assertIn('grid.append(networkHeading, networkMetrics, mailHeading, summary)', source)
+        self.assertIn('evidenceGroup("dns-resolution-group", networkHeading, networkMetrics', source)
+        self.assertIn('evidenceGroup("dns-email-group", mailHeading, summary', source)
         self.assertIn('A lookup failed; review the saved evidence', source)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
