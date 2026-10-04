@@ -8,9 +8,9 @@ struct ChromeChecks {
         switch check.description {
         // Privacy and Security
         case let desc where desc.contains("Safe Browsing settings are enabled"):
-            return checkSafeBrowsing(check: check, preferences: preferences)
+            return managedSafeBrowsing(check: check, enhanced: false, readPolicy: readManagedPolicy)
         case let desc where desc.contains("Safe Browsing Protection Level"):
-            return checkSafeBrowsingProtectionLevel(check: check, preferences: preferences)
+            return managedSafeBrowsing(check: check, enhanced: true, readPolicy: readManagedPolicy)
         case let desc where desc.contains("Allow Google Cast to connect to Cast devices"):
             return checkGoogleCastDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Allow queries to a Google time service"):
@@ -118,32 +118,22 @@ struct ChromeChecks {
     
     // MARK: - Privacy and Security Checks
     
-    private static func checkSafeBrowsing(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let safebrowsing = prefs["safebrowsing"] as? [String: Any],
-              let enabled = safebrowsing["enabled"] as? Bool else {
-            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome Safe Browsing setting.")
+    private static func managedSafeBrowsing(check: CISCheck, enhanced: Bool,
+        readPolicy: (String) -> (Any?, Bool)) -> CheckResult {
+        let key = "SafeBrowsingProtectionLevel"
+        let (raw, forced) = readPolicy(key)
+        guard forced, let value = raw as? NSNumber,
+              CFGetTypeID(value) != CFBooleanGetTypeID(),
+              ["c", "C", "s", "S", "i", "I", "l", "L", "q", "Q"].contains(String(cString: value.objCType)),
+              [0, 1, 2].contains(value.intValue) else {
+            return CheckResult(check: check, status: "manual", details: "SafeBrowsingProtectionLevel was not captured as a forced supported integer (0, 1 or 2) in the current user's com.google.Chrome domain. Missing, recommended or unsupported evidence was not inferred as protection. Review chrome://policy for browser acceptance and precedence.")
         }
-        if enabled {
-            return CheckResult(check: check, status: "pass", details: "Safe Browsing is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Safe Browsing is NOT enabled.")
-        }
+        let level = value.intValue
+        let matches = enhanced ? level == 2 : level > 0
+        let criterion = enhanced ? "enhanced protection (2)" : "standard or enhanced protection (1 or 2)"
+        return CheckResult(check: check, status: matches ? "pass" : "fail", details: "CSP criterion: Safe Browsing requires " + criterion + ". Captured forced macOS SafeBrowsingProtectionLevel=" + String(level) + ". This is current-user platform policy evidence, not live browser acceptance or a malicious-site test. Enhanced mode shares more browsing information with Google. No policy was changed.")
     }
-    
-    private static func checkSafeBrowsingProtectionLevel(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let safebrowsing = prefs["safebrowsing"] as? [String: Any],
-              let level = safebrowsing["protection_level"] as? String else {
-            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome Safe Browsing Protection Level.")
-        }
-        if level == "enhanced" {
-            return CheckResult(check: check, status: "pass", details: "Safe Browsing Protection Level is set to enhanced.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Safe Browsing Protection Level is not set to enhanced.")
-        }
-    }
-    
+
     private static func checkGoogleCastDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let discovery = prefs["discovery"] as? [String: Any],

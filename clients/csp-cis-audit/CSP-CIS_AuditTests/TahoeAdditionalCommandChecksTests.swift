@@ -13,6 +13,25 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func chromeSafeBrowsingUsesForcedSupportedPolicyLevels() {
+        for description in ["Safe Browsing settings are enabled", "Safe Browsing Protection Level"] {
+            let check = CISCheck(id: "safe", category: "chrome", description: description)
+            func evaluate(_ value: Any?, _ forced: Bool = true) -> String {
+                ChromeChecks.run(check: check, readPreferences: { nil }, readManagedPolicy: { key in
+                    #expect(key == "SafeBrowsingProtectionLevel")
+                    return (value, forced)
+                }).status
+            }
+            #expect(evaluate(0) == "fail")
+            #expect(evaluate(1) == (description.contains("Protection Level") ? "fail" : "pass"))
+            #expect(evaluate(2) == "pass")
+            for value: Any? in [nil, true, "2", -1, 3, NSNumber(value: 2.5)] {
+                #expect(evaluate(value) == "manual")
+            }
+            #expect(evaluate(2, false) == "manual")
+        }
+    }
+
     @Test func chromeManagedPoliciesRequireForcedTypedBooleans() {
         let mappings = [("Enable saving passwords to the password manager", "PasswordManagerEnabled"), ("Enable Autofill for addresses", "AutofillAddressEnabled"), ("Enable Autofill for credit cards", "AutofillCreditCardEnabled")]
         for (description, key) in mappings {

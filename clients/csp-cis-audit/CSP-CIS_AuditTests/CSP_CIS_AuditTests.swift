@@ -16,12 +16,12 @@ struct CSP_CIS_AuditTests {
         let chrome = CISCheck(id: "chrome_1", category: "chrome", description: "Ensure Safe Browsing settings are enabled")
         let chromeMissing: [[String: Any]?] = [nil, [:], ["safebrowsing": ["enabled": "unknown"]]]
         for evidence in chromeMissing {
-            let result = ChromeChecks.run(check: chrome, readPreferences: { evidence })
+            let result = ChromeChecks.run(check: chrome, readPreferences: { evidence }, readManagedPolicy: { _ in (nil, false) })
             #expect(result.status == "manual")
-            #expect(result.details.contains("effective default or managed policy"))
+            #expect(result.details.contains("forced supported integer"))
         }
-        #expect(ChromeChecks.run(check: chrome, readPreferences: { ["safebrowsing": ["enabled": true]] }).status == "pass")
-        #expect(ChromeChecks.run(check: chrome, readPreferences: { ["safebrowsing": ["enabled": false]] }).status == "fail")
+        #expect(ChromeChecks.run(check: chrome, readPreferences: { ["safebrowsing": ["enabled": true]] }, readManagedPolicy: { _ in (nil, false) }).status == "manual")
+        #expect(ChromeChecks.run(check: chrome, readPreferences: { ["safebrowsing": ["enabled": false]] }, readManagedPolicy: { _ in (nil, false) }).status == "manual")
         let safari = CISCheck(id: "safari_8", category: "safari", description: "Ensure JavaScript is disabled")
         let safariMissing: [[String: Any]?] = [nil, [:], ["WebKitJavaScriptEnabled": "unknown"]]
         for evidence in safariMissing {
