@@ -56,6 +56,57 @@ class ScannerRunTests(unittest.TestCase):
         self.assertIn("earlier results were not substituted", invalid["reason"])
         self.assertEqual(self.client.get('/api/agents/999999/assessment').status_code, 404)
 
+    def test_assessment_does_not_replace_failed_latest_scan_with_old_success(self):
+        self.setup_scanner()
+        path = f"/api/agents/{self.agent}/assessment"
+        self.send(self.envelope("deep_scan_results", {"hosts": [{"ip": "127.0.0.1", "ports": []}]}))
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        self.job_id = str(uuid4())
+        self.send(self.envelope("job_status", {"status": "failed", "job_type": "scan"}))
+        data = self.client.get(path).json()
+        self.assertEqual(data["run"]["source_job_id"], self.job_id)
+        self.assertEqual(data["run"]["status"], "failed")
+        self.assertEqual(data["state"], "attention")
+        self.assertIsNone(data["observations"])
+
+    def test_assessment_bounds_artifacts_before_read_and_rejects_corruption(self):
+        self.setup_scanner()
+        path = f"/api/agents/{self.agent}/assessment"
+        payload = self.envelope("deep_scan_results", {"hosts": [{"ip": "127.0.0.1", "ports": []}]})
+        uploaded = self.client.post(f"/api/agents/{self.agent}/event-artifacts", headers=self.headers, content=json.dumps(payload))
+        self.assertEqual(uploaded.status_code, 200)
+        with self.session_factory() as db:
+            event = db.get(ScanEvent, uploaded.json()["event_id"])
+            original_size = event.artifact_size_bytes
+            event.artifact_size_bytes = 8 * 1024 * 1024 + 1
+            db.commit()
+        with patch.object(server, "load_scanner_event_payload", side_effect=AssertionError("Oversized evidence must not be read")):
+            data = self.client.get(path).json()
+        self.assertIsNone(data["observations"])
+        self.assertIn("size limit", data["reason"])
+        with self.session_factory() as db:
+            event = db.get(ScanEvent, uploaded.json()["event_id"])
+            event.artifact_size_bytes = original_size
+            db.commit()
+            server.scanner_artifact_path(event).write_text("corrupted")
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "Saved scanner evidence is missing or has changed.")
+
+    def test_assessment_metadata_conflict_never_reports_observation_counts(self):
+        self.setup_scanner()
+        self.send(self.envelope("deep_scan_results", {"hosts": [{"ip": "127.0.0.1", "ports": []}]}))
+        with self.session_factory() as db:
+            agent = db.get(server.Agent, self.agent)
+            db.add(ScanEvent(organization_id=agent.organization_id, agent_id=agent.id,
+                source_job_id=self.job_id, source_job_type="report", event_name="report_complete",
+                payload={}, created_at=server.utcnow()))
+            db.commit()
+        data = self.client.get(f"/api/agents/{self.agent}/assessment").json()
+        self.assertTrue(data["run"]["group_metadata_conflict"])
+        self.assertIsNone(data["observations"])
+        self.assertEqual(data["state"], "attention")
+
     def test_explicit_grouping_legacy_unknown_and_terminal_evidence(self):
         self.setup_scanner()
         self.assertEqual(self.send(self.envelope()).status_code, 200)
@@ -257,6 +308,15 @@ class ScannerRunTests(unittest.TestCase):
                 self.assertEqual(runs["runs"][0]["source_job_type"], "scan")
                 self.assertEqual(runs["runs"][0]["event_count"], 2)
                 self.assertEqual(runs["runs"][0]["status"], "completed")
+                assessment_response = http.get(f"/api/agents/{self.agent}/assessment")
+                self.assertEqual(assessment_response.status_code, 200)
+                assessment = assessment_response.json()
+                self.assertEqual(assessment["state"], "recorded")
+                self.assertEqual(assessment["observations"]["host_count"], 1)
+                self.assertEqual(assessment["observations"]["open_port_count"], 1)
+                self.assertEqual(assessment["observations"]["result_event_id"], event_id)
+                self.assertIsNone(assessment["observations"]["covered_targets"])
+                self.assertFalse(assessment["observations"]["coverage_complete"])
                 detail = http.get(f"/api/agents/{self.agent}/runs/{self.job_id}").json()
                 saved = detail["events"][0]
                 canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False,

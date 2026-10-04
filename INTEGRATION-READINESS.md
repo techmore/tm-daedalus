@@ -556,3 +556,8 @@ Scanner cards now show the latest scan status and saved detailed-result counts (
 ### 2026-10-04 — Production saved scanner assessment
 
 Source bd11f9f is active on Incus with internal/public health checks passed and verified backup daedalus-data-20261004T102553Z.tar.gz. Authenticated production assessment for scanner 2 retains loopback run e9f020f1-d603-4616-a36c-f49c7aa8bc2c and detailed event 143: one host, 19 explicitly open ports, zero missing port states, collected 2026-10-04T07:13:36.503544Z. Reported covered targets remain null and coverage_complete remains false. Authenticated dashboard assets confirm version 094 and summary placement before controls. This is saved loopback evidence, not VLAN coverage or confirmed vulnerability assessment. Private receipt: /data/codex-scanner-assessment-validation-20261004.json.
+
+
+### 2026-10-04 — Scanner summary failure and transport validation
+
+Additional isolated fixtures prove oversized result artifacts are refused before loading, corrupted artifacts return 409, mixed scan/report metadata suppresses counts, and a failed newest scan is not replaced by an older successful scan. A real ephemeral HTTP listener also verifies artifact-backed summary counts and exact result-event identity while retaining unconfirmed target coverage. Full suite: 521 tests and 104 subtests; scanner suite 15 passed with the additional transport assertions. Production CIS report 5 retains seven changes and exactly one persistent cis_report notification, detected 2026-10-04T10:17:15.506743Z and routed to CIS. Private receipt /data/codex-cis-session-notification-validation-20261004.json. No production corruption or artificial failed scan was induced.
