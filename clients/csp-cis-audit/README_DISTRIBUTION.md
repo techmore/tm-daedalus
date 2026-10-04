@@ -10,15 +10,15 @@ The Xcode project minimum deployment target is macOS 15.4. Build the `CSP-CIS_Au
 xcodebuild -project CSP-CIS_Audit.xcodeproj -scheme CSP-CIS_Audit -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
 ```
 
-For direct distribution, sign the archived app with the organization's Apple Developer ID certificate, notarize it, and deliver the notarized app or signed package through a private distribution channel. Confirm the app launches and uploads a test report on each supported macOS version before deploying broadly. A production MDM package is not yet implemented. Users can opt into launch at login from the app menu. Once open, the menu-bar app checks in at launch, on demand, and every 24 hours.
+For direct distribution, use `./scripts/build-notarized-client.sh [output-directory]`. It selects the only available Developer ID Application identity or accepts `CSP_CIS_SIGNING_IDENTITY`, derives and checks `CSP_CIS_TEAM_ID`, archives with hardened runtime, submits through the `notarytool` keychain profile named by `CSP_CIS_NOTARY_PROFILE` (default `daedalus-cis-notary`), staples the ticket, and requires `spctl` to accept the app before writing the final ZIP. The script refuses to build without a Developer ID identity. It does not disable Gatekeeper or ask users to override it. Never put signing keys or notarization credentials in this repository or the app archive. Confirm the app launches and uploads a test report on each supported macOS version before deploying broadly. A production MDM package is not yet implemented. Users can opt into launch at login from the app menu. Once open, the menu-bar app checks in at launch, on demand, and every 24 hours.
 
 Do not run the menu-bar app with `sudo`, deploy the legacy LaunchDaemon, or run it as a shared root service. Each endpoint needs a per-user config and private device identity. The app checks at launch, every 24 hours while open, and when the user selects **Run Checks**.
 
 ## Local artifact
 
-Run `./scripts/build-local-client.sh` from this repository to create a Release build, unsigned ZIP, and SHA-256 checksum in a new timestamped `dist/local-client-*` directory. An optional first argument selects a new output directory. The script refuses an existing destination and checks that workspace config files were not bundled. It does not install, launch, register a login item, run an audit, or upload anything. It builds for the current Mac architecture; a production universal archive needs both architectures.
+Run `./scripts/build-local-client.sh` from this repository to create a Release build, ad hoc signed ZIP, and SHA-256 checksum in a new timestamped `dist/local-client-*` directory. An optional first argument selects a new output directory. The script refuses an existing destination and checks that workspace config files were not bundled. It does not install, launch, register a login item, run an audit, or upload anything. It builds for the current Mac architecture; a production archive is built for the generic macOS destination.
 
-The unsigned local ZIP is for developer validation. Direct customer distribution requires an Apple Developer ID signed archive, notarization and stapling, and validation on the target OS. Use Xcode Archive and Export for that release process. No certificate, upload key, or notarization credential belongs in this script or artifact.
+The ad hoc signed local ZIP validates bundle integrity but has no trusted publisher identity; Gatekeeper can still reject it. Use the notarized release script for external distribution. No certificate, upload key, or notarization credential belongs in either script or artifact.
 
 ## Launch at login
 

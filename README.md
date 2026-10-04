@@ -43,7 +43,7 @@ xcodebuild test \
   CODE_SIGNING_ALLOWED=NO
 ```
 
-For a private local demo archive, run `sh clients/csp-cis-audit/scripts/build-local-client.sh`. It does not bundle workspace credentials. The app receives an ad hoc bundle signature for integrity checks, but that signature has no publisher identity and is not notarized; downloaded copies may still be blocked by Gatekeeper. Do not ask end users to override that protection. External distribution requires a Developer ID build and notarization.
+For a private local demo archive, run `sh clients/csp-cis-audit/scripts/build-local-client.sh`. It does not bundle workspace credentials. The app receives an ad hoc bundle signature for integrity checks, but that signature has no publisher identity and is not notarized; downloaded copies may still be blocked by Gatekeeper. Do not ask end users to override that protection. With a Developer ID Application identity and a configured `notarytool` keychain profile, build an external distribution ZIP using `sh clients/csp-cis-audit/scripts/build-notarized-client.sh`.
 
 ## Product overview
 

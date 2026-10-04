@@ -246,11 +246,12 @@ assert.equal(emailAuthenticationMetrics(null)[0].value, 'Not assessed');
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_refresh_shares_inflight_request_and_recovers_after_failure(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
-        function = source[source.index('  function refresh() {'):source.index('  async function runCommand')]
+        function = source[source.index('  function refresh(force) {'):source.index('  async function sendCommand')]
         script = '''const assert = require('node:assert/strict');
-let dashboardRefreshPromise = null, calls = 0, rendered = [], release;
+let dashboardRefreshPromise = null, calls = 0, rendered = [], release, inlineConfirmationOpen = false;
 let fetch = () => { calls++; return new Promise(resolve => { release = resolve; }); };
 let render = value => rendered.push(value);
+let document = {querySelector(selector) { assert.equal(selector, '.inline-confirmation'); return inlineConfirmationOpen ? {} : null; }};
 ''' + function + '''
 (async () => {
   const first = refresh(), second = refresh();
@@ -266,6 +267,12 @@ let render = value => rendered.push(value);
   fetch = async () => ({ok: true, json: async () => ({status: 'online'})});
   await refresh();
   assert.equal(rendered.length, 2);
+  inlineConfirmationOpen = true;
+  fetch = async () => ({ok: true, json: async () => ({status: 'newer'})});
+  await refresh();
+  assert.equal(rendered.length, 2, 'passive refresh must leave an open confirmation in place');
+  await refresh(true);
+  assert.deepEqual(rendered.at(-1), {status: 'newer'}, 'confirmed actions can force the dashboard update');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 '''
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)

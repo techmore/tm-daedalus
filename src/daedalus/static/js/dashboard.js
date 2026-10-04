@@ -50,6 +50,7 @@
   var openComparisonHistories = new Set();
   var openSavedComparisons = new Set();
   var notifiedScannerComparisons = new Set();
+  var inlineConfirmationCount = 0;
   var scannerTargets = new Map();
   var scannerSkipDiscovery = new Map();
   var scannerNetworkInputs = new Map();
@@ -71,6 +72,66 @@
 
   function text(node, value) {
     if (node) node.textContent = value == null ? "" : String(value);
+  }
+
+  function requestInlineConfirmation(button, message, confirmLabel, onConfirm) {
+    var group = button.closest(".agent-actions, .membership-actions") || button.parentElement;
+    var panelHost = button.closest(".membership-row") || group;
+    if (!group || !panelHost || panelHost.querySelector(".inline-confirmation")) return;
+
+    var confirmationId = ++inlineConfirmationCount;
+    var panel = document.createElement("div");
+    panel.className = "inline-confirmation";
+    panel.id = "inline-confirmation-panel-" + confirmationId;
+    panel.setAttribute("role", "group");
+    var description = document.createElement("p");
+    description.className = "inline-confirmation-message";
+    description.id = "inline-confirmation-message-" + confirmationId;
+    description.textContent = message;
+    panel.setAttribute("aria-labelledby", description.id);
+    var feedback = document.createElement("p");
+    feedback.className = "inline-confirmation-error";
+    feedback.setAttribute("aria-live", "polite");
+    var actions = document.createElement("div");
+    actions.className = "inline-confirmation-actions";
+    var confirmButton = document.createElement("button");
+    confirmButton.type = "button";
+    confirmButton.className = "button button-small";
+    confirmButton.textContent = confirmLabel;
+    confirmButton.setAttribute("aria-describedby", description.id);
+    var cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "button button-small button-quiet";
+    cancelButton.textContent = "Cancel";
+    actions.append(confirmButton, cancelButton);
+    panel.append(description, feedback, actions);
+    panelHost.append(panel);
+    button.setAttribute("aria-expanded", "true");
+    button.setAttribute("aria-controls", panel.id);
+
+    cancelButton.addEventListener("click", function () {
+      panel.remove();
+      button.setAttribute("aria-expanded", "false");
+      button.removeAttribute("aria-controls");
+      button.focus();
+    });
+    confirmButton.addEventListener("click", async function () {
+      confirmButton.disabled = true;
+      cancelButton.disabled = true;
+      button.disabled = true;
+      try {
+        await onConfirm();
+        panel.remove();
+        button.setAttribute("aria-expanded", "false");
+        button.removeAttribute("aria-controls");
+      } catch (error) {
+        text(feedback, (error && error.message) || "The action could not be completed.");
+        confirmButton.disabled = false;
+        cancelButton.disabled = false;
+        button.disabled = false;
+      }
+    });
+    confirmButton.focus();
   }
 
   function shellQuote(value) {
@@ -864,13 +925,18 @@
     text(document.getElementById("event-count"), data.events.length + " recent");
   }
 
-  function refresh() {
-    if (dashboardRefreshPromise) return dashboardRefreshPromise;
+  function refresh(force) {
+    if (dashboardRefreshPromise) {
+      if (force) return dashboardRefreshPromise.then(function () { return refresh(true); });
+      return dashboardRefreshPromise;
+    }
     dashboardRefreshPromise = (async function () {
       try {
         var response = await fetch("/api/dashboard", { credentials: "same-origin" });
         if (!response.ok) return;
-        render(await response.json());
+        var data = await response.json();
+        if (!force && document.querySelector(".inline-confirmation")) return;
+        render(data);
       } catch (_error) {
         // Periodic refresh retries transient failures without changing saved evidence.
       }
@@ -878,13 +944,10 @@
     return dashboardRefreshPromise;
   }
 
-  async function runCommand(button) {
+  async function sendCommand(button) {
     var card = button.closest("[data-agent-id]");
     if (!card) return;
     var action = button.dataset.command;
-    if (action === "restart_nmapui" && !window.confirm(
-      "Restart the managed NmapUI service on this scanner? Active scans will stop."
-    )) return;
     var targetInput = card.querySelector(".scan-target");
     var skipDiscoveryInput = card.querySelector(".scan-skip-discovery");
     button.disabled = true;
@@ -904,7 +967,7 @@
       var body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Could not queue command");
       button.textContent = "Queued";
-      await refresh();
+      await refresh(true);
       window.setTimeout(function () {
         button.textContent = original;
         button.disabled = false;
@@ -915,7 +978,18 @@
         button.textContent = original;
         button.disabled = false;
       }, 2800);
+      throw error;
     }
+  }
+
+  function runCommand(button) {
+    if (button.dataset.command === "restart_nmapui") {
+      requestInlineConfirmation(button, "Restart the managed NmapUI service? Active scans will stop.", "Restart service", function () {
+        return sendCommand(button);
+      });
+      return;
+    }
+    sendCommand(button).catch(function () {});
   }
 
   async function saveScannerScope(button) {
@@ -2085,26 +2159,29 @@
     });
   }
 
-  document.addEventListener("click", async function (event) {
+  document.addEventListener("click", function (event) {
     var button = event.target.closest("[data-disable-scanner]");
     if (!button) return;
     event.preventDefault();
-    if (!window.confirm("Revoke portal access for " + (button.dataset.scannerName || "this scanner") + "? Future check-ins and uploads will be rejected, and queued commands cancelled. An active local scan may continue. Saved history will remain. A new enrollment is required to reconnect.")) return;
-    var feedback = button.parentElement.querySelector(".scanner-revoke-feedback");
-    button.disabled = true;
-    try {
-      var result = await postJson("/api/agents/" + encodeURIComponent(button.dataset.disableScanner) + "/disable");
-      text(feedback, "Access revoked. " + result.cancelled_queued_command_count + " queued commands cancelled; " + result.unconfirmed_active_command_count + " delivered commands remain unconfirmed.");
-      var revokeToast = document.getElementById("check-toast");
-      if (revokeToast) {
-        text(revokeToast, "Scanner access revoked. " + result.unconfirmed_active_command_count + " delivered commands remain unconfirmed; active local work may continue.");
-        revokeToast.classList.remove("hidden");
-        window.clearTimeout(revokeToast.hideTimer);
-        revokeToast.hideTimer = window.setTimeout(function () { revokeToast.classList.add("hidden"); }, 9000);
+    requestInlineConfirmation(button, "Revoke portal access for " + (button.dataset.scannerName || "this scanner") + "? Future check-ins and uploads will be rejected, and queued commands cancelled. An active local scan may continue. Saved history will remain. Reconnecting requires a new enrollment.", "Revoke access", async function () {
+      var feedback = button.parentElement.querySelector(".scanner-revoke-feedback");
+      try {
+        var result = await postJson("/api/agents/" + encodeURIComponent(button.dataset.disableScanner) + "/disable");
+        text(feedback, "Access revoked. " + result.cancelled_queued_command_count + " queued commands cancelled; " + result.unconfirmed_active_command_count + " delivered commands remain unconfirmed.");
+        var revokeToast = document.getElementById("check-toast");
+        if (revokeToast) {
+          text(revokeToast, "Scanner access revoked. " + result.unconfirmed_active_command_count + " delivered commands remain unconfirmed; active local work may continue.");
+          revokeToast.classList.remove("hidden");
+          window.clearTimeout(revokeToast.hideTimer);
+          revokeToast.hideTimer = window.setTimeout(function () { revokeToast.classList.add("hidden"); }, 9000);
+        }
+        await refresh(true);
+        if (role === "admin") loadAuditLog();
+      } catch (error) {
+        text(feedback, error.message);
+        throw error;
       }
-      await refresh();
-      if (role === "admin") loadAuditLog();
-    } catch (error) { text(feedback, error.message); button.disabled = false; }
+    });
   });
 
   document.addEventListener("click", async function (event) {
@@ -3514,7 +3591,7 @@
     }
   });
 
-  document.addEventListener("click", async function (event) {
+  document.addEventListener("click", function (event) {
     var roleButton = event.target.closest("[data-membership-role]");
     if (!roleButton) return;
     var targetRole = roleButton.dataset.membershipRole;
@@ -3523,39 +3600,39 @@
     var confirmation = selfChange
       ? "Transfer admin control to another approved member and switch your account to the user role?"
       : "Confirm " + actionDescription + roleButton.dataset.membershipEmail + "?";
-    if (!window.confirm(confirmation)) return;
-    roleButton.disabled = true;
-    try {
-      await postJson("/api/memberships/" + roleButton.dataset.membershipId + "/role", { role: targetRole });
-      if (selfChange) {
-        window.location.reload();
-        return;
+    requestInlineConfirmation(roleButton, confirmation, selfChange ? "Transfer admin" : (targetRole === "admin" ? "Promote to admin" : "Change to user"), async function () {
+      try {
+        await postJson("/api/memberships/" + roleButton.dataset.membershipId + "/role", { role: targetRole });
+        if (selfChange) {
+          window.location.reload();
+          return;
+        }
+        text(document.getElementById("member-access-note"), "Administrator access updated. The change is recorded in the workspace audit log.");
+        document.getElementById("member-access-note").classList.remove("hidden");
+        await Promise.all([loadMemberships(), loadAuditLog()]);
+      } catch (error) {
+        text(document.getElementById("member-access-note"), error.message);
+        document.getElementById("member-access-note").classList.remove("hidden");
+        throw error;
       }
-      text(document.getElementById("member-access-note"), "Administrator access updated. The change is recorded in the workspace audit log.");
-      document.getElementById("member-access-note").classList.remove("hidden");
-      await Promise.all([loadMemberships(), loadAuditLog()]);
-    } catch (error) {
-      text(document.getElementById("member-access-note"), error.message);
-      document.getElementById("member-access-note").classList.remove("hidden");
-      roleButton.disabled = false;
-    }
+    });
   });
 
-  document.addEventListener("click", async function (event) {
+  document.addEventListener("click", function (event) {
     var revoke = event.target.closest("[data-membership-revoke]");
     if (!revoke) return;
-    if (!window.confirm("Remove " + revoke.dataset.membershipEmail + " from this workspace? They will need admin approval to rejoin.")) return;
-    revoke.disabled = true;
-    try {
-      await postJson("/api/memberships/" + revoke.dataset.membershipRevoke + "/revoke");
-      text(document.getElementById("member-access-note"), "Workspace access was removed. The action is recorded in the audit log.");
-      document.getElementById("member-access-note").classList.remove("hidden");
-      await Promise.all([loadMemberships(), loadAuditLog()]);
-    } catch (error) {
-      text(document.getElementById("member-access-note"), error.message);
-      document.getElementById("member-access-note").classList.remove("hidden");
-      revoke.disabled = false;
-    }
+    requestInlineConfirmation(revoke, "Remove " + revoke.dataset.membershipEmail + " from this workspace? They will need admin approval to rejoin.", "Remove access", async function () {
+      try {
+        await postJson("/api/memberships/" + revoke.dataset.membershipRevoke + "/revoke");
+        text(document.getElementById("member-access-note"), "Workspace access was removed. The action is recorded in the audit log.");
+        document.getElementById("member-access-note").classList.remove("hidden");
+        await Promise.all([loadMemberships(), loadAuditLog()]);
+      } catch (error) {
+        text(document.getElementById("member-access-note"), error.message);
+        document.getElementById("member-access-note").classList.remove("hidden");
+        throw error;
+      }
+    });
   });
 
   if (orgId) {

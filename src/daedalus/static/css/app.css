@@ -234,11 +234,17 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
 .empty-workspace-actions { display: flex; gap: 8px; margin-top: 18px; }
 .membership-list { display: grid; gap: 9px; }
 .membership-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.membership-row > .inline-confirmation { grid-column: 1 / -1; }
 .membership-person { display: grid; gap: 4px; min-width: 0; }
 .membership-person strong { overflow: hidden; color: #344653; font-size: 12px; text-overflow: ellipsis; }
 .membership-person small, .membership-meta { color: #82909a; font-size: 10px; }
 .membership-meta { text-align: right; }
-.membership-actions { display: flex; gap: 6px; }
+.membership-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.inline-confirmation { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid #d8dec8; border-radius: 8px; background: #f6f7ef; }
+.inline-confirmation-message { flex: 1 1 240px; margin: 0; color: #4e5b4c; font-size: 11px; line-height: 1.5; }
+.inline-confirmation-error { flex: 1 0 100%; margin: 0; color: #87463d; font-size: 10px; }
+.inline-confirmation-error:empty { display: none; }
+.inline-confirmation-actions { display: flex; gap: 6px; }
 .button-quiet.membership-revoke { color: #87463d; border-color: #dfc4bc; }
 .button-quiet.membership-revoke:hover { background: #f8eeeb; }
 .demo-switch { display: inline-flex; margin-left: 2px; }
