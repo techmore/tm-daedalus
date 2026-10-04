@@ -55,102 +55,19 @@ struct MacOSAppSecurityChecks {
         CheckResult(check: check, status: "manual", details: "Review quarantine metadata on representative downloaded files and the responsible applications. A global LaunchServices preference does not establish that every downloaded file is quarantined. Supported file-provenance evidence was not collected.")
     }
     
-    // Check if XProtect Updater is enabled
-    static func checkXProtectEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticSecurityUpdates"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "fail", details: "XProtect Updater appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "XProtect Updater is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "XProtect Updater is DISABLED.")
-        }
+    // Legacy preferences describe captured settings, not runtime malware protection.
+    static func checkXProtectEnabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.SoftwareUpdate", key: "AutomaticSecurityUpdates", expected: true, command: command)
     }
-    
-    // Check if XProtect Signatures are updated regularly
+
     static func checkXProtectSignatures(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/find"
-        process.arguments = ["/Library/Apple/System/Library/CoreServices/XProtect.bundle/Contents/Resources", "-name", "*.plist", "-mtime", "-30"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check XProtect signatures: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if !output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "XProtect Signatures have been updated within the last 30 days.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "XProtect Signatures have NOT been updated within the last 30 days.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review current XProtect security-content version and update history against applicable vendor information. A recently modified plist does not establish current signatures or regular successful updates. Supported freshness evidence was not collected; no update or malware scan was started.")
     }
-    
-    // Check if MRT.app is enabled
-    static func checkMRTEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.security.common", "OSXMRTEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, check if MRT.app exists
-            let mrtProcess = Process()
-            mrtProcess.launchPath = "/bin/ls"
-            mrtProcess.arguments = ["-la", "/System/Library/CoreServices/MRT.app"]
-            let mrtPipe = Pipe()
-            mrtProcess.standardOutput = mrtPipe
-            mrtProcess.standardError = mrtPipe
-            do {
-                try mrtProcess.run()
-            } catch {
-                return CheckResult(check: check, status: "fail", details: "MRT.app does not appear to be installed.")
-            }
-            mrtProcess.waitUntilExit()
-            
-            let mrtData = mrtPipe.fileHandleForReading.readDataToEndOfFile()
-            let mrtOutput = String(data: mrtData, encoding: .utf8) ?? ""
-            
-            if !mrtOutput.isEmpty {
-                return CheckResult(check: check, status: "pass", details: "MRT.app is installed and appears to be enabled by default.")
-            } else {
-                return CheckResult(check: check, status: "fail", details: "MRT.app is not installed.")
-            }
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "1" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "MRT.app is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "MRT.app is DISABLED.")
-        }
+
+    static func checkMRTEnabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.security.common", key: "OSXMRTEnabled", expected: true, command: command)
     }
-    
+
     // Permission audits must not reset grants or infer approval from app counts.
     static func checkCameraAccess(check: CISCheck) -> CheckResult {
         MacOSHardwareChecks.checkCameraAccess(check: check)
