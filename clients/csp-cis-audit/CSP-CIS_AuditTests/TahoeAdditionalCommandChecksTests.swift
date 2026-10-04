@@ -150,6 +150,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "audit_auditd_enabled": ("/bin/launchctl", ["print", "system/com.apple.auditd"]),
             "os_anti_virus_installed": ("/usr/bin/xprotect", ["status"]),
             "os_guest_folder_removed": ("/bin/ls", ["-1", "/Users"]),
             "os_nfsd_disable": ("/sbin/nfsd", ["status"]),
