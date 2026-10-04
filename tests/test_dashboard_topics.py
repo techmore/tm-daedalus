@@ -6,6 +6,13 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_external_topics_lead_with_assessment_and_changes(self):
+        template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
+        section = template.split('data-external-check="{{ key }}">', 1)[1].split("{% elif key == 'reports' %}", 1)[0]
+        self.assertLess(section.index('id="{{ key }}-priorities"'), section.index('data-run-external-check'))
+        self.assertLess(section.index('id="{{ key }}-check-changes"'), section.index('id="dns-record-grid"'))
+        self.assertIn('<details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>', section)
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_scanner_card_controls_preserve_open_state_and_scope_guard(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
@@ -78,11 +85,11 @@ assert.equal(cisPriorityMetrics(null,0)[0][0],'—');
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_external_topics_put_results_before_review_and_controls(self):
+    def test_external_topics_put_assessment_before_records_and_controls(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()
-        self.assertLess(template.index('id="dns-record-grid"'), template.index('id="{{ key }}-priority-title"'))
-        self.assertLess(template.index('id="web-summary-grid"'), template.index('id="{{ key }}-priority-title"'))
+        self.assertLess(template.index('id="{{ key }}-priority-title"'), template.index('id="dns-record-grid"'))
+        self.assertLess(template.index('id="{{ key }}-priority-title"'), template.index('id="web-summary-grid"'))
         self.assertLess(template.index('id="{{ key }}-priority-title"'), template.index('<summary>Exposure findings'))
         source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
         self.assertIn('grid.append(networkHeading, networkMetrics, mailHeading, summary)', source)

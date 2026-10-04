@@ -309,6 +309,11 @@
         </section>
         {% elif key in ['dns', 'web'] %}
         <section class="external-check-workspace" data-external-check="{{ key }}">
+          <section class="topic-priority" aria-labelledby="{{ key }}-priority-title">
+            <p class="eyebrow">CURRENT ASSESSMENT</p><h3 id="{{ key }}-priority-title">What needs attention</h3>
+            <div id="{{ key }}-priorities" aria-live="polite"><p class="muted">Loading saved evidence…</p></div>
+            {% if key == 'web' %}<div class="topic-audit-outcomes"><p id="web-exposure-outcome">Exposure assessment: loading saved evidence…</p><p id="web-nikto-outcome">Deeper website assessment: loading saved evidence…</p><div id="web-audit-review" aria-live="polite"></div></div>{% endif %}
+          </section>
           <div class="check-toolbar">
             <div>
               <span class="check-status" id="{{ key }}-check-status">No check run yet</span>
@@ -319,11 +324,16 @@
             {% endif %}
           </div>
 
+          <div class="section-heading check-subheading"><div><p class="eyebrow">DETECTED DIFFERENCES</p><h3>Change history</h3></div></div>
+          <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
+          <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="changes">Load older changes</button>
+          <details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>
           {% if key == 'dns' %}
           <p class="check-scope-note">DNS and email records can be checked on demand or on a daily/weekly schedule after TXT domain verification. Results include root and www address/alias records, mail routing, SPF, DMARC, and six common DKIM selectors; selector discovery and local DNSSEC chain validation are not included.</p>
           {% else %}
           <p class="check-scope-note">Passive checks make one HTTPS request to the domain root and inventory linked references. Separate fixed-path exposure checks are explicit, bounded requests against this registered domain and never use Nmap. Results are signature observations that need review, not an assurance that the site is free of vulnerabilities.</p>
           {% endif %}
+          </details>
           {% if key == 'dns' %}
           <div class="check-record-grid" id="dns-record-grid" aria-live="polite"><div class="empty-events">Loading stored DNS results…</div></div>
           <p class="check-footnote">DKIM checks cover six common selectors and are not an exhaustive selector discovery process.</p>
@@ -337,11 +347,6 @@
           <div class="check-record-grid" id="web-vendor-grid" aria-live="polite"><div class="empty-events">External dependency results will appear after a website check.</div></div>
           </details>
           {% endif %}
-          <section class="topic-priority" aria-labelledby="{{ key }}-priority-title">
-            <p class="eyebrow">CURRENT ASSESSMENT</p><h3 id="{{ key }}-priority-title">What needs attention</h3>
-            <div id="{{ key }}-priorities" aria-live="polite"><p class="muted">Loading saved evidence…</p></div>
-            {% if key == 'web' %}<div class="topic-audit-outcomes"><p id="web-exposure-outcome">Exposure assessment: loading saved evidence…</p><p id="web-nikto-outcome">Deeper website assessment: loading saved evidence…</p><div id="web-audit-review" aria-live="polite"></div></div>{% endif %}
-          </section>
 
           {% if key == 'web' %}
           <details class="topic-secondary"><summary>Exposure findings &amp; deeper website audits</summary>
@@ -367,9 +372,6 @@
           </section>
           </details>
           {% endif %}
-          <div class="section-heading check-subheading"><div><p class="eyebrow">DETECTED DIFFERENCES</p><h3>Change history</h3></div></div>
-          <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
-          <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="changes">Load older changes</button>
           <details class="topic-secondary"><summary>Check history</summary>
           <div class="section-heading check-subheading"><div><p class="eyebrow">PERSISTED RUNS</p><h3>Check history</h3></div></div>
           <div class="check-run-list" id="{{ key }}-check-runs" aria-live="polite"><div class="empty-events">No check history yet.</div></div>
