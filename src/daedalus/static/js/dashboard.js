@@ -1441,8 +1441,8 @@
           captured.textContent = "Latest completed report · " + dateLabel(completed.completed_at || completed.created_at);
           var totals = completed.meraki_summary || {};
           var grid = document.createElement("div"); grid.className = "audit-metric-grid";
-          [["Networks", "network_count"], ["Devices", "device_count"], ["Controls read", "security_controls_collected"], ["Controls unavailable", "security_controls_unavailable"]].forEach(function (metric) {
-            grid.append(makeAuditMetric(metric[0], totals[metric[1]] == null ? "Not captured" : String(totals[metric[1]]), "Latest saved report", "neutral"));
+          [["Review observations", "review_observation_count"], ["Controls unavailable", "security_controls_unavailable"], ["Networks", "network_count"], ["Devices", "device_count"]].forEach(function (metric) {
+            grid.append(makeAuditMetric(metric[0], totals[metric[1]] == null ? "Not captured" : String(totals[metric[1]]), (metric[1] === "security_controls_unavailable" && totals.security_controls_collected != null ? String(totals.security_controls_collected) + " controls read · latest saved report" : "Latest saved report"), (metric[1] === "review_observation_count" || metric[1] === "security_controls_unavailable") && (totals[metric[1]] == null || totals[metric[1]] > 0) ? "attention" : "neutral"));
           });
           overview.append(captured, grid);
         }

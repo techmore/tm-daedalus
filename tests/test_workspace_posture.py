@@ -2,7 +2,7 @@ import unittest
 from datetime import timedelta
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import ExternalCheckRun, Organization, Membership, CISDevice, CISReport
+from daedalus.models import ExternalCheckRun, Organization, Membership, CISDevice, CISReport, ReportJob
 import test_active_website_flows as fixtures
 
 
@@ -91,3 +91,22 @@ class WorkspacePostureTests(unittest.TestCase):
                 db.get(CISReport,report_id).summary=counts;db.commit()
             area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='cis')
             self.assertEqual(area['state'],state)
+
+    def test_meraki_review_counts_and_failed_attempt_keep_saved_evidence(self):
+        org,_=self.context();now=server.utcnow()
+        with self.session_factory() as db:
+            job=ReportJob(organization_id=org,report_type='meraki_security',domain='cybersecuritypilot.org',status='completed',progress=100,stage='PDF ready',file_name='fixture.pdf',created_at=now,updated_at=now,completed_at=now,report_snapshot={'meraki':{'summary':{'network_count':1,'device_count':0,'security_controls_unavailable':2},'findings':[{'status':'Review','title':'private observation'},{'status':'Info','title':'private info'}]}})
+            db.add(job);db.commit()
+        def area():return next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='meraki')
+        self.assertEqual(area()['state'],'attention')
+        self.assertIn('1 review observations · 2 controls unavailable',area()['summary'])
+        self.assertNotIn('private observation',str(area()))
+        with self.session_factory() as db:
+            db.add(ReportJob(organization_id=org,report_type='meraki_security',domain='cybersecuritypilot.org',status='failed',progress=0,stage='Failed',file_name='failed.pdf',created_at=now,updated_at=now,report_snapshot={}));db.commit()
+        self.assertEqual(area()['state'],'unavailable')
+        self.assertIn('1 review observations',area()['summary'])
+        self.assertTrue(area()['updated_at'])
+
+    def test_missing_meraki_findings_are_not_zero_reviews(self):
+        self.assertNotIn('review_observation_count',server.meraki_review_summary({'summary':{}}))
+        self.assertEqual(server.meraki_review_summary({'findings':[]})['review_observation_count'],0)

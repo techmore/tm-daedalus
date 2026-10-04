@@ -704,6 +704,20 @@ def serialize_external_schedule(
     }
 
 
+def meraki_review_summary(snapshot: dict[str, Any] | None) -> dict[str, int]:
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    totals = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
+    summary = {key: value for key, value in totals.items()
+               if key in {"network_count", "device_count", "security_controls_collected", "security_controls_unavailable"}
+               and type(value) is int and value >= 0}
+    findings = snapshot.get("findings")
+    if isinstance(findings, list):
+        summary["review_observation_count"] = sum(
+            isinstance(item, dict) and item.get("status") == "Review" for item in findings
+        )
+    return summary
+
+
 def serialize_report_job(job: ReportJob, actor: User | None = None) -> dict[str, Any]:
     comparison = (job.report_snapshot or {}).get("meraki_comparison")
     return {
@@ -721,9 +735,7 @@ def serialize_report_job(job: ReportJob, actor: User | None = None) -> dict[str,
         "updated_at": iso_utc(job.updated_at),
         "completed_at": iso_utc(job.completed_at),
         "download_url": f"/api/reports/{job.id}/download" if job.status == "completed" else None,
-        "meraki_summary": {key: value for key, value in ((job.report_snapshot or {}).get("meraki", {}).get("summary", {}) or {}).items()
-            if key in {"network_count", "device_count", "security_controls_collected", "security_controls_unavailable"}
-            and isinstance(value, int) and not isinstance(value, bool)} if job.report_type == "meraki_security" and job.status == "completed" else None,
+        "meraki_summary": meraki_review_summary((job.report_snapshot or {}).get("meraki")) if job.report_type == "meraki_security" and job.status == "completed" else None,
         "meraki_comparison": {key: comparison.get(key) for key in (
             "baseline", "previous_report_id", "changed_control_count", "coverage_change_count",
             "inventory_change_count", "inventory_coverage_change_count",
@@ -4942,9 +4954,18 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
     areas.append({"key":"cis", "title":"Endpoint checks", "state":"recorded" if cis and reporting == len(devices) and not cis_needs_review else "attention" if devices or cis else "not_assessed",
         "summary":cis_summary, "updated_at":iso_utc(cis.collected_at) if cis else None})
     meraki = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "meraki_security", ReportJob.status == "completed").order_by(ReportJob.id.desc()).limit(1))
-    totals = ((meraki.report_snapshot or {}).get("meraki", {}).get("summary", {}) or {}) if meraki else {}
-    areas.append({"key":"meraki", "title":"Meraki network", "state":"recorded" if meraki else "not_assessed",
-        "summary":f"{totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} assigned devices" if meraki else "No completed network report yet.",
+    totals = meraki_review_summary((meraki.report_snapshot or {}).get("meraki")) if meraki else {}
+    meraki_attempt = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "meraki_security").order_by(ReportJob.id.desc()).limit(1))
+    review = totals.get("review_observation_count")
+    unavailable = totals.get("security_controls_unavailable")
+    meraki_state = "attention" if meraki and (review is None or review > 0 or unavailable is None or unavailable > 0) else "recorded" if meraki else "not_assessed"
+    if meraki_attempt and meraki_attempt.status in {"queued", "running"}:
+        meraki_state = "running"
+    elif meraki_attempt and meraki_attempt.status == "failed":
+        meraki_state = "unavailable"
+    areas.append({"key":"meraki", "title":"Meraki network", "state":meraki_state,
+        "summary":f"{review if review is not None else 'Unknown'} review observations · {unavailable if unavailable is not None else 'unknown'} controls unavailable · {totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} assigned devices" if meraki else "No completed network report yet.",
+        "latest_attempt_status":meraki_attempt.status if meraki_attempt else None,
         "updated_at":iso_utc(meraki.completed_at) if meraki else None})
     return JSONResponse({"domain":org.domain, "areas":areas, "assessed_at":iso_utc(utcnow())}, headers={"Cache-Control":"no-store"})
 
