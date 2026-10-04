@@ -3153,9 +3153,17 @@ def serialize_cis_profile(profile: CISProfile) -> dict[str, Any]:
     }
 
 
-def get_cis_workspace_from_key(db: Session, api_key: str | None) -> tuple[CISAPIKey, Organization]:
+def get_cis_workspace_from_key(db: Session, api_key: str | None) -> tuple[CISAPIKey | UserAPIKey, Organization]:
     if not api_key or len(api_key) > 256:
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
+    if api_key.startswith("dd_user_"):
+        stored_key = validate_user_key(db, db.scalar(select(UserAPIKey).where(
+            UserAPIKey.token_hash == token_digest(api_key)
+        )))
+        organization = db.get(Organization, stored_key.organization_id)
+        if organization is None:
+            raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
+        return stored_key, organization
     stored_key = db.scalar(select(CISAPIKey).where(CISAPIKey.token_hash == token_digest(api_key)))
     if stored_key is None or not hmac.compare_digest(
         stored_key.token_hash, token_digest(api_key)

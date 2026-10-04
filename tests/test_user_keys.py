@@ -59,3 +59,42 @@ class UserKeyTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/dashboard',headers={'Authorization':'Bearer invalid'}).status_code,401)
         self.assertEqual(self.client.get('/account/keys').status_code,200)
         self.assertIn('token-login',self.client.get('/').text if not self.client.cookies else self.client.post('/logout').text + self.client.get('/').text)
+
+    def test_cis_user_key_upload_without_rotating_shared_key(self):
+        shared = self.client.post('/api/cis/api-key').json()['api_key']
+        profile = {'name':'Key fixture','slug':'key-fixture','version':'1','platform':'macos',
+                   'checks':[{'id':'one','category':'macos','description':'One'}]}
+        self.assertEqual(self.client.post('/api/cis/profiles',json=profile).status_code,200)
+        key = self.issue()
+        self.assertEqual(self.client.post('/api/workspaces',json={'name':'Other','domain':'other-cis.example'}).status_code,200)
+        self.assertEqual(self.client.post('/api/cis/profiles',json={**profile,'slug':'other-fixture'}).status_code,200)
+        self.client.post('/logout')
+        headers = {'X-API-Key':key['token']}
+        catalog = self.client.get('/api/cis/client/profiles',headers=headers)
+        self.assertEqual(catalog.status_code,200,catalog.text)
+        self.assertEqual(len(catalog.json()['profiles']),1)
+        self.assertEqual(catalog.json()['domain'],'cybersecuritypilot.org')
+        self.assertEqual(catalog.json()['profiles'][0]['slug'],'key-fixture')
+        payload = {'device_uuid':'key-fixture-device','report_id':'key-fixture-run',
+                   'timestamp':'2026-10-04T05:00:00Z','profile_slug':'key-fixture','profile_version':'1',
+                   'system_info':{'hostname':'Fixture','os_version':'26.0'},
+                   'results':[{'id':'one','category':'macos','description':'One','status':'pass'}]}
+        uploaded = self.client.post('/api/cis/report',headers=headers,json=payload)
+        self.assertEqual(uploaded.status_code,200,uploaded.text)
+        self.client.delete('/api/user-keys/'+str(key['id']),headers={'Authorization':'Bearer '+key['token']})
+        self.assertEqual(self.client.get('/api/cis/client/profiles',headers=headers).status_code,401)
+        self.assertEqual(self.client.post('/api/cis/report',headers=headers,json=payload).status_code,401)
+        self.assertEqual(self.client.get('/api/cis/client/profiles',headers={'X-API-Key':shared}).status_code,200)
+
+    def test_cis_user_key_revalidates_membership_and_expiry(self):
+        key = self.issue()
+        org,user = self.context()
+        with self.session_factory() as db:
+            db.get(UserAPIKey,key['id']).expires_at = server.utcnow()-timedelta(seconds=1)
+            db.commit()
+        self.assertEqual(self.client.get('/api/cis/client/profiles',headers={'X-API-Key':key['token']}).status_code,401)
+        key = self.issue()
+        with self.session_factory() as db:
+            db.scalar(select(Membership).where(Membership.user_id==user,Membership.organization_id==org)).status='denied'
+            db.commit()
+        self.assertEqual(self.client.get('/api/cis/client/profiles',headers={'X-API-Key':key['token']}).status_code,401)

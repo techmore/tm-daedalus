@@ -22,6 +22,8 @@ Run the signed app as the logged-in user. Do not run it with `sudo` or install t
 
 In the workspace's **CIS profiles** tab, choose a compatible client profile from the **Client profile** dropdown, then issue/download the config. In the CSP CIS menu-bar app, select **Import Daedalus client config…** and choose that file. The app stores its copy at `~/Library/Application Support/Daedalus/cis-client.yaml` with owner-only permissions.
 
+A revocable user access key from Daedalus **Access keys** can also be used as the `api_key` in the private client config. It binds uploads and profile downloads to its workspace and stops working when it expires, is revoked, or the user loses approved membership. This avoids rotating the shared workspace deployment key. Give an endpoint its own named key and plan renewal before its expiry. User access keys also permit dashboard/API access under the owning user’s current role; keep them private.
+
 Keep the workspace API key private. Do not bundle it in the app, put it in an installer, commit it, or distribute it through a public link. Daedalus stores a hash of the upload key and supports rotation or revocation.
 
 At each run the client downloads the selected published profile. A blank profile selection uses the newest compatible macOS profile. If a profile slug was explicitly selected and the portal cannot provide that profile, the client skips the run rather than silently switching to the bundled CSP baseline. With no selected profile, an unavailable portal still uses the bundled CSP checklist.
