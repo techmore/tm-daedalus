@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## October 4, 2026 — Legacy auditing false-pass correction
+
+Client source **ec0d61011c44a6487c47935947859424827c4a31** replaces the legacy audit-service substring test. That test merged stdout/stderr and could pass on an error containing com.apple.auditd. Legacy and Tahoe checks now share the explicit system-service, regular audit_control metadata and kernel-condition implementation. Known absent service fails; permission/unsupported/ambiguous evidence stays manual; explicit enabled evidence passes. The original legacy check ID is retained. Regression fixtures cover error text mentioning auditd, permission denial and enabled evidence. Saved production report 1 remains unchanged.
+
+Local Xcode build-for-testing passed. Current full client CI **37180718823** is running; prior client run **37180619319** was cancelled when the updated source superseded it, so no prior success is inferred. Current backend CI **37180718842** is also running; the unchanged backend retains its local 439-test/90-subtest pass. No rebuilt client distribution or new production endpoint score is claimed. Requested a real macOS 26 endpoint while continuing independent client work. The full objective remains active.
+
 ## October 4, 2026 — Legacy automatic-login evidence correction
 
 Client source **21cedc28792fc28cd56783598bc493d6151e576c** corrects the automatic-login checker exposed by actual production report 1. Previously it merged defaults stderr into stdout, treated a missing-key error as an enabled account, and treated process launch failure as a pass. It now uses the bounded no-follow regular-plist reader at the fixed system login-window path. Missing, inaccessible, malformed, unsupported and empty account evidence remains manual. An explicit nonempty account setting fails without uploading the account name. Both legacy implementations now use one checker; saved report 1 remains immutable.
