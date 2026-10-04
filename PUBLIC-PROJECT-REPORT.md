@@ -2,7 +2,7 @@
 
 ## October 4, 2026 — Release 062 and repeat-audit comparison
 
-Production commit **3eed1aafd3bbfe5cd6853091e6584b7d7c1707fa** is active and healthy. Release archive: 58 files, SHA-256 **01368371378dd8adaaf37f166e79eeadfc15007ee19d575cfd7e443bc77b4bed**. Verified off-host backup: daedalus-data-20261004T043650Z.tar.gz. All **429 tests and 90 subtests** passed locally. Python CI 37177490712 passed; managed Linux CI 37177490710 is still in progress. The preceding grouped-review source passed managed Linux CI 37177228216.
+Production commit **3eed1aafd3bbfe5cd6853091e6584b7d7c1707fa** is active and healthy. Release archive: 58 files, SHA-256 **01368371378dd8adaaf37f166e79eeadfc15007ee19d575cfd7e443bc77b4bed**. Verified off-host backup: daedalus-data-20261004T043650Z.tar.gz. All **429 tests and 90 subtests** passed locally. Python CI 37177490712 and real managed Linux scanner/recovery CI 37177490710 both passed. The preceding grouped-review source passed managed Linux CI 37177228216.
 
 Actual Nikto run **46** completed_with_warnings after 601.8 seconds, with six observation identities matching run 43, zero new observations, and zero recorded removals. Saved comparison_scope is new_observations_only and coverage_complete remains false. Exactly one dated warning notice **8** exists. The engine stopped and request session **27504 is terminal**; do not re-poll it as a live job. No observation disappeared between these two real audits; partial-report absence cases are covered by fixtures, not this real comparison. Receipt: /data/codex-nikto-comparison-receipt-20261004.json.
 
