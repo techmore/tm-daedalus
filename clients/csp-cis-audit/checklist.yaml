@@ -1,0 +1,191 @@
+macos:
+  # 1. Installation, Updates, and Patches
+  - Ensure all Apple-provided software is current
+  - Ensure Auto Update is enabled
+  - Ensure Download New Updates When Available is enabled
+  - Ensure Install of macOS Updates is enabled
+  - Ensure Install Application Updates from the App Store is enabled
+  - Ensure Install Security Responses and System Files is enabled
+  - Ensure Software Update Deferment is 30 days or less
+  
+  # 2. System Preferences
+  - Ensure Gatekeeper is enabled
+  - Ensure FileVault is enabled
+  - Ensure Firewall is enabled
+  - Ensure Firewall Stealth Mode is enabled
+  - Ensure Firewall is configured to block all incoming connections
+  - Ensure Automatic Login is disabled
+  - Ensure Guest account is disabled
+  - Ensure Guest access to shared folders is disabled
+  - Ensure Fast User Switching is disabled
+  - Ensure the screensaver is enabled and set to begin after 20 minutes or less
+  - Ensure screensaver requires a password
+  - Ensure password screensaver grace period is set to 5 seconds or less
+  - Ensure Secure Keyboard Entry in Terminal.app is enabled
+  - Ensure Secure Empty Trash is enabled
+  
+  # 3. Logging and Auditing
+  - Ensure security auditing is enabled
+  - Ensure security auditing retention is configured
+  - Ensure security auditing flags are configured for startup and time changes
+  - Ensure security auditing flags are configured for system-wide settings
+  - Ensure security auditing flags are configured for authentication and authorization
+  - Ensure security auditing flags are configured for file system events
+  - Ensure security auditing flags are configured for user events
+  - Ensure security auditing flags are configured for network events
+  - Ensure security auditing flags are configured for process events
+  
+  # 4. Network Configurations
+  - Ensure Set Time and Date Automatically is enabled
+  - Ensure NTP servers are configured properly
+  - Ensure Remote Login is disabled
+  - Ensure Remote Management is disabled
+  - Ensure Remote Apple Events is disabled
+  - Ensure Internet Sharing is disabled
+  - Ensure Media Sharing is disabled
+  - Ensure DVD/CD Sharing is disabled
+  - Ensure Screen Sharing is disabled
+  - Ensure File Sharing is disabled
+  - Ensure Printer Sharing is disabled
+  - Ensure Bluetooth is disabled when not needed
+  - Ensure Bluetooth Sharing is disabled
+  - Ensure AirDrop is disabled
+  - Ensure AirPlay Receiver is disabled
+  - Ensure Content Caching is disabled
+  
+  # 5. System Access, Authentication, and Authorization
+  - Ensure password account lockout threshold is configured
+  - Ensure password minimum length is configured
+  - Ensure password complexity is configured
+  - Ensure password history is configured
+  - Ensure password maximum age is configured
+  - Ensure password minimum age is configured
+  - Ensure root account is disabled
+  - Ensure login keychain is locked when system sleeps
+  - Ensure login items are not added
+  - Ensure System Integrity Protection is enabled
+  - Ensure Apple Mobile File Integrity is enabled
+  - Ensure Sealed System Volume is enabled
+  - Ensure Automatic Login is disabled
+  - Ensure the guest user account is disabled
+  
+  # 6. User Accounts and Environment
+  - Ensure Show All Users on Login Screen is disabled
+  - Ensure Show password hints is disabled
+  - Ensure users' home directories permissions are 750 or more restrictive
+  - Ensure users' dot-files permissions are 750 or more restrictive
+  - Ensure users' .ssh directory permissions are 700 or more restrictive
+  - Ensure users' .ssh/config permissions are 600 or more restrictive
+  - Ensure users' .ssh/authorized_keys permissions are 600 or more restrictive
+  
+  # 7. Privacy and Security
+  - Ensure Location Services is disabled
+  - Ensure Sending diagnostic and usage data to Apple is disabled
+  - Ensure Limit Ad Tracking is enabled
+  - Ensure Siri is disabled
+  - Ensure Dictation is disabled
+  - Ensure Spotlight Suggestions are disabled
+  - Ensure Safari Spotlight Suggestions are disabled
+  - Ensure Safari Prevent cross-site tracking is enabled
+  - Ensure Safari Block all cookies is enabled
+  - Ensure Safari Extensions are disabled
+  - Ensure Safari Web Content is set to deny without user prompt
+  - Ensure Safari JavaScript is disabled
+  - Ensure Safari Pop-up Windows are blocked
+  - Ensure Safari Fraudulent Website Warning is enabled
+  
+  # 8. Application Security
+  - Ensure Gatekeeper is configured to only allow code signed by Apple
+  - Ensure Automatic Opening of Safe Files in Safari is disabled
+  - Ensure Automatic Execution of JavaScript is disabled in downloaded files
+  - Ensure Automatic Execution of Java Applets is disabled
+  - Ensure Automatic Execution of Plugins is disabled
+  - Ensure Automatic Execution of Safe Files is disabled
+  - Ensure Quarantine of Downloaded Files is enabled
+  - Ensure XProtect Updater is enabled
+  - Ensure XProtect Signatures are updated regularly
+  - Ensure MRT.app is enabled
+  
+  # 9. Hardware and Peripheral Security
+  - Ensure Bluetooth is disabled when not needed
+  - Ensure Camera access is limited to approved apps
+  - Ensure Microphone access is limited to approved apps
+  - Ensure Full Disk Access is limited to approved apps
+  - Ensure Screen Recording access is limited to approved apps
+  - Ensure Automation access is limited to approved apps
+  - Ensure USB restricted mode is enabled
+chrome:
+  # 1. Privacy and Security
+  - Ensure Safe Browsing settings are enabled
+  - Ensure 'Safe Browsing Protection Level' is enabled
+  - Ensure 'Allow Google Cast to connect to Cast devices on all IP addresses' is disabled
+  - Ensure 'Allow queries to a Google time service' is enabled
+  - Ensure 'Allow the audio sandbox to run' is enabled
+  - Ensure 'Ask where to save each file before downloading' is enabled
+  - Ensure 'Continue running background apps when Chrome is closed' is disabled
+  - Ensure 'Control SafeSites adult content filtering' is enabled
+  - Ensure 'Disable Certificate Transparency enforcement for a list of Legacy Certificate Authorities' is disabled
+  - Ensure 'Disable saving browser history' is disabled
+  - Ensure 'DNS interception checks enabled' is enabled
+  - Ensure 'Enable component updates in Google Chrome' is enabled
+  - Ensure 'Enable third party software injection blocking' is enabled
+  
+  # 2. Privacy Features
+  - Ensure 'Import autofill form data from default browser on first run' is disabled
+  - Ensure 'Import of homepage from default browser on first run' is disabled
+  - Ensure 'Import search engines from default browser on first run' is disabled
+  - Ensure 'Enable security warnings for command-line flags' is enabled
+  - Ensure 'Enable reporting of usage and crash-related data' is disabled
+  - Ensure 'Enable Safe Browsing for trusted sources' is disabled
+  - Ensure 'Enable search suggestions' is disabled
+  - Ensure 'Set disk cache size, in bytes' is set to recommended value
+  
+  # 3. Cookie and Site Data Settings
+  - Ensure 'Block third-party cookies' is enabled
+  - Ensure 'Clear cookies and site data when you quit Chrome' is enabled
+  - Ensure 'Default cookies setting' is set to 'Keep local data only until you quit your browser'
+  - Ensure 'Enable Do Not Track' is enabled
+  
+  # 4. Extension Settings
+  - Ensure 'Configure extension installation blocklist' is set to block extensions not explicitly approved
+  - Ensure 'Configure allowed Chrome Web Store extensions' is configured
+  - Ensure 'Control which extensions can access file URLs' is configured
+  - Ensure 'Control which extensions can inject scripts into websites' is configured
+  
+  # 5. Password Settings
+  - Ensure 'Enable saving passwords to the password manager' is disabled
+  - Ensure 'Enable Autofill for addresses' is disabled
+  - Ensure 'Enable Autofill for credit cards' is disabled
+  - Ensure 'Enable Autofill for payment methods' is disabled
+
+safari:
+  # 1. Privacy and Security
+  - Ensure 'Open safe files after downloading' is disabled
+  - Ensure AutoFill is disabled
+  - Ensure AutoFill web forms is disabled
+  - Ensure AutoFill credit cards is disabled
+  - Ensure AutoFill contact information is disabled
+  - Ensure AutoFill usernames and passwords is disabled
+  - Ensure Block pop-up windows is enabled
+  - Ensure JavaScript is disabled
+  - Ensure 'Warn when visiting a fraudulent website' is enabled
+  
+  # 2. Privacy Features
+  - Ensure 'Prevent cross-site tracking' is enabled
+  - Ensure 'Block all cookies' is enabled
+  - Ensure 'Website tracking' is set to 'Prevent cross-site tracking'
+  - Ensure 'Ask websites not to track me' is enabled
+  - Ensure 'Privacy preserving ad measurement' is disabled
+  
+  # 3. Extension Settings
+  - Ensure 'Allow Extensions' is disabled
+  - Ensure 'Enable JavaScript' is disabled for untrusted sites
+  - Ensure 'Internet plug-ins' are disabled
+  - Ensure 'Java' is disabled
+  
+  # 4. Advanced Settings
+  - Ensure 'Show full website address' is enabled
+  - Ensure 'Show Develop menu in menu bar' is enabled for debugging
+  - Ensure 'Show status bar' is enabled
+  - Ensure 'Smart Search Field' shows search suggestions is disabled
+  - Ensure 'Default search engine' is set to a privacy-focused engine

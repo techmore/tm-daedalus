@@ -1,0 +1,39 @@
+name: Test CIS macOS client
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'clients/csp-cis-audit/**'
+      - '.github/workflows/cis-client.yml'
+  pull_request:
+    paths:
+      - 'clients/csp-cis-audit/**'
+      - '.github/workflows/cis-client.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cis-client-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-client:
+    name: macOS unit tests and local package build
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run client unit tests
+        run: >-
+          xcodebuild -quiet test
+          -project clients/csp-cis-audit/CSP-CIS_Audit.xcodeproj
+          -scheme CSP-CIS_Audit
+          -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO
+
+      - name: Build credential-free local demo package
+        run: sh clients/csp-cis-audit/scripts/build-local-client.sh "$RUNNER_TEMP/daedalus-cis-client"

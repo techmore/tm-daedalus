@@ -1,0 +1,676 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		DAED20260929000000000002 /* TahoeAdditionalCommandChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAED20260929000000000001 /* TahoeAdditionalCommandChecks.swift */; };
+		B6C671202DE0C9D300862FB0 /* ChromeChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671122DE0C9D300862FB0 /* ChromeChecks.swift */; };
+		B6C671212DE0C9D300862FB0 /* MacOSSystemChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671192DE0C9D300862FB0 /* MacOSSystemChecks.swift */; };
+		B6C671222DE0C9D300862FB0 /* MacOSPasswordChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671172DE0C9D300862FB0 /* MacOSPasswordChecks.swift */; };
+		B6C671232DE0C9D300862FB0 /* SafariChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711F2DE0C9D300862FB0 /* SafariChecks.swift */; };
+		B6C671242DE0C9D300862FB0 /* CheckRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671112DE0C9D300862FB0 /* CheckRunner.swift */; };
+		B6C671252DE0C9D300862FB0 /* MacOSAppSecurityChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671132DE0C9D300862FB0 /* MacOSAppSecurityChecks.swift */; };
+		B6C671262DE0C9D300862FB0 /* Reporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711E2DE0C9D300862FB0 /* Reporter.swift */; };
+		B6C671272DE0C9D300862FB0 /* MacOSUpdateChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711A2DE0C9D300862FB0 /* MacOSUpdateChecks.swift */; };
+		B6C671282DE0C9D300862FB0 /* MacOSHardwareChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671152DE0C9D300862FB0 /* MacOSHardwareChecks.swift */; };
+		B6C671292DE0C9D300862FB0 /* MacOSUserChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711B2DE0C9D300862FB0 /* MacOSUserChecks.swift */; };
+		B6C6712A2DE0C9D300862FB0 /* Main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711C2DE0C9D300862FB0 /* Main.swift */; };
+		B6C6712B2DE0C9D300862FB0 /* MacOSNetworkChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671162DE0C9D300862FB0 /* MacOSNetworkChecks.swift */; };
+		B6C6712C2DE0C9D300862FB0 /* MacOSPrivacyChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671182DE0C9D300862FB0 /* MacOSPrivacyChecks.swift */; };
+		B6C6712D2DE0C9D300862FB0 /* MacOSChecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671142DE0C9D300862FB0 /* MacOSChecks.swift */; };
+		B6C6712E2DE0C9D300862FB0 /* MenuBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711D2DE0C9D300862FB0 /* MenuBarManager.swift */; };
+		B6C6712F2DE0C9D300862FB0 /* ChecklistLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671102DE0C9D300862FB0 /* ChecklistLoader.swift */; };
+		B6C6713E2DE0CA3C00862FB0 /* checklist.yaml in Resources */ = {isa = PBXBuildFile; fileRef = B6C6713D2DE0CA3C00862FB0 /* checklist.yaml */; };
+		B6C671412DE0CA4800862FB0 /* com.csp.cis-compliance.plist in Resources */ = {isa = PBXBuildFile; fileRef = B6C6713F2DE0CA4800862FB0 /* com.csp.cis-compliance.plist */; };
+		B6C671442DE0CA4E00862FB0 /* openapi.yaml in Resources */ = {isa = PBXBuildFile; fileRef = B6C671432DE0CA4E00862FB0 /* openapi.yaml */; };
+		B6C671472DE0CA5400862FB0 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = B6C671452DE0CA5400862FB0 /* README.md */; };
+		B6C671482DE0CA5400862FB0 /* README_DISTRIBUTION.md in Resources */ = {isa = PBXBuildFile; fileRef = B6C671462DE0CA5400862FB0 /* README_DISTRIBUTION.md */; };
+		B6C6714B2DE0CBED00862FB0 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = B6C6714A2DE0CBED00862FB0 /* Yams */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B6C670F42DE0C92600862FB0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B6C670DD2DE0C92500862FB0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B6C670E42DE0C92500862FB0;
+			remoteInfo = "CSP-CIS_Audit";
+		};
+		B6C670FE2DE0C92600862FB0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B6C670DD2DE0C92500862FB0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B6C670E42DE0C92500862FB0;
+			remoteInfo = "CSP-CIS_Audit";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		DAED20260929000000000001 /* TahoeAdditionalCommandChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TahoeAdditionalCommandChecks.swift; sourceTree = "<group>"; };
+		B6C670E52DE0C92500862FB0 /* CSP-CIS_Audit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "CSP-CIS_Audit.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6C670F32DE0C92600862FB0 /* CSP-CIS_AuditTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "CSP-CIS_AuditTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6C670FD2DE0C92600862FB0 /* CSP-CIS_AuditUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "CSP-CIS_AuditUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6C671102DE0C9D300862FB0 /* ChecklistLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistLoader.swift; sourceTree = "<group>"; };
+		B6C671112DE0C9D300862FB0 /* CheckRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckRunner.swift; sourceTree = "<group>"; };
+		B6C671122DE0C9D300862FB0 /* ChromeChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeChecks.swift; sourceTree = "<group>"; };
+		B6C671132DE0C9D300862FB0 /* MacOSAppSecurityChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSAppSecurityChecks.swift; sourceTree = "<group>"; };
+		B6C671142DE0C9D300862FB0 /* MacOSChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSChecks.swift; sourceTree = "<group>"; };
+		B6C671152DE0C9D300862FB0 /* MacOSHardwareChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSHardwareChecks.swift; sourceTree = "<group>"; };
+		B6C671162DE0C9D300862FB0 /* MacOSNetworkChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSNetworkChecks.swift; sourceTree = "<group>"; };
+		B6C671172DE0C9D300862FB0 /* MacOSPasswordChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSPasswordChecks.swift; sourceTree = "<group>"; };
+		B6C671182DE0C9D300862FB0 /* MacOSPrivacyChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSPrivacyChecks.swift; sourceTree = "<group>"; };
+		B6C671192DE0C9D300862FB0 /* MacOSSystemChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSSystemChecks.swift; sourceTree = "<group>"; };
+		B6C6711A2DE0C9D300862FB0 /* MacOSUpdateChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSUpdateChecks.swift; sourceTree = "<group>"; };
+		B6C6711B2DE0C9D300862FB0 /* MacOSUserChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacOSUserChecks.swift; sourceTree = "<group>"; };
+		B6C6711C2DE0C9D300862FB0 /* Main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Main.swift; sourceTree = "<group>"; };
+		B6C6711D2DE0C9D300862FB0 /* MenuBarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarManager.swift; sourceTree = "<group>"; };
+		B6C6711E2DE0C9D300862FB0 /* Reporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reporter.swift; sourceTree = "<group>"; };
+		B6C6711F2DE0C9D300862FB0 /* SafariChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariChecks.swift; sourceTree = "<group>"; };
+		B6C6713D2DE0CA3C00862FB0 /* checklist.yaml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = checklist.yaml; sourceTree = "<group>"; };
+		B6C6713F2DE0CA4800862FB0 /* com.csp.cis-compliance.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "com.csp.cis-compliance.plist"; sourceTree = "<group>"; };
+		B6C671432DE0CA4E00862FB0 /* openapi.yaml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = openapi.yaml; sourceTree = "<group>"; };
+		B6C671452DE0CA5400862FB0 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		B6C671462DE0CA5400862FB0 /* README_DISTRIBUTION.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README_DISTRIBUTION.md; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B6C670E72DE0C92500862FB0 /* CSP-CIS_Audit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "CSP-CIS_Audit";
+			sourceTree = "<group>";
+		};
+		B6C670F62DE0C92600862FB0 /* CSP-CIS_AuditTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "CSP-CIS_AuditTests";
+			sourceTree = "<group>";
+		};
+		B6C671002DE0C92600862FB0 /* CSP-CIS_AuditUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "CSP-CIS_AuditUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B6C670E22DE0C92500862FB0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6C6714B2DE0CBED00862FB0 /* Yams in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6C670F02DE0C92600862FB0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6C670FA2DE0C92600862FB0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B6C670DC2DE0C92500862FB0 = {
+			isa = PBXGroup;
+			children = (
+				B6C6713D2DE0CA3C00862FB0 /* checklist.yaml */,
+				B6C671102DE0C9D300862FB0 /* ChecklistLoader.swift */,
+				B6C671112DE0C9D300862FB0 /* CheckRunner.swift */,
+				B6C671122DE0C9D300862FB0 /* ChromeChecks.swift */,
+				B6C671132DE0C9D300862FB0 /* MacOSAppSecurityChecks.swift */,
+				B6C671142DE0C9D300862FB0 /* MacOSChecks.swift */,
+				DAED20260929000000000001 /* TahoeAdditionalCommandChecks.swift */,
+				B6C671152DE0C9D300862FB0 /* MacOSHardwareChecks.swift */,
+				B6C671162DE0C9D300862FB0 /* MacOSNetworkChecks.swift */,
+				B6C671172DE0C9D300862FB0 /* MacOSPasswordChecks.swift */,
+				B6C671182DE0C9D300862FB0 /* MacOSPrivacyChecks.swift */,
+				B6C671192DE0C9D300862FB0 /* MacOSSystemChecks.swift */,
+				B6C6711A2DE0C9D300862FB0 /* MacOSUpdateChecks.swift */,
+				B6C6711B2DE0C9D300862FB0 /* MacOSUserChecks.swift */,
+				B6C6711C2DE0C9D300862FB0 /* Main.swift */,
+				B6C6711D2DE0C9D300862FB0 /* MenuBarManager.swift */,
+				B6C6711E2DE0C9D300862FB0 /* Reporter.swift */,
+				B6C6711F2DE0C9D300862FB0 /* SafariChecks.swift */,
+				B6C670E72DE0C92500862FB0 /* CSP-CIS_Audit */,
+				B6C670F62DE0C92600862FB0 /* CSP-CIS_AuditTests */,
+				B6C671002DE0C92600862FB0 /* CSP-CIS_AuditUITests */,
+				B6C670E62DE0C92500862FB0 /* Products */,
+				B6C6713F2DE0CA4800862FB0 /* com.csp.cis-compliance.plist */,
+				B6C671432DE0CA4E00862FB0 /* openapi.yaml */,
+				B6C671452DE0CA5400862FB0 /* README.md */,
+				B6C671462DE0CA5400862FB0 /* README_DISTRIBUTION.md */,
+			);
+			sourceTree = "<group>";
+		};
+		B6C670E62DE0C92500862FB0 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B6C670E52DE0C92500862FB0 /* CSP-CIS_Audit.app */,
+				B6C670F32DE0C92600862FB0 /* CSP-CIS_AuditTests.xctest */,
+				B6C670FD2DE0C92600862FB0 /* CSP-CIS_AuditUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B6C670E42DE0C92500862FB0 /* CSP-CIS_Audit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6C671072DE0C92600862FB0 /* Build configuration list for PBXNativeTarget "CSP-CIS_Audit" */;
+			buildPhases = (
+				B6C670E12DE0C92500862FB0 /* Sources */,
+				B6C670E22DE0C92500862FB0 /* Frameworks */,
+				B6C670E32DE0C92500862FB0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B6C670E72DE0C92500862FB0 /* CSP-CIS_Audit */,
+			);
+			name = "CSP-CIS_Audit";
+			packageProductDependencies = (
+				B6C6714A2DE0CBED00862FB0 /* Yams */,
+			);
+			productName = "CSP-CIS_Audit";
+			productReference = B6C670E52DE0C92500862FB0 /* CSP-CIS_Audit.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B6C670F22DE0C92600862FB0 /* CSP-CIS_AuditTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6C6710A2DE0C92600862FB0 /* Build configuration list for PBXNativeTarget "CSP-CIS_AuditTests" */;
+			buildPhases = (
+				B6C670EF2DE0C92600862FB0 /* Sources */,
+				B6C670F02DE0C92600862FB0 /* Frameworks */,
+				B6C670F12DE0C92600862FB0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B6C670F52DE0C92600862FB0 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B6C670F62DE0C92600862FB0 /* CSP-CIS_AuditTests */,
+			);
+			name = "CSP-CIS_AuditTests";
+			packageProductDependencies = (
+			);
+			productName = "CSP-CIS_AuditTests";
+			productReference = B6C670F32DE0C92600862FB0 /* CSP-CIS_AuditTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B6C670FC2DE0C92600862FB0 /* CSP-CIS_AuditUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6C6710D2DE0C92600862FB0 /* Build configuration list for PBXNativeTarget "CSP-CIS_AuditUITests" */;
+			buildPhases = (
+				B6C670F92DE0C92600862FB0 /* Sources */,
+				B6C670FA2DE0C92600862FB0 /* Frameworks */,
+				B6C670FB2DE0C92600862FB0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B6C670FF2DE0C92600862FB0 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B6C671002DE0C92600862FB0 /* CSP-CIS_AuditUITests */,
+			);
+			name = "CSP-CIS_AuditUITests";
+			packageProductDependencies = (
+			);
+			productName = "CSP-CIS_AuditUITests";
+			productReference = B6C670FD2DE0C92600862FB0 /* CSP-CIS_AuditUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B6C670DD2DE0C92500862FB0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1630;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					B6C670E42DE0C92500862FB0 = {
+						CreatedOnToolsVersion = 16.3;
+					};
+					B6C670F22DE0C92600862FB0 = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = B6C670E42DE0C92500862FB0;
+					};
+					B6C670FC2DE0C92600862FB0 = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = B6C670E42DE0C92500862FB0;
+					};
+				};
+			};
+			buildConfigurationList = B6C670E02DE0C92500862FB0 /* Build configuration list for PBXProject "CSP-CIS_Audit" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B6C670DC2DE0C92500862FB0;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B6C671492DE0CBED00862FB0 /* XCRemoteSwiftPackageReference "Yams" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B6C670E62DE0C92500862FB0 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B6C670E42DE0C92500862FB0 /* CSP-CIS_Audit */,
+				B6C670F22DE0C92600862FB0 /* CSP-CIS_AuditTests */,
+				B6C670FC2DE0C92600862FB0 /* CSP-CIS_AuditUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B6C670E32DE0C92500862FB0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6C6713E2DE0CA3C00862FB0 /* checklist.yaml in Resources */,
+				B6C671472DE0CA5400862FB0 /* README.md in Resources */,
+				B6C671482DE0CA5400862FB0 /* README_DISTRIBUTION.md in Resources */,
+				B6C671442DE0CA4E00862FB0 /* openapi.yaml in Resources */,
+				B6C671412DE0CA4800862FB0 /* com.csp.cis-compliance.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6C670F12DE0C92600862FB0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6C670FB2DE0C92600862FB0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B6C670E12DE0C92500862FB0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6C671202DE0C9D300862FB0 /* ChromeChecks.swift in Sources */,
+				B6C671212DE0C9D300862FB0 /* MacOSSystemChecks.swift in Sources */,
+				B6C671222DE0C9D300862FB0 /* MacOSPasswordChecks.swift in Sources */,
+				B6C671232DE0C9D300862FB0 /* SafariChecks.swift in Sources */,
+				B6C671242DE0C9D300862FB0 /* CheckRunner.swift in Sources */,
+				B6C671252DE0C9D300862FB0 /* MacOSAppSecurityChecks.swift in Sources */,
+				B6C671262DE0C9D300862FB0 /* Reporter.swift in Sources */,
+				B6C671272DE0C9D300862FB0 /* MacOSUpdateChecks.swift in Sources */,
+				B6C671282DE0C9D300862FB0 /* MacOSHardwareChecks.swift in Sources */,
+				B6C671292DE0C9D300862FB0 /* MacOSUserChecks.swift in Sources */,
+				B6C6712A2DE0C9D300862FB0 /* Main.swift in Sources */,
+				B6C6712B2DE0C9D300862FB0 /* MacOSNetworkChecks.swift in Sources */,
+				B6C6712C2DE0C9D300862FB0 /* MacOSPrivacyChecks.swift in Sources */,
+				B6C6712D2DE0C9D300862FB0 /* MacOSChecks.swift in Sources */,
+				DAED20260929000000000002 /* TahoeAdditionalCommandChecks.swift in Sources */,
+				B6C6712E2DE0C9D300862FB0 /* MenuBarManager.swift in Sources */,
+				B6C6712F2DE0C9D300862FB0 /* ChecklistLoader.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6C670EF2DE0C92600862FB0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B6C670F92DE0C92600862FB0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B6C670F52DE0C92600862FB0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B6C670E42DE0C92500862FB0 /* CSP-CIS_Audit */;
+			targetProxy = B6C670F42DE0C92600862FB0 /* PBXContainerItemProxy */;
+		};
+		B6C670FF2DE0C92600862FB0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B6C670E42DE0C92500862FB0 /* CSP-CIS_Audit */;
+			targetProxy = B6C670FE2DE0C92600862FB0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B6C671052DE0C92600862FB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = MM7WM753D6;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B6C671062DE0C92600862FB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = MM7WM753D6;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		B6C671082DE0C92600862FB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "CSP-CIS_Audit/CSP_CIS_Audit.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G8D238C7EJ;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "cybersecuritypilot.CSP-CIS-Audit";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B6C671092DE0C92600862FB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "CSP-CIS_Audit/CSP_CIS_Audit.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G8D238C7EJ;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "cybersecuritypilot.CSP-CIS-Audit";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		B6C6710B2DE0C92600862FB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MM7WM753D6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "cybersecuritypilot.CSP-CIS-AuditTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CSP-CIS_Audit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CSP-CIS_Audit";
+			};
+			name = Debug;
+		};
+		B6C6710C2DE0C92600862FB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MM7WM753D6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "cybersecuritypilot.CSP-CIS-AuditTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CSP-CIS_Audit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CSP-CIS_Audit";
+			};
+			name = Release;
+		};
+		B6C6710E2DE0C92600862FB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MM7WM753D6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "cybersecuritypilot.CSP-CIS-AuditUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "CSP-CIS_Audit";
+			};
+			name = Debug;
+		};
+		B6C6710F2DE0C92600862FB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = MM7WM753D6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "cybersecuritypilot.CSP-CIS-AuditUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "CSP-CIS_Audit";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B6C670E02DE0C92500862FB0 /* Build configuration list for PBXProject "CSP-CIS_Audit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6C671052DE0C92600862FB0 /* Debug */,
+				B6C671062DE0C92600862FB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6C671072DE0C92600862FB0 /* Build configuration list for PBXNativeTarget "CSP-CIS_Audit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6C671082DE0C92600862FB0 /* Debug */,
+				B6C671092DE0C92600862FB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6C6710A2DE0C92600862FB0 /* Build configuration list for PBXNativeTarget "CSP-CIS_AuditTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6C6710B2DE0C92600862FB0 /* Debug */,
+				B6C6710C2DE0C92600862FB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6C6710D2DE0C92600862FB0 /* Build configuration list for PBXNativeTarget "CSP-CIS_AuditUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6C6710E2DE0C92600862FB0 /* Debug */,
+				B6C6710F2DE0C92600862FB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B6C671492DE0CBED00862FB0 /* XCRemoteSwiftPackageReference "Yams" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/Yams.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B6C6714A2DE0CBED00862FB0 /* Yams */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B6C671492DE0CBED00862FB0 /* XCRemoteSwiftPackageReference "Yams" */;
+			productName = Yams;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B6C670DD2DE0C92500862FB0 /* Project object */;
+}

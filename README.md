@@ -5,6 +5,7 @@ Daedalus is Cyber Security Pilot's multi-organization security portal. It brings
 - **Marketing site:** [`site/`](site/) — the Cyber Security Pilot homepage and Daedalus overview.
 - **Application:** [`src/daedalus/`](src/daedalus/) — FastAPI service, dashboard, and API.
 - **Scanner kit:** [`src/daedalus/agent_bundle/`](src/daedalus/agent_bundle/) — local NmapUI integration and outbound reporting bridge.
+- **CIS macOS client:** [`clients/csp-cis-audit/`](clients/csp-cis-audit/) — menu-bar audit client, Tahoe checks, profile fetching, report upload, and Xcode tests.
 - **Profiles:** [`src/daedalus/profiles/`](src/daedalus/profiles/) — endpoint baseline profiles.
 - **Tests:** [`tests/`](tests/).
 
@@ -29,6 +30,20 @@ Open `http://127.0.0.1:8000`. Google sign-in and external integrations need thei
 ## Production on Incus
 
 The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/INCUS-DEPLOYMENT.md) for the verified backup, staged release, health-check, and automatic rollback workflow.
+
+## Build and test the CIS client
+
+The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:
+
+```sh
+xcodebuild test \
+  -project clients/csp-cis-audit/CSP-CIS_Audit.xcodeproj \
+  -scheme CSP-CIS_Audit \
+  -destination 'platform=macOS' \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+For a private local demo archive, run `sh clients/csp-cis-audit/scripts/build-local-client.sh`. It does not bundle workspace credentials. The app receives an ad hoc bundle signature for integrity checks, but that signature has no publisher identity and is not notarized; downloaded copies may still be blocked by Gatekeeper. Do not ask end users to override that protection. External distribution requires a Developer ID build and notarization.
 
 ## Product overview
 

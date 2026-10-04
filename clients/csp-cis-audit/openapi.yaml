@@ -1,0 +1,49 @@
+openapi: 3.0.0
+info:
+  title: CIS Benchmark Check API
+  version: 1.0.0
+paths:
+  /report:
+    post:
+      summary: Report the results of all checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckReport'
+      responses:
+        '200':
+          description: Report accepted
+components:
+  schemas:
+    Check:
+      type: object
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+          enum: [macos, chrome, safari]
+        description:
+          type: string
+    CheckResult:
+      type: object
+      properties:
+        check:
+          $ref: '#/components/schemas/Check'
+        status:
+          type: string
+          enum: [pass, fail, manual, error]
+        details:
+          type: string
+    CheckReport:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckResult'
+        timestamp:
+          type: string
+          format: date-time
