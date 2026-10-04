@@ -32,7 +32,7 @@ The Pages workflow intentionally publishes only `site/`. Private deployment runb
 
 ## Validation snapshot
 
-As of October 3, 2026, the Daedalus source suite passes **397 tests and 77 subtests** locally. [Python CI run 37173085088](https://github.com/techmore/tm-daedalus/actions/runs/37173085088) passed on Python 3.11/3.12, and [Linux lifecycle CI run 37172392203](https://github.com/techmore/tm-daedalus/actions/runs/37172392203) passed against a real systemd user manager. The lifecycle check uses inert processes and synthetic enrollment/evidence; it proves service removal and exact restoration, without claiming a Linux NmapUI engine or portal workflow.
+As of October 3, 2026, the Daedalus source suite passes **397 tests and 77 subtests** locally. [Python CI run 37173085088](https://github.com/techmore/tm-daedalus/actions/runs/37173085088) passed on Python 3.11/3.12, and [Linux lifecycle CI run 37172870664](https://github.com/techmore/tm-daedalus/actions/runs/37172870664) passed against a real systemd user manager. The lifecycle check uses inert processes and synthetic enrollment/evidence; it proves service removal and exact restoration, without claiming a Linux NmapUI engine or portal workflow.
 
 Production Release 055 runs commit `11ad49967190dd169309ce0669bfdc97589f7c08`; its 53-file archive SHA-256 is `e86b271e8eab12b69233b1df84dff480fee6497f0a9e2d74584f44e8b97a6b9e`. Internal and public readiness checks passed after activation, and the deployment created a verified off-host backup. See [`INTEGRATION-READINESS.md`](INTEGRATION-READINESS.md) for current deployment and validation details.
 
