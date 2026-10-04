@@ -19,6 +19,39 @@ class DashboardTopicTests(unittest.TestCase):
         self.assertNotIn('<details', evidence)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_assessment_refreshes_ignore_outdated_successes_and_failures(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        cases = [
+            ('loadActiveExposure', '', '  document.querySelectorAll("[data-load-older-active]"'),
+            ('loadExternalCheck', "'dns'", '  document.querySelectorAll("[data-load-older-checks]"'),
+        ]
+        for name, args, end in cases:
+            with self.subTest(loader=name):
+                helper = source[source.index('  async function ' + name + '('):source.index(end)]
+                script = """const assert=require('node:assert/strict');
+const orgId=1,externalCheckHistory=Object.create(null);
+let activeExposureHistory={},rendered=[];
+const nodes=new Map(),document={querySelector:()=>null,getElementById(id){if(!nodes.has(id))nodes.set(id,{textContent:'',replaceChildren(){this.textContent='';}});return nodes.get(id);}};
+function appendEmpty(node,value){node.textContent=value;}function text(node,value){node.textContent=value;}
+function renderActiveExposure(body){rendered.push(body.marker);}function renderCheckHistory(type,body){rendered.push(body.marker);}
+let requests=[];function fetch(){return new Promise((resolve,reject)=>requests.push({resolve,reject}));}
+function result(marker){return {ok:true,json:async()=>({marker,runs:[],changes:[]})};}
+""" + helper + """
+(async()=>{
+const old=CALL,newer=CALL;requests[1].resolve(result('new'));await newer;
+requests[0].resolve(result('old'));await old;assert.deepEqual(rendered,['new']);
+requests=[];const failedOld=CALL,newest=CALL;requests[1].resolve(result('newest'));await newest;
+requests[0].reject(new Error('stale error'));await failedOld;assert.deepEqual(rendered,['new','newest']);
+assert.equal(nodes.size,0);
+requests=[];const current=CALL;requests[0].reject(new Error('current error'));await current;
+assert.ok([...nodes.values()].some(node=>node.textContent.includes('unavailable')));
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+                script = script.replace('CALL', name + '(' + args + ')')
+                result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_deeper_audit_refresh_failure_is_visible_and_stale_errors_ignored(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  async function loadNikto('):source.index('  var niktoButton =')]

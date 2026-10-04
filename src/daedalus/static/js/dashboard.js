@@ -3488,6 +3488,7 @@
     if (olderKind && (!activeExposureHistory[olderKind + "HasMore"] || activeExposureHistory.loading)) return;
     if (!olderKind) activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
     activeExposureHistory.loading = olderKind || null;
+    var requestState = activeExposureHistory;
     try {
       var params = new URLSearchParams();
       if (olderKind === "runs") params.set("runs_before", activeExposureHistory.runsCursor);
@@ -3495,6 +3496,7 @@
       var suffix = params.toString() ? "?" + params.toString() : "";
       var response = await fetch("/api/external-checks/web-active" + suffix, { credentials: "same-origin" });
       var body = await response.json();
+      if (requestState !== activeExposureHistory) return;
       if (!response.ok) throw new Error(body.detail || "Could not load active check history");
       if (!olderKind) {
         activeExposureHistory.runs = body.runs || [];
@@ -3520,6 +3522,7 @@
         changes_has_more: activeExposureHistory.changesHasMore
       }));
     } catch (error) {
+      if (requestState !== activeExposureHistory) return;
       activeExposureHistory.loading = null;
       if (olderKind) {
         var retryButton = document.querySelector('[data-load-older-active="' + olderKind + '"]');
@@ -3692,6 +3695,7 @@
       var suffix = params.toString() ? "?" + params.toString() : "";
       var response = await fetch("/api/external-checks/" + type + suffix, { credentials: "same-origin" });
       var body = await response.json();
+      if (state !== externalCheckHistory[type]) return;
       if (!response.ok) throw new Error(body.detail || "Could not load check history");
       if (!olderKind) {
         state.runs = body.runs || [];
@@ -3717,6 +3721,7 @@
         changes_has_more: state.changesHasMore
       }));
     } catch (error) {
+      if (state !== externalCheckHistory[type]) return;
       state.loading = null;
       if (olderKind) {
         var retryButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="' + olderKind + '"]');
@@ -3724,6 +3729,10 @@
           retryButton.disabled = false;
           retryButton.textContent = olderKind === "runs" ? "Load older check runs" : "Load older changes";
         }
+      }
+      if (!olderKind) {
+        var priorities = document.getElementById(type + "-priorities");
+        if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Current assessment evidence could not be refreshed. Review is unavailable until the request succeeds."); }
       }
       var target = document.getElementById(type + "-check-runs");
       if (target) {

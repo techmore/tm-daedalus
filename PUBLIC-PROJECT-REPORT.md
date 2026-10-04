@@ -388,3 +388,7 @@ The website evidence section now includes the latest fixed-path exposure signatu
 ### Deeper audit refresh states — October 4, 2026
 
 A failed current deeper-audit request now replaces its visible review and summary with an unavailable state rather than leaving loading or older evidence in place. Older-history pagination errors preserve the current assessment, and sequence checks prevent stale request failures from overwriting newer evidence. Request-level renderer fixtures validate all three behaviors. All 526 backend tests and 104 subtests passed; exact-head backend CI for b82c0de succeeded. The existing production deployment handle remains live and no replacement deployment was started. These changes await production access and rendered visual acceptance.
+
+### Concurrent assessment refreshes — October 4, 2026
+
+DNS, passive website and fixed-path exposure loaders now reject responses and errors from a replaced refresh state. Deferred-request fixtures prove that older successes and failures cannot overwrite a newer assessment. Failed current DNS/website requests mark the prominent summary unavailable. All 527 backend tests and 106 subtests passed. Production access and browser acceptance remain pending. A fresh private credential-free CIS release build has been started separately to validate the current collector source; success is not yet claimed.
