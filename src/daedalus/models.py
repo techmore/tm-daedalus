@@ -482,3 +482,21 @@ class ScannerRunComparison(Base):
     detected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     meaningful_change_count: Mapped[int] = mapped_column(Integer, nullable=False)
     comparison: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+class VendorReview(Base):
+    __tablename__ = "vendor_reviews"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "request_id", name="uq_vendor_review_request"),
+        Index("ix_vendor_review_run_resource", "organization_id", "run_id", "resource_index", "id"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"))
+    run_id: Mapped[int] = mapped_column(ForeignKey("external_check_runs.id", ondelete="CASCADE"))
+    resource_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    origin: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    note: Mapped[str] = mapped_column(String(2000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

@@ -89,6 +89,7 @@ from daedalus.models import (
     UserAPIKey,
     WorkspaceNotification,
     WorkspaceNotificationRead,
+    VendorReview,
 )
 from daedalus.domain_verification import (
     challenge_record_name,
@@ -3202,6 +3203,7 @@ def external_check_history(
         "domain": organization.domain,
         "schedule": serialize_external_schedule(schedule, check_type),
         "latest_snapshot": latest_snapshot,
+        "latest_snapshot_run_id": latest_snapshot_row[0].id if latest_snapshot_row else None,
         "runs": recent_runs,
         "runs_has_more": runs_has_more,
         "runs_next_before": run_rows[-1][0].id if runs_has_more and run_rows else None,
@@ -5182,6 +5184,85 @@ def _cis_assessment_state(report, now):
     if report.collected_at > now:
         return "unknown"
     return "current" if report.collected_at >= now - timedelta(hours=36) else "stale"
+
+
+class VendorReviewInput(BaseModel):
+    run_id: int = Field(gt=0, strict=True)
+    resource_index: int = Field(ge=0, lt=100, strict=True)
+    request_id: UUID
+    status: Literal["reviewed", "needs_action", "monitor"]
+    note: str = Field(min_length=8, max_length=2000)
+
+
+def _vendor_review_run(db, organization_id, run_id):
+    run = db.get(ExternalCheckRun, run_id)
+    if run is None or run.organization_id != organization_id or run.check_type != "web" or run.status not in {"completed", "completed_with_warnings"}:
+        raise HTTPException(status_code=404, detail="Saved website inventory not found")
+    return run
+
+
+def _serialize_vendor_review(row):
+    return {"id": row.id, "run_id": row.run_id, "resource_index": row.resource_index,
+            "origin": row.origin, "status": row.status, "note": row.note,
+            "actor_user_id": row.actor_user_id, "created_at": iso_utc(row.created_at)}
+
+
+@app.get("/api/vendor-reviews")
+def list_vendor_reviews(run_id: int, request: Request, before: int | None = None, db: Session = Depends(get_db)):
+    _, organization, _ = get_org_context(request, db)
+    _vendor_review_run(db, organization.id, run_id)
+    scope = (VendorReview.organization_id == organization.id, VendorReview.run_id == run_id)
+    ranked = select(VendorReview.id, func.row_number().over(partition_by=VendorReview.resource_index, order_by=VendorReview.id.desc()).label("rank")).where(*scope).subquery()
+    latest = db.scalars(select(VendorReview).join(ranked, ranked.c.id == VendorReview.id).where(ranked.c.rank == 1).order_by(VendorReview.resource_index)).all()
+    query = select(VendorReview).where(*scope)
+    if before is not None:
+        query = query.where(VendorReview.id < max(1, before))
+    rows = db.scalars(query.order_by(VendorReview.id.desc()).limit(101)).all()
+    more = len(rows) > 100
+    rows = rows[:100]
+    return {"reviews": [_serialize_vendor_review(row) for row in latest],
+            "history": [_serialize_vendor_review(row) for row in rows],
+            "history_has_more": more, "history_next_before": rows[-1].id if more else None,
+            "security_assessment": False}
+
+
+@app.post("/api/vendor-reviews")
+def save_vendor_review(payload: VendorReviewInput, request: Request, db: Session = Depends(get_db)):
+    user, organization, _ = get_org_context(request, db, admin=True)
+    run = _vendor_review_run(db, organization.id, payload.run_id)
+    resources = (run.snapshot or {}).get("external_resources")
+    if not isinstance(resources, list) or payload.resource_index >= len(resources):
+        raise HTTPException(status_code=422, detail="Choose an origin in this saved inventory")
+    resource = resources[payload.resource_index]
+    if not isinstance(resource, dict) or not resource.get("host") or resource.get("scheme") not in {"http", "https"}:
+        raise HTTPException(status_code=422, detail="This inventory origin cannot be reviewed")
+    note = payload.note.strip()
+    if len(note) < 8:
+        raise HTTPException(status_code=422, detail="Provide a review rationale of at least eight characters")
+    origin = {name: resource.get(name) for name in ("host", "scheme", "port")}
+    def existing():
+        return db.scalar(select(VendorReview).where(VendorReview.organization_id == organization.id, VendorReview.request_id == str(payload.request_id)))
+    def replay(row):
+        if (row.run_id, row.resource_index, row.status, row.note, row.actor_user_id, row.origin) != (run.id, payload.resource_index, payload.status, note, user.id, origin):
+            raise HTTPException(status_code=409, detail="Review request identifier already used")
+        return {"review": _serialize_vendor_review(row), "created": False}
+    prior = existing()
+    if prior is not None:
+        return replay(prior)
+    row = VendorReview(organization_id=organization.id, run_id=run.id, resource_index=payload.resource_index,
+                      request_id=str(payload.request_id), actor_user_id=user.id, origin=origin,
+                      status=payload.status, note=note, created_at=utcnow())
+    db.add(row)
+    audit(db, organization.id, user.id, "vendor.review.recorded", {"run_id": run.id, "resource_index": payload.resource_index, "status": payload.status})
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        prior = existing()
+        if prior is None:
+            raise
+        return replay(prior)
+    return {"review": _serialize_vendor_review(row), "created": True}
 
 
 @app.get("/api/workspace-posture")
