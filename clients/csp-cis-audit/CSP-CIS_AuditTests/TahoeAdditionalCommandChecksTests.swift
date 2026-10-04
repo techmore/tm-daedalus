@@ -135,6 +135,23 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(status == "pass")
     }
 
+    @Test func passwordLengthRequiresAnExplicitSupportedCondition() {
+        let rule = "pwpolicy_minimum_length_enforce"
+        func xml(_ contents: [Any]) -> String {
+            let policy: [String: Any] = ["policyCategoryPasswordContent": contents.map { ["policyContent": $0] }]
+            return String(data: try! PropertyListSerialization.data(fromPropertyList: policy, format: .xml, options: 0), encoding: .utf8)!
+        }
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{15,}'"]))) == "pass")
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{8,}'"]))) == "fail")
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{14,}'", "policyAttributePassword matches '.{16,}'"]))) == "pass")
+        for contents: [Any] in [[], [15], [true], ["minChars=15"], ["policyAttributePassword matches '.{15,}' OR TRUE"], ["NOT policyAttributePassword matches '.{15,}'"], ["policyAttributePassword matches '.{015,}'"], ["policyAttributePassword matches '.{15,}'", "unknown condition"]] {
+            #expect(run(rule, .init(output: xml(contents))) == "manual")
+        }
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{15,}'"]), exitCode: 1)) == "manual")
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{15,}'"]), error: "denied")) == "manual")
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{15,}'"]), unavailable: "timeout")) == "manual")
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -272,6 +289,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "pwpolicy_minimum_length_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_history_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "system_settings_system_wide_preferences_configure": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.preferences"]),
             "os_unlock_active_user_session_disable": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.login.screensaver"]),

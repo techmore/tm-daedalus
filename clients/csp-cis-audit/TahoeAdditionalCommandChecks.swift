@@ -38,7 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -99,7 +99,7 @@ extension MacOSChecks {
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
 
-        case "pwpolicy_history_enforce":
+        case "pwpolicy_history_enforce", "pwpolicy_minimum_length_enforce":
             let evidence = command("/usr/bin/pwpolicy", ["-getaccountpolicies"])
             guard usable(evidence), evidence.output.utf8.count <= 65536 else {
                 return result("manual", "Account-policy evidence was unavailable or exceeded its limit.")
@@ -114,6 +114,30 @@ extension MacOSChecks {
             }
             guard let policy = authorizationPolicy(xml) else {
                 return result("manual", "Account-policy XML could not be read unambiguously.")
+            }
+            if rule == "pwpolicy_minimum_length_enforce" {
+                guard let entries = policy["policyCategoryPasswordContent"] as? [[String: Any]],
+                      !entries.isEmpty, entries.count <= 100 else {
+                    return result("manual", "Explicit password-content policy entries were absent or unsupported.")
+                }
+                let expression = try! NSRegularExpression(pattern: #"^policyAttributePassword matches '\.\{(0|[1-9][0-9]{0,3}),\}'$"#)
+                var lengths = [Int]()
+                for entry in entries {
+                    guard let content = entry["policyContent"] as? String,
+                          content.utf8.count <= 4096 else {
+                        return result("manual", "Password-content policy was absent or wrongly typed.")
+                    }
+                    let value = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+                    guard let match = expression.firstMatch(in: value, range: range),
+                          match.range == range, let capture = Range(match.range(at: 1), in: value),
+                          let minimum = Int(value[capture]) else {
+                        return result("manual", "Password-content policy uses an unsupported condition. Compound predicates were not inferred.")
+                    }
+                    lengths.append(minimum)
+                }
+                let maximum = lengths.max()!
+                return result(maximum >= 15 ? "pass" : "fail", "Captured " + String(lengths.count) + " explicit minimum-length condition(s); strongest minimum " + String(maximum) + ", pinned CIS threshold 15. This is local policy evidence, not a password-creation attempt or external directory assessment. Raw policy is omitted.")
             }
             var depths = [Int]()
             var invalid = false
