@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from daedalus.db import Base
 from daedalus import server
 from daedalus.models import (
-    Membership, Organization, User, WorkspaceNotification, WorkspaceNotificationRead,
+    Membership, Organization, User, WorkspaceNotification, WorkspaceNotificationRead, ExternalCheckRun,
 )
 try:
     from . import test_cis_pdf_flow as fixtures
@@ -34,6 +34,28 @@ class WorkspaceNotificationTests(unittest.TestCase):
         org_id, user_id = self.workspace()
         with patch.object(server, "run_website_check", return_value=snapshot):
             return server.execute_external_check(org_id, user_id, "web")
+
+    def test_interrupted_audit_creates_one_persistent_notice_and_preserves_history(self):
+        org_id, user_id = self.workspace()
+        with self.session_factory() as db:
+            run = ExternalCheckRun(organization_id=org_id, check_type="web-nikto",
+                domain="cybersecuritypilot.org", status="running", trigger_source="manual",
+                triggered_by_user_id=user_id, started_at=server.utcnow(), change_count=0)
+            db.add(run); db.commit(); run_id = run.id
+        self.assertEqual(server.recover_interrupted_external_checks(), 1)
+        self.assertEqual(server.recover_interrupted_external_checks(), 0)
+        with self.session_factory() as db:
+            run = db.get(ExternalCheckRun, run_id)
+            self.assertEqual(run.status, "failed")
+            self.assertIsNone(run.snapshot)
+            self.assertIsNotNone(run.completed_at)
+            notices = db.scalars(select(WorkspaceNotification).where(
+                WorkspaceNotification.source_type == "external_check_run",
+                WorkspaceNotification.source_id == run_id)).all()
+            self.assertEqual(len(notices), 1)
+            self.assertEqual(notices[0].organization_id, org_id)
+            self.assertEqual(notices[0].reason, "check_failed")
+            self.assertIn("interrupted", notices[0].title)
 
     def test_existing_database_gets_notification_tables_through_metadata_upgrade(self):
         engine = create_engine("sqlite://")

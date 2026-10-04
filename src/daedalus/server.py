@@ -321,6 +321,35 @@ def ensure_cis_presence_columns(connection) -> None:
         connection.execute(text("ALTER TABLE cis_devices ADD COLUMN last_client_heartbeat_at TIMESTAMP"))
 
 
+def recover_interrupted_external_checks() -> int:
+    """Preserve incomplete attempts and notify their workspace after process loss."""
+    with SessionLocal() as db:
+        runs = db.scalars(select(ExternalCheckRun).where(ExternalCheckRun.status == "running")).all()
+        for run in runs:
+            run.status = "failed"
+            run.error_summary = "The check did not finish before the server restarted."
+            run.completed_at = utcnow()
+            audit(db, run.organization_id, None, "external_check.interrupted", {
+                "run_id": run.id, "check_type": run.check_type, "source": run.trigger_source,
+            })
+            existing = db.scalar(select(WorkspaceNotification.id).where(
+                WorkspaceNotification.organization_id == run.organization_id,
+                WorkspaceNotification.source_type == "external_check_run",
+                WorkspaceNotification.source_id == run.id,
+            ))
+            if existing is None:
+                db.add(WorkspaceNotification(
+                    organization_id=run.organization_id,
+                    source_type="external_check_run", source_id=run.id,
+                    title=f"{check_type_label(run.check_type)} check interrupted · {run.domain}",
+                    summary="The server restarted before this audit finished. This attempt has no completed assessment; review its history and start a new run when appropriate.",
+                    reason="check_failed", detected_at=run.completed_at,
+                ))
+        if runs:
+            db.commit()
+        return len(runs)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -350,26 +379,7 @@ async def lifespan(_app: FastAPI):
             job.updated_at = utcnow()
         if interrupted_jobs:
             db.commit()
-        interrupted_checks = db.scalars(
-            select(ExternalCheckRun).where(ExternalCheckRun.status == "running")
-        ).all()
-        for run in interrupted_checks:
-            run.status = "failed"
-            run.error_summary = "The check did not finish before the server restarted."
-            run.completed_at = utcnow()
-            audit(
-                db,
-                run.organization_id,
-                None,
-                "external_check.interrupted",
-                {
-                    "run_id": run.id,
-                    "check_type": run.check_type,
-                    "source": run.trigger_source,
-                },
-            )
-        if interrupted_checks:
-            db.commit()
+    recover_interrupted_external_checks()
     recover_interrupted_external_check_schedules()
     scheduler_task = asyncio.create_task(external_check_scheduler())
     try:
