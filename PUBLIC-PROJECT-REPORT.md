@@ -2,7 +2,7 @@
 
 ## Current checkpoint — October 4, 2026
 
-The authenticated portal runs in Incus on SER8 at daedalus.cybersecuritypilot.org; GitHub Pages hosts the CSP marketing site. Current deployed application source is **336f9b1**, with internal/public readiness and authenticated PDF downloads verified. Later documentation commits do not change the deployed runtime. Entries below retain dated validation history and are not the current deployment inventory.
+The authenticated portal runs in Incus on SER8 at daedalus.cybersecuritypilot.org; GitHub Pages hosts the CSP marketing site. Current deployed application source is **fa0d275**, with internal/public readiness and authenticated PDF downloads verified. Later documentation commits do not change the deployed runtime. Entries below retain dated validation history and are not the current deployment inventory.
 
 The dashboard leads with topic assessments, findings and changes, with grouped supporting evidence and secondary controls. Authenticated structure and renderer checks passed; signed-in desktop/mobile visual acceptance remains pending return of the review session.
 
@@ -707,3 +707,9 @@ Comparison skips the new block when an older snapshot lacks its schema, when ori
 ## Per-origin dependency presentation — 2026-10-04
 
 Dashboard vendor rows and the website PDF now attach HTTP, script, stylesheet and declared/missing integrity counts to the exact host/scheme/port. Old snapshots show attributes not recorded; absent, duplicate or invalid records show unavailable rather than a zero count. Values are rendered as text. Existing partial-page and capped-inventory notices remain in effect. This is returned root-HTML evidence; linked content, integrity hashes and provider security are not assessed. Targeted presentation/inventory tests passed (41 tests, 5 subtests); the full backend suite passed 561 tests and 122 subtests. JavaScript syntax and diff checks passed. Deployment and a fresh production PDF review remain pending.
+
+## Per-origin production validation — 2026-10-04
+
+Source **fa0d275113176a1ab03b73eecf815b6a5ec81377** is active in SER8 Incus. Off-host backup verification and internal/public readiness passed. Actual website runs **57 and 58** completed with four origins, two external scripts, one stylesheet, zero HTTP references, zero declared integrity attributes and three missing declarations. Saved snapshots match the API evidence. Direct read-only database checks found zero saved differences and zero persistent notices for both runs; collector introduction did not create an alert.
+
+Actual production PDF **38** downloaded with private no-store headers. Its frozen website snapshot matches the origin evidence. All seven rendered pages were visually reviewed, including the origin-specific counts and review scope. Receipt: /data/codex-origin-presentation-validation-20261004.json. This validates returned HTML metadata and report storage/presentation, not linked-provider security or browser UX acceptance. Signed-in visual review, approved subnet scanner deployment, managed macOS 26 enrollment and trusted signing, larger Meraki fleet validation, and the other completion-matrix gates remain outstanding.
