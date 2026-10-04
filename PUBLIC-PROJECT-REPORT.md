@@ -601,3 +601,9 @@ All 110 native unit tests passed on macOS 27.0.1, including fixtures that previo
 ## October 4, 2026 — Safari script-execution mapping correction
 
 The untrusted-site JavaScript check no longer treats the popup-window preference as a script-execution control. It requires manual review of site-specific execution settings and organization trust criteria. Regression fixtures cover both popup preference values; all 110 native unit tests passed on macOS 27.0.1. No Safari setting changed. Actual report 18 already retained unavailable Safari evidence as manual; these fixtures do not establish supported effective browser policy, macOS 26 conformance or browser visual acceptance. The review-session handoff was requested again to enable signed-in topic-layout validation.
+
+## October 4, 2026 — current cross-version backend CI
+
+[Backend CI run 37204676506](https://github.com/techmore/tm-daedalus/actions/runs/37204676506) completed successfully for source 8f50a0019a6da15d9037d3a90e464b22c2d18f06. Python 3.11 and 3.12 each passed 542 tests and 122 subtests, including locked-dependency/export checks. The latest [native CI run 37204676457](https://github.com/techmore/tm-daedalus/actions/runs/37204676457) was still running client tests when inspected; its package-build step had not started, so no final native CI success is claimed. Earlier cancelled native runs are not passing evidence. Local native unit evidence remains 110 passing tests on macOS 27.0.1.
+
+Production download review confirmed the unsigned demo package is withheld in production. Trusted client distribution still requires Developer ID signing/notarization; local builds and uploads do not complete that gate. Latest actual SER8 report remains 18.
