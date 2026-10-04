@@ -34,7 +34,7 @@ class CISProfileTests(unittest.TestCase):
             "audit_folder_owner_configure", "audit_folder_group_configure", "audit_folders_mode_configure",
             "audit_acls_files_configure", "audit_acls_folders_configure", "audit_control_acls_configure",
         }
-        for profile, supported, manual in ((level1, 84, 16), (level2, 89, 30)):
+        for profile, supported, manual in ((level1, 85, 15), (level2, 90, 29)):
             self.assertEqual(sum(check["rule_id"] in SUPPORTED_RULE_IDS for check in profile["checks"]), supported)
             self.assertEqual(len(profile["checks"]) - supported, manual)
             profile_rule_ids = {check["rule_id"] for check in profile["checks"]}
@@ -52,7 +52,7 @@ class CISProfileTests(unittest.TestCase):
             "system_settings_guest_access_smb_disable",
         }
         self.assertTrue(managed_safari_rules.issubset(SUPPORTED_RULE_IDS))
-        self.assertEqual(len(SUPPORTED_RULE_IDS), 91)
+        self.assertEqual(len(SUPPORTED_RULE_IDS), 92)
         self.assertEqual(level1["benchmark"]["version"], "1.1.0")
         self.assertEqual(level1["benchmark"]["level"], "1")
         self.assertEqual(level2["benchmark"]["level"], "2")

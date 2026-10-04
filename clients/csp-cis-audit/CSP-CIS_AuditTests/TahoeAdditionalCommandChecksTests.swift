@@ -152,6 +152,28 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(run(rule, .init(output: xml(["policyAttributePassword matches '.{15,}'"]), unavailable: "timeout")) == "manual")
     }
 
+    @Test func passwordLifetimeRequiresPositiveTypedDaysWithoutRounding() {
+        let rule = "pwpolicy_max_lifetime_enforce"
+        func xml(_ values: [Any]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: ["policyCategoryAuthentication": values.map { ["policyParameters": ["policyAttributeExpiresEveryNDays": $0]] }], format: .xml, options: 0), encoding: .utf8)!
+        }
+        #expect(run(rule, .init(output: xml([365]))) == "pass")
+        #expect(run(rule, .init(output: xml([365.01]))) == "fail")
+        #expect(run(rule, .init(output: xml([60, 366]))) == "fail")
+        for values: [Any] in [[], [0], [-1], [true], ["90"], [10001]] {
+            #expect(run(rule, .init(output: xml(values))) == "manual")
+        }
+        let check = CISCheck(id: "legacy", category: "macos", description: "Legacy")
+        #expect(MacOSPasswordChecks.checkPasswordMaxAge(check: check, command: { _, _ in .init(output: xml([90])) }).status == "pass")
+        #expect(MacOSPasswordChecks.checkPasswordMaxAge(check: check, command: { _, _ in .init(output: xml([90.01])) }).status == "fail")
+        #expect(MacOSPasswordChecks.checkPasswordMaxAge(check: check, command: { _, _ in .init(output: xml([0])) }).status == "manual")
+        #expect(MacOSPasswordChecks.checkPasswordMaxAge(check: check, command: { _, _ in .init(output: "maxMinutesUntilChangePassword") }).status == "manual")
+        for evidence in [MacOSChecks.CommandEvidence(output: xml([90]), exitCode: 1), .init(output: xml([90]), error: "denied"), .init(output: xml([90]), unavailable: "timeout")] {
+            #expect(run(rule, evidence) == "manual")
+            #expect(MacOSPasswordChecks.checkPasswordMaxAge(check: check, command: { _, _ in evidence }).status == "manual")
+        }
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -289,6 +311,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "pwpolicy_max_lifetime_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_minimum_length_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_history_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "system_settings_system_wide_preferences_configure": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.preferences"]),

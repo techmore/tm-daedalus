@@ -25,6 +25,7 @@ SOURCE_URL = "https://github.com/usnistgov/macos_security/tree/" + SOURCE_COMMIT
 # bounded audit filesystem/ACL evidence checks.
 # All other rules remain manual until a dedicated local implementation exists.
 SUPPORTED_RULE_IDS = {
+    "pwpolicy_max_lifetime_enforce",
     "pwpolicy_minimum_length_enforce",
     "pwpolicy_history_enforce",
     "system_settings_system_wide_preferences_configure",

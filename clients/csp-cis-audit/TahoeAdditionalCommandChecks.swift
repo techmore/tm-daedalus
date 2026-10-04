@@ -38,7 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -101,7 +101,7 @@ extension MacOSChecks {
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
 
-        case "pwpolicy_history_enforce", "pwpolicy_minimum_length_enforce":
+        case "pwpolicy_history_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_max_lifetime_enforce":
             let evidence = command("/usr/bin/pwpolicy", ["-getaccountpolicies"])
             guard usable(evidence), evidence.output.utf8.count <= 65536 else {
                 return result("manual", "Account-policy evidence was unavailable or exceeded its limit.")
@@ -141,6 +141,26 @@ extension MacOSChecks {
                 let maximum = lengths.max()!
                 let threshold = legacyPasswordCriteria ? 8 : 15
                 return result(maximum >= threshold ? "pass" : "fail", "Captured " + String(lengths.count) + " explicit minimum-length condition(s); strongest minimum " + String(maximum) + ", bundled threshold " + String(threshold) + ". This is local policy evidence, not a password-creation attempt or external directory assessment. Raw policy is omitted.")
+            }
+            if rule == "pwpolicy_max_lifetime_enforce" {
+                var ages = [Double]()
+                var invalid = false
+                func visit(_ object: Any) {
+                    if let dictionary = object as? [String: Any] {
+                        if let raw = dictionary["policyAttributeExpiresEveryNDays"] {
+                            guard let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+                                  number.doubleValue.isFinite, number.doubleValue > 0, number.doubleValue <= 10000 else { invalid = true; return }
+                            ages.append(number.doubleValue)
+                        }
+                        for value in dictionary.values { visit(value) }
+                    } else if let array = object as? [Any] { for value in array { visit(value) } }
+                }
+                visit(policy)
+                guard !invalid, !ages.isEmpty else {
+                    return result("manual", "Explicit supported positive password-lifetime values were absent or wrongly typed. A zero value was not interpreted as an enforced lifetime.")
+                }
+                let maximum = ages.max()!, threshold = legacyPasswordCriteria ? 90.0 : 365.0
+                return result(maximum <= threshold ? "pass" : "fail", "Captured " + String(ages.count) + " lifetime value(s); longest " + String(maximum) + " days, bundled maximum " + String(threshold) + ". This is captured local policy evidence, not a recommendation to change password-rotation policy or an external directory assessment. Raw policy is omitted.")
             }
             var depths = [Int]()
             var invalid = false

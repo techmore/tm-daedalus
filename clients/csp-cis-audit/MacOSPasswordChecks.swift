@@ -100,41 +100,12 @@ struct MacOSPasswordChecks {
     }
     
     // Check if password maximum age is configured
-    static func checkPasswordMaxAge(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/pwpolicy"
-        process.arguments = ["getaccountpolicies"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check password maximum age: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("maxMinutesUntilChangePassword") {
-            // Extract the value
-            if let range = output.range(of: "maxMinutesUntilChangePassword\\s*=\\s*\\d+", options: .regularExpression),
-               let valueRange = output[range].range(of: "\\d+", options: .regularExpression) {
-                let value = output[range][valueRange]
-                if let minutes = Int(value) {
-                    let days = minutes / 1440 // Convert minutes to days
-                    if days <= 90 {
-                        return CheckResult(check: check, status: "pass", details: "Password maximum age is configured to \(days) days.")
-                    } else {
-                        return CheckResult(check: check, status: "fail", details: "Password maximum age is configured but exceeds 90 days.")
-                    }
-                }
-            }
-            return CheckResult(check: check, status: "pass", details: "Password maximum age is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password maximum age is NOT configured.")
-        }
+    static func checkPasswordMaxAge(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let mapped = CISCheck(id: check.id, category: check.category, description: check.description, ruleID: "pwpolicy_max_lifetime_enforce")
+        let evidence = MacOSChecks.runAdditionalTahoeCommand(check: mapped, command: command, legacyPasswordCriteria: true)
+        return CheckResult(check: check, status: evidence.status, details: evidence.details)
     }
     
     // Check if password minimum age is configured
