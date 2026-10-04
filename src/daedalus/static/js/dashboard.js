@@ -2752,6 +2752,21 @@
     ];
   }
 
+  function websiteCertificateAssessment(certificate, now) {
+    var value = certificate && certificate.valid_until;
+    var match = typeof value === "string" ? value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/) : null;
+    var unknown = {state: "unknown", value: "Unknown", detail: "Expiry unavailable or timestamp unsupported", days: null, expiry: null};
+    if (!match) return unknown;
+    var calendar = new Date(0); calendar.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3])); calendar.setUTCHours(0, 0, 0, 0);
+    if (calendar.getUTCFullYear() !== Number(match[1]) || calendar.getUTCMonth() !== Number(match[2]) - 1 || calendar.getUTCDate() !== Number(match[3]) || Number(match[4]) > 23 || Number(match[5]) > 59 || Number(match[6]) > 59) return unknown;
+    if (match[7] !== "Z" && (Number(match[7].slice(1, 3)) > 23 || Number(match[7].slice(4)) > 59)) return unknown;
+    var expiry = Date.parse(value), reference = now === undefined ? Date.now() : now;
+    if (!Number.isFinite(expiry) || !Number.isFinite(reference)) return unknown;
+    var remaining = expiry - reference, days = Math.ceil(remaining / 86400000);
+    var state = remaining <= 0 ? "expired" : remaining < 30 * 86400000 ? "expiring" : "recorded";
+    return {state: state, value: state === "expired" ? "Expired" : days + " days", detail: "Saved certificate expires " + new Date(expiry).toISOString(), days: days, expiry: expiry};
+  }
+
   function renderTopicPriorities(type, snapshot) {
     var container = document.getElementById(type + "-priorities");
     if (!container) return;
@@ -2768,10 +2783,10 @@
     } else {
       var code = Number(snapshot.http_status || 0);
       if (!code || code >= 400) items.push("Website response needs review: " + (code || "no HTTP response") + ".");
-      var expiry = snapshot.tls && snapshot.tls.valid_until ? Date.parse(snapshot.tls.valid_until) : NaN;
-      var days = Number.isNaN(expiry) ? null : Math.ceil((expiry - Date.now()) / 86400000);
-      if (days === null) items.push("Certificate expiry was not captured in this snapshot.");
-      else if (days < 30) items.push(days < 0 ? "The observed TLS certificate has expired." : "The observed TLS certificate expires in " + days + " days.");
+      var certificateAssessment = websiteCertificateAssessment(snapshot.tls);
+      if (certificateAssessment.state === "unknown") items.push("Certificate expiry evidence is unavailable or has an unsupported timestamp.");
+      else if (certificateAssessment.state === "expired") items.push("The observed TLS certificate has expired.");
+      else if (certificateAssessment.state === "expiring") items.push("The observed TLS certificate expires within 30 days (about " + certificateAssessment.days + " days remaining).");
       var policies = snapshot.security_headers || {};
       var missing = Object.keys(policies).filter(function (name) { return !policies[name]; });
       if (missing.length) items.push("Browser policy headers absent from the response: " + missing.join(", ") + ". Review which policies are appropriate for this site.");
@@ -3056,10 +3071,8 @@
     var responseCode = Number(snapshot.http_status || 0);
     var responseOkay = responseCode >= 200 && responseCode < 400;
     var certificate = snapshot.tls || {};
-    var expiry = certificate.valid_until ? Date.parse(certificate.valid_until) : NaN;
-    var daysRemaining = Number.isNaN(expiry) ? null : Math.ceil((expiry - Date.now()) / 86400000);
-    var certState = daysRemaining === null ? "Not captured" : (daysRemaining < 0 ? "Expired" : daysRemaining + " days");
-    var certTone = daysRemaining === null || daysRemaining < 30 ? "attention" : "good";
+    var certificateAssessment = websiteCertificateAssessment(certificate);
+    var certTone = certificateAssessment.state === "recorded" ? "good" : "attention";
     var headerTone = headerNames.length > 0 && presentHeaders === headerNames.length ? "good" : "attention";
 
     var hero = document.createElement("section");
@@ -3085,7 +3098,7 @@
     metrics.className = "audit-metric-grid site-audit-metrics";
     metrics.append(
       makeAuditMetric("HTTP response", responseCode ? String(responseCode) : "No response", snapshot.http_reason || "Root page request", responseOkay ? "good" : "attention"),
-      makeAuditMetric("TLS certificate", certState, certificate.valid_until ? "Expires " + new Date(expiry).toLocaleDateString() : "Certificate details unavailable", certTone),
+      makeAuditMetric("TLS certificate", certificateAssessment.value, certificateAssessment.detail, certTone),
       makeAuditMetric("Security headers", headerNames.length ? presentHeaders + "/" + headerNames.length : "No data", headerNames.length ? "selected headers present" : "Header data unavailable", headerTone),
       makeAuditMetric("Content type", snapshot.content_type || "Not returned", snapshot.redirects && snapshot.redirects.length ? snapshot.redirects.length + " same-domain redirect(s)" : "No redirect recorded", "neutral")
     );

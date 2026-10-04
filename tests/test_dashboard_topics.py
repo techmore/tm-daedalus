@@ -315,6 +315,27 @@ renderSavedScannerAssessment(host,{run:null});assert.equal(host.children.length,
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_certificate_expiry_requires_timezone_and_uses_exact_boundaries(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function websiteCertificateAssessment('):source.index('  function renderTopicPriorities(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+const now=Date.parse('2026-10-04T12:00:00Z');
+const assess=value=>websiteCertificateAssessment({valid_until:value},now);
+for(const value of [null,'2100-01-01','2026-10-04T12:00:00','2026-02-30T12:00:00Z','2026-10-04T24:00:00Z','2026-10-04T12:00:00+24:00']) assert.equal(assess(value).state,'unknown');
+assert.equal(assess('2026-10-04T11:59:59Z').state,'expired');
+assert.equal(assess('2026-10-04T12:00:00Z').state,'expired');
+assert.equal(assess('2026-10-04T12:00:01Z').state,'expiring');
+assert.equal(assess('2026-11-03T11:59:59Z').state,'expiring');
+assert.equal(assess('2026-11-03T12:00:00Z').state,'recorded');
+assert.deepEqual(assess('2026-10-04T08:00:00-04:00'),assess('2026-10-04T12:00:00Z'));
+assert.equal(assess('2028-02-29T12:00:00.123456+00:00').state,'recorded');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('var certificateAssessment = websiteCertificateAssessment(snapshot.tls)', source)
+        self.assertIn('var certificateAssessment = websiteCertificateAssessment(certificate)', source)
+
     def test_external_topics_put_assessment_before_records_and_controls(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()
@@ -329,7 +350,7 @@ renderSavedScannerAssessment(host,{run:null});assert.equal(host.children.length,
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_assessment_summaries_preserve_unknown_and_partial_coverage(self):
         source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
-        priority=source[source.index('  function renderTopicPriorities('):source.index('  function renderDnsSnapshot(')]
+        priority=source[source.index('  function websiteCertificateAssessment('):source.index('  function renderDnsSnapshot(')]
         outcome=source[source.index('  function renderWebsiteAuditOutcome('):source.index('  function renderActiveExposure(')]
         script='''const assert=require('node:assert/strict');
 class Node { constructor(){this.children=[];this.textContent='';} replaceChildren(){this.children=[];} append(...items){this.children.push(...items);} }
