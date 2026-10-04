@@ -1,5 +1,13 @@
 # Integration readiness
 
+## October 4, 2026 — Release 071: topic evidence grouping
+
+Production application commit **fa3546b4d4f7f97638b3dabdf99e3b08bba5a0c0** is active and healthy. The 58-file archive SHA-256 is **7df74284c67c6e0aa91c2ee7dd54e5219691a33d000751b3e7d7cf9f11a6e769**; verified off-host backup: daedalus-data-20261004T061718Z.tar.gz. The full suite passed **445 tests and 90 subtests**. JavaScript syntax and diff checks passed; current-release CI remains unconfirmed.
+
+DNS now leads with domain resolution and signing-record evidence, followed by email routing/protection. Website summaries precede the review list. DNS lookup failures stay unknown; signing-record observations do not imply local DNSSEC chain validation. Endpoint compliance highlights latest-report failed/manual/error counts alongside pass rate and enrolled devices; baseline reports precede availability. Meraki's current assessment is labeled network posture and coverage. These changes respond to the requested organization by security topic; remaining topic-level layout work is open.
+
+Authenticated production checks confirmed version-071 assets, DNS/website summary order, endpoint report order and script grouping. The no-store posture endpoint still reports the actual latest endpoint evidence: 82 failed, 19 manual, 17 errors, 23.38% pass rate. Private receipt: /data/codex-topic-layout-validation-20261004.json. This verifies served structure and data, not rendered browser UX. Visual review, real Tahoe execution, trusted persistent client distribution, approved production VLAN coverage and the remaining full-project requirements are still open. The full objective remains active.
+
 ## October 4, 2026 — Release 069: Meraki observations visible in topic summary
 
 Production application commit **517f38fe7106c2b16b71f30a4a20506e1c39efb7** is active and healthy. Archive: 58 files, SHA-256 **b18107c75baf87ac5cbd1263d4ccd7d605fdddf0a69fea7dbbf828ab1b85133f**; verified off-host backup: daedalus-data-20261004T060725Z.tar.gz. The full suite passed **443 tests and 90 subtests**; after removing a test-string escape warning, all four topic tests passed again. JavaScript syntax and diff checks passed. Release 068 Python CI **37181613402** and managed Linux CI **37181613380** both passed; current release CI remains unconfirmed.
