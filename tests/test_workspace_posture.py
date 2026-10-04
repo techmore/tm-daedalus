@@ -2,7 +2,7 @@ import unittest
 from datetime import timedelta
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import ExternalCheckRun, Organization, Membership
+from daedalus.models import ExternalCheckRun, Organization, Membership, CISDevice, CISReport
 import test_active_website_flows as fixtures
 
 
@@ -71,3 +71,23 @@ class WorkspacePostureTests(unittest.TestCase):
         self.assertIsNone(area['updated_at'])
         self.assertEqual(area['state'],'attention')
         self.assertNotIn('private detector text',str(area))
+
+    def test_latest_cis_results_surface_review_counts_without_raw_evidence(self):
+        org,_=self.context()
+        now=server.utcnow()
+        with self.session_factory() as db:
+            device=CISDevice(organization_id=org,device_fingerprint='fixture',name='Private endpoint',first_seen_at=now,last_seen_at=now)
+            db.add(device);db.flush()
+            report=CISReport(organization_id=org,device_id=device.id,client_report_hash='fixture',collected_at=now,created_at=now,summary={'score':24.68,'fail':90,'manual':9,'error':17},results=[{'details':'private local evidence'}])
+            db.add(report);db.commit();report_id=report.id
+        area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='cis')
+        self.assertEqual(area['state'],'attention')
+        self.assertIn('latest report pass rate: 24.68%',area['summary'])
+        self.assertIn('90 failed · 9 manual · 17 errors',area['summary'])
+        self.assertNotIn('private local evidence',str(area))
+        self.assertNotIn('Private endpoint',str(area))
+        for counts,state in [({'score':100,'fail':0,'manual':0,'error':0},'recorded'),({'score':100},'attention')]:
+            with self.session_factory() as db:
+                db.get(CISReport,report_id).summary=counts;db.commit()
+            area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='cis')
+            self.assertEqual(area['state'],state)

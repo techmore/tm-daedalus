@@ -4926,9 +4926,21 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
     devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
     reporting = sum(device.last_seen_at >= utcnow()-timedelta(hours=36) for device in devices)
     cis = db.scalar(select(CISReport).where(CISReport.organization_id == org.id).order_by(CISReport.collected_at.desc(), CISReport.id.desc()).limit(1))
-    areas.append({"key":"cis", "title":"Endpoint compliance", "state":"recorded" if cis and reporting == len(devices) else "attention" if devices else "not_assessed",
-        "summary":f"{reporting}/{len(devices)} devices reporting" + (f" · latest report pass rate: {cis.summary.get('score', 'unknown')}%" if cis else " · no baseline results yet"),
-        "updated_at":iso_utc(cis.collected_at) if cis else None})
+    cis_summary = f"{reporting}/{len(devices)} devices reporting"
+    cis_needs_review = False
+    if cis:
+        counts = {name: value if type(value) is int and value >= 0 else None
+                  for name in ("fail", "manual", "error") for value in [(cis.summary or {}).get(name)]}
+        cis_needs_review = any(value is None or value > 0 for value in counts.values())
+        cis_summary += f" · latest report pass rate: {(cis.summary or {}).get('score', 'unknown')}%"
+        cis_summary += " · " + " · ".join(
+            f"{counts[name] if counts[name] is not None else 'unknown'} {label}"
+            for name, label in (("fail", "failed"), ("manual", "manual"), ("error", "errors"))
+        )
+    else:
+        cis_summary += " · no baseline results yet"
+    areas.append({"key":"cis", "title":"Endpoint checks", "state":"recorded" if cis and reporting == len(devices) and not cis_needs_review else "attention" if devices or cis else "not_assessed",
+        "summary":cis_summary, "updated_at":iso_utc(cis.collected_at) if cis else None})
     meraki = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "meraki_security", ReportJob.status == "completed").order_by(ReportJob.id.desc()).limit(1))
     totals = ((meraki.report_snapshot or {}).get("meraki", {}).get("summary", {}) or {}) if meraki else {}
     areas.append({"key":"meraki", "title":"Meraki network", "state":"recorded" if meraki else "not_assessed",
