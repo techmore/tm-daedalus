@@ -6,6 +6,18 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_website_audit_evidence_is_visible_and_separate_from_summary(self):
+        template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
+        priority = template[template.index('id="{{ key }}-priority-title"'):template.index('id="{{ key }}-changes-title"')]
+        self.assertNotIn('id="web-audit-review"', priority)
+        self.assertEqual(template.count('id="web-audit-review"'), 1)
+        self.assertLess(template.index('id="web-summary-grid"'), template.index('id="web-audit-review"'))
+        self.assertLess(template.index('id="web-audit-review"'), template.index('<summary>Linked vendors'))
+        self.assertLess(template.index('id="web-audit-review"'), template.index('<summary>Refresh assessment'))
+        start = template.index('<section class="website-audit-evidence"')
+        evidence = template[start:template.index('</section>', start)]
+        self.assertNotIn('<details', evidence)
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_vendor_review_drafts_retries_and_literal_history(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()

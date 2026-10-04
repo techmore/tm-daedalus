@@ -866,3 +866,6 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .assessment-finding { min-width: 0; border-left: 3px solid var(--olive-600); padding: 4px 16px; }
 .assessment-finding h4 { margin: 0 0 8px; color: var(--brown-900); font-size: 18px; }
 .assessment-finding p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+
+.website-audit-evidence { margin: 24px 0; padding: 16px 0; border-top: 1px solid var(--card-line); }
+.website-audit-evidence > .section-heading { margin-top: 0; }
