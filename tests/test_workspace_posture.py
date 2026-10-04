@@ -2,7 +2,7 @@ import unittest
 from datetime import timedelta
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import ExternalCheckRun, Organization, Membership, CISDevice, CISReport, ReportJob
+from daedalus.models import ExternalCheckRun, Organization, Membership, CISDevice, CISReport, ReportJob, Agent, ScanEvent
 import test_active_website_flows as fixtures
 
 
@@ -138,3 +138,26 @@ class WorkspacePostureTests(unittest.TestCase):
         self.assertIn('2/2 devices with current assessments',area['summary'])
         self.assertIn('1 devices with checks needing review',area['summary'])
         self.assertIn('0 failed · 0 manual · 0 errors',area['summary'])
+
+    def test_scanner_readiness_does_not_imply_saved_scan_evidence(self):
+        org,_=self.context();now=server.utcnow()
+        with self.session_factory() as db:
+            agent=Agent(organization_id=org,name='Private scanner',token_hash='private-fixture-token',enabled=True,nmapui_connected=True,nmapui_ready=True,authorized_networks=['10.9.0.0/24'],last_seen_at=now,created_at=now)
+            db.add(agent);db.commit();agent_id=agent.id
+        def area():return next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='scanners')
+        self.assertEqual(area()['state'],'not_assessed')
+        self.assertIn('1/1 scan engines ready',area()['summary'])
+        self.assertIn('0 with a completed latest scan',area()['summary'])
+        self.assertIsNone(area()['updated_at'])
+        def event(job,status,offset,kind='scan'):
+            with self.session_factory() as db:
+                db.add(ScanEvent(organization_id=org,agent_id=agent_id,event_name='job_status',source_job_id=job,source_job_type=kind,payload={'status':status,'job_type':kind},occurred_at=now+timedelta(seconds=offset),created_at=now));db.commit()
+        event('completed-fixture','completed',0)
+        self.assertEqual(area()['state'],'recorded')
+        self.assertIn('1 with a completed latest scan',area()['summary'])
+        event('latest-fixture','failed',1)
+        self.assertEqual(area()['state'],'attention')
+        event('latest-fixture','completed',2,'report')
+        self.assertEqual(area()['state'],'attention')
+        self.assertNotIn('10.9.0.0',str(area()))
+        self.assertNotIn('private-fixture-token',str(area()))

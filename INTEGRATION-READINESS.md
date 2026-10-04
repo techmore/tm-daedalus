@@ -446,3 +446,8 @@ Overview adds area-level review, failed-collection, and unassessed counts. Area 
 ### 2026-10-04 — Consistent endpoint coverage on Overview
 
 Overview and endpoint status share the same latest-per-device collection-time classifier. Fresh receipts do not make stale assessments current; future timestamps stay unknown and devices without results stay missing. Overview also counts devices whose latest assessment needs review, so a later clean report from another device cannot clear their attention state. Latest-report detail remains explicitly scoped to that report. Fixtures cover stale/future/missing assessments with fresh receipts and two devices with different latest results.
+
+
+### 2026-10-04 — Scanner availability versus scan evidence
+
+Overview now distinguishes online scanners, confirmed scan-engine readiness, approved ranges, and scanners whose latest saved scan completed. A ready scanner without any saved scan remains unassessed. Failed or conflicting latest-run evidence requires attention. Completion uses the existing run-summary validator; mixed scan/report metadata cannot count as a completed scan. Scan evidence timestamps are separate from availability check-ins. No claim is made that saved runs cover all approved ranges. Fixtures cover readiness without evidence, a completed run, a later failure, metadata conflict, and private-detail exclusion.

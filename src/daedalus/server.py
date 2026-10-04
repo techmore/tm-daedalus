@@ -5205,8 +5205,29 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
     agents = db.scalars(select(Agent).where(Agent.organization_id == org.id, Agent.enabled.is_(True))).all()
     online = sum(agent_status(agent) == "online" for agent in agents)
     scoped = sum(bool(agent.authorized_networks) for agent in agents)
-    areas.append({"key":"scanners", "title":"Internal network", "state":"recorded" if agents and online == len(agents) and scoped == len(agents) else "attention" if agents else "not_assessed",
-        "summary":f"{online}/{len(agents)} enabled scanners online · {scoped} with approved network ranges" if agents else "No enabled scanners in this workspace.", "updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
+    ready = sum(agent_status(agent) == "online" and agent.nmapui_ready is True for agent in agents)
+    completed_scans = 0
+    scan_attempts = 0
+    scan_times = []
+    for agent in agents:
+        occurred = func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at)
+        job_id = db.scalar(select(ScanEvent.source_job_id).where(
+            ScanEvent.organization_id == org.id, ScanEvent.agent_id == agent.id,
+            ScanEvent.source_job_type == "scan", ScanEvent.source_job_id.is_not(None),
+        ).group_by(ScanEvent.source_job_id).order_by(func.max(occurred).desc(), func.max(ScanEvent.id).desc()).limit(1))
+        if job_id:
+            scan_attempts += 1
+            run = scanner_run_summary(db, agent, job_id)
+            if run["status"] == "completed" and not run["group_metadata_conflict"]:
+                completed_scans += 1
+                scan_times.append(run["last_occurred_at"])
+    scanner_state = "not_assessed" if not scan_attempts else "recorded" if completed_scans == len(agents) else "attention"
+    if agents and (ready != len(agents) or scoped != len(agents) or (completed_scans and completed_scans != len(agents))):
+        scanner_state = "attention"
+    areas.append({"key":"scanners", "title":"Internal network", "state":scanner_state,
+        "summary":f"{ready}/{len(agents)} scan engines ready · {online} online · {scoped} with approved ranges · {completed_scans} with a completed latest scan. Saved runs do not establish coverage of all approved ranges." if agents else "No enabled scanners in this workspace.",
+        "updated_at":max(scan_times, default=None),
+        "availability_updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
     devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
     now = utcnow()
     latest_assessments = _cis_latest_assessments(db, org.id)
