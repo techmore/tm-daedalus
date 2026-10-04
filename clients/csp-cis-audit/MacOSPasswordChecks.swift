@@ -144,133 +144,55 @@ struct MacOSPasswordChecks {
 
     // MARK: - File Permissions
     
-    // Check if users' home directories permissions are 750 or more restrictive
-    static func checkHomeDirectoryPermissions(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/find"
-        process.arguments = ["/Users", "-mindepth", "1", "-maxdepth", "1", "-type", "d", "-perm", "-751", "-ls"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check home directory permissions: \(error)")
+    // Read every matching mode, rather than selecting only files with all
+    // bits in an unsafe mask. Never include filesystem paths in report details.
+    private static func legacyPermissions(check: CISCheck, selection: [String], allowed: Int,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence
+    ) -> CheckResult {
+        let evidence = command("/usr/bin/find", ["/Users"] + selection + ["-exec", "/usr/bin/stat", "-f", "%Lp", "{}", "+"])
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "Complete readable mode evidence was unavailable for the selected /Users scope. Missing, failed or truncated enumeration does not establish compliant permissions.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "All users' home directories have permissions 750 or more restrictive.")
-        } else {
-            let lines = output.split(separator: "\n")
-            return CheckResult(check: check, status: "fail", details: "Found \(lines.count) home directories with permissions less restrictive than 750.")
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              evidence.output.utf8.count <= 65_536 else { return unknown() }
+        let lines = evidence.output.split(separator: "\n", omittingEmptySubsequences: false)
+        let rows = lines.last == "" ? Array(lines.dropLast()) : lines
+        guard !rows.isEmpty, rows.count <= 5_000 else { return unknown() }
+        var violations = 0
+        for row in rows {
+            guard !row.isEmpty, row.count <= 4,
+                  row.allSatisfy({ "01234567".contains($0) }),
+                  let mode = Int(row, radix: 8), mode <= 0o7777 else { return unknown() }
+            if mode & ~allowed != 0 { violations += 1 }
         }
+        return CheckResult(check: check, status: violations == 0 ? "pass" : "fail",
+            details: "Captured modes for \(rows.count) matching entries in the local /Users scope; \(violations) exceed the allowed legacy permission mask. Other home-directory locations, ACLs, ownership and subsequent changes require separate review.")
     }
-    
-    // Check if users' dot-files permissions are 750 or more restrictive
-    static func checkDotFilePermissions(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/find"
-        process.arguments = ["/Users", "-name", ".*", "-type", "f", "-perm", "-751", "-ls"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check dot-file permissions: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "All users' dot-files have permissions 750 or more restrictive.")
-        } else {
-            let lines = output.split(separator: "\n")
-            return CheckResult(check: check, status: "fail", details: "Found \(lines.count) dot-files with permissions less restrictive than 750.")
-        }
+
+    static func checkHomeDirectoryPermissions(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyPermissions(check: check, selection: ["-mindepth", "1", "-maxdepth", "1", "-type", "d"], allowed: 0o750, command: command)
     }
-    
-    // Check if users' .ssh directory permissions are 700 or more restrictive
-    static func checkSSHDirectoryPermissions(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/find"
-        process.arguments = ["/Users", "-name", ".ssh", "-type", "d", "-perm", "-701", "-ls"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check .ssh directory permissions: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "All users' .ssh directories have permissions 700 or more restrictive.")
-        } else {
-            let lines = output.split(separator: "\n")
-            return CheckResult(check: check, status: "fail", details: "Found \(lines.count) .ssh directories with permissions less restrictive than 700.")
-        }
+    static func checkDotFilePermissions(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyPermissions(check: check, selection: ["-name", ".*", "-type", "f"], allowed: 0o750, command: command)
     }
-    
-    // Check if users' .ssh/config permissions are 600 or more restrictive
-    static func checkSSHConfigPermissions(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/find"
-        process.arguments = ["/Users", "-name", "config", "-path", "*/.ssh/*", "-type", "f", "-perm", "-601", "-ls"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check .ssh/config permissions: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "All users' .ssh/config files have permissions 600 or more restrictive.")
-        } else {
-            let lines = output.split(separator: "\n")
-            return CheckResult(check: check, status: "fail", details: "Found \(lines.count) .ssh/config files with permissions less restrictive than 600.")
-        }
+    static func checkSSHDirectoryPermissions(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyPermissions(check: check, selection: ["-name", ".ssh", "-type", "d"], allowed: 0o700, command: command)
     }
-    
-    // Check if users' .ssh/authorized_keys permissions are 600 or more restrictive
-    static func checkSSHAuthorizedKeysPermissions(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/find"
-        process.arguments = ["/Users", "-name", "authorized_keys", "-path", "*/.ssh/*", "-type", "f", "-perm", "-601", "-ls"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check .ssh/authorized_keys permissions: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "All users' .ssh/authorized_keys files have permissions 600 or more restrictive.")
-        } else {
-            let lines = output.split(separator: "\n")
-            return CheckResult(check: check, status: "fail", details: "Found \(lines.count) .ssh/authorized_keys files with permissions less restrictive than 600.")
-        }
+    static func checkSSHConfigPermissions(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyPermissions(check: check, selection: ["-name", "config", "-path", "*/.ssh/*", "-type", "f"], allowed: 0o600, command: command)
+    }
+    static func checkSSHAuthorizedKeysPermissions(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyPermissions(check: check, selection: ["-name", "authorized_keys", "-path", "*/.ssh/*", "-type", "f"], allowed: 0o600, command: command)
     }
 }

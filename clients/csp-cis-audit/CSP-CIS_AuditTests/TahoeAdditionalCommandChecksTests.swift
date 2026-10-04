@@ -13,6 +13,41 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyPermissionCollectorsCompareEveryModeAndRejectIncompleteEnumeration() {
+        let check = CISCheck(id: "legacy-permissions", category: "macos", description: "Permissions")
+        for kind in 0..<5 {
+            func evaluate(_ evidence: MacOSChecks.CommandEvidence) -> CheckResult {
+                let command: (String, [String]) -> MacOSChecks.CommandEvidence = { executable, arguments in
+                    #expect(executable == "/usr/bin/find")
+                    #expect(arguments.first == "/Users")
+                    #expect(Array(arguments.suffix(6)) == ["-exec", "/usr/bin/stat", "-f", "%Lp", "{}", "+"])
+                    #expect(!arguments.contains("-perm"))
+                    return evidence
+                }
+                switch kind {
+                case 0: return MacOSPasswordChecks.checkHomeDirectoryPermissions(check: check, command: command)
+                case 1: return MacOSPasswordChecks.checkDotFilePermissions(check: check, command: command)
+                case 2: return MacOSPasswordChecks.checkSSHDirectoryPermissions(check: check, command: command)
+                case 3: return MacOSPasswordChecks.checkSSHConfigPermissions(check: check, command: command)
+                default: return MacOSPasswordChecks.checkSSHAuthorizedKeysPermissions(check: check, command: command)
+                }
+            }
+            #expect(evaluate(.init(output: "600\n400\n")).status == "pass")
+            // Others-read violates all masks, even without every bit in -751/-701/-601.
+            #expect(evaluate(.init(output: "604\n")).status == "fail")
+            #expect(evaluate(.init(output: "777\n")).status == "fail")
+            #expect(evaluate(.init(output: "4600\n")).status == "fail")
+            #expect(evaluate(.init(output: "640\n")).status == (kind < 2 ? "pass" : "fail"))
+            for output in ["", "\n", "600\n\n", "888", "mode=600", "/private/path 600", String(repeating: "600\n", count: 5001)] {
+                #expect(evaluate(.init(output: output)).status == "manual")
+            }
+            for evidence in [MacOSChecks.CommandEvidence(output: "600\n", exitCode: 1), .init(output: "600\n", error: "denied"), .init(output: "600\n", unavailable: "truncated")] {
+                #expect(evaluate(evidence).status == "manual")
+            }
+            #expect(!evaluate(.init(output: "600\n")).details.contains("/private/path"))
+        }
+    }
+
     @Test func legacyKeychainSleepLockRequiresExplicitSettingsNotTimeout() {
         let check = CISCheck(id: "legacy-keychain", category: "macos", description: "Sleep locking")
         let prefix = "Keychain \"/Users/fixture/Library/Keychains/login.keychain-db\""
