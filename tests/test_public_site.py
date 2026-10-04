@@ -33,6 +33,13 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn("https://daedalus.cybersecuritypilot.org/", home)
         self.assertIn("https://daedalus.cybersecuritypilot.org/", overview)
 
+    def test_marketing_describes_implemented_evidence_features(self):
+        home = (SITE / "index.html").read_text(encoding="utf-8")
+        self.assertIn("DNS change history and alerts", home)
+        self.assertIn("Versioned endpoint checks and audit history", home)
+        self.assertNotIn("Domain email enumeration", home)
+        self.assertNotIn("CIS v8 level 1, 2, and 3 device audits", home)
+
     def test_existing_csp_school_resources_are_preserved(self):
         home = (SITE / "index.html").read_text(encoding="utf-8")
         legacy_directory = SITE / "Chrome_Moysle_googleadmin"
