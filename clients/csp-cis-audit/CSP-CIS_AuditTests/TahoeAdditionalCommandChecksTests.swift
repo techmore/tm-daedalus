@@ -13,6 +13,20 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func guestPreferencesDoNotGuessMissingDefaults() {
+        let check = CISCheck(id: "guest", category: "macos", description: "Guest")
+        let collectors: [(CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult] = [
+            { MacOSUserChecks.checkGuestAccountDisabled(check: $0, command: $1) },
+            { MacOSUserChecks.checkGuestSharingDisabled(check: $0, command: $1) }]
+        for collect in collectors {
+            #expect(collect(check, { _, _ in .init(output: "0") }).status == "pass")
+            #expect(collect(check, { _, _ in .init(output: "1") }).status == "fail")
+            for evidence in [MacOSChecks.CommandEvidence(), .init(output: "0", exitCode: 1), .init(output: "0", error: "failed"), .init(output: "10"), .init(output: "0", unavailable: "timeout")] {
+                #expect(collect(check, { _, _ in evidence }).status == "manual")
+            }
+        }
+    }
+
     @Test func legacyMalwarePreferencesRequireExplicitEvidence() {
         let check = CISCheck(id: "malware", category: "macos", description: "Malware")
         let collectors: [(CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult] = [

@@ -5,56 +5,14 @@ struct MacOSUserChecks {
     
     // MARK: - Login Window and User Account Settings
     
-    // Check if Guest account is disabled
-    static func checkGuestAccountDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.loginwindow", "GuestEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (default is disabled)
-            return CheckResult(check: check, status: "pass", details: "Guest account appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Guest account is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Guest account is ENABLED.")
-        }
+    static func checkGuestAccountDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.loginwindow", key: "GuestEnabled", expected: false, command: command)
     }
-    
-    // Check if Guest access to shared folders is disabled
-    static func checkGuestSharingDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/SystemConfiguration/com.apple.smb.server", "AllowGuestAccess"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (default is disabled)
-            return CheckResult(check: check, status: "pass", details: "Guest access to shared folders appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Guest access to shared folders is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Guest access to shared folders is ENABLED.")
-        }
+
+    static func checkGuestSharingDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/SystemConfiguration/com.apple.smb.server", key: "AllowGuestAccess", expected: false, command: command)
     }
-    
+
     // Check if Automatic Login is disabled
     static func checkAutomaticLoginDisabled(
         check: CISCheck,
