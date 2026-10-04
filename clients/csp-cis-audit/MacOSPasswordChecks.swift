@@ -111,30 +111,37 @@ struct MacOSPasswordChecks {
     }
 
     // Check if login keychain is locked when system sleeps
-    static func checkLoginKeychainLocked(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/security"
-        process.arguments = ["show-keychain-info", "/Users/\(NSUserName())/Library/Keychains/login.keychain-db"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check login keychain: \(error)")
+    static func checkLoginKeychainLocked(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand,
+        homeDirectory: String = NSHomeDirectory()
+    ) -> CheckResult {
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "Login keychain sleep-lock settings were unavailable or unsupported. No state is inferred from a timeout or failed read.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("lock-on-sleep") || output.contains("timeout=") {
-            return CheckResult(check: check, status: "pass", details: "Login keychain is locked when system sleeps.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Login keychain is NOT locked when system sleeps.")
+        guard homeDirectory.hasPrefix("/"), !homeDirectory.contains("\""),
+              !homeDirectory.contains("\n"), !homeDirectory.contains("\r") else { return unknown() }
+        let path = URL(fileURLWithPath: homeDirectory).appendingPathComponent("Library/Keychains/login.keychain-db").path
+        let evidence = command("/usr/bin/security", ["show-keychain-info", path])
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.output.utf8.count + evidence.error.utf8.count <= 16_384 else { return unknown() }
+        let stdout = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stderr = evidence.error.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Apple's tool writes successful settings to stderr. Never merge an error
+        // message with a settings line or interpret unrelated keychain metadata.
+        guard stdout.isEmpty || stderr.isEmpty else { return unknown() }
+        let value = stdout.isEmpty ? stderr : stdout
+        let prefix = "Keychain \"" + path + "\""
+        guard value.hasPrefix(prefix) else { return unknown() }
+        let flags = String(value.dropFirst(prefix.count))
+        guard flags.range(of: #"^( lock-on-sleep)?( use-lock-interval)? (no-timeout|timeout=(0|[1-9][0-9]{0,9})s)$"#, options: .regularExpression) != nil else { return unknown() }
+        if let timeout = flags.split(separator: " ").last, timeout.hasPrefix("timeout=") {
+            guard let seconds = Int(timeout.dropFirst(8).dropLast()), seconds < Int(Int32.max) else { return unknown() }
         }
+        let enabled = flags.split(separator: " ").contains("lock-on-sleep")
+        return CheckResult(check: check, status: enabled ? "pass" : "fail",
+            details: "Current user's login keychain reports sleep locking " + (enabled ? "enabled." : "disabled.") + " Timeout settings are evaluated separately. This is captured configuration, not a live sleep/unlock test or an assessment of other users.")
     }
-    
+
     // MARK: - File Permissions
     
     // Check if users' home directories permissions are 750 or more restrictive

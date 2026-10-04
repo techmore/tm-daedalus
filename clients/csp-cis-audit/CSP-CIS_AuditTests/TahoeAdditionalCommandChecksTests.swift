@@ -13,6 +13,29 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyKeychainSleepLockRequiresExplicitSettingsNotTimeout() {
+        let check = CISCheck(id: "legacy-keychain", category: "macos", description: "Sleep locking")
+        let prefix = "Keychain \"/Users/fixture/Library/Keychains/login.keychain-db\""
+        func result(_ evidence: MacOSChecks.CommandEvidence) -> CheckResult {
+            MacOSPasswordChecks.checkLoginKeychainLocked(check: check, command: { executable, arguments in
+                #expect(executable == "/usr/bin/security")
+                #expect(arguments == ["show-keychain-info", "/Users/fixture/Library/Keychains/login.keychain-db"])
+                return evidence
+            }, homeDirectory: "/Users/fixture")
+        }
+        #expect(result(.init(error: prefix + " lock-on-sleep use-lock-interval timeout=300s")).status == "pass")
+        #expect(result(.init(output: prefix + " lock-on-sleep no-timeout")).status == "pass")
+        #expect(result(.init(error: prefix + " use-lock-interval timeout=300s")).status == "fail")
+        #expect(result(.init(error: prefix + " no-timeout")).status == "fail")
+        for output in ["", "timeout=300s", prefix + " not-lock-on-sleep timeout=300s", prefix + " lock-on-sleep timeout=0300s", prefix + " lock-on-sleep timeout=2147483647s", prefix + " lock-on-sleep timeout=-1s", prefix + " lock-on-sleep timeout=300s\nerror", "Keychain \"/other\" lock-on-sleep timeout=300s"] {
+            #expect(result(.init(error: output)).status == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(error: prefix + " lock-on-sleep timeout=300s", exitCode: 1), .init(output: prefix + " lock-on-sleep timeout=300s", error: "denied"), .init(error: prefix + " lock-on-sleep timeout=300s", unavailable: "timeout")] {
+            #expect(result(evidence).status == "manual")
+        }
+        #expect(!result(.init(error: prefix + " no-timeout")).details.contains("/Users/fixture"))
+    }
+
     @Test func legacyMinimumPasswordAgeRequiresExplicitNumericEvidence() {
         let check = CISCheck(id: "legacy-min-age", category: "macos", description: "Minimum age")
         func result(_ evidence: MacOSChecks.CommandEvidence) -> CheckResult {
