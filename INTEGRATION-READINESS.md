@@ -491,3 +491,8 @@ Website dependency evidence now includes saved decisions, a rationale form for a
 ### 2026-10-04 — Production vendor review workflow validation
 
 Source f14337e is deployed on Incus; health checks and verified off-host backup passed. Full suite: 511 tests, 104 subtests. Authenticated production dashboard includes version-091 controls. Saved website inventory 54 received review 1 (monitor) at 2026-10-04T09:50:33.395962Z, explicitly labeled workflow validation pending owner review and not a provider-security approval. An identical retry returned the same ID with created=false; history and read-only database inspection confirmed exactly one stored request row. Private receipt: /data/codex-vendor-review-live-validation-20261004.json. Browser visual review, automated provider assessment and review inclusion in frozen PDF reports remain outstanding.
+
+
+### 2026-10-04 — Frozen vendor decisions in external reports
+
+External report snapshots now capture current decisions and up to 100 history entries for exactly the selected saved website inventory, including origin, status, rationale, reviewer label, and time. Later decisions or account-label changes do not rewrite a saved report snapshot; a newer inventory does not inherit earlier decisions. PDFs show decision summaries and full captured history rationales, explicitly marking human review as distinct from provider security assessment. Long rationales are normal paragraphs that can flow across pages rather than oversized table rows. Fixtures check snapshot immutability, exact inventory scope, long notes, reviewer attribution, and bounded-history disclosure. Production generation and all-page visual review remain pending.

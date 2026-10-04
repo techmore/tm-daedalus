@@ -371,3 +371,19 @@ class ScannerRunReportTests(unittest.TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertEqual(sum(line in value for value in values), 1)
         self.assertNotIn("Additional scanner evidence", values)
+
+
+class VendorDecisionPDFTests(unittest.TestCase):
+    def test_frozen_decisions_include_rationale_and_long_notes_render(self):
+        from unittest.mock import patch
+        from daedalus import reports
+        review={'id':1,'origin':{'host':'cdn.example','scheme':'https','port':None},'status':'needs_action','reviewer':'Fixture reviewer','created_at':'2026-10-04T09:50:33Z','note':'<script>literal rationale</script> '+('Long review rationale. '*85)}
+        snapshot={'checks':{'web':{'run':{'id':54,'status':'completed','snapshot':{'http_status':200}},'vendor_reviews':{'run_id':54,'security_assessment':False,'latest':[review],'history':[review],'history_truncated':True}}}}
+        with patch.object(reports,'_paragraph',wraps=reports._paragraph) as paragraphs:
+            pdf=reports.build_external_posture_pdf(snapshot)
+        values=[str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertIn(review['note'],values)
+        self.assertTrue(any('not provider security assessments' in value for value in values))
+        self.assertTrue(any('latest 100 decision-history entries' in value for value in values))
+        self.assertIn('Fixture reviewer',values)

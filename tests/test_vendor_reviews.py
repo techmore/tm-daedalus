@@ -1,8 +1,9 @@
 import unittest
+import json
 from uuid import uuid4
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import AuditLog, ExternalCheckRun, Membership, Organization, VendorReview
+from daedalus.models import AuditLog, ExternalCheckRun, Membership, Organization, VendorReview, User
 import test_active_website_flows as fixtures
 
 
@@ -68,3 +69,27 @@ class VendorReviewTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/vendor-reviews',params={'run_id':run}).status_code,200)
         self.client.post('/logout')
         self.assertEqual(self.client.get('/api/vendor-reviews',params={'run_id':run}).status_code,401)
+
+    def test_report_snapshot_freezes_decisions_and_reviewer(self):
+        run=self.inventory();payload=self.payload(run)
+        self.client.post('/api/vendor-reviews',json=payload)
+        org,user=self.context()
+        with self.session_factory() as db:
+            frozen=server.capture_external_report_snapshot(db,db.get(Organization,org),db.get(User,user))
+        saved=json.dumps(frozen)
+        decisions=frozen['checks']['web']['vendor_reviews']
+        self.assertEqual(decisions['run_id'],run)
+        self.assertEqual(decisions['latest'][0]['status'],'needs_action')
+        self.assertTrue(decisions['latest'][0]['reviewer'])
+        self.assertFalse(decisions['security_assessment'])
+        changed=dict(payload,request_id=str(uuid4()),status='reviewed',note='Later review decision with a different rationale.')
+        self.client.post('/api/vendor-reviews',json=changed)
+        self.assertEqual(json.dumps(frozen),saved)
+        with self.session_factory() as db:
+            newer=server.capture_external_report_snapshot(db,db.get(Organization,org),db.get(User,user))
+        self.assertEqual(newer['checks']['web']['vendor_reviews']['latest'][0]['status'],'reviewed')
+        self.assertEqual(len(newer['checks']['web']['vendor_reviews']['history']),2)
+        self.inventory()
+        with self.session_factory() as db:
+            latest=server.capture_external_report_snapshot(db,db.get(Organization,org),db.get(User,user))
+        self.assertEqual(latest['checks']['web']['vendor_reviews']['latest'],[])

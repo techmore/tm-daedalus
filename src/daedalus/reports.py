@@ -422,6 +422,33 @@ def _append_website(story: list[Any], check: dict[str, Any], styles: dict[str, P
             story.append(_paragraph("The stored inventory was capped at 100 linked origins.", styles["small"]))
     if snapshot.get("page_html_truncated"):
         story.append(_paragraph("The page exceeded 256 KiB; resource inventory covers only the captured first 256 KiB.", styles["small"]))
+    reviews = check.get("vendor_reviews")
+    story.append(Paragraph("Dependency review decisions", styles["subsection"]))
+    if not isinstance(reviews, dict):
+        story.append(_paragraph("Review decisions were not captured in this report snapshot.", styles["body"]))
+    else:
+        story.append(_paragraph(f"Decisions apply to saved website inventory #{reviews.get('run_id')}. These are human review records, not provider security assessments or approvals. Later decisions do not change this PDF.", styles["body"]))
+        latest = reviews.get("latest") or []
+        if not latest:
+            story.append(_paragraph("No decisions were recorded for this inventory when the report was requested.", styles["body"]))
+        else:
+            rows = [[_paragraph(label, styles["table_header"]) for label in ("Origin", "Decision", "Reviewer", "Recorded")]]
+            labels = {"reviewed": "Reviewed", "needs_action": "Needs action", "monitor": "Monitor"}
+            for review in latest:
+                origin = review.get("origin") or {}
+                host = str(origin.get("host") or "Unknown") + (":" + str(origin["port"]) if origin.get("port") else "")
+                rows.append([_paragraph(host, styles["cell"]), _paragraph(labels.get(review.get("status"), "Unknown"), styles["cell"]), _paragraph(review.get("reviewer") or "Former member", styles["cell"]), _paragraph(_time_text(review.get("created_at")), styles["cell"])])
+            story.append(_table(rows, [1.9 * inch, 1.0 * inch, 1.5 * inch, 2.1 * inch]))
+        history = reviews.get("history") or []
+        if history:
+            story.append(Paragraph("Decision history and rationale", styles["subsection"]))
+            labels = {"reviewed": "Reviewed", "needs_action": "Needs action", "monitor": "Monitor"}
+            for review in history:
+                origin = review.get("origin") or {}
+                story.append(_paragraph(f"Review #{review.get('id')} - {origin.get('host', 'Unknown')} - {labels.get(review.get('status'), 'Unknown')} - {review.get('reviewer') or 'Former member'} - {_time_text(review.get('created_at'))}", styles["small"]))
+                story.append(_paragraph(review.get("note") or "No rationale recorded", styles["body"]))
+        if reviews.get("history_truncated"):
+            story.append(_paragraph("Only the latest 100 decision-history entries are included; older entries remain in workspace history.", styles["small"]))
     _append_changes(story, check.get("changes") or [], styles)
 
 

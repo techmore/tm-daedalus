@@ -823,6 +823,21 @@ def capture_external_report_snapshot(
                 for change in change_rows
             ],
         }
+    web_run = (checks.get("web") or {}).get("run")
+    if web_run:
+        scope = (VendorReview.organization_id == organization.id, VendorReview.run_id == web_run["id"])
+        ranked = select(VendorReview.id, func.row_number().over(partition_by=VendorReview.resource_index, order_by=VendorReview.id.desc()).label("rank")).where(*scope).subquery()
+        latest_ids = select(ranked.c.id).where(ranked.c.rank == 1)
+        latest_reviews = db.execute(select(VendorReview, User).outerjoin(User, User.id == VendorReview.actor_user_id).where(VendorReview.id.in_(latest_ids)).order_by(VendorReview.resource_index)).all()
+        history = db.execute(select(VendorReview, User).outerjoin(User, User.id == VendorReview.actor_user_id).where(*scope).order_by(VendorReview.id.desc()).limit(101)).all()
+        def frozen_review(row, reviewer):
+            return {**_serialize_vendor_review(row), "reviewer": (reviewer.display_name or reviewer.email) if reviewer else "Former member"}
+        checks["web"]["vendor_reviews"] = {
+            "run_id": web_run["id"], "security_assessment": False,
+            "latest": [frozen_review(*row) for row in latest_reviews],
+            "history": [frozen_review(*row) for row in history[:100]],
+            "history_truncated": len(history) > 100,
+        }
     return {
         "domain": organization.domain,
         "organization_name": organization.name,
