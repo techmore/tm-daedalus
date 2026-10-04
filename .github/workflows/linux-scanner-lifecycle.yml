@@ -50,6 +50,8 @@ jobs:
           sudo install -m 644 scripts/validate_linux_lifecycle.py /home/daedalusqa/validate_linux_lifecycle.py
           sudo install -m 644 src/daedalus/agent_bundle/systemd_service.py /home/daedalusqa/systemd_service.py
           sudo runuser -u daedalusqa -- env \
+            XDG_CONFIG_HOME="/home/daedalusqa/.config" \
+            XDG_DATA_HOME="/home/daedalusqa/.local/share" \
             XDG_RUNTIME_DIR="/run/user/${qa_uid}" \
             DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${qa_uid}/bus" \
             python3 /home/daedalusqa/validate_linux_lifecycle.py \
