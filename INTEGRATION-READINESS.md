@@ -526,3 +526,8 @@ Source 7cad122 is active on Incus, with internal/public health checks and verifi
 ### 2026-10-04 — Legacy screensaver evidence correction
 
 Three legacy screensaver collectors now use the bounded reader. Password requirements require explicit successful Boolean evidence. Timer zero fails because it does not activate a screensaver; positive integral seconds must meet the retained legacy 1200-second threshold. Grace-period evidence accepts finite nonnegative decimal seconds and retains the legacy five-second threshold. Failed, missing, malformed, negative or timed-out reads are manual. Results explicitly limit claims to local preferences, not effective session-lock behavior or enforcement for every user. Native xcresult confirms 76 tests passed, zero failed/skipped, including boundary and unavailable-evidence fixtures. Initial test compilation exposed a nested Swift Testing macro; moving the collector call outside the assertion corrected the fixture. No live macOS 26 assessment or trusted public client distribution is claimed.
+
+
+### 2026-10-04 — Legacy root query evidence
+
+The legacy root collector now uses bounded directory reads and does not infer disabled root login from missing attributes, failed commands or unfamiliar authentication mechanisms. Both readable and unreadable mechanisms remain manual pending a supported platform-specific interpretation. This removes a false-pass path without claiming root-state assessment coverage. Native xcresult: 77 passed, zero failed/skipped. The separate pinned Tahoe rule remains distinct; actual Tahoe validation is still pending.

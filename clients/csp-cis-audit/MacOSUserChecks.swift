@@ -139,29 +139,20 @@ struct MacOSUserChecks {
             details: key + " explicitly reads " + value + " seconds. Local preference evidence does not establish effective session-lock behavior or managed enforcement for every user.")
     }
 
-    // Check if root account is disabled
-    static func checkRootAccountDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/dscl"
-        process.arguments = [".", "-read", "/Users/root", "AuthenticationAuthority"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the root account is disabled
-            return CheckResult(check: check, status: "pass", details: "Root account appears to be disabled.")
+    // A missing or failed directory query does not establish root login state.
+    static func checkRootAccountDisabled(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let evidence = command("/usr/bin/dscl", [".", "-read", "/Users/root", "AuthenticationAuthority"])
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return CheckResult(check: check, status: "manual", details: "Root directory evidence is unavailable. Root login state was not inferred from a failed query.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("No such key") || output.contains("dsAttrTypeNative:AuthenticationAuthority") == false {
-            return CheckResult(check: check, status: "pass", details: "Root account is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Root account is ENABLED.")
+        let value = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.hasPrefix("AuthenticationAuthority:"),
+              !value.dropFirst("AuthenticationAuthority:".count).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return CheckResult(check: check, status: "manual", details: "No supported explicit root authentication authority was returned. Confirm root login state using the applicable platform procedure.")
         }
+        return CheckResult(check: check, status: "manual", details: "A root authentication authority is present. Its mechanisms require review; this legacy collector does not establish whether root login is enabled or disabled.")
     }
 }

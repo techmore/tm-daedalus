@@ -209,6 +209,18 @@ struct CSP_CIS_AuditTests {
         #expect(MacOSUserChecks.checkScreensaverPasswordRequired(check: check, command: { _, _ in .init(output: "0") }).status == "fail")
     }
 
+    @Test func legacyRootQueryDoesNotInferLoginState() {
+        let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
+        for evidence in [MacOSChecks.CommandEvidence(), .init(output: "No such key"), .init(error: "No such key: AuthenticationAuthority", exitCode: 1), .init(output: "AuthenticationAuthority: ;ShadowHash;"), .init(output: "AuthenticationAuthority: ;DisabledUser;"), .init(output: "AuthenticationAuthority:"), .init(output: "AuthenticationAuthority: ;ShadowHash;", exitCode: 1), .init(output: "AuthenticationAuthority: ;ShadowHash;", unavailable: "timeout")] {
+            let result = MacOSUserChecks.checkRootAccountDisabled(check: check) { path, args in
+                #expect(path == "/usr/bin/dscl")
+                #expect(args == [".", "-read", "/Users/root", "AuthenticationAuthority"])
+                return evidence
+            }
+            #expect(result.status == "manual")
+        }
+    }
+
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
         let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
         func flags(_ text: String?) -> String {
