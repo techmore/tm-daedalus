@@ -2080,6 +2080,12 @@
     });
   }
 
+  function cisAssessmentScope(latest) {
+    if (!latest) return "Waiting for the first saved endpoint assessment.";
+    var profile = latest.profile_slug ? latest.profile_slug + (latest.profile_version ? " v" + latest.profile_version : "") : "Profile not identified";
+    return "Latest saved assessment: " + (latest.device_name || "Unnamed endpoint") + " · " + profile + " · collected " + dateLabel(latest.collected_at) + ". Check counts and pass rate below describe this report.";
+  }
+
   function cisPriorityMetrics(latest, enrolledDeviceCount) {
     var summary = latest && latest.summary ? latest.summary : {};
     function count(key) {
@@ -2098,6 +2104,7 @@
   function renderCISReports(reports, enrolledDeviceCount) {
     var list = document.getElementById("cis-report-list");
     var metrics = document.getElementById("cis-summary-metrics");
+    text(document.getElementById("cis-assessment-scope"), cisAssessmentScope(reports[0]));
     if (metrics) {
       var latest = reports[0];
       metrics.replaceChildren();
@@ -2254,6 +2261,7 @@
         tahoe.disabled = publishedSlugs.has("cis-macos-26-tahoe-level-1") && publishedSlugs.has("cis-macos-26-tahoe-level-2");
       }
     } catch (error) {
+      text(document.getElementById("cis-assessment-scope"), "Could not refresh the latest endpoint assessment. Previously displayed headline counts may be out of date.");
       ["cis-profile-list", "cis-device-list", "cis-report-list", "cis-change-list"].forEach(function (id) {
         var list = document.getElementById(id);
         if (list) { list.replaceChildren(); appendEmpty(list, error.message); }

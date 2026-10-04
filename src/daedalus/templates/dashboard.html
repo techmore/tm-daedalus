@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-082">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-083">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -258,6 +258,7 @@
             <div><p class="eyebrow">ENDPOINT COMPLIANCE</p><h3>Endpoint posture</h3><p class="muted">Check which devices are reporting and review their latest baseline results. Scores describe reported checks; they are not a CIS attestation.</p></div>
             <div class="cis-hero-metrics" id="cis-summary-metrics" aria-live="polite"><div class="cis-mini-metric"><strong>—</strong><span>Failed checks</span></div><div class="cis-mini-metric"><strong>—</strong><span>Need manual review</span></div><div class="cis-mini-metric"><strong>—</strong><span>Collection errors</span></div></div>
           </div>
+          <p class="check-scope-note" id="cis-assessment-scope" aria-live="polite">Loading the latest saved endpoint assessment…</p>
           <div class="section-heading check-subheading"><div><p class="eyebrow">ENDPOINT REPORTS</p><h3>Baseline results</h3></div></div>
           <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">CHANGES BETWEEN REPORTS</p><h3>Check status history</h3></div></div>
@@ -479,6 +480,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-082" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-083" defer></script>
 </body>
 </html>

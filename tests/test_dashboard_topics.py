@@ -135,6 +135,19 @@ const empty=new Node('div');renderCISResultGroups(empty,[]);assert.match(empty.t
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_endpoint_headline_scope_identifies_its_report_and_profile(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function cisAssessmentScope('):source.index('  function cisPriorityMetrics(')]
+        script = "const assert=require('node:assert/strict');function dateLabel(value){return value;}" + helper + """
+assert.match(cisAssessmentScope(null),/first saved endpoint assessment/);
+assert.equal(cisAssessmentScope({device_name:'<script>device</script>',profile_slug:'baseline',profile_version:'1.0',collected_at:'saved-time'}),'Latest saved assessment: <script>device</script> · baseline v1.0 · collected saved-time. Check counts and pass rate below describe this report.');
+assert.match(cisAssessmentScope({}),/Profile not identified/);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('text(document.getElementById("cis-assessment-scope"), cisAssessmentScope(reports[0]))', source)
+
     def test_external_evidence_groups_keep_key_metrics_visible(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         evidence = template[template.index('<section class="topic-evidence"'):template.index('<summary>Exposure findings')]
