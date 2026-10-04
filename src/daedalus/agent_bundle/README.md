@@ -125,7 +125,8 @@ If stop, disable, or startup cannot be confirmed, the helper reports an error
 and retains its recovery files. Retrying uses the same installation and
 credentials. Changed, symlinked, incorrectly owned, or public service files
 are refused. Only the two fixed Daedalus units are operated. The managed Linux
-workflow still needs an in-place upgrade path.
+workflow still needs an in-place upgrade path. Concurrent uninstall/restore
+commands are refused until the current lifecycle operation releases its lock.
 
 ## Foreground install on Linux
 

@@ -502,6 +502,24 @@ class LinuxSystemdUnitFixtures(unittest.TestCase):
         for path, contents in retained.items():
             self.assertEqual(path.read_bytes(), contents)
 
+    def test_overlapping_lifecycle_action_is_refused_before_manager_operations(self):
+        self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        overlaps = []
+
+        def overlapping(argv, **kwargs):
+            if argv[2] == 'disable':
+                inner = Mock()
+                with self.assertRaisesRegex(ValueError, 'Another scanner lifecycle action'):
+                    systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=inner)
+                inner.assert_not_called()
+                overlaps.append(argv[-1])
+            return execute(argv, **kwargs)
+
+        systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=overlapping)
+        self.assertEqual(len(overlaps), 2)
+        systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=execute)
+
     def test_unconfirmed_stop_or_disable_does_not_remove_units(self):
         self.install_lifecycle_fixture()
         for field, value in [('ActiveState', 'deactivating'), ('MainPID', '123'), ('UnitFileState', 'enabled')]:

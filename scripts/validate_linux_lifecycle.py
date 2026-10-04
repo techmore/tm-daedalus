@@ -34,7 +34,7 @@ def main() -> None:
     spec.loader.exec_module(helper)
     config_home = Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config')))
     unit_dir, config_dir = config_home / 'systemd/user', config_home / 'daedalus'
-    for path in (unit_dir / helper.NMAPUI_UNIT, unit_dir / helper.BRIDGE_UNIT, config_dir / helper.ENV_FILE, config_dir / helper.STATE_FILE, config_dir / helper.RESUME_FILE, config_dir / 'managed-agent.json'):
+    for path in (unit_dir / helper.NMAPUI_UNIT, unit_dir / helper.BRIDGE_UNIT, config_dir / helper.ENV_FILE, config_dir / helper.STATE_FILE, config_dir / helper.RESUME_FILE, config_dir / helper.LOCK_FILE, config_dir / 'managed-agent.json'):
         if path.exists() or path.is_symlink():
             raise SystemExit('Existing scanner installation found; refusing to modify it.')
     subprocess.run([helper.SYSTEMCTL, '--user', 'show-environment'], check=True, capture_output=True, timeout=10)
@@ -130,7 +130,7 @@ def main() -> None:
                 cleanup_error = type(exc).__name__
         if cleanup_error is None:
             if installed:
-                for name in ('managed-agent.json', helper.ENV_FILE, helper.STATE_FILE, helper.RESUME_FILE):
+                for name in ('managed-agent.json', helper.ENV_FILE, helper.STATE_FILE, helper.RESUME_FILE, helper.LOCK_FILE):
                     (config_dir / name).unlink(missing_ok=True)
             elif owned_enrollment:
                 enrollment.unlink(missing_ok=True)

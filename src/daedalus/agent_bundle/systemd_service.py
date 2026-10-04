@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ BRIDGE_UNIT = "daedalus-scanner-bridge.service"
 ENV_FILE = "daedalus-nmapui.env"
 STATE_FILE = ".daedalus-scanner-services.json"
 RESUME_FILE = ".daedalus-scanner-services-resume.json"
+LOCK_FILE = ".daedalus-scanner-services.lock"
 SYSTEMCTL = "/usr/bin/systemctl"
 
 
@@ -297,6 +299,23 @@ def manage(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> d
     """Remove/resume only fixed owned services, preserving enrollment and evidence."""
     if action not in {"uninstall", "restore"}:
         raise ServiceError("Unsupported Linux service lifecycle action.")
+    _ownership(unit_dir, config_dir)
+    lock = os.open(config_dir / LOCK_FILE, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        info = os.fstat(lock)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+            raise ServiceError("Lifecycle lock must be a private regular file belonging to this user.")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ServiceError("Another scanner lifecycle action is running; retry when it finishes.") from exc
+        return _manage_locked(action, unit_dir, config_dir, executor=executor)
+    finally:
+        # Keep the lock file: unlinking it could let another process lock a different inode.
+        os.close(lock)
+
+
+def _manage_locked(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> dict:
     executor = executor or subprocess.run
     resume_path = config_dir / RESUME_FILE
     if action == "uninstall" and not (resume_path.exists() or resume_path.is_symlink()):
