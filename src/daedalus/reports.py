@@ -1115,7 +1115,7 @@ def build_cis_endpoint_pdf(report_snapshot: dict[str, Any]) -> bytes:
             ])
         story.append(_table(change_rows, [1.5 * inch, 1.1 * inch, 1.1 * inch, 3.2 * inch]))
     else:
-        story.append(_paragraph("No check status changes were detected since the previous report.", styles["CISReportBody"]))
+        story.append(_paragraph("No recorded check-status differences accompany this report. A first report or a report without comparable prior evidence does not establish that settings were unchanged.", styles["CISReportBody"]))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()

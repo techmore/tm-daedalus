@@ -33,6 +33,15 @@ from daedalus.cis import CISDataError, validate_report_target_os
 
 
 class CISReportPDFFlowTests(unittest.TestCase):
+    def test_pdf_without_recorded_changes_does_not_claim_unchanged_settings(self):
+        from daedalus import reports
+        with patch.object(reports, "_paragraph", wraps=reports._paragraph) as paragraphs:
+            data = reports.build_cis_endpoint_pdf({"domain":"example.test","cis":{"changes":[]}})
+        self.assertTrue(data.startswith(b"%PDF"))
+        text = " ".join(str(call.args[0]) for call in paragraphs.call_args_list)
+        self.assertIn("does not establish that settings were unchanged", text)
+        self.assertNotIn("No check status changes were detected since the previous report", text)
+
     def test_cis_profile_report_requires_matching_target_os_major_version(self):
         profile = server.load_macos26_starter_profiles()[0]
         for os_version in ("macOS 26.0.1", "26.4"):
