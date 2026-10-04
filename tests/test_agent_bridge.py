@@ -89,6 +89,19 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         ), patch("daedalus.agent.subprocess.run", side_effect=__import__("subprocess").TimeoutExpired("softwareupdate", 120)):
             self.assertEqual(bridge._check_os_updates()["status"], "timed_out")
 
+    def test_macos_no_updates_message_on_stderr(self):
+        bridge = self.make_bridge()
+        with patch("daedalus.agent.platform.system", return_value="Darwin"), patch(
+            "daedalus.agent.Path.is_file", return_value=True
+        ), patch("daedalus.agent.subprocess.run", return_value=Mock(
+            returncode=0, stdout="Software Update Tool\nFinding available software\n",
+            stderr="No new software available.\n"
+        )):
+            result = bridge._check_os_updates()
+        self.assertEqual(result["status"], "no_updates")
+        self.assertEqual(result["update_count"], 0)
+        self.assertNotIn("stderr", result)
+
     def test_macos_update_command_is_local_only_and_protocol_is_three(self):
         self.assertEqual(COMMAND_PROTOCOL_VERSION, 3)
         bridge = self.make_bridge()

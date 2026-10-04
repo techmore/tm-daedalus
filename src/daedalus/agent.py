@@ -604,7 +604,11 @@ class NmapUIBridge:
             return {"schema_version": 1, "observed_at": observed_at, "status": "unavailable", "platform": "Darwin"}
         if result.returncode != 0:
             return {"schema_version": 1, "observed_at": observed_at, "status": "error", "platform": "Darwin"}
-        output = (result.stdout or "")[:128 * 1024]
+        # Apple's tool can write a successful catalog result to stderr.
+        output = "\n".join(
+            stream[:64 * 1024] for stream in (result.stdout, result.stderr)
+            if isinstance(stream, str)
+        )
         labels = re.findall(r"^\s*\*\s+Label:\s*(.{1,200})\s*$", output, re.MULTILINE)
         titles = re.findall(r"^\s*Title:\s*(.{1,240})\s*$", output, re.MULTILINE)
         if labels:
