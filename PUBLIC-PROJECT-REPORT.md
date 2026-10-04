@@ -637,3 +637,9 @@ The first run caught obsolete assertions expecting ordinary preferences to produ
 Fresh source c09c8c8 uploaded actual macOS 27.0.1 report 20 to SER8: 154 verified checks, 11 pass, 10 fail, 133 manual and zero errors. Authenticated report inspection confirmed both Safe Browsing checks retained explicit unavailable forced-policy details and manual status. No managed policy was installed or changed to produce a fixture verdict. Direct read-only database inspection verified zero comparison entries and zero notifications. Temporary config and owned client process were removed.
 
 Receipts: validation/cis-chrome-safe-release-20261004/live-receipt.json and /data/codex-cis-chrome-safe-validation-20261004.json. Latest actual report is 20. This validates unavailable-policy collection, upload and unchanged-run behavior; real forced-policy acceptance, macOS 26 and the broader project acceptance gates remain open. Earlier pending-upload statements are historical.
+
+## October 4, 2026 — native CI diagnostics retention
+
+Native CI now writes an explicit xcresult bundle and uploads it with always() after the test step, retaining diagnostics for 14 days. Upload-artifact v4.6.2 was pinned to its verified official tag commit ea165f8d65b6e75b540449e92b4886f43607fa02. Test execution is bounded to 15 minutes, package build to 10 minutes and the overall job to 30 minutes. All existing test targets remain selected; the step label now says client tests to reflect its UI launch scaffolding as well as unit tests. YAML parsing and structure assertions passed locally.
+
+The changed workflow still needs its own successful CI run and artifact inspection. This improves failure evidence and does not establish installer trust, functional UI acceptance, macOS 26 execution or the complete project. Actual SER8 report remains 20.
