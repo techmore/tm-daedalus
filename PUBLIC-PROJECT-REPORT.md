@@ -1,5 +1,16 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 062 and repeat-audit comparison
+
+Production commit **3eed1aafd3bbfe5cd6853091e6584b7d7c1707fa** is active and healthy. Release archive: 58 files, SHA-256 **01368371378dd8adaaf37f166e79eeadfc15007ee19d575cfd7e443bc77b4bed**. Verified off-host backup: daedalus-data-20261004T043650Z.tar.gz. All **429 tests and 90 subtests** passed locally. Python CI 37177490712 passed; managed Linux CI 37177490710 is still in progress. The preceding grouped-review source passed managed Linux CI 37177228216.
+
+Actual Nikto run **46** completed_with_warnings after 601.8 seconds, with six observation identities matching run 43, zero new observations, and zero recorded removals. Saved comparison_scope is new_observations_only and coverage_complete remains false. Exactly one dated warning notice **8** exists. The engine stopped and request session **27504 is terminal**; do not re-poll it as a live job. No observation disappeared between these two real audits; partial-report absence cases are covered by fixtures, not this real comparison. Receipt: /data/codex-nikto-comparison-receipt-20261004.json.
+
+Website assessment now surfaces the latest completed audit's observations, grouped into policy review, application context and infrastructure information, while showing the latest running/failed attempt separately. Existing saved evidence is not rewritten. Future messages omit raw uncommon-header contents and changed-banner values. Production authenticated page/current script checks passed; browser visual validation still needs returned control of the existing review session under ego-browser rules.
+
+Fresh host inspection: this Mac is macOS **27.0.1**, so it cannot prove macOS 26 execution. Production CSP has scanner 2 online and scanner 1 offline; both have empty approved CIDRs. Requested exact private subnet/VLAN ranges and deployment locations for production multi-subnet validation. The full goal remains active with these and previous operational/product gaps; these questions do not block independent backend work.
+
+
 ## October 4, 2026 — Release 061 and actual CSP audit evidence
 
 Production application commit `ce7374760dbacd337590da16ffd90d2fa54daf07` is active and healthy. The 58-file release archive SHA-256 is `281ae2170695a1a8d8cae039370d891e9c394d426ed05eda02c4cb4894661412`. Deployment backed up current data off-host (`daedalus-data-20261004T042205Z.tar.gz`) and passed internal/public readiness checks. The source suite passed **427 tests and 90 subtests**. Python CI `37176679762` and real managed Linux scanner/recovery CI `37176679713` passed.
