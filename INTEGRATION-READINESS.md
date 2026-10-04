@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — production report library validation
+
+Production source **1bb372ec563e4ee235c3bb7bd400508db5321023** (dashboard asset 076) groups domain health, internal network, and Meraki/endpoint PDFs before report creation controls. Authenticated production HTML and JavaScript checks confirmed the new library and ordering. Latest completed PDFs downloaded successfully for all four topics: scanner **32** (5,970 bytes), Meraki **31** (10,510), endpoint **30** (24,923), external posture **28** (17,419). Private receipt: /data/codex-report-library-validation-20261004.json. This verifies served structure and downloads; browser visual review remains open.
+
+The report status summary is being corrected to distinguish ready downloads, running/queued jobs, failures and jobs without a ready download. Full-project requirements listed in earlier checkpoints remain open.
+
+
 ## October 4, 2026 — topic layout and production Mac scanner evidence
 
 Production source **b474133a6df3d9644d4881b96405bc952d26ef08** puts DNS and website assessment and change history ahead of detailed records; scope explanations are expandable. Incus deployment passed internal and public health checks, with a verified off-host backup. The authenticated served dashboard passed structural ordering checks; browser pixel review remains unverified.

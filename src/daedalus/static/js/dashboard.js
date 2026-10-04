@@ -1501,6 +1501,18 @@
     }
   }
 
+  function reportJobStatusSummary(reports) {
+    var ready = reports.filter(function (job) { return job.status === "completed" && job.download_url; }).length;
+    var running = reports.filter(function (job) { return job.status === "queued" || job.status === "running"; }).length;
+    var failed = reports.filter(function (job) { return job.status === "failed"; }).length;
+    var other = reports.length - ready - running - failed;
+    var parts = [ready + " PDF(s) ready"];
+    if (running) parts.push(running + " in progress");
+    if (failed) parts.push(failed + " failed");
+    if (other) parts.push(other + " without a ready download");
+    return parts.join(" · ") + ".";
+  }
+
   function renderReportJobs(reports, listId, statusId, reportType) {
     var list = document.getElementById(listId);
     var status = document.getElementById(statusId);
@@ -1544,10 +1556,7 @@
       return;
     }
 
-    var running = reports.filter(function (job) {
-      return job.status === "queued" || job.status === "running";
-    }).length;
-    if (status) text(status, running ? running + " report job(s) in progress." : reports.length + " report(s) available in this workspace.");
+    if (status) text(status, reportJobStatusSummary(reports));
 
     reports.forEach(function (job) {
       var card = document.createElement("article");

@@ -6,6 +6,18 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_report_status_counts_only_ready_downloads_as_available(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function reportJobStatusSummary('):source.index('  function renderReportJobs(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.equal(reportJobStatusSummary([]), '0 PDF(s) ready.');
+assert.equal(reportJobStatusSummary([{status:'completed',download_url:'/pdf'},{status:'queued'},{status:'running'},{status:'failed'},{status:'completed'},{status:'unknown'}]), '1 PDF(s) ready · 2 in progress · 1 failed · 2 without a ready download.');
+assert.equal(reportJobStatusSummary([{status:'failed'}]), '0 PDF(s) ready · 1 failed.');
+"""
+        result = subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_report_library_includes_all_topics_before_creation(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()
