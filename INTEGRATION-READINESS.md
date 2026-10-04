@@ -1,5 +1,15 @@
 # Integration readiness
 
+## October 4, 2026 — Release 068: fresh Meraki report and review-first summaries
+
+Production application commit **742141eefe0398ff411dfa45acb6d14badd45d35** is active and healthy. Archive: 58 files, SHA-256 **b90ead84f40578f1440e26e747dcb71b94842c637a650255b114989616e590b8**; verified off-host backup: daedalus-data-20261004T060210Z.tar.gz. All **442 tests and 90 subtests** passed locally after repairing a failed-job fixture that omitted its required snapshot. Python CI **37181613402** and managed Linux CI **37181613380** are running. Release 067's Python CI 37181241962 and managed Linux CI 37181241841 passed.
+
+Used the existing stored Meraki credential and exactly one already-authorized organization; no credential rotation or scope grant was performed. Actual report **31** completed at 100% / PDF ready. It saved one network, zero assigned devices, ten collected controls and two unavailable controls. Comparison with report **26** recorded zero control, coverage, inventory or inventory-coverage changes, and no new change notice. The saved observation asks for review of an open SSID configuration; the intrusion and malware protection calls returned HTTP 400 coverage gaps, not disabled-protection evidence. The actual 10,510-byte, five-page PDF was downloaded, rendered and reviewed on every page. Private evidence: /data/codex-meraki-validation-20261004.json; local PDF: validation/csp-meraki-20261004.pdf.
+
+Overview and Meraki topic summaries now lead with review observations and unavailable controls, then inventory counts. Missing finding evidence remains unknown / Not captured. A newer queued/running/failed Meraki attempt is represented separately while retaining the last completed evidence and its date. Authenticated production checks confirmed one review observation, two unavailable controls, attention state and current version-068 script content. Browser visual review remains pending; PDF review does not prove the browser layout.
+
+The full objective remains active: macOS 26 validation, trusted persistent CIS distribution, remaining checker semantics, approved production VLAN coverage, browser review, broader authorized inventory and other earlier scope gaps are not declared complete.
+
 ## October 4, 2026 — Release 067: repeat CIS history, notice and visible review counts
 
 Production application commit **3b3b0f16bcbf30817713f59cc05cd338262ae72e** is active and healthy. Archive: 58 files, SHA-256 **7bbe095e25092d9b5d4dfa4927a210ef357a78eb98ea3d5f50402a148addcc9c**; verified off-host backup: daedalus-data-20261004T055456Z.tar.gz. All **440 backend tests and 90 subtests** passed locally. Full client CI **37181000414** passed its configured suite (67 passing case records, zero failures), release-script syntax check and demo-package build. Current release backend/scanner CI remains unconfirmed.
