@@ -1,5 +1,12 @@
 # Daedalus project report
 
+## October 4, 2026 deployment checkpoint
+
+Release 058 adds per-user access keys for API authentication and dashboard sign-in. Keys are hashed, expire within 90 days, are revocable, and are bound to one workspace with live membership/role checks. A named Codex operator was explicitly provisioned only for CSP with a 30-day key; production bearer access, token login, secret-free key listing, and rejected workspace switching were validated. The source suite passed 423 tests and 90 subtests. Incus deployment and public readiness checks passed. Browser visual review remains pending.
+
+Release 057 added the pinned Nikto runtime and bounded HTTPS website audits excluding denial-of-service checks, with saved history and PDF evidence. Real CSP execution remains pending; engine output cannot prove test exhaustion, so coverage stays explicitly incomplete. Managed Linux scanner and isolated portal recovery CI passed (`37174836552`).
+
+
 **Daedalus** is a multi-organization security operations portal being developed for Cyber Security Pilot (CSP). Its public project overview is published at [`site/daedalus.html`](site/daedalus.html).
 
 ## Purpose

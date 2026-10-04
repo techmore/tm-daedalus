@@ -4835,6 +4835,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .where(Membership.user_id == user.id, Membership.status == "approved")
         .order_by(Organization.name)
     ).all()
+    scoped_key = getattr(request.state, "user_api_key", None)
+    if scoped_key is not None:
+        user_memberships = [(m, o) for m, o in user_memberships if o.id == scoped_key.organization_id]
     agents = db.scalars(
         select(Agent)
         .where(Agent.organization_id == organization.id)
