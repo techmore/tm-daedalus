@@ -79,6 +79,45 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_kit_hash_and_members_use_same_snapshot_when_path_is_replaced(self):
+        original = self.bundle.read_bytes()
+        replacement = self.root / "replacement.zip"
+        make_bundle(replacement)
+        with zipfile.ZipFile(replacement, "a") as archive:
+            archive.writestr("daedalus-scanner-kit/replaced.txt", "different kit")
+        real_zip = zipfile.ZipFile
+        opened = 0
+        def replace_before_parse(source, *args, **kwargs):
+            nonlocal opened
+            opened += 1
+            if opened == 1:
+                os.replace(replacement, self.bundle)
+            return real_zip(source, *args, **kwargs)
+        with patch.object(upgrade_service.zipfile, "ZipFile", side_effect=replace_before_parse):
+            files, digest = upgrade_service._read_kit(self.bundle)
+        self.assertEqual(digest, hashlib.sha256(original).hexdigest())
+        self.assertNotIn("replaced.txt", files)
+        self.assertNotEqual(self.bundle.read_bytes(), original)
+
+    def test_oversized_kit_is_refused_before_zip_parsing(self):
+        with patch.object(upgrade_service, "MAX_KIT_BYTES", 8), patch.object(upgrade_service.zipfile, "ZipFile") as reader:
+            with self.assertRaisesRegex(ValueError, "too large"):
+                upgrade_service._read_kit(self.bundle)
+            reader.assert_not_called()
+
+    def test_non_regular_kit_is_refused_without_waiting_for_a_writer(self):
+        fifo = self.root / "kit-fifo"
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(ValueError, "unsafe"):
+            upgrade_service._read_kit(fifo)
+
+    def test_growth_after_size_check_is_bounded_and_refused(self):
+        info = self.bundle.stat()
+        with patch.object(upgrade_service, "MAX_KIT_BYTES", 8), patch.object(upgrade_service.os, "fstat", return_value=SimpleNamespace(st_mode=info.st_mode, st_size=1)), patch.object(upgrade_service.zipfile, "ZipFile") as reader:
+            with self.assertRaisesRegex(ValueError, "allowed size"):
+                upgrade_service._read_kit(self.bundle)
+            reader.assert_not_called()
+
     def test_bridge_launcher_is_rebased_before_versioned_stage_is_renamed(self):
         stage = self.root / "releases/.stage-fixture/.venv/bin"
         release = self.root / "releases" / ("c" * 64)

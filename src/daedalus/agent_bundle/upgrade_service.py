@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import plistlib
 import shutil
@@ -40,12 +41,20 @@ def _private_file(path: Path, root: Path) -> bytes:
 
 
 def _read_kit(bundle_path: Path) -> tuple[dict[str, bytes], str]:
-    if bundle_path.is_symlink() or not bundle_path.is_file() or bundle_path.stat().st_size > MAX_KIT_BYTES:
-        raise ValueError("Scanner kit is missing, unsafe, or too large")
-    raw = bundle_path.read_bytes()
+    try:
+        descriptor = os.open(bundle_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_KIT_BYTES:
+                raise ValueError("Scanner kit is missing, unsafe, or too large")
+            raw = stream.read(MAX_KIT_BYTES + 1)
+        if len(raw) > MAX_KIT_BYTES:
+            raise ValueError("Scanner kit expands beyond the allowed size")
+    except OSError as exc:
+        raise ValueError("Scanner kit is missing, unsafe, or unreadable") from exc
     digest = hashlib.sha256(raw).hexdigest()
     try:
-        archive = zipfile.ZipFile(bundle_path)
+        archive = zipfile.ZipFile(io.BytesIO(raw))
     except (OSError, zipfile.BadZipFile) as exc:
         raise ValueError("Scanner kit is not a valid ZIP archive") from exc
     files: dict[str, bytes] = {}
