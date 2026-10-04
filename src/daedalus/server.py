@@ -5146,6 +5146,25 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
+def _website_certificate_summary(snapshot, now):
+    tls = snapshot.get("tls")
+    expiry = tls.get("valid_until") if isinstance(tls, dict) else None
+    try:
+        expires = datetime.fromisoformat(expiry.replace("Z", "+00:00")) if isinstance(expiry, str) else None
+        if expires is None or expires.tzinfo is None:
+            return "Certificate expiry unknown", True
+        current = now.replace(tzinfo=UTC) if now.tzinfo is None else now
+        remaining = expires - current
+    except (ValueError, OverflowError):
+        return "Certificate expiry unknown", True
+    date = expires.astimezone(UTC).date().isoformat()
+    if remaining <= timedelta(0):
+        return f"Saved certificate expired {date}", True
+    if remaining < timedelta(days=30):
+        return f"Saved certificate expires soon: {date}", True
+    return f"Saved certificate expires {date}", False
+
+
 def _cis_latest_assessments(db: Session, organization_id: int):
     ranked = select(
         CISReport.id, CISReport.device_id, CISReport.collected_at, CISReport.summary,
@@ -5187,10 +5206,11 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
         elif saved:
             headers = snapshot.get("security_headers") or {}
             absent = sum(not value for value in headers.values())
-            summary = f"HTTPS {snapshot.get('http_status') or 'unknown'} · {absent} selected header(s) absent"
-            if absent or not headers or not (200 <= int(snapshot.get("http_status") or 0) < 400): state = "attention"
-        if latest and latest.status in {"running", "failed"}:
-            state = "running" if latest.status == "running" else "unavailable"
+            certificate_label, certificate_review = _website_certificate_summary(snapshot, utcnow())
+            summary = f"HTTPS {snapshot.get('http_status') or 'unknown'} · {certificate_label} · {absent} selected header(s) absent"
+            if certificate_review or absent or not headers or not (200 <= int(snapshot.get("http_status") or 0) < 400): state = "attention"
+        if latest and latest.status in {"queued", "running", "failed"}:
+            state = "running" if latest.status in {"queued", "running"} else "unavailable"
         areas.append({"key":kind, "title":title, "state":state, "summary":summary,
             "updated_at":iso_utc(saved.completed_at) if saved else None,
             "latest_attempt_status":latest.status if latest else None})

@@ -161,3 +161,16 @@ class WorkspacePostureTests(unittest.TestCase):
         self.assertEqual(area()['state'],'attention')
         self.assertNotIn('10.9.0.0',str(area()))
         self.assertNotIn('private-fixture-token',str(area()))
+
+    def test_website_certificate_expiry_is_an_independent_review_signal(self):
+        org,_=self.context();now=server.utcnow()
+        for expiry,state,label in ((None,'attention','unknown'),('invalid','attention','unknown'),(now.isoformat(),'attention','unknown'),((now-timedelta(days=1)).replace(tzinfo=server.UTC).isoformat(),'attention','expired'),((now+timedelta(days=10)).replace(tzinfo=server.UTC).isoformat(),'attention','expires soon'),((now+timedelta(days=60)).replace(tzinfo=server.UTC).isoformat(),'recorded','expires')):
+            with self.subTest(expiry=expiry):
+                self.save(org,kind='web',snapshot={'http_status':200,'security_headers':{'Content-Security-Policy':"default-src 'self'"},'tls':{'valid_until':expiry}})
+                area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='web')
+                self.assertEqual(area['state'],state)
+                self.assertIn(label,area['summary'])
+        self.save(org,kind='web',status='queued')
+        area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='web')
+        self.assertEqual(area['state'],'running')
+        self.assertIn('Saved certificate expires',area['summary'])

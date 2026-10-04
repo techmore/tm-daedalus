@@ -451,3 +451,8 @@ Overview and endpoint status share the same latest-per-device collection-time cl
 ### 2026-10-04 — Scanner availability versus scan evidence
 
 Overview now distinguishes online scanners, confirmed scan-engine readiness, approved ranges, and scanners whose latest saved scan completed. A ready scanner without any saved scan remains unassessed. Failed or conflicting latest-run evidence requires attention. Completion uses the existing run-summary validator; mixed scan/report metadata cannot count as a completed scan. Scan evidence timestamps are separate from availability check-ins. No claim is made that saved runs cover all approved ranges. Fixtures cover readiness without evidence, a completed run, a later failure, metadata conflict, and private-detail exclusion.
+
+
+### 2026-10-04 — Website certificate overview
+
+Website overview shows saved certificate expiry independently of HTTP response and selected browser headers. Unknown/malformed/naive expiry timestamps, expired certificates, and expiry within 30 days require review; timestamps must identify a timezone. Labels explicitly refer to the saved certificate, alongside the saved assessment time. Queued checks use the active-attempt state while preserving previous evidence. Fixtures cover unknown, malformed, naive, expired, soon-expiring, and later-expiring timestamps.
