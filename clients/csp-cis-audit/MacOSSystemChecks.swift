@@ -5,7 +5,7 @@ struct MacOSSystemChecks {
     
     // MARK: - System Integrity and Security
     
-    private static func exactStatus(check: CISCheck, path: String, arguments: [String], enabled: String, disabled: String, scope: String,
+    static func exactStatus(check: CISCheck, path: String, arguments: [String], enabled: String, disabled: String, scope: String,
         command: (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult {
         let evidence = command(path, arguments)
         let value = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)

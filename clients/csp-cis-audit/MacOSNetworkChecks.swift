@@ -6,98 +6,25 @@ struct MacOSNetworkChecks {
     // MARK: - Firewall Settings
     
     // Check if Firewall is enabled
-    static func checkFirewall(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/libexec/ApplicationFirewall/socketfilterfw"
-        process.arguments = ["--getglobalstate"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to run firewall check: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("State = 1") {
-            return CheckResult(check: check, status: "pass", details: "Firewall is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Firewall is NOT enabled.")
-        }
+    static func checkFirewall(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSSystemChecks.exactStatus(check: check, path: "/usr/libexec/ApplicationFirewall/socketfilterfw", arguments: ["--getglobalstate"], enabled: "Firewall is enabled. (State = 1)", disabled: "Firewall is disabled. (State = 0)", scope: "This records a local configuration response, not reachability, traffic filtering or managed enforcement. Other response formats require review.", command: command)
     }
     
     // Check if Firewall Stealth Mode is enabled
-    static func checkFirewallStealthMode(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/libexec/ApplicationFirewall/socketfilterfw"
-        process.arguments = ["--getstealthmode"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to run firewall stealth mode check: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("enabled") {
-            return CheckResult(check: check, status: "pass", details: "Firewall Stealth Mode is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Firewall Stealth Mode is NOT enabled.")
-        }
+    static func checkFirewallStealthMode(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSSystemChecks.exactStatus(check: check, path: "/usr/libexec/ApplicationFirewall/socketfilterfw", arguments: ["--getstealthmode"], enabled: "Firewall stealth mode is on", disabled: "Firewall stealth mode is off", scope: "This records a local configuration response, not reachability, traffic filtering or managed enforcement. Other response formats require review.", command: command)
     }
     
     // Check if Firewall is configured to block all incoming connections
-    static func checkFirewallBlockAll(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/libexec/ApplicationFirewall/socketfilterfw"
-        process.arguments = ["--getblockall"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check firewall block all setting: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("Block all ENABLED") {
-            return CheckResult(check: check, status: "pass", details: "Firewall is configured to block all incoming connections.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Firewall is NOT configured to block all incoming connections.")
-        }
+    static func checkFirewallBlockAll(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSSystemChecks.exactStatus(check: check, path: "/usr/libexec/ApplicationFirewall/socketfilterfw", arguments: ["--getblockall"], enabled: "Firewall has block all state set to enabled.", disabled: "Firewall has block all state set to disabled.", scope: "This records a local configuration response, not reachability, traffic filtering or managed enforcement. Other response formats require review.", command: command)
     }
     
     // MARK: - Network Services
     
     // Check if Remote Login (SSH) is disabled
-    static func checkRemoteLoginDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/systemsetup"
-        process.arguments = ["-getremotelogin"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Remote Login: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("Remote Login: Off") {
-            return CheckResult(check: check, status: "pass", details: "Remote Login is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Remote Login is ENABLED.")
-        }
+    static func checkRemoteLoginDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSSystemChecks.exactStatus(check: check, path: "/usr/sbin/systemsetup", arguments: ["-getremotelogin"], enabled: "Remote Login: Off", disabled: "Remote Login: On", scope: "This records a local configuration response, not reachability, traffic filtering or managed enforcement. Other response formats require review.", command: command)
     }
     
     // Check if Remote Management (ARD) is disabled
@@ -125,26 +52,8 @@ struct MacOSNetworkChecks {
     }
     
     // Check if Remote Apple Events are disabled
-    static func checkRemoteAppleEventsDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/systemsetup"
-        process.arguments = ["-getremoteappleevents"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Remote Apple Events: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("Remote Apple Events: Off") {
-            return CheckResult(check: check, status: "pass", details: "Remote Apple Events are disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Remote Apple Events are ENABLED.")
-        }
+    static func checkRemoteAppleEventsDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSSystemChecks.exactStatus(check: check, path: "/usr/sbin/systemsetup", arguments: ["-getremoteappleevents"], enabled: "Remote Apple Events: Off", disabled: "Remote Apple Events: On", scope: "This records a local configuration response, not reachability, traffic filtering or managed enforcement. Other response formats require review.", command: command)
     }
     
     // Check if Internet Sharing is disabled
@@ -389,50 +298,12 @@ struct MacOSNetworkChecks {
     // MARK: - Time and Date
     
     // Check if Set Time and Date Automatically is enabled
-    static func checkTimeAndDateAutomatically(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/systemsetup"
-        process.arguments = ["-getusingnetworktime"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check time and date setting: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output.contains("On") {
-            return CheckResult(check: check, status: "pass", details: "Set Time and Date Automatically is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Set Time and Date Automatically is NOT enabled.")
-        }
+    static func checkTimeAndDateAutomatically(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSSystemChecks.exactStatus(check: check, path: "/usr/sbin/systemsetup", arguments: ["-getusingnetworktime"], enabled: "Network Time: On", disabled: "Network Time: Off", scope: "This records a local configuration response, not reachability, traffic filtering or managed enforcement. Other response formats require review.", command: command)
     }
     
     // Check if NTP servers are configured properly
     static func checkNTPServers(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/systemsetup"
-        process.arguments = ["-getnetworktimeserver"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check NTP server configuration: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("Network Time Server:") && !output.contains("Network Time Server: ") {
-            return CheckResult(check: check, status: "pass", details: "NTP servers are configured: \(output.trimmingCharacters(in: .whitespacesAndNewlines))")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "NTP servers are NOT properly configured.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review the configured time sources against the organization's approved-server policy and verify synchronization. A reported server name alone does not establish proper configuration or a synchronized clock; no approved-server policy was supplied.")
     }
 }

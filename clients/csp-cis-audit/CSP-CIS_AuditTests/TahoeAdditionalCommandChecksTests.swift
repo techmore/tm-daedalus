@@ -13,6 +13,33 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyNetworkStatusRequiresExactSuccessfulResponse() {
+        let check = CISCheck(id: "network", category: "macos", description: "Network")
+        let collectors: [(String, [String], String, String, (CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult)] = [
+            ("/usr/libexec/ApplicationFirewall/socketfilterfw", ["--getglobalstate"], "Firewall is enabled. (State = 1)", "Firewall is disabled. (State = 0)", { MacOSNetworkChecks.checkFirewall(check: $0, command: $1) }),
+            ("/usr/libexec/ApplicationFirewall/socketfilterfw", ["--getstealthmode"], "Firewall stealth mode is on", "Firewall stealth mode is off", { MacOSNetworkChecks.checkFirewallStealthMode(check: $0, command: $1) }),
+            ("/usr/libexec/ApplicationFirewall/socketfilterfw", ["--getblockall"], "Firewall has block all state set to enabled.", "Firewall has block all state set to disabled.", { MacOSNetworkChecks.checkFirewallBlockAll(check: $0, command: $1) }),
+            ("/usr/sbin/systemsetup", ["-getremotelogin"], "Remote Login: Off", "Remote Login: On", { MacOSNetworkChecks.checkRemoteLoginDisabled(check: $0, command: $1) }),
+            ("/usr/sbin/systemsetup", ["-getremoteappleevents"], "Remote Apple Events: Off", "Remote Apple Events: On", { MacOSNetworkChecks.checkRemoteAppleEventsDisabled(check: $0, command: $1) }),
+            ("/usr/sbin/systemsetup", ["-getusingnetworktime"], "Network Time: On", "Network Time: Off", { MacOSNetworkChecks.checkTimeAndDateAutomatically(check: $0, command: $1) }),
+        ]
+        for (path, arguments, enabled, disabled, collect) in collectors {
+            func status(_ evidence: MacOSChecks.CommandEvidence) -> String {
+                collect(check) { actualPath, actualArguments in
+                    #expect(actualPath == path); #expect(actualArguments == arguments)
+                    return evidence
+                }.status
+            }
+            #expect(status(.init(output: enabled)) == "pass")
+            #expect(status(.init(output: disabled)) == "fail")
+            for evidence in [MacOSChecks.CommandEvidence(), .init(output: "not " + enabled), .init(output: enabled + "\n" + disabled), .init(output: enabled, exitCode: 1), .init(output: enabled, error: "permission denied"), .init(output: enabled, unavailable: "timeout")] {
+                #expect(status(evidence) == "manual")
+            }
+        }
+        #expect(MacOSNetworkChecks.checkNTPServers(check: check).status == "manual")
+        #expect(MacOSNetworkChecks.checkNTPServers(check: check).details.contains("approved-server policy"))
+    }
+
     @Test func legacySystemStatusRequiresExactSuccessfulEvidence() {
         let check = CISCheck(id: "system", category: "macos", description: "Protection")
         let collectors: [(String, [String], String, String, (CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult)] = [
