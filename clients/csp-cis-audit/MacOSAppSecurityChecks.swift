@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 // This file contains application security checks for macOS
 struct MacOSAppSecurityChecks {
@@ -6,51 +7,29 @@ struct MacOSAppSecurityChecks {
     // MARK: - Gatekeeper and XProtect
     
     // Check if Gatekeeper is configured to only allow code signed by Apple
-    static func checkGatekeeperStrictConfig(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/spctl"
-        process.arguments = ["--status"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Gatekeeper status: \(error)")
+    static func checkGatekeeperStrictConfig(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand,
+        readPreference: (String, String) -> Any? = { suite, key in
+            CFPreferencesCopyAppValue(key as CFString, suite as CFString)
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("assessments enabled") {
-            // Now check the level
-            let levelProcess = Process()
-            levelProcess.launchPath = "/usr/sbin/spctl"
-            levelProcess.arguments = ["--list"]
-            let levelPipe = Pipe()
-            levelProcess.standardOutput = levelPipe
-            levelProcess.standardError = levelPipe
-            do {
-                try levelProcess.run()
-            } catch {
-                return CheckResult(check: check, status: "error", details: "Failed to check Gatekeeper configuration: \(error)")
-            }
-            levelProcess.waitUntilExit()
-            
-            let levelData = levelPipe.fileHandleForReading.readDataToEndOfFile()
-            let levelOutput = String(data: levelData, encoding: .utf8) ?? ""
-            
-            if levelOutput.contains("Apple System Policy: Mac App Store") && !levelOutput.contains("Developer ID") {
-                return CheckResult(check: check, status: "pass", details: "Gatekeeper is configured to only allow code signed by Apple.")
-            } else {
-                return CheckResult(check: check, status: "fail", details: "Gatekeeper allows code signed by sources other than Apple.")
-            }
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Gatekeeper is NOT enabled.")
+    ) -> CheckResult {
+        let evidence = command("/usr/sbin/spctl", ["--status"])
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "The stricter Gatekeeper policy was not established by readable explicit evidence. Enabled assessments alone do not establish the App Store-only setting.")
         }
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return unknown() }
+        let status = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if status == "assessments disabled" {
+            return CheckResult(check: check, status: "fail", details: "Gatekeeper reports assessments disabled; the stricter legacy setting is not satisfied.")
+        }
+        guard status == "assessments enabled",
+              let raw = readPreference("com.apple.systempolicy.control", "AllowIdentifiedDevelopers") as? NSNumber,
+              CFGetTypeID(raw) == CFBooleanGetTypeID() else { return unknown() }
+        return CheckResult(check: check, status: raw.boolValue ? "fail" : "pass",
+            details: "Gatekeeper reports assessments enabled and the captured system-policy setting " + (raw.boolValue ? "allows identified developers." : "selects App Store-only.") + " This describes collected settings, not a live app acceptance test or all policy exceptions.")
     }
-    
+
     // Check if Automatic Opening of Safe Files in Safari is disabled
     static func checkSafariAutoOpenSafeFiles(check: CISCheck) -> CheckResult {
         let process = Process()

@@ -13,6 +13,31 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func strictGatekeeperNeedsExplicitPolicyBeyondEnabledAssessments() {
+        let check = CISCheck(id: "gatekeeper-strict", category: "macos", description: "App Store only")
+        func result(_ evidence: MacOSChecks.CommandEvidence, _ preference: Any?) -> CheckResult {
+            MacOSAppSecurityChecks.checkGatekeeperStrictConfig(check: check, command: { path, arguments in
+                #expect(path == "/usr/sbin/spctl")
+                #expect(arguments == ["--status"])
+                return evidence
+            }, readPreference: { suite, key in
+                #expect(suite == "com.apple.systempolicy.control")
+                #expect(key == "AllowIdentifiedDevelopers")
+                return preference
+            })
+        }
+        #expect(result(.init(output: "assessments enabled\n"), false).status == "pass")
+        #expect(result(.init(output: "assessments enabled"), true).status == "fail")
+        #expect(result(.init(output: "assessments disabled"), false).status == "fail")
+        for preference: Any? in [nil, "false", 0, 1] {
+            #expect(result(.init(output: "assessments enabled"), preference).status == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(), .init(output: "not assessments enabled"), .init(output: "assessments enabled\nunknown"), .init(output: "assessments enabled", exitCode: 1), .init(output: "assessments enabled", error: "denied"), .init(output: "assessments enabled", unavailable: "timeout")] {
+            #expect(result(evidence, false).status == "manual")
+        }
+        #expect(result(.init(output: "assessments enabled"), false).details.contains("not a live app acceptance test"))
+    }
+
     @Test func legacyComplexityCountsDistinctEnabledFieldsOnly() {
         let check = CISCheck(id: "complexity", category: "macos", description: "Complexity")
         func evaluate(_ evidence: MacOSChecks.CommandEvidence) -> String {
