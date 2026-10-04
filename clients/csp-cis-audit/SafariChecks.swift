@@ -314,18 +314,9 @@ struct SafariChecks {
     
     // Check if JavaScript is disabled for untrusted sites
     private static func checkJavaScriptDisabledForUntrustedSites(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let plist = preferences,
-              let javascriptFromUntrustedSites = plist["WebKitPreferences.javaScriptCanOpenWindowsAutomatically"] as? Bool else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
-        }
-        
-        if !javascriptFromUntrustedSites {
-            return CheckResult(check: check, status: "pass", details: "JavaScript is disabled for untrusted sites.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "JavaScript is enabled for untrusted sites.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review JavaScript execution settings and the organization's trusted-site policy. The popup-window preference javaScriptCanOpenWindowsAutomatically does not establish whether scripts execute on untrusted sites. Supported site-specific execution evidence and trust criteria were not collected; no Safari setting was changed.")
     }
-    
+
     // Check if Internet plug-ins are disabled
     private static func checkInternetPluginsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,

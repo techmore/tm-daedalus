@@ -13,6 +13,13 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func safariPopupPreferenceDoesNotEstablishScriptExecution() {
+        let check = CISCheck(id: "script", category: "safari", description: "Enable JavaScript for untrusted sites")
+        for value in [false, true] {
+            #expect(SafariChecks.run(check: check, readPreferences: { ["WebKitPreferences.javaScriptCanOpenWindowsAutomatically": value] }).status == "manual")
+        }
+    }
+
     @Test func chromeExtensionCollectionsDoNotEstablishApproval() {
         let preferences: [String: Any] = ["extensions": ["blocklist": ["one-id"], "allowed_types": ["extension"], "file_access": ["one-id": true], "script_injection": ["one-id": true]]]
         for description in ["Configure extension installation blocklist", "Configure allowed Chrome Web Store extensions", "Control which extensions can access file URLs", "Control which extensions can inject scripts"] {
