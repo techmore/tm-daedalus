@@ -13,6 +13,33 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func safariPrivacyDoesNotSubstituteUnrelatedPreferences() {
+        let check = CISCheck(id: "privacy", category: "macos", description: "Privacy")
+        for result in [MacOSPrivacyChecks.checkSpotlightSuggestionsDisabled(check: check),
+            MacOSPrivacyChecks.checkSafariPreventCrossSiteTracking(check: check),
+            MacOSPrivacyChecks.checkSafariBlockAllCookies(check: check),
+            MacOSPrivacyChecks.checkSafariWebContentDeny(check: check)] {
+            #expect(result.status == "manual")
+            #expect(result.details.contains("not collected"))
+        }
+    }
+
+    @Test func safariSuggestionsRejectFailedAndSubstringEvidence() {
+        let check = CISCheck(id: "suggestions", category: "macos", description: "Suggestions")
+        func status(_ evidence: MacOSChecks.CommandEvidence) -> String {
+            MacOSPrivacyChecks.checkSafariSpotlightSuggestionsDisabled(check: check) { path, arguments in
+                #expect(path == "/usr/bin/defaults")
+                #expect(arguments == ["read", "com.apple.Safari", "UniversalSearchEnabled"])
+                return evidence
+            }.status
+        }
+        #expect(status(.init(output: "0")) == "pass")
+        #expect(status(.init(output: "1")) == "fail")
+        for evidence in [MacOSChecks.CommandEvidence(output: "error 100"), .init(output: ""), .init(output: "false"), .init(output: "0", exitCode: 1), .init(output: "0", error: "denied"), .init(output: "0", unavailable: "timeout")] {
+            #expect(status(evidence) == "manual")
+        }
+    }
+
     @Test func legacyPermissionCountsCannotEstablishApprovedAccess() {
         let check = CISCheck(id: "permissions", category: "macos", description: "Approved apps")
         let results = [MacOSHardwareChecks.checkCameraAccess(check: check),
