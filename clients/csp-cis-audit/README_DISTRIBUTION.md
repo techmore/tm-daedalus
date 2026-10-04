@@ -10,9 +10,21 @@ The Xcode project minimum deployment target is macOS 15.4. Build the `CSP-CIS_Au
 xcodebuild -project CSP-CIS_Audit.xcodeproj -scheme CSP-CIS_Audit -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
 ```
 
-For direct distribution, use `./scripts/build-notarized-client.sh [output-directory]`. It selects the only available Developer ID Application identity or accepts `CSP_CIS_SIGNING_IDENTITY`, derives and checks `CSP_CIS_TEAM_ID`, archives with hardened runtime, submits through the `notarytool` keychain profile named by `CSP_CIS_NOTARY_PROFILE` (default `daedalus-cis-notary`), staples the ticket, and requires `spctl` to accept the app before writing the final ZIP. The script refuses to build without a Developer ID identity. It does not disable Gatekeeper or ask users to override it. Never put signing keys or notarization credentials in this repository or the app archive. Confirm the app launches and uploads a test report on each supported macOS version before deploying broadly. A production MDM package is not yet implemented. Users can opt into launch at login from the app menu. Once open, the menu-bar app checks in at launch, on demand, and every 24 hours.
+For direct distribution, use `./scripts/build-notarized-client.sh [output-directory]`. It selects the only available Developer ID Application identity or accepts `CSP_CIS_SIGNING_IDENTITY`, derives and checks `CSP_CIS_TEAM_ID`, archives with hardened runtime, submits through the `notarytool` keychain profile named by `CSP_CIS_NOTARY_PROFILE` (default `daedalus-cis-notary`), staples the ticket, and requires `spctl` to accept the app before writing the final ZIP. The script refuses to build without a Developer ID identity. It does not disable Gatekeeper or ask users to override it. Never put signing keys or notarization credentials in this repository or the app archive. Confirm the app launches and uploads a test report on each supported macOS version before deploying broadly. A signed MDM package build workflow is available below; signed package installation and update acceptance remain unverified until the required certificates are available. Users can opt into launch at login from the app menu. Once open, the menu-bar app checks in at launch, on demand, and every 24 hours.
 
 Do not run the menu-bar app with `sudo`, deploy the legacy LaunchDaemon, or run it as a shared root service. Each endpoint needs a per-user config and private device identity. The app checks at launch, every 24 hours while open, and when the user selects **Run Checks**.
+
+## MDM installer package
+
+First build the notarized app with `scripts/build-notarized-client.sh`. Then run:
+
+```bash
+./scripts/build-mdm-package.sh /absolute/path/CSP-CIS_Audit.app /absolute/path/new-package-output
+```
+
+The package workflow requires a valid Developer ID Application signature and stapled app ticket, plus a Developer ID Installer identity from the same team. Set `CSP_CIS_INSTALLER_IDENTITY` when multiple installer identities exist. It uses the existing `CSP_CIS_NOTARY_PROFILE` keychain profile, submits the signed package for notarization, staples its ticket and requires Gatekeeper's install assessment before writing the final checksum. Apple's [installer signing guidance](https://help.apple.com/xcode/mac/current/en.lproj/deve51ce7c3d.html) describes the separate Installer certificate.
+
+The credential-free payload installs only `CSP-CIS_Audit.app` under `/Applications`; relocation to older copies elsewhere is disabled. There are no install scripts, root collection service or bundled workspace config. Installation does not launch the app, import a config or register a login item. Existing per-user Daedalus configs, identity and reports remain outside the payload. Deploy the package through your MDM, then complete per-user configuration and launch-at-login setup described below. Validate fresh install, update, removal and user login on macOS 26 before broad deployment; this workflow has not yet produced an accepted signed package in this environment.
 
 ## Local artifact
 

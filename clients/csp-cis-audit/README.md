@@ -38,7 +38,7 @@ The client uploads check results, device name, macOS version, and the stable ano
 
 ## Legacy files
 
-`com.csp.cis-compliance.plist` and the old SwiftPM/LaunchDaemon instructions are retained as historical files. They are not the supported distribution path for this menu-bar app.
+The retired developer-specific LaunchDaemon plist has been removed. Use the per-user menu-bar app and its launch-at-login option; the signed MDM package workflow is documented in README_DISTRIBUTION.md.
 
 ### Separate client check-ins
 

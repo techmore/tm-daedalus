@@ -36,7 +36,9 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
 
       - name: Check notarized release script syntax
-        run: bash -n clients/csp-cis-audit/scripts/build-notarized-client.sh
+        run: |
+          bash -n clients/csp-cis-audit/scripts/build-notarized-client.sh
+          bash -n clients/csp-cis-audit/scripts/build-mdm-package.sh
 
       - name: Build credential-free local demo package
         run: sh clients/csp-cis-audit/scripts/build-local-client.sh "$RUNNER_TEMP/daedalus-cis-client"
