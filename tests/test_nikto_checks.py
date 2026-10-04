@@ -60,6 +60,18 @@ class NiktoCollectionTests(unittest.TestCase):
             self.assertNotIn('error_code',result)
             self.assertFalse(result['coverage_complete'])
 
+    def test_missing_report_preserves_safe_failure_diagnostics(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temporary:
+            executable=Path(temporary)/'nikto.pl'; executable.write_text('fixture')
+            with patch('daedalus.nikto_checks._public_addresses',return_value=['8.8.8.8']), patch('daedalus.nikto_checks.subprocess.run',return_value=SimpleNamespace(returncode=1)):
+                result=run_nikto_check('example.org',executable)
+            self.assertEqual(result['error_code'],'nikto_report_unavailable')
+            self.assertEqual(result['engine_exit_code'],1)
+            self.assertEqual(result['proxy_connected_tunnels'],0)
+            self.assertEqual(result['proxy_denied_connections'],0)
+            self.assertFalse(result['coverage_complete'])
+
     def test_unavailable_runtime_does_not_resolve_or_start_process(self):
         with patch('daedalus.nikto_checks._public_addresses') as resolve, patch('daedalus.nikto_checks.subprocess.run') as run:
             result=run_nikto_check('example.org',Path('/missing-nikto-fixture'))

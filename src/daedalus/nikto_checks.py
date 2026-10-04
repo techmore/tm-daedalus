@@ -169,7 +169,7 @@ def run_nikto_check(domain: str, executable: Path | None = None) -> dict:
                 timed_out = True
                 returncode = None
             if not output.is_file() or output.is_symlink() or output.stat().st_size > MAX_OUTPUT:
-                return dict(preset, error_code="nikto_report_unavailable", timed_out=timed_out)
+                return dict(preset, error_code="nikto_report_unavailable", timed_out=timed_out, engine_exit_code=returncode, proxy_denied_connections=proxy.denied, proxy_connected_tunnels=proxy.connected)
             with output.open("rb") as report:
                 parsed = parse_report(report.read(MAX_OUTPUT + 1), domain)
             process_completed = returncode == 0 and not timed_out and parsed["engine_report_ended"] and proxy.denied == 0 and proxy.connected > 0

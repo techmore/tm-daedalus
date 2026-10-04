@@ -649,7 +649,7 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
         ),
         Spacer(1, 12),
         _paragraph(
-            "This report captures saved DNS/email checks, passive HTTPS observations, and authorized fixed-path website exposure checks when available. It does not run Nmap, crawl pages, fetch linked resources, or assess third-party services.",
+            "This report captures saved DNS/email checks, passive HTTPS observations, and authorized website audit evidence when available, including fixed-path exposure checks and Nikto observations. Generating this PDF does not start scans or assess third-party services. Audit scope and coverage limits are recorded with each result.",
             styles["DaedalusBody"],
         ),
     ]
