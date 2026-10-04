@@ -100,7 +100,7 @@ class Tunnel(socketserver.BaseRequestHandler):
 
 
 def parse_report(content: bytes, domain: str) -> dict:
-    """Retain stable finding metadata, excluding banners and response contents."""
+    """Retain stable finding metadata without raw banners or response bodies."""
     if len(content) > MAX_OUTPUT:
         raise ValueError("Nikto output exceeds the collection limit.")
     report = json.loads(content)
@@ -135,6 +135,8 @@ def parse_report(content: bytes, domain: str) -> dict:
         if not isinstance(description, str):
             raise ValueError("Nikto finding description is invalid.")
         description = re.sub(r"(?i)(password|secret|token|api[_-]?key)\s*[:=]\s*\S+", r"\1=[redacted]", description[:2048])
+        description = re.sub(r"(?is)(\bwith contents:\s*).*", r"\1[value omitted]", description)
+        description = re.sub(r"(?is)Server banner changed from .*", "Server banner changed between requests; values omitted.", description)
         description = re.sub(r"\?[^\s]+", "?[query redacted]", description)
         description = " ".join(description.split())
         item = {"signature_id": signature, "test_id": identifier, "method": method, "path": parsed.path, "query_sha256": query_digest, "http_status": None, "description": description}

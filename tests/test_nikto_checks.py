@@ -27,6 +27,16 @@ class NiktoCollectionTests(unittest.TestCase):
         self.assertNotIn('private', json.dumps(saved))
         self.assertIn('Missing header', finding['description'])
 
+    def test_detector_messages_omit_header_contents_and_banner_values(self):
+        rows=[{'id':'999100','method':'GET','url':'/','msg':"Uncommon header(s) 'x-custom' found, with contents: synthetic-sensitive-header."},
+              {'id':'999962','method':'OPTIONS','url':'/','msg':"Server banner changed from 'synthetic-banner' to 'other-banner'."}]
+        saved=parse_report(self.report(vulnerabilities=rows),'example.org')
+        encoded=json.dumps(saved)
+        self.assertNotIn('synthetic-sensitive-header',encoded)
+        self.assertNotIn('synthetic-banner',encoded)
+        self.assertIn('x-custom',encoded)
+        self.assertIn('Server banner changed between requests',encoded)
+
     def test_unknown_host_port_and_multiple_hosts_are_refused(self):
         for content in (self.report(host='other.example.org'), self.report(port=80), b'[{},{}]'):
             with self.subTest(content=content), self.assertRaises(ValueError):
