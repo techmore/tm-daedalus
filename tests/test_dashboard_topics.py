@@ -363,6 +363,10 @@ function flatten(node){return node.textContent+' '+node.children.map(flatten).jo
 '''+priority+outcome+'''
 renderTopicPriorities('dns',{resolver_errors:{MX:'timeout'}});
 assert.match(flatten(nodes['dns-priorities']),/remain unknown/);
+assert.equal(nodes['dns-priorities'].children[0].className,'assessment-findings');
+assert.equal(nodes['dns-priorities'].children[0].children[0].children[0].textContent,'SPF: Unknown');
+assert.equal(nodes['dns-priorities'].children[1].className,'check-scope-note');
+assert.doesNotMatch(flatten(nodes['dns-priorities'].children[0]),/missing selector/);
 renderTopicPriorities('web',{http_status:200,tls:{valid_until:'2100-01-01'},security_headers:{}});
 assert.match(flatten(nodes['web-priorities']),/evidence is unavailable/);
 assert.doesNotMatch(flatten(nodes['web-priorities']),/No response, certificate/);

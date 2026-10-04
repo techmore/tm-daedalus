@@ -860,3 +860,9 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .scanner-saved-assessment { padding: 14px 0; border-top: 1px solid var(--card-line); border-bottom: 1px solid var(--card-line); margin: 16px 0; }
 .scanner-saved-assessment h4 { margin: 0 0 10px; color: var(--brown-900); }
 .scanner-saved-assessment .audit-metric-grid { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+
+/* Topic findings: readable headings first, supporting explanation second. */
+.assessment-findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.assessment-finding { min-width: 0; border-left: 3px solid var(--olive-600); padding: 4px 16px; }
+.assessment-finding h4 { margin: 0 0 8px; color: var(--brown-900); font-size: 18px; }
+.assessment-finding p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }

@@ -2773,29 +2773,46 @@
     container.replaceChildren();
     if (!snapshot) { appendEmpty(container, "No saved assessment yet. Run a check to establish a baseline."); return; }
     var items = [];
+    function finding(title, detail) { items.push({title: title, detail: detail}); }
     if (type === "dns") {
       var errors = snapshot.resolver_errors || {};
       emailAuthenticationMetrics(snapshot.email_authentication_assessment).forEach(function (metric) {
-        if (metric.state !== "good") items.push(metric.label + ": " + metric.value + ". " + metric.detail);
+        if (metric.state !== "good") finding(metric.label + ": " + metric.value, metric.detail);
       });
-      if (Object.keys(errors).length) items.push("Some DNS lookups failed. Those records remain unknown; review the lookup evidence below.");
-      items.push("DKIM coverage is limited to the common selectors checked. A missing selector does not establish that mail is unsigned.");
+      if (Object.keys(errors).length) finding("DNS lookup coverage", "Some DNS lookups failed. Those records remain unknown; review the lookup evidence below.");
+      if (!items.length) finding("Email protection evidence recorded", "No concern was identified in the saved SPF and DMARC assessment. Review domain resolution and selector evidence below.");
     } else {
       var code = Number(snapshot.http_status || 0);
-      if (!code || code >= 400) items.push("Website response needs review: " + (code || "no HTTP response") + ".");
+      if (!code || code >= 400) finding("Website availability", "Website response needs review: " + (code || "no HTTP response") + ".");
       var certificateAssessment = websiteCertificateAssessment(snapshot.tls);
-      if (certificateAssessment.state === "unknown") items.push("Certificate expiry evidence is unavailable or has an unsupported timestamp.");
-      else if (certificateAssessment.state === "expired") items.push("The observed TLS certificate has expired.");
-      else if (certificateAssessment.state === "expiring") items.push("The observed TLS certificate expires within 30 days (about " + certificateAssessment.days + " days remaining).");
+      if (certificateAssessment.state === "unknown") finding("Certificate expiry unknown", "Certificate expiry evidence is unavailable or has an unsupported timestamp.");
+      else if (certificateAssessment.state === "expired") finding("Certificate expired", "The observed TLS certificate has expired.");
+      else if (certificateAssessment.state === "expiring") finding("Certificate renewal approaching", "The observed TLS certificate expires within 30 days (about " + certificateAssessment.days + " days remaining).");
       var policies = snapshot.security_headers || {};
       var missing = Object.keys(policies).filter(function (name) { return !policies[name]; });
-      if (missing.length) items.push("Browser policy headers absent from the response: " + missing.join(", ") + ". Review which policies are appropriate for this site.");
-      if (!Object.keys(policies).length) items.push("Browser policy header evidence is unavailable.");
-      if (!items.length) items.push("No response, certificate-expiry, or missing-header concern was identified in this saved snapshot. Deeper audit coverage is separate.");
+      if (missing.length) finding("Browser protection", "Browser policy headers absent from the response: " + missing.join(", ") + ". Review which policies are appropriate for this site.");
+      if (!Object.keys(policies).length) finding("Browser protection unknown", "Browser policy header evidence is unavailable.");
+      if (!items.length) finding("Saved website evidence recorded", "No response, certificate-expiry, or missing-header concern was identified in this saved snapshot. Deeper audit coverage is separate.");
     }
-    var list = document.createElement("ul");
-    items.forEach(function (item) { var row = document.createElement("li"); row.textContent = item; list.append(row); });
-    container.append(list);
+    var group = document.createElement("div");
+    group.className = "assessment-findings";
+    items.forEach(function (item) {
+      var row = document.createElement("article");
+      row.className = "assessment-finding";
+      var heading = document.createElement("h4");
+      heading.textContent = item.title;
+      var detail = document.createElement("p");
+      detail.textContent = item.detail;
+      row.append(heading, detail);
+      group.append(row);
+    });
+    container.append(group);
+    if (type === "dns") {
+      var limit = document.createElement("p");
+      limit.className = "check-scope-note";
+      limit.textContent = "DKIM coverage is limited to the common selectors checked. A missing selector does not establish that mail is unsigned.";
+      container.append(limit);
+    }
   }
 
   function renderDnsSnapshot(snapshot) {
