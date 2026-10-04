@@ -3386,6 +3386,40 @@
       + (snapshot.coverage_complete === true ? ". Fixed-path coverage completed; observations need review." : ". Coverage incomplete; absence does not establish resolution."));
   }
 
+  function renderExposureReview(run) {
+    var host = document.getElementById("web-exposure-review");
+    if (!host) return;
+    host.replaceChildren();
+    if (!run) { appendEmpty(host, "No saved exposure assessment yet."); return; }
+    if (run.status !== "completed" && run.status !== "completed_with_warnings") {
+      appendEmpty(host, "Latest exposure attempt " + String(run.status || "has unknown status") + ". No completed assessment is inferred from this attempt.");
+      return;
+    }
+    var snapshot = run.snapshot || {};
+    var findings = Array.isArray(snapshot.findings) ? snapshot.findings : [];
+    var caption = document.createElement("p");
+    caption.className = "muted";
+    caption.textContent = "Latest exposure assessment · " + dateLabel(run.completed_at || run.started_at)
+      + " · run #" + run.id + ". Signature observations require application review.";
+    host.append(caption);
+    findings.slice(0, 20).forEach(function (finding) {
+      var row = document.createElement("article"); row.className = "assessment-finding";
+      var title = document.createElement("h4"); title.textContent = String(finding.signature_id || "Unclassified signature");
+      var detail = document.createElement("p");
+      detail.textContent = String(finding.path || "Path unavailable") + " · HTTP "
+        + (finding.http_status == null ? "unknown" : finding.http_status) + " · signature requires review";
+      row.append(title, detail); host.append(row);
+    });
+    if (findings.length > 20) {
+      var more = document.createElement("p"); more.textContent = (findings.length - 20) + " further observations are retained in exposure history."; host.append(more);
+    }
+    var scope = document.createElement("p"); scope.className = "check-scope-note";
+    scope.textContent = (findings.length ? "" : "No configured signature was observed. ")
+      + (snapshot.coverage_complete === true ? "Fixed-path coverage completed; this does not establish that the website is free of vulnerabilities."
+        : "Coverage incomplete or ambiguous; absence does not establish resolution.");
+    host.append(scope);
+  }
+
   function renderActiveExposure(body) {
     var status = document.getElementById("web-active-status");
     var list = document.getElementById("web-active-runs");
@@ -3393,6 +3427,7 @@
     if (!list) return;
     var runs = body.runs || [];
     renderWebsiteAuditOutcome("web-exposure-outcome", "Public exposure paths", runs[0]);
+    renderExposureReview(runs[0]);
     if (status) {
       var latest = runs[0];
       status.className = "check-status" + (latest && latest.status === "failed" ? " status-failed" : "");
@@ -3492,6 +3527,11 @@
           retryButton.disabled = false;
           retryButton.textContent = olderKind === "runs" ? "Load older exposure runs" : "Load older finding changes";
         }
+      }
+      if (!olderKind) {
+        var review = document.getElementById("web-exposure-review");
+        if (review) { review.replaceChildren(); appendEmpty(review, "Current exposure evidence could not be refreshed. Review is unavailable until the request succeeds."); }
+        text(document.getElementById("web-exposure-outcome"), "Public exposure paths: current evidence unavailable.");
       }
       text(document.getElementById("web-active-feedback"), error.message);
     }

@@ -19,6 +19,30 @@ class DashboardTopicTests(unittest.TestCase):
         self.assertNotIn('<details', evidence)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_exposure_review_preserves_latest_attempt_and_literal_evidence(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function renderExposureReview('):source.index('  function renderActiveExposure(')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(){this.children=[];this.textContent='';}replaceChildren(){this.children=[];this.textContent='';}append(...items){this.children.push(...items);}}
+const host=new Node(),document={getElementById:()=>host,createElement:()=>new Node()};
+function appendEmpty(node,message){node.textContent=message;}function dateLabel(value){return value;}
+function flatten(node){return node.textContent+' '+node.children.map(flatten).join(' ');}
+""" + helper + """
+renderExposureReview({id:3,status:'completed_with_warnings',snapshot:{coverage_complete:false,findings:[{signature_id:'<script>literal</script>',path:'/probe',http_status:200}]}});
+assert.match(flatten(host),/Coverage incomplete/);assert.equal(host.children[1].children[0].textContent,'<script>literal</script>');
+renderExposureReview({status:'failed',snapshot:{findings:[{signature_id:'stale'}]}});
+assert.match(flatten(host),/Latest exposure attempt failed/);assert.doesNotMatch(flatten(host),/stale/);assert.equal(host.children.length,0);
+renderExposureReview({status:'completed',snapshot:{coverage_complete:true,findings:[]}});
+assert.match(flatten(host),/does not establish/);assert.match(flatten(host),/No configured signature/);
+renderExposureReview(null);assert.match(flatten(host),/No saved exposure assessment/);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Current exposure evidence could not be refreshed.', source)
+        self.assertIn('Public exposure paths: current evidence unavailable.', source)
+
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_vendor_review_drafts_retries_and_literal_history(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  var vendorReviewContext ='):source.index('  function groupExternalDependencies(')]

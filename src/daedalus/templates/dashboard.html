@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-097">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-098">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -347,6 +347,9 @@
           </details>
           <section class="website-audit-evidence" aria-labelledby="web-audit-evidence-title">
             <div class="section-heading check-subheading"><div><p class="eyebrow">DEEPER ASSESSMENT EVIDENCE</p><h3 id="web-audit-evidence-title">Website observations to review</h3></div></div>
+            <h4>Public exposure paths</h4>
+            <div id="web-exposure-review" aria-live="polite"><p class="muted">Loading saved exposure observations…</p></div>
+            <h4>Deeper website audit</h4>
             <div id="web-audit-review" aria-live="polite"><p class="muted">Loading saved audit observations…</p></div>
           </section>
           <details class="topic-secondary"><summary>Linked vendors &amp; page dependencies</summary>
@@ -515,6 +518,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-097" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-098" defer></script>
 </body>
 </html>
