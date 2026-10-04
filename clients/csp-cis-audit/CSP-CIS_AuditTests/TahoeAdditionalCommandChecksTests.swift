@@ -13,6 +13,23 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyDownloadPreferencesDoNotGuessMissingDefaults() {
+        let check = CISCheck(id: "download", category: "macos", description: "Download")
+        let collectors: [(CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult] = [
+            { MacOSAppSecurityChecks.checkSafariAutoOpenSafeFiles(check: $0, command: $1) },
+            { MacOSAppSecurityChecks.checkJavaAppletsDisabled(check: $0, command: $1) },
+            { MacOSAppSecurityChecks.checkPluginsDisabled(check: $0, command: $1) }]
+        for collect in collectors {
+            #expect(collect(check, { _, _ in .init(output: "0") }).status == "pass")
+            #expect(collect(check, { _, _ in .init(output: "1") }).status == "fail")
+            for evidence in [MacOSChecks.CommandEvidence(), .init(output: "0", exitCode: 1), .init(output: "0", error: "failed"), .init(output: "10"), .init(output: "0", unavailable: "timeout")] {
+                #expect(collect(check, { _, _ in evidence }).status == "manual")
+            }
+        }
+        #expect(MacOSAppSecurityChecks.checkJavaScriptAutoExecDisabled(check: check).status == "manual")
+        #expect(MacOSAppSecurityChecks.checkQuarantineEnabled(check: check).status == "manual")
+    }
+
     @Test func sharingServicesRequireExplicitMatchingOverride() {
         let check = CISCheck(id: "sharing", category: "macos", description: "Sharing")
         func status(_ output: String, exitCode: Int32 = 0) -> String {

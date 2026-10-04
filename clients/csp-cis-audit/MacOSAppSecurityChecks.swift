@@ -31,133 +31,28 @@ struct MacOSAppSecurityChecks {
     }
 
     // Check if Automatic Opening of Safe Files in Safari is disabled
-    static func checkSafariAutoOpenSafeFiles(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.Safari", "AutoOpenSafeDownloads"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (default is disabled)
-            return CheckResult(check: check, status: "pass", details: "Automatic Opening of Safe Files in Safari appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Automatic Opening of Safe Files in Safari is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Automatic Opening of Safe Files in Safari is ENABLED.")
-        }
+    static func checkSafariAutoOpenSafeFiles(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.Safari", key: "AutoOpenSafeDownloads", expected: false, command: command)
     }
     
     // Check if Automatic Execution of JavaScript is disabled in downloaded files
     static func checkJavaScriptAutoExecDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.Safari", "WebKitPreferences.javaScriptCanOpenWindowsAutomatically"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "pass", details: "Automatic Execution of JavaScript in downloaded files appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Automatic Execution of JavaScript in downloaded files is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Automatic Execution of JavaScript in downloaded files is ENABLED.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review handling of downloaded JavaScript files and the applications that open them. A Safari popup-window preference does not establish downloaded-file execution policy. Supported execution-policy evidence was not collected.")
     }
     
     // Check if Automatic Execution of Java Applets is disabled
-    static func checkJavaAppletsDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.Safari", "WebKitJavaEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "pass", details: "Automatic Execution of Java Applets appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Automatic Execution of Java Applets is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Automatic Execution of Java Applets is ENABLED.")
-        }
+    static func checkJavaAppletsDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.Safari", key: "WebKitJavaEnabled", expected: false, command: command)
     }
     
     // Check if Automatic Execution of Plugins is disabled
-    static func checkPluginsDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.Safari", "WebKitPluginsEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "pass", details: "Automatic Execution of Plugins appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Automatic Execution of Plugins is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Automatic Execution of Plugins is ENABLED.")
-        }
+    static func checkPluginsDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.Safari", key: "WebKitPluginsEnabled", expected: false, command: command)
     }
     
     // Check if Quarantine of Downloaded Files is enabled
     static func checkQuarantineEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.LaunchServices", "LSQuarantine"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Quarantine of Downloaded Files appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Quarantine of Downloaded Files is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Quarantine of Downloaded Files is DISABLED.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review quarantine metadata on representative downloaded files and the responsible applications. A global LaunchServices preference does not establish that every downloaded file is quarantined. Supported file-provenance evidence was not collected.")
     }
     
     // Check if XProtect Updater is enabled
