@@ -6,38 +6,12 @@ struct MacOSPasswordChecks {
     // MARK: - Password Policies
     
     // Check if password account lockout threshold is configured
-    static func checkPasswordLockoutThreshold(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/pwpolicy"
-        process.arguments = ["getaccountpolicies"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check password lockout threshold: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("maxFailedLoginAttempts") {
-            // Extract the value
-            if let range = output.range(of: "maxFailedLoginAttempts\\s*=\\s*\\d+", options: .regularExpression),
-               let valueRange = output[range].range(of: "\\d+", options: .regularExpression) {
-                let value = output[range][valueRange]
-                if let attempts = Int(value), attempts <= 5 {
-                    return CheckResult(check: check, status: "pass", details: "Password account lockout threshold is configured to \(attempts) attempts.")
-                } else {
-                    return CheckResult(check: check, status: "fail", details: "Password account lockout threshold is configured but exceeds 5 attempts.")
-                }
-            }
-            return CheckResult(check: check, status: "pass", details: "Password account lockout threshold is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password account lockout threshold is NOT configured.")
-        }
+    static func checkPasswordLockoutThreshold(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let mapped = CISCheck(id: check.id, category: check.category, description: check.description, ruleID: "pwpolicy_account_lockout_enforce")
+        let evidence = MacOSChecks.runAdditionalTahoeCommand(check: mapped, command: command, legacyPasswordCriteria: true)
+        return CheckResult(check: check, status: evidence.status, details: evidence.details)
     }
     
     // Check if password minimum length is configured

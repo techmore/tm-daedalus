@@ -174,6 +174,30 @@ struct TahoeAdditionalCommandChecksTests {
         }
     }
 
+    @Test func accountLockoutRequiresTypedLimitsAndPinnedTimeoutSeconds() {
+        func xml(_ key: String, _ values: [Any]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: ["policies": values.map { [key: $0] }], format: .xml, options: 0), encoding: .utf8)!
+        }
+        for attempts in [true, false] {
+            let rule = attempts ? "pwpolicy_account_lockout_enforce" : "pwpolicy_account_lockout_timeout_enforce"
+            let key = attempts ? "policyAttributeMaximumFailedAuthentications" : "autoEnableInSeconds"
+            #expect(run(rule, .init(output: xml(key, [attempts ? 5 : 900]))) == "pass")
+            #expect(run(rule, .init(output: xml(key, [attempts ? 6 : 899]))) == "fail")
+            #expect(run(rule, .init(output: xml(key, [attempts ? 3 : 1000, attempts ? 6 : 899]))) == "fail")
+            for values: [Any] in [[], [-1], [true], ["5"], [5.5], [31536001]] {
+                #expect(run(rule, .init(output: xml(key, values))) == "manual")
+            }
+            for evidence in [MacOSChecks.CommandEvidence(output: xml(key, [5]), exitCode: 1), .init(output: xml(key, [5]), error: "denied"), .init(output: xml(key, [5]), unavailable: "timeout")] {
+                #expect(run(rule, evidence) == "manual")
+            }
+            #expect(run(rule, .init(output: xml(key, [0]))) == (attempts ? "manual" : "fail"))
+        }
+        let check = CISCheck(id: "legacy", category: "macos", description: "Legacy")
+        #expect(MacOSPasswordChecks.checkPasswordLockoutThreshold(check: check, command: { _, _ in .init(output: xml("policyAttributeMaximumFailedAuthentications", [5])) }).status == "pass")
+        #expect(MacOSPasswordChecks.checkPasswordLockoutThreshold(check: check, command: { _, _ in .init(output: "maxFailedLoginAttempts") }).status == "manual")
+        #expect(MacOSPasswordChecks.checkPasswordLockoutThreshold(check: check, command: { _, _ in .init(output: xml("policyAttributeMaximumFailedAuthentications", [0])) }).status == "manual")
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -311,6 +335,8 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "pwpolicy_account_lockout_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
+            "pwpolicy_account_lockout_timeout_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_max_lifetime_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_minimum_length_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_history_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
