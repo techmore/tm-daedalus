@@ -13,6 +13,23 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func configuredTimeoutsRemainFiniteAndBounded() {
+        for value in ["nan", "inf", "-inf", "-1", "0", "0.01", "301", "1e100", "unknown"] {
+            let config = Config.parse(yamlString: "timeouts:\n  default: \(value)\n  filesystem: \(value)\n  network: \(value)\nchecks:\n  fixture: \(value)\n")
+            #expect(config.timeouts.default == 10)
+            #expect(config.timeouts.filesystem == 30)
+            #expect(config.timeouts.network == 20)
+            #expect(config.timeouts.checks.isEmpty)
+        }
+        for value in [0.1, 5.0, 300.0] {
+            let config = Config.parse(yamlString: "timeouts:\n  default: \(value)\n  filesystem: \(value)\n  network: \(value)\nchecks:\n  fixture: \(value)\n")
+            #expect(config.timeouts.default == value)
+            #expect(config.timeouts.filesystem == value)
+            #expect(config.timeouts.network == value)
+            #expect(config.timeouts.checks["fixture"] == value)
+        }
+    }
+
     @Test func chromeSafeBrowsingUsesForcedSupportedPolicyLevels() {
         for description in ["Safe Browsing settings are enabled", "Safe Browsing Protection Level"] {
             let check = CISCheck(id: "safe", category: "chrome", description: description)

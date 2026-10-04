@@ -55,3 +55,7 @@ Legacy password complexity uses the same strict bounded global-policy parser as 
 The stricter legacy Gatekeeper check uses bounded `spctl --status` evidence and a typed `AllowIdentifiedDevelopers` system-policy preference. It no longer invokes `spctl --list` or waits on unread rule output. Enabled assessments alone cannot establish the stricter policy. Missing preferences, failed status reads or unsupported output remain manual; collected App Store-only settings do not constitute a live application acceptance test or inspection of all exceptions. Setting semantics follow [Apple's SystemPolicyControl documentation](https://developer.apple.com/documentation/devicemanagement/systempolicycontrol).
 
 The legacy software-current check uses a bounded read-only Software Update query and exact recognized response lines. A successful no-updates response describes current catalog availability rather than every installed application's patch state. Offered update labels fail the legacy check; unavailable, malformed, contradictory or failed queries remain manual. Raw update output is not included in reported details and no installation is performed.
+
+### Configured check timeouts
+
+Timeout values in `timeouts` and per-check overrides must be finite numbers from 0.1 through 300 seconds. Invalid values retain the category default or omit the per-check override. Defaults are 10 seconds for ordinary checks, 30 for filesystem checks and 20 for network checks. This bounds the client wait; supported command collectors also apply their own deadlines.

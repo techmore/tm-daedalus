@@ -65,6 +65,12 @@ struct Config {
         }
     }
 
+    private static func validTimeout(_ value: String) -> Double? {
+        guard let timeout = Double(value), timeout.isFinite,
+              (0.1...300.0).contains(timeout) else { return nil }
+        return timeout
+    }
+
     static func parse(yamlString: String) -> Config {
         var reporting = Reporting(
             endpoint: "",
@@ -108,18 +114,18 @@ struct Config {
                 }
             case "timeouts":
                 if !checksSection {
-                    if key == "default", let timeout = Double(value) {
+                    if key == "default", let timeout = validTimeout(value) {
                         timeouts.default = timeout
-                    } else if key == "filesystem", let timeout = Double(value) {
+                    } else if key == "filesystem", let timeout = validTimeout(value) {
                         timeouts.filesystem = timeout
-                    } else if key == "network", let timeout = Double(value) {
+                    } else if key == "network", let timeout = validTimeout(value) {
                         timeouts.network = timeout
                     }
-                } else if let timeout = Double(value) {
+                } else if let timeout = validTimeout(value) {
                     timeouts.checks[key] = timeout
                 }
             case "checks":
-                if let timeout = Double(value) {
+                if let timeout = validTimeout(value) {
                     timeouts.checks[key] = timeout
                 }
             default:
