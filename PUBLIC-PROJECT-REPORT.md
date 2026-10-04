@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 069: Meraki observations visible in topic summary
+
+Production application commit **517f38fe7106c2b16b71f30a4a20506e1c39efb7** is active and healthy. Archive: 58 files, SHA-256 **b18107c75baf87ac5cbd1263d4ccd7d605fdddf0a69fea7dbbf828ab1b85133f**; verified off-host backup: daedalus-data-20261004T060725Z.tar.gz. The full suite passed **443 tests and 90 subtests**; after removing a test-string escape warning, all four topic tests passed again. JavaScript syntax and diff checks passed. Release 068 Python CI **37181613402** and managed Linux CI **37181613380** both passed; current release CI remains unconfirmed.
+
+The Meraki topic summary now presents the latest saved Review observation titles and guidance immediately beneath its assessment counts. It shares the immutable-report detail cache with the existing detail view, displays at most five observations, keeps missing evidence distinct from zero observations, renders provider strings through textContent and ignores detached refresh containers. Node fixtures verify literal HTML-like strings, shared request caching, the cap and unknown/empty/detached states. Coverage warning rows remain distinct from Review observations.
+
+Authenticated production checks confirmed the version-069 template/script and the no-store saved-detail response for report 31, including its open-SSID review item. Receipt: /data/codex-meraki-summary-validation-20261004.json. Browser visual review is still pending; API/script validation is not pixel QA. Full project completion remains unproven with the previously recorded deployment, endpoint and operational requirements open.
+
 ## October 4, 2026 — Release 068: fresh Meraki report and review-first summaries
 
 Production application commit **742141eefe0398ff411dfa45acb6d14badd45d35** is active and healthy. Archive: 58 files, SHA-256 **b90ead84f40578f1440e26e747dcb71b94842c637a650255b114989616e590b8**; verified off-host backup: daedalus-data-20261004T060210Z.tar.gz. All **442 tests and 90 subtests** passed locally after repairing a failed-job fixture that omitted its required snapshot. Python CI **37181613402** and managed Linux CI **37181613380** are running. Release 067's Python CI 37181241962 and managed Linux CI 37181241841 passed.
