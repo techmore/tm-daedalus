@@ -107,3 +107,32 @@ class ExternalResourceInventoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class HTMLBaseInventoryTests(unittest.TestCase):
+    def inventory(self, html):
+        return _external_resource_inventory(html, 'https://example.com/page/index.html', 'example.com')
+
+    def test_relative_dependencies_follow_first_base_even_when_it_is_later(self):
+        result = self.inventory('<script src="app.js"></script><base href="https://cdn.example.net/assets/"><base href="https://ignored.example.net/"><link rel="stylesheet" href="style.css">')
+        self.assertEqual(result['external_host_count'], 1)
+        self.assertEqual(result['external_resources'][0]['host'], 'cdn.example.net')
+        self.assertEqual(result['external_resources'][0]['reference_count'], 2)
+        self.assertEqual(result['dependency_observations']['integrity_missing_reference_count'], 2)
+
+    def test_empty_first_base_and_first_duplicate_attribute_are_preserved(self):
+        self.assertEqual(self.inventory('<base href=""><base href="https://ignored.example.net/"><script src="a.js"></script>')['external_host_count'], 0)
+        result = self.inventory('<base href="https://first.example.net/" href="https://second.example.net/"><script src="a.js" src="https://other.example.net/a.js"></script>')
+        self.assertEqual(result['external_resources'][0]['host'], 'first.example.net')
+        self.assertEqual(result['external_host_count'], 1)
+
+    def test_absolute_links_keep_their_origin_and_relative_internal_bases_stay_internal(self):
+        result = self.inventory('<base href="/assets/"><script src="app.js"></script><script src="//cdn.example.net/a.js"></script>')
+        self.assertEqual(result['external_host_count'], 1)
+        self.assertEqual(result['external_resources'][0]['host'], 'cdn.example.net')
+
+    def test_invalid_and_disallowed_first_bases_use_document_fallback(self):
+        for base in ['https://[bad', 'javascript:alert(1)', 'data:text/html,fixture']:
+            with self.subTest(base=base):
+                result = self.inventory('<base href="' + base + '"><base href="https://ignored.example.net/"><script src="a.js"></script><script src="https://cdn.example.net/a.js"></script>')
+                self.assertEqual(result['external_host_count'], 1)
+                self.assertEqual(result['external_resources'][0]['host'], 'cdn.example.net')

@@ -104,10 +104,17 @@ class _PageResourceParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.references: list[tuple[str, str, bool]] = []
+        self.base_href: str | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        values = {name.lower(): value for name, value in attrs if value}
+        values: dict[str, str] = {}
+        for name, value in attrs:
+            values.setdefault(name.lower(), value or "")
         tag = tag.lower()
+        if tag == "base" and "href" in values:
+            if self.base_href is None:
+                self.base_href = values["href"]
+            return
         if tag == "script" and values.get("src"):
             self.references.append(("Script", values["src"] or "", bool((values.get("integrity") or "").strip())))
         elif tag == "link" and values.get("href"):
@@ -149,6 +156,15 @@ def _external_resource_inventory(
     parser = _PageResourceParser()
     parser.feed(html)
     base_domain = domain.removeprefix("www.").rstrip(".").casefold()
+    resource_base = page_url
+    if parser.base_href is not None:
+        try:
+            resolved_base = urljoin(page_url, parser.base_href.strip())
+            parsed_base = urlparse(resolved_base)
+            if parsed_base.scheme.casefold() not in {"data", "javascript"}:
+                resource_base = resolved_base
+        except ValueError:
+            resource_base = page_url
     references: dict[tuple[str, str, int | None, str], int] = {}
 
     dependency_counts = {"http_reference_count": 0, "script_reference_count": 0, "stylesheet_reference_count": 0, "integrity_declared_reference_count": 0, "integrity_missing_reference_count": 0}
@@ -157,7 +173,7 @@ def _external_resource_inventory(
         if not candidate or len(candidate) > 2048:
             continue
         try:
-            parsed = urlparse(urljoin(page_url, candidate))
+            parsed = urlparse(urljoin(resource_base, candidate))
             host = (parsed.hostname or "").rstrip(".").casefold()
             port = parsed.port
         except ValueError:
