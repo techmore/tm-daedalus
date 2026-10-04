@@ -11,6 +11,31 @@ import Testing
 
 struct CSP_CIS_AuditTests {
 
+    @Test func legacyAuditPolicyRequiresExactReadableFields() {
+        let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
+        func flags(_ text: String?) -> String {
+            MacOSSystemChecks.checkAuditFlags(check: check, classes: ["aa"]) { url in
+                #expect(url.path == "/etc/security/audit_control")
+                return text.map { Data($0.utf8) }
+            }.status
+        }
+        #expect(flags("flags:aa,ad\n") == "pass")
+        #expect(flags("flags:all") == "pass")
+        #expect(flags("flags:lo") == "fail")
+        for value in [nil, "permission denied aa", "# flags:aa", "flags:+aa", "flags:all,^aa", "flags:aaaa", "flags:aa\nflags:lo", "flags:aa,aa"] {
+            #expect(flags(value) == "manual")
+        }
+        func retention(_ value: String?) -> String {
+            MacOSSystemChecks.checkAuditRetention(check: check) { _ in value.map { Data($0.utf8) } }.status
+        }
+        #expect(retention("expire-after:7d") == "pass")
+        #expect(retention("expire-after:604800s") == "pass")
+        #expect(retention("expire-after:1d") == "fail")
+        for value in [nil, "sudo: permission denied", "expire-after:error", "expire-after:7d OR 1G", "expire-after:1G", "expire-after:10m", "expire-after:7d\nexpire-after:1d"] {
+            #expect(retention(value) == "manual")
+        }
+    }
+
     @Test func legacyAuditCheckDoesNotPassOnErrorTextMentioningAuditd() {
         let check = CISCheck(id: "macos_22", category: "macos", description: "Ensure security auditing is enabled")
         let error = MacOSSystemChecks.checkSecurityAuditingEnabled(check: check) { _, _ in

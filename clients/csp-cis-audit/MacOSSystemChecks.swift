@@ -161,215 +161,82 @@ struct MacOSSystemChecks {
         MacOSChecks.checkAuditServiceEnabled(check: check, command: command)
     }
 
-    // Check if security auditing flags are configured for startup and time changes
+    // Read the fixed audit policy without privilege escalation or uploading its contents.
+    static func auditPolicyField(_ field: String, readControl: (URL) -> Data?) -> String? {
+        guard let data = readControl(URL(fileURLWithPath: "/etc/security/audit_control")),
+              data.count <= MacOSChecks.auditControlMaximumBytes,
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        let values = text.components(separatedBy: .newlines).compactMap { line -> String? in
+            let value = line.components(separatedBy: "#")[0].trimmingCharacters(in: .whitespaces)
+            guard value.hasPrefix(field + ":") else { return nil }
+            return String(value.dropFirst(field.count + 1)).trimmingCharacters(in: .whitespaces)
+        }
+        guard values.count == 1, !values[0].isEmpty else { return nil }
+        return values[0]
+    }
+
+    static func checkAuditFlags(
+        check: CISCheck, classes: Set<String>,
+        readControl: (URL) -> Data? = MacOSChecks.readAuditControl
+    ) -> CheckResult {
+        func result(_ state: String, _ detail: String) -> CheckResult {
+            CheckResult(check: check, status: state, details: detail)
+        }
+        guard let field = auditPolicyField("flags", readControl: readControl) else {
+            return result("manual", "Audit flags were missing, inaccessible or duplicated; selection was not inferred.")
+        }
+        let tokens = field.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        let known: Set<String> = ["no","fr","fw","fa","fm","fc","fd","cl","pc","nt","ip","na","ad","lo","aa","ap","res","io","ex","ot","all"]
+        guard tokens.allSatisfy({ known.contains($0) }), Set(tokens).count == tokens.count else {
+            return result("manual", "Audit flags contain unknown, prefixed or duplicate selections requiring review.")
+        }
+        let selected = Set(tokens)
+        let enabled = selected.contains("all") || !selected.intersection(classes).isEmpty
+        return result(enabled ? "pass" : "fail", "CSP criterion: at least one required event class must select both successful and failed events. This does not attest complete event coverage or active kernel auditing.")
+    }
+
     static func checkAuditFlagsStartup(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("aa") || output.contains("ad") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for startup and time changes.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for startup and time changes.")
-        }
+        checkAuditFlags(check: check, classes: ["ad"])
     }
-    
-    // Check if security auditing flags are configured for system-wide settings
+
     static func checkAuditFlagsSystemWide(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("lo") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for system-wide settings.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for system-wide settings.")
-        }
+        checkAuditFlags(check: check, classes: ["ad"])
     }
-    
-    // Check if security auditing flags are configured for authentication and authorization
+
     static func checkAuditFlagsAuth(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("am") || output.contains("aa") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for authentication and authorization.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for authentication and authorization.")
-        }
+        checkAuditFlags(check: check, classes: ["aa"])
     }
-    
-    // Check if security auditing flags are configured for file system events
+
     static func checkAuditFlagsFileSystem(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("fd") || output.contains("fw") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for file system events.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for file system events.")
-        }
+        checkAuditFlags(check: check, classes: ["fr", "fw", "fa", "fm", "fc", "fd", "cl"])
     }
-    
-    // Check if security auditing flags are configured for user events
+
     static func checkAuditFlagsUserEvents(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("lo") || output.contains("ex") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for user events.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for user events.")
-        }
+        checkAuditFlags(check: check, classes: ["lo"])
     }
-    
-    // Check if security auditing flags are configured for network events
+
     static func checkAuditFlagsNetworkEvents(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("ip") || output.contains("nt") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for network events.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for network events.")
-        }
+        checkAuditFlags(check: check, classes: ["nt"])
     }
-    
-    // Check if security auditing flags are configured for process events
+
     static func checkAuditFlagsProcessEvents(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "flags", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit flags: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("ex") || output.contains("pc") {
-            return CheckResult(check: check, status: "pass", details: "Security auditing flags are properly configured for process events.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing flags are NOT properly configured for process events.")
-        }
+        checkAuditFlags(check: check, classes: ["pc", "ex"])
     }
-    
-    // Check if security auditing retention is configured
-    static func checkAuditRetention(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/sudo"
-        process.arguments = ["-n", "/usr/bin/grep", "expire-after", "/etc/security/audit_control"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check audit retention: \(error)")
+
+    static func checkAuditRetention(
+        check: CISCheck, readControl: (URL) -> Data? = MacOSChecks.readAuditControl
+    ) -> CheckResult {
+        guard let value = auditPolicyField("expire-after", readControl: readControl),
+              value.range(of: "^[0-9]{1,12}[shdy]$", options: .regularExpression) != nil,
+              let number = Double(value.dropLast()), let unit = value.last else {
+            return CheckResult(check: check, status: "manual", details: "Audit expiration was missing, inaccessible or unsupported. Combined age/size conditions require manual review; no retention duration was inferred.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if !output.isEmpty {
-            // Check if retention is at least 7 days (604800 seconds)
-            if let range = output.range(of: "\\d+", options: .regularExpression),
-               let seconds = Int(output[range]) {
-                if seconds >= 604800 {
-                    return CheckResult(check: check, status: "pass", details: "Security auditing retention is configured for at least 7 days.")
-                } else {
-                    return CheckResult(check: check, status: "fail", details: "Security auditing retention is configured but for less than 7 days.")
-                }
-            }
-            return CheckResult(check: check, status: "pass", details: "Security auditing retention is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Security auditing retention is NOT configured.")
-        }
+        let units: [Character: Double] = ["s":1,"h":3600,"d":86400,"y":31536000]
+        let days = number * (units[unit] ?? 0) / 86400
+        return CheckResult(check: check, status: days >= 7 ? "pass" : "fail",
+            details: "CSP criterion: the explicit age-only audit expiration must be at least seven days. This checks policy, not the presence or age of retained audit records.")
     }
-    
+
     // Check if login items are not added
     static func checkLoginItemsNotAdded(check: CISCheck) -> CheckResult {
         let homeDir = FileManager.default.homeDirectoryForCurrentUser

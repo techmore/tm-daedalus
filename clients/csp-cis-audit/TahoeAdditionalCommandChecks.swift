@@ -455,7 +455,7 @@ extension MacOSChecks {
         return result("pass", summary)
     }
 
-    private static let auditControlMaximumBytes = 65_536
+    static let auditControlMaximumBytes = 65_536
     private static let auditFileMaximumCount = 4_096
 
     private struct AuditMetadata {
@@ -526,7 +526,7 @@ extension MacOSChecks {
         return value
     }
 
-    private static func readAuditControl(at url: URL) -> Data? {
+    static func readAuditControl(at url: URL) -> Data? {
         let descriptor = url.path.withCString { open($0, O_RDONLY | O_NONBLOCK | O_NOFOLLOW) }
         guard descriptor >= 0 else { return nil }
         defer { _ = close(descriptor) }
