@@ -1941,6 +1941,41 @@
     return row;
   }
 
+  function renderCISResultGroups(host, results) {
+    var groups = [
+      {title: "Checks requiring attention", accepts: function (status) { return status === "fail"; }},
+      {title: "Unassessed checks", accepts: function (status) { return status !== "pass" && status !== "fail"; }},
+      {title: "Passing checks", accepts: function (status) { return status === "pass"; }}
+    ];
+    groups.forEach(function (group) {
+      var selected = results.filter(function (result) { return group.accepts(result.status); });
+      if (!selected.length) return;
+      var section = document.createElement("section");
+      section.className = "cis-evidence-group";
+      var heading = document.createElement("h4");
+      heading.textContent = group.title + " · " + selected.length;
+      section.append(heading);
+      var categories = new Map();
+      selected.forEach(function (result) {
+        var category = result.category || "Other checks";
+        if (!categories.has(category)) categories.set(category, []);
+        categories.get(category).push(result);
+      });
+      categories.forEach(function (checks, category) {
+        var evidence = document.createElement("details");
+        evidence.className = "topic-secondary";
+        var summary = document.createElement("summary");
+        var labels = {macos: "macOS", chrome: "Chrome", safari: "Safari"};
+        summary.textContent = (labels[category] || category) + " · " + checks.length + " checks";
+        evidence.append(summary);
+        checks.forEach(function (result) { evidence.append(makeCISResultRow(result)); });
+        section.append(evidence);
+      });
+      host.append(section);
+    });
+    if (!results.length) appendEmpty(host, "No individual check evidence was returned.");
+  }
+
   function renderCISProfiles(profiles) {
     var list = document.getElementById("cis-profile-list");
     var clientProfilePicker = document.getElementById("cis-client-profile");
@@ -2140,7 +2175,7 @@
           pdfFeedback.className = "cis-pdf-feedback";
           pdfToolbar.append(pdfButton, pdfFeedback);
           resultList.append(pdfToolbar);
-          (body.results || []).forEach(function (result) { resultList.append(makeCISResultRow(result)); });
+          renderCISResultGroups(resultList, body.results || []);
           resultList.dataset.loaded = "true";
         } catch (error) {
           resultList.replaceChildren();

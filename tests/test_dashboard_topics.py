@@ -113,6 +113,37 @@ assert.equal(cisPriorityMetrics(null,0)[0][0],'—');
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_endpoint_evidence_groups_prioritize_failures_and_keep_unknown_unassessed(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function renderCISResultGroups('):source.index('  function renderCISProfiles(')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(tag){this.tag=tag;this.children=[];this.textContent='';} append(...items){this.children.push(...items);}}
+const document={createElement:tag=>new Node(tag)};
+function makeCISResultRow(result){const row=new Node('article');row.result=result;return row;}
+function appendEmpty(host,message){host.textContent=message;}
+""" + helper + """
+const results=[{status:'pass',category:'macos',id:1},{status:'manual',category:'chrome',id:2},{status:'fail',category:'macos',id:3},{status:'error',category:'chrome',id:4},{status:'unknown',category:'<script>',id:5}];
+const original=JSON.stringify(results);const host=new Node('div');renderCISResultGroups(host,results);
+assert.deepEqual(host.children.map(section=>section.children[0].textContent),['Checks requiring attention · 1','Unassessed checks · 3','Passing checks · 1']);
+const unassessed=host.children[1];assert.equal(unassessed.children[1].children[0].textContent,'Chrome · 2 checks');
+assert.equal(unassessed.children[2].children[0].textContent,'<script> · 1 checks');
+assert.ok(host.children.every(section=>section.children.slice(1).every(details=>details.tag==='details'&&!details.open)));
+assert.equal(JSON.stringify(results),original);
+const empty=new Node('div');renderCISResultGroups(empty,[]);assert.match(empty.textContent,/No individual check evidence/);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_external_evidence_groups_keep_key_metrics_visible(self):
+        template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
+        evidence = template[template.index('<section class="topic-evidence"'):template.index('<summary>Exposure findings')]
+        self.assertIn('aria-labelledby="{{ key }}-evidence-title"', evidence)
+        self.assertLess(evidence.index('id="dns-record-grid"'), evidence.index('<details'))
+        self.assertLess(evidence.index('id="web-summary-grid"'), evidence.index('<details'))
+        self.assertLess(evidence.index('<summary>Browser security policy evidence</summary>'), evidence.index('id="web-header-grid"'))
+        self.assertNotIn('<details open', evidence)
+
     def test_external_topics_put_assessment_before_records_and_controls(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-081">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-082">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -337,19 +337,22 @@
           <p class="check-scope-note">Passive checks make one HTTPS request to the domain root and inventory linked references. Separate fixed-path exposure checks are explicit, bounded requests against this registered domain and never use Nmap. Results are signature observations that need review, not an assurance that the site is free of vulnerabilities.</p>
           {% endif %}
           </details>
+          <section class="topic-evidence" aria-labelledby="{{ key }}-evidence-title"><div class="section-heading check-subheading"><div><p class="eyebrow">SUPPORTING EVIDENCE</p><h3 id="{{ key }}-evidence-title">{{ 'Domain resolution & email protection' if key == 'dns' else 'Availability & browser protection' }}</h3></div></div>
           {% if key == 'dns' %}
           <div class="check-record-grid" id="dns-record-grid" aria-live="polite"><div class="empty-events">Loading stored DNS results…</div></div>
           <p class="check-footnote">DKIM checks cover six common selectors and are not an exhaustive selector discovery process.</p>
           {% else %}
           <div class="website-summary-grid" id="web-summary-grid" aria-live="polite"><div class="empty-events">Loading stored website results…</div></div>
-          <div class="section-heading check-subheading"><div><p class="eyebrow">RESPONSE HEADERS</p><h3>Browser security policy</h3></div></div>
+          <details class="topic-secondary"><summary>Browser security policy evidence</summary>
           <div class="check-record-grid" id="web-header-grid" aria-live="polite"><div class="empty-events">No website result yet.</div></div>
+          </details>
           <details class="topic-secondary"><summary>Linked vendors &amp; page dependencies</summary>
           <div class="section-heading check-subheading"><div><p class="eyebrow">LINKED VENDORS</p><h3>External page dependencies</h3></div></div>
           <p class="check-scope-note">Hosts are derived from scripts, stylesheets, resource hints, embedded frames, and media references in the root page. This inventory identifies linked providers; it does not assess their security or load their content.</p>
           <div class="check-record-grid" id="web-vendor-grid" aria-live="polite"><div class="empty-events">External dependency results will appear after a website check.</div></div>
           </details>
           {% endif %}
+          </section>
 
           {% if key == 'web' %}
           <details class="topic-secondary"><summary>Exposure findings &amp; deeper website audits</summary>
@@ -476,6 +479,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-081" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-082" defer></script>
 </body>
 </html>

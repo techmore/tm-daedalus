@@ -1,5 +1,16 @@
 # Daedalus project report
 
+## Current checkpoint — October 4, 2026
+
+Daedalus is running on the owner’s Incus host at `daedalus.cybersecuritypilot.org`; GitHub Pages hosts the CSP marketing site. The entries below retain earlier validation history and should not be read as the current deployment inventory.
+
+The dashboard leads with topic assessments and changes. DNS/email and website evidence now share explicit topic groups; detailed browser policies are expandable. Endpoint report details group checks requiring attention, unassessed checks, and passing checks, then organize each by operating system or browser. These changes have structural and renderer validation; browser visual review remains pending.
+
+The CIS client has **71 passing local unit tests**, including unavailable browser preferences staying manual rather than being classified as errors or assumed defaults. This corrects future evidence classification and does not remediate endpoints or alter saved reports. An actual macOS 26 audit and trusted Developer ID signing/notarization remain outstanding.
+
+Recent production evidence includes a real Mac loopback scanner command with uploaded events and a generated PDF, Meraki reporting with unavailable controls kept distinct from disabled protection, DNS resolver observations and comparisons, and a durable queued website audit with a cancellation path and collection timestamps. The bounded Nikto audit completed with warnings; it does not establish exhaustive website coverage. Exact production subnet scopes, multiple VLAN deployment, broader human onboarding, and deeper vendor assessments remain open.
+
+
 ## October 4, 2026 — concurrent workspace access request handling
 
 Concurrent first access requests from the same user/domain can collide with the membership uniqueness constraint. The request handler now rolls back the losing insert and returns the already-saved pending/approved status; other changed-access cases return HTTP 409. This preserves the pending user role and avoids a duplicate membership request audit or admin notification.

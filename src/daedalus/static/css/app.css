@@ -813,3 +813,12 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 
 .cis-hero-metrics { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 .cis-hero-metrics .cis-mini-metric { min-width: 0; }
+
+/* Keep assessment visually strongest; supporting evidence has one quiet boundary. */
+.topic-evidence { margin: 28px 0; padding-top: 8px; border-top: 1px solid var(--card-line); min-width: 0; }
+.topic-evidence > .section-heading { margin-top: 12px; }
+.topic-evidence > .topic-secondary { margin-bottom: 12px; }
+
+.cis-evidence-group { margin-top: 24px; }
+.cis-evidence-group > h4 { color: var(--brown-900); margin: 0 0 12px; }
+.cis-evidence-group > .topic-secondary { margin: 10px 0; }
