@@ -91,7 +91,11 @@ connects outward to Daedalus. No inbound port, root service, shell command, or
 automatic software update is installed. NmapUI's local trust bypass is disabled.
 Unit files, enrollment config, and
 optional NmapUI Basic Authentication credentials are owner-only. Existing
-units or files with these names are never overwritten.
+units or files with these names are never overwritten. If startup fails, the
+installer attempts to stop every service it tried to start, including a
+partially successful systemd start. Enrollment and private service files are
+retained for recovery. A failed cleanup stop is reported explicitly because
+the service may still be running.
 
 Use the managed service helper for a status check or restart:
 

@@ -72,7 +72,7 @@ raise SystemExit("Unexpected fixture Python invocation")
         self.assertEqual(installed.stat().st_mode & 0o777, 0o700)
         self.assertEqual(json.loads(recorder.read_text()), ['--server', 'https://fixture.invalid', '--nmapui-url', 'http://127.0.0.1:9000', '--name', 'Fixture scanner'])
 
-    def test_linux_managed_installer_prepares_enrolls_and_starts_fixed_services(self):
+    def linux_managed_install(self, fail_unit=None, fail_stop_unit=None):
         kit = self.root / 'linux-kit'
         (kit / 'src/daedalus').mkdir(parents=True)
         for name in ['install-service-linux.sh', 'manage-service-linux.sh', 'install-nmapui.sh', 'systemd_service.py', 'pyproject.toml']:
@@ -118,6 +118,7 @@ raise SystemExit("Unexpected fixture Python invocation: "+repr(args))
             'systemctl': f'''#!/bin/sh
 printf '%s\\n' "$*" >> {str(recorder)!r}.systemctl
 case "$*" in *"is-active"*|*"is-enabled"*) exit 0;; esac
+if [ "$*" = "--user enable --now $FIXTURE_FAIL_UNIT" ] || [ "$*" = "--user stop $FIXTURE_FAIL_STOP_UNIT" ]; then exit 1; fi
 exit 0
 ''',
         }.items():
@@ -128,10 +129,16 @@ exit 0
             'XDG_DATA_HOME': str(self.root/'data-home'),
             'XDG_CONFIG_HOME': str(self.root/'config-home'),
             'PYTHON_BIN': str(python_stub),
+            'FIXTURE_FAIL_UNIT': fail_unit or '',
+            'FIXTURE_FAIL_STOP_UNIT': fail_stop_unit or '',
             'NMAPUI_USERNAME': 'scanner user',
             'NMAPUI_PASSWORD': 'fixture"secret\\$value',
         }
         response = subprocess.run(['/bin/sh', str(kit/'install-service-linux.sh'), 'https://fixture.invalid', 'CSP VLAN 10'], env=environment, capture_output=True, text=True, timeout=20)
+        return response, recorder, environment
+
+    def test_linux_managed_installer_prepares_enrolls_and_starts_fixed_services(self):
+        response, recorder, environment = self.linux_managed_install()
         self.assertEqual(response.returncode, 0, response.stderr+response.stdout)
         config = self.root/'config-home/daedalus/managed-agent.json'
         unit_dir = self.root/'config-home/systemd/user'
@@ -150,6 +157,35 @@ exit 0
             ('--nmapui-systemd-config-dir', str(self.root/'config-home/daedalus')),
         ):
             self.assertEqual(enrollment_args[enrollment_args.index(flag)+1], value)
+
+    def check_linux_partial_start_failure(self, unit, expected_stops):
+        response, recorder, _ = self.linux_managed_install(fail_unit=unit)
+        self.assertNotEqual(response.returncode, 0)
+        self.assertIn('Service startup failed', response.stderr)
+        commands = Path(str(recorder) + '.systemctl').read_text().splitlines()
+        stops = [command for command in commands if command.startswith('--user stop ')]
+        self.assertEqual(stops, ['--user stop ' + name for name in expected_stops])
+        config = self.root / 'config-home/daedalus'
+        self.assertTrue((config / 'managed-agent.json').is_file())
+        self.assertTrue((config / systemd_service.STATE_FILE).is_file())
+        systemd_service.verify(self.root / 'config-home/systemd/user', config)
+
+    def test_linux_partial_nmapui_start_is_stopped_and_enrollment_retained(self):
+        self.check_linux_partial_start_failure(systemd_service.NMAPUI_UNIT, [systemd_service.NMAPUI_UNIT])
+
+    def test_linux_partial_bridge_start_stops_both_services_and_retains_enrollment(self):
+        self.check_linux_partial_start_failure(systemd_service.BRIDGE_UNIT, [systemd_service.BRIDGE_UNIT, systemd_service.NMAPUI_UNIT])
+
+    def test_linux_failed_cleanup_reports_running_risk_and_attempts_other_stop(self):
+        response, recorder, _ = self.linux_managed_install(
+            fail_unit=systemd_service.BRIDGE_UNIT, fail_stop_unit=systemd_service.BRIDGE_UNIT,
+        )
+        self.assertNotEqual(response.returncode, 0)
+        self.assertIn('Could not stop daedalus-scanner-bridge.service', response.stderr)
+        self.assertIn('may still be running', response.stderr)
+        commands = Path(str(recorder) + '.systemctl').read_text().splitlines()
+        self.assertIn('--user stop daedalus-nmapui.service', commands)
+        self.assertTrue((self.root / 'config-home/daedalus/managed-agent.json').is_file())
 
     def test_nested_bridge_module_symlink_is_rejected_before_overwrite(self):
         kit, environment, recorder = self.foreground_fixture()

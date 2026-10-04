@@ -120,14 +120,18 @@ printf 'Daedalus one-time enrollment code: '
   --agent-executable "$BRIDGE_VENV/bin/daedalus-agent" --bridge-working-dir "$BRIDGE_INSTALL_ROOT" \
   --agent-config "$CONFIG_PATH" --port "$NMAPUI_PORT"
 
-NMAPUI_STARTED=0
-BRIDGE_STARTED=0
+NMAPUI_START_ATTEMPTED=0
+BRIDGE_START_ATTEMPTED=0
 rollback_startup() {
   status=$?
   trap - EXIT HUP INT TERM
   if [ "$status" -ne 0 ]; then
-    [ "$BRIDGE_STARTED" -eq 0 ] || systemctl --user stop "$BRIDGE_LABEL" >/dev/null 2>&1 || true
-    [ "$NMAPUI_STARTED" -eq 0 ] || systemctl --user stop "$NMAPUI_LABEL" >/dev/null 2>&1 || true
+    if [ "$BRIDGE_START_ATTEMPTED" -eq 1 ]; then
+      systemctl --user stop "$BRIDGE_LABEL" >/dev/null 2>&1 || printf '%s\n' "Could not stop $BRIDGE_LABEL after failed startup; it may still be running." >&2
+    fi
+    if [ "$NMAPUI_START_ATTEMPTED" -eq 1 ]; then
+      systemctl --user stop "$NMAPUI_LABEL" >/dev/null 2>&1 || printf '%s\n' "Could not stop $NMAPUI_LABEL after failed startup; it may still be running." >&2
+    fi
     printf '%s\n' "Service startup failed. Private unit/config files and enrollment were retained; inspect with sh manage-service-linux.sh status, then retry with sh manage-service-linux.sh restart." >&2
   fi
   exit "$status"
@@ -138,8 +142,8 @@ if command -v systemd-analyze >/dev/null 2>&1; then
   systemd-analyze verify "$NMAPUI_UNIT" "$BRIDGE_UNIT" || fail "Generated systemd unit validation failed."
 fi
 systemctl --user daemon-reload
+NMAPUI_START_ATTEMPTED=1
 systemctl --user enable --now "$NMAPUI_LABEL"
-NMAPUI_STARTED=1
 "$PYTHON_BIN" - "$NMAPUI_URL" <<'PY'
 import base64, json, os, sys, time
 from urllib.error import URLError
@@ -162,8 +166,8 @@ while time.monotonic() < deadline:
     time.sleep(1)
 raise SystemExit("Managed NmapUI did not become ready within 60 seconds.")
 PY
+BRIDGE_START_ATTEMPTED=1
 systemctl --user enable --now "$BRIDGE_LABEL"
-BRIDGE_STARTED=1
 systemctl --user is-active --quiet "$NMAPUI_LABEL" || fail "NmapUI service is not active."
 systemctl --user is-active --quiet "$BRIDGE_LABEL" || fail "Daedalus bridge service is not active."
 trap - EXIT HUP INT TERM
