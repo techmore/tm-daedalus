@@ -607,3 +607,9 @@ The untrusted-site JavaScript check no longer treats the popup-window preference
 [Backend CI run 37204676506](https://github.com/techmore/tm-daedalus/actions/runs/37204676506) completed successfully for source 8f50a0019a6da15d9037d3a90e464b22c2d18f06. Python 3.11 and 3.12 each passed 542 tests and 122 subtests, including locked-dependency/export checks. The latest [native CI run 37204676457](https://github.com/techmore/tm-daedalus/actions/runs/37204676457) was still running client tests when inspected; its package-build step had not started, so no final native CI success is claimed. Earlier cancelled native runs are not passing evidence. Local native unit evidence remains 110 passing tests on macOS 27.0.1.
 
 Production download review confirmed the unsigned demo package is withheld in production. Trusted client distribution still requires Developer ID signing/notarization; local builds and uploads do not complete that gate. Latest actual SER8 report remains 18.
+
+## October 4, 2026 — current native CI completed
+
+[Native CI run 37204676457](https://github.com/techmore/tm-daedalus/actions/runs/37204676457) completed successfully for 8f50a0019a6da15d9037d3a90e464b22c2d18f06. The client test step, both release-script syntax checks, and credential-free local demo package build succeeded. The build emitted CSP-CIS_Audit-local-demo.zip in the runner's temporary directory. Earlier in-progress statements are historical. Local native unit evidence remains 110 passing tests.
+
+UI test sources currently launch the app, measure launch performance and capture a screenshot; they do not assert enrollment, signed-in dashboard hierarchy, persistent installation or endpoint lifecycle. CI success does not prove those acceptance gates or Developer ID distribution. Production download remains unavailable for the unsigned demo package, and actual macOS 26 target execution remains unproven.
