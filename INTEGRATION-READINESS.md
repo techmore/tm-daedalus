@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — queued website audit cancellation
+
+Workspace admins can cancel a queued Nikto audit through a scoped API and a history-row action. A conditional queued-to-cancelled update races safely with worker claiming; already-started collection returns HTTP 409. Cancelled attempts keep their original requester, timestamps and history, while the cancelling actor is recorded in external_check.cancelled. Repeated cancellation is idempotent and does not duplicate the audit entry. Current admin membership is required, including when domain authorization is no longer available. No new confirmation popup is used.
+
+Fixtures confirm cancellation prevents collection, repeated cancellation creates one audit record, a running job is retained on conflict, and a downgraded member cannot cancel. Production audit 51 remains active on source 99ec2bb; cancellation and separate timestamp changes await deployment after terminal confirmation. The full goal remains active.
+
+
 ## October 4, 2026 — separate website queue and collection timestamps
 
 Website jobs now record nullable queued_at and collection_started_at fields. Submission records queue entry, while the atomic worker claim records collection start. API history and frozen report snapshots expose both times, and Nikto history displays them separately. Existing started_at is retained for compatibility. Migration adds the fields without reconstructing timestamps for legacy runs; an idempotent old-schema fixture verifies preserved timestamps/snapshots and null new fields.

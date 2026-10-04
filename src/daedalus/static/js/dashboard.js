@@ -3077,7 +3077,7 @@
     var node = document.getElementById(id);
     if (!node) return;
     if (!run) { text(node, label + ": no assessment saved yet."); return; }
-    if (run.status === "failed" || run.status === "running" || run.status === "queued") {
+    if (run.status === "failed" || run.status === "running" || run.status === "queued" || run.status === "cancelled") {
       text(node, label + ": latest attempt " + run.status + ". Review the audit details below."); return;
     }
     var snapshot = run.snapshot || {};
@@ -3263,6 +3263,22 @@
         var note = document.createElement("p"); note.className = "muted";
         note.textContent = run.error_summary || "Coverage remains unconfirmed. Comparisons record new observations; absent findings do not prove resolution.";
         card.append(title, note);
+        if (role === "admin" && run.status === "queued") {
+          var cancel = document.createElement("button"); cancel.type = "button";
+          cancel.className = "button button-small button-secondary"; cancel.textContent = "Cancel queued audit";
+          cancel.addEventListener("click", async function () {
+            cancel.disabled = true;
+            try {
+              await postJson("/api/external-checks/web-nikto/runs/" + run.id + "/cancel");
+              text(document.getElementById("web-nikto-feedback"), "Queued audit #" + run.id + " cancelled.");
+              await loadNikto(); await loadAuditLog();
+            } catch (error) {
+              text(document.getElementById("web-nikto-feedback"), error.message);
+              cancel.disabled = false;
+            }
+          });
+          card.append(cancel);
+        }
         if (run.queued_at) {
           var timing = document.createElement("p"); timing.className = "muted";
           timing.textContent = "Queued " + dateLabel(run.queued_at) + (run.collection_started_at ? " · Collection started " + dateLabel(run.collection_started_at) : " · Collection start not recorded");

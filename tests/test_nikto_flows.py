@@ -6,7 +6,7 @@ from datetime import timedelta
 from unittest.mock import patch
 from sqlalchemy import select, create_engine, text
 from daedalus import server
-from daedalus.models import Organization, Membership, ExternalCheckRun, ProbationOverride
+from daedalus.models import Organization, Membership, ExternalCheckRun, ProbationOverride, AuditLog
 import test_active_website_flows as fixtures
 
 
@@ -160,6 +160,38 @@ class NiktoFlowsTests(unittest.TestCase):
                 self.assertIsNone(row[2]);self.assertIsNone(row[3])
         finally:
             engine.dispose()
+
+    def test_queued_cancellation_is_audited_idempotent_and_never_collected(self):
+        queued=self.client.post('/api/external-checks/web-nikto/run').json()
+        path=f"/api/external-checks/web-nikto/runs/{queued['id']}/cancel"
+        response=self.client.post(path)
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(response.json()['status'],'cancelled')
+        self.assertIsNone(response.json()['collection_started_at'])
+        self.assertEqual(self.client.post(path).status_code,200)
+        with patch.object(server,'run_nikto_check') as collector:
+            self.assertIsNone(server.process_next_website_audit())
+        collector.assert_not_called()
+        with self.session_factory() as db:
+            self.assertEqual(len(db.scalars(select(AuditLog).where(AuditLog.action=='external_check.cancelled')).all()),1)
+
+    def test_started_audit_cancellation_does_not_claim_running_collection_stopped(self):
+        queued=self.client.post('/api/external-checks/web-nikto/run').json()
+        with self.session_factory() as db:
+            db.get(ExternalCheckRun,queued['id']).status='running';db.commit()
+        response=self.client.post(f"/api/external-checks/web-nikto/runs/{queued['id']}/cancel")
+        self.assertEqual(response.status_code,409)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(ExternalCheckRun,queued['id']).status,'running')
+
+    def test_queued_cancellation_requires_current_workspace_admin(self):
+        queued=self.client.post('/api/external-checks/web-nikto/run').json()
+        org_id,user_id=self.context()
+        with self.session_factory() as db:
+            db.scalar(select(Membership).where(Membership.organization_id==org_id,Membership.user_id==user_id)).role='user';db.commit()
+        self.assertEqual(self.client.post(f"/api/external-checks/web-nikto/runs/{queued['id']}/cancel").status_code,403)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(ExternalCheckRun,queued['id']).status,'queued')
 
     def test_queued_pdf_does_not_describe_collection_as_started(self):
         from daedalus import reports

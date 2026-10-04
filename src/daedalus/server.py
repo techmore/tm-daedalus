@@ -4867,6 +4867,36 @@ async def start_external_check(
     return result
 
 
+@app.post("/api/external-checks/{check_type}/runs/{run_id}/cancel")
+def cancel_queued_website_audit(
+    check_type: str, run_id: int, request: Request, db: Session = Depends(get_db),
+):
+    user, organization, _ = get_org_context(request, db, admin=True)
+    if check_type != "web-nikto":
+        raise HTTPException(status_code=404, detail="Unknown queued website audit")
+    run = db.scalar(select(ExternalCheckRun).where(
+        ExternalCheckRun.id == run_id, ExternalCheckRun.organization_id == organization.id,
+        ExternalCheckRun.check_type == check_type,
+    ))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Website audit not found")
+    if run.status == "cancelled":
+        return serialize_external_run(run, db.get(User, run.triggered_by_user_id))
+    cancelled = db.execute(update(ExternalCheckRun).where(
+        ExternalCheckRun.id == run_id, ExternalCheckRun.organization_id == organization.id,
+        ExternalCheckRun.status == "queued",
+    ).values(status="cancelled", completed_at=utcnow(), error_summary="Cancelled before collection by a workspace admin."))
+    if cancelled.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Only queued audits can be cancelled. Collection may already have started.")
+    audit(db, organization.id, user.id, "external_check.cancelled", {
+        "run_id":run_id, "check_type":check_type, "phase":"queued",
+    })
+    db.commit()
+    db.refresh(run)
+    return serialize_external_run(run, db.get(User, run.triggered_by_user_id))
+
+
 @app.put("/api/external-checks/{check_type}/schedule")
 async def update_external_check_schedule(
     check_type: str,

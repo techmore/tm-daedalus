@@ -58,6 +58,7 @@ class ExternalReportFreshnessTests(unittest.TestCase):
                 self.assertEqual(check["changes"][0]["field_path"], "records.A")
                 self.assertEqual(check["latest_attempt"], {
                     "id": latest.id, "status": status, "started_at": "2026-09-29T12:00:00Z",
+                    "queued_at": None, "collection_started_at": None,
                     "completed_at": None if status == "running" else "2026-09-29T12:00:02Z",
                     "error_summary": "fixture failure" if status == "failed" else None})
 
