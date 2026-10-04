@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-090">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-091">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -359,6 +359,20 @@
           <div class="section-heading check-subheading"><div><p class="eyebrow">LINKED VENDORS</p><h3>External page dependencies</h3></div></div>
           <p class="check-scope-note">Hosts are derived from scripts, stylesheets, resource hints, embedded frames, and media references in the root page. This inventory identifies linked providers; it does not assess their security or load their content.</p>
           <div class="check-record-grid" id="web-vendor-grid" aria-live="polite"><div class="empty-events">External dependency results will appear after a website check.</div></div>
+          <section aria-labelledby="vendor-review-title"><h3 id="vendor-review-title">Dependency review decisions</h3>
+          <p class="check-scope-note" id="vendor-review-scope">Choose a saved inventory before recording a review.</p>
+          <div id="vendor-review-decisions" aria-live="polite"></div>
+          {% if membership.role == 'admin' %}
+          <form id="vendor-review-form" class="workspace-form">
+            <label>Linked origin<select id="vendor-review-origin" required></select></label>
+            <label>Decision<select id="vendor-review-status"><option value="needs_action">Needs action</option><option value="monitor">Monitor</option><option value="reviewed">Reviewed</option></select></label>
+            <label>Review rationale<textarea id="vendor-review-note" minlength="8" maxlength="2000" required rows="3"></textarea></label>
+            <button class="button button-secondary" id="vendor-review-save" type="submit" disabled>Record review</button>
+          </form>
+          {% endif %}
+          <p id="vendor-review-feedback" class="check-scope-note" aria-live="polite"></p>
+          <details class="topic-secondary"><summary>Review decision history</summary><div id="vendor-review-history"></div><button id="vendor-review-older" class="button button-quiet hidden" type="button">Load older decisions</button></details>
+          </section>
           </details>
           {% endif %}
           <details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>
@@ -495,6 +509,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-090" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-091" defer></script>
 </body>
 </html>

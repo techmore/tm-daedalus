@@ -7,6 +7,35 @@ import unittest
 
 class DashboardTopicTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_vendor_review_drafts_retries_and_literal_history(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  var vendorReviewContext ='):source.index('  function groupExternalDependencies(')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(){this.children=[];this.value='';this.events={};this.classList={toggle(){}};}
+replaceChildren(){this.children=[];}append(...nodes){this.children.push(...nodes);}addEventListener(name,fn){this.events[name]=fn;}}
+const ids=new Map();const document={getElementById(id){if(!ids.has(id))ids.set(id,new Node());return ids.get(id);},createElement(){return new Node();}};
+function text(n,v){n.textContent=v;}function appendEmpty(n,v){n.textContent=v;}function dateLabel(v){return v;}
+let uuidCalls=0;const crypto={randomUUID(){uuidCalls++;return '00000000-0000-0000-0000-000000000001';}};
+let fail=true;const posts=[];
+const fetch=async(url,options)=>{if(options.method==='POST'){posts.push(JSON.parse(options.body));return {ok:!fail,json:async()=>fail?{detail:'Temporary failure'}:{review:{id:1}}};}
+return {ok:true,json:async()=>({reviews:[{id:1,origin:{host:'cdn.test'},status:'monitor',note:'<script>literal</script>',actor_user_id:1,created_at:'date'}],history:[],history_has_more:false})};};
+""" + helper + """
+(async()=>{
+loadVendorReviewContext(10,[{host:'cdn.test',scheme:'https'}]);
+const note=document.getElementById('vendor-review-note'),origin=document.getElementById('vendor-review-origin'),status=document.getElementById('vendor-review-status');
+note.value='Review this dependency';origin.value='0';status.value='monitor';
+loadVendorReviewContext(11,[{host:'new.test',scheme:'https'}]);assert.equal(vendorReviewContext.runId,10);
+await vendorReviewForm.events.submit({preventDefault(){}});assert.equal(note.value,'Review this dependency');
+fail=false;await vendorReviewForm.events.submit({preventDefault(){}});
+assert.equal(posts[0].request_id,posts[1].request_id);assert.equal(uuidCalls,1);assert.equal(posts[1].run_id,10);assert.equal(note.value,'');
+assert.equal(document.getElementById('vendor-review-decisions').children[0].children[1].textContent,'<script>literal</script>');
+loadVendorReviewContext(11,[{host:'new.test',scheme:'https'}]);assert.equal(vendorReviewContext.runId,11);
+})().catch(e=>{console.error(e);process.exitCode=1;});
+"""
+        result = subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_vendor_groups_preserve_observations_and_avoid_object_key_collisions(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function groupExternalDependencies('):source.index('  function renderWebsiteSnapshot(')]

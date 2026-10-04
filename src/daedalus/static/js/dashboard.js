@@ -2876,6 +2876,89 @@
     }
   }
 
+  var vendorReviewContext = null, vendorReviewSequence = 0, vendorReviewPending = null;
+  var vendorReviewHistory = [], vendorReviewBefore = null, vendorReviewSaving = false;
+  var vendorReviewLabels = {reviewed: "Reviewed", needs_action: "Needs action", monitor: "Monitor"};
+
+  function renderVendorDecisionList(host, rows) {
+    if (!host) return;
+    host.replaceChildren();
+    if (!rows.length) { appendEmpty(host, "No review decisions recorded for this inventory."); return; }
+    rows.forEach(function (row) {
+      var item = document.createElement("article"); item.className = "cis-report-card";
+      var title = document.createElement("strong");
+      title.textContent = (row.origin || {}).host + " · " + (vendorReviewLabels[row.status] || "Unknown decision");
+      var note = document.createElement("p"); note.textContent = row.note;
+      var when = document.createElement("small"); when.textContent = "Reviewer #" + (row.actor_user_id || "former member") + " · " + dateLabel(row.created_at);
+      item.append(title, note, when); host.append(item);
+    });
+  }
+
+  async function fetchVendorReviews(older) {
+    if (!vendorReviewContext) return;
+    var runId = vendorReviewContext.runId, sequence = ++vendorReviewSequence;
+    try {
+      var response = await fetch("/api/vendor-reviews?run_id=" + runId + (older && vendorReviewBefore ? "&before=" + vendorReviewBefore : ""), {credentials: "same-origin"});
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "Review decisions unavailable.");
+      if (sequence !== vendorReviewSequence || !vendorReviewContext || vendorReviewContext.runId !== runId) return;
+      renderVendorDecisionList(document.getElementById("vendor-review-decisions"), body.reviews || []);
+      var expanded = vendorReviewHistory.length > 100;
+      var merged = new Map(vendorReviewHistory.map(function (row) { return [row.id, row]; }));
+      (body.history || []).forEach(function (row) { merged.set(row.id, row); });
+      vendorReviewHistory = Array.from(merged.values()).sort(function (a,b) { return b.id-a.id; });
+      if (older || !expanded) vendorReviewBefore = body.history_has_more ? body.history_next_before : null;
+      renderVendorDecisionList(document.getElementById("vendor-review-history"), vendorReviewHistory);
+      var more = document.getElementById("vendor-review-older"); if (more) more.classList.toggle("hidden", !vendorReviewBefore);
+    } catch (error) {
+      if (sequence === vendorReviewSequence) text(document.getElementById("vendor-review-feedback"), error.message);
+    }
+  }
+
+  function loadVendorReviewContext(runId, resources) {
+    var note = document.getElementById("vendor-review-note");
+    var keepDraft = vendorReviewContext && vendorReviewContext.runId !== runId && (vendorReviewSaving || (note && note.value.trim()));
+    if (keepDraft) {
+      text(document.getElementById("vendor-review-scope"), "New inventory available. This draft remains attached to saved website run #" + vendorReviewContext.runId + ". Finish or clear the rationale before switching.");
+      return;
+    }
+    if (!vendorReviewContext || vendorReviewContext.runId !== runId) {
+      vendorReviewContext = runId && Array.isArray(resources) ? {runId: runId, resources: resources} : null;
+      vendorReviewHistory = []; vendorReviewBefore = null; vendorReviewPending = null; ++vendorReviewSequence;
+      var select = document.getElementById("vendor-review-origin");
+      if (select) {
+        select.replaceChildren();
+        (resources || []).forEach(function (origin, index) {
+          var option = document.createElement("option"); option.value = String(index);
+          option.textContent = origin.host + " · " + origin.scheme + (origin.port ? ":" + origin.port : ""); select.append(option);
+        });
+      }
+    }
+    text(document.getElementById("vendor-review-scope"), vendorReviewContext ? "Decisions apply to saved website run #" + runId + ". Reviewed records a human decision; provider security remains unassessed." : "No saved inventory available for review.");
+    var save = document.getElementById("vendor-review-save"); if (save) save.disabled = vendorReviewSaving || !vendorReviewContext || !resources.length;
+    if (vendorReviewContext) fetchVendorReviews(false);
+  }
+
+  var vendorReviewForm = document.getElementById("vendor-review-form");
+  if (vendorReviewForm) vendorReviewForm.addEventListener("submit", async function (event) {
+    event.preventDefault(); if (!vendorReviewContext || vendorReviewSaving) return;
+    var note = document.getElementById("vendor-review-note"), origin = document.getElementById("vendor-review-origin"), status = document.getElementById("vendor-review-status");
+    var values = {run_id: vendorReviewContext.runId, resource_index: Number(origin.value), status: status.value, note: note.value.trim()};
+    var signature = JSON.stringify(values);
+    if (!vendorReviewPending || vendorReviewPending.signature !== signature) vendorReviewPending = {signature: signature, payload: Object.assign({request_id: crypto.randomUUID()}, values)};
+    vendorReviewSaving = true; document.getElementById("vendor-review-save").disabled = true;
+    try {
+      var response = await fetch("/api/vendor-reviews", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"}, body: JSON.stringify(vendorReviewPending.payload)});
+      var body = await response.json(); if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Review could not be saved.");
+      text(document.getElementById("vendor-review-feedback"), "Review recorded for website run #" + values.run_id + ".");
+      if (note.value.trim() === values.note && Number(origin.value) === values.resource_index && status.value === values.status) note.value = "";
+      vendorReviewPending = null; await fetchVendorReviews(false);
+    } catch (error) { text(document.getElementById("vendor-review-feedback"), error.message); }
+    finally { vendorReviewSaving = false; document.getElementById("vendor-review-save").disabled = false; }
+  });
+  var vendorReviewOlder = document.getElementById("vendor-review-older");
+  if (vendorReviewOlder) vendorReviewOlder.addEventListener("click", function () { fetchVendorReviews(true); });
+
   function groupExternalDependencies(resources) {
     var groups = new Map();
     (Array.isArray(resources) ? resources : []).forEach(function (resource) {
@@ -3162,7 +3245,7 @@
     }
     renderTopicPriorities(type, body.latest_snapshot);
     if (type === "dns") renderDnsSnapshot(body.latest_snapshot);
-    if (type === "web") renderWebsiteSnapshot(body.latest_snapshot);
+    if (type === "web") { renderWebsiteSnapshot(body.latest_snapshot); loadVendorReviewContext(body.latest_snapshot_run_id, (body.latest_snapshot || {}).external_resources); }
     renderExternalCheckSchedule(type, body.schedule);
   }
 
