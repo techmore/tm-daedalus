@@ -39,3 +39,7 @@ The client uploads check results, device name, macOS version, and the stable ano
 ## Legacy files
 
 `com.csp.cis-compliance.plist` and the old SwiftPM/LaunchDaemon instructions are retained as historical files. They are not the supported distribution path for this menu-bar app.
+
+### Separate client check-ins
+
+The updated menu-bar client sends a same-origin authenticated check-in at launch and every five minutes while open. The server accepts it only after the first report has registered this device in the key's workspace. Check-ins carry the private stable device identifier, never check results or a score, and do not update report timestamps. The dashboard marks client presence overdue after 15 minutes without a check-in. Older clients remain presence-unknown even when they have a recent report. Audits still run at launch, on demand and every 24 hours while open; this does not install a background daemon or provide trusted signing/notarization.

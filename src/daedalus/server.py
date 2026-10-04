@@ -315,6 +315,12 @@ def ensure_external_check_columns(connection) -> None:
         )
 
 
+def ensure_cis_presence_columns(connection) -> None:
+    existing = {column["name"] for column in sqlalchemy_inspect(connection).get_columns("cis_devices")}
+    if "last_client_heartbeat_at" not in existing:
+        connection.execute(text("ALTER TABLE cis_devices ADD COLUMN last_client_heartbeat_at TIMESTAMP"))
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -324,6 +330,7 @@ async def lifespan(_app: FastAPI):
         ensure_scanner_event_columns(connection)
         ensure_agent_command_columns(connection)
         ensure_external_check_columns(connection)
+        ensure_cis_presence_columns(connection)
         connection.execute(
             text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_organizations_domain "
@@ -3218,6 +3225,33 @@ def cis_device_fingerprint(organization_id: int, device_identifier: str) -> str:
     return hmac.new(stable_instance_key, device_identifier.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+class CISHeartbeatOptions(BaseModel):
+    model_config = {"extra": "forbid"}
+    device_identifier: str = Field(min_length=1, max_length=256)
+
+
+@app.post("/api/cis/client/heartbeat")
+def receive_cis_heartbeat(
+    payload: CISHeartbeatOptions,
+    api_key: str | None = Header(default=None, alias="X-API-Key"),
+    db: Session = Depends(get_db),
+):
+    _, organization = get_cis_workspace_from_key(db, api_key)
+    identifier = payload.device_identifier.strip()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="A device identifier is required.")
+    device = db.scalar(select(CISDevice).where(
+        CISDevice.organization_id == organization.id,
+        CISDevice.device_fingerprint == cis_device_fingerprint(organization.id, identifier),
+    ))
+    if device is None:
+        raise HTTPException(status_code=404, detail="Upload the first endpoint report before sending check-ins.")
+    now = utcnow()
+    device.last_client_heartbeat_at = now
+    db.commit()
+    return JSONResponse({"accepted": True, "received_at": iso_utc(now), "next_check_in_seconds": 300}, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/cis/status")
 def cis_status(request: Request, db: Session = Depends(get_db)):
     _user, organization, membership = get_org_context(request, db)
@@ -3252,6 +3286,9 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
             "os_version": device.os_version,
             "last_seen_at": iso_utc(device.last_seen_at),
             "state": "online" if device.last_seen_at >= online_cutoff else "offline",
+            "presence_source": "report_receipt",
+            "last_client_heartbeat_at": iso_utc(device.last_client_heartbeat_at),
+            "client_state": "unknown" if device.last_client_heartbeat_at is None else "online" if device.last_client_heartbeat_at >= now - timedelta(minutes=15) else "offline",
         }
         for device in device_rows
     ]
@@ -3262,6 +3299,10 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
         "device_count": devices,
         "online_device_count": online_device_count,
         "offline_device_count": max(0, devices - online_device_count),
+        "report_recency_seconds": 36 * 60 * 60,
+        "client_presence_seconds": 15 * 60,
+        "online_client_count": db.scalar(select(func.count(CISDevice.id)).where(CISDevice.organization_id == organization.id, CISDevice.last_client_heartbeat_at >= now - timedelta(minutes=15))) or 0,
+        "devices_truncated": devices > len(device_rows),
         "devices": device_statuses,
         "can_manage": membership.role == "admin",
     }
@@ -4964,7 +5005,7 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
     devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
     reporting = sum(device.last_seen_at >= utcnow()-timedelta(hours=36) for device in devices)
     cis = db.scalar(select(CISReport).where(CISReport.organization_id == org.id).order_by(CISReport.collected_at.desc(), CISReport.id.desc()).limit(1))
-    cis_summary = f"{reporting}/{len(devices)} devices reporting"
+    cis_summary = f"{reporting}/{len(devices)} devices with recent report receipts"
     cis_needs_review = False
     if cis:
         counts = {name: value if type(value) is int and value >= 0 else None

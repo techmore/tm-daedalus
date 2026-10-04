@@ -140,6 +140,7 @@ class CISApp: NSObject, NSApplicationDelegate {
     private var checkRunInProgress = false
     private var periodicCheckIn: DispatchSourceTimer?
     private var periodicReportRetry: DispatchSourceTimer?
+    private var periodicClientHeartbeat: DispatchSourceTimer?
     private static let reportUploadLock = NSLock()
     
     // Add applicationDidFinishLaunching to initialize MenuBarManager
@@ -159,6 +160,12 @@ class CISApp: NSObject, NSApplicationDelegate {
         retryTimer.setEventHandler { CISApp.retryPendingReports() }
         periodicReportRetry = retryTimer
         retryTimer.resume()
+
+        let heartbeatTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        heartbeatTimer.schedule(deadline: .now(), repeating: .seconds(5 * 60), leeway: .seconds(30))
+        heartbeatTimer.setEventHandler { CISApp.sendClientHeartbeat() }
+        periodicClientHeartbeat = heartbeatTimer
+        heartbeatTimer.resume()
 
         // Run checks in background
         DispatchQueue.global(qos: .background).async {
@@ -914,6 +921,18 @@ class CISApp: NSObject, NSApplicationDelegate {
         } catch {
             print("[ERROR] Could not process the private report upload queue.")
         }
+    }
+
+    static func sendClientHeartbeat(config: Config = Config.load()) {
+        guard let identifier = try? CISClientPaths.deviceIdentifier(),
+              let request = DaedalusProfileClient.heartbeatRequest(reportEndpoint: config.reporting.endpoint,
+                  apiKey: config.reporting.apiKey, deviceIdentifier: identifier) else { return }
+        let session = DaedalusProfileClient.protectedSession()
+        defer { session.invalidateAndCancel() }
+        let semaphore = DispatchSemaphore(value: 0)
+        let task = session.dataTask(with: request) { _, _, _ in semaphore.signal() }
+        task.resume()
+        if semaphore.wait(timeout: .now() + 15) == .timedOut { task.cancel() }
     }
 
     @discardableResult

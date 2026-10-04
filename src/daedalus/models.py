@@ -418,6 +418,7 @@ class CISDevice(Base):
     os_version: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_client_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class CISReport(Base):

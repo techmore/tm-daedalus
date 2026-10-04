@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-074">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-075">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -261,7 +261,7 @@
           <div class="section-heading check-subheading"><div><p class="eyebrow">ENDPOINT REPORTS</p><h3>Baseline results</h3></div></div>
           <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">DEVICE AVAILABILITY</p><h3>Endpoint check-ins</h3></div></div>
-          <p class="check-scope-note">The menu-bar client runs at launch, on demand, and every 24 hours while open. A device is marked offline after 36 hours without a report.</p>
+          <p class="check-scope-note">The menu-bar client runs at launch, on demand, and every 24 hours while open. Report recency uses a 36-hour window. Updated clients check in separately every five minutes while open; after 15 minutes without a client check-in, presence is overdue. Older clients have unknown presence.</p>
           <div class="cis-device-list" id="cis-device-list" aria-live="polite"><div class="empty-events">No endpoint has checked in yet.</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">CHANGES BETWEEN REPORTS</p><h3>Check status history</h3></div></div>
           <div class="cis-change-list" id="cis-change-list" aria-live="polite"><div class="empty-events">Changes appear after an endpoint sends a later report.</div></div>
@@ -465,6 +465,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-074" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-075" defer></script>
 </body>
 </html>

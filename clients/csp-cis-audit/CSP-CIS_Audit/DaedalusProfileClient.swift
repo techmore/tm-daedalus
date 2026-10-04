@@ -74,6 +74,25 @@ enum DaedalusProfileClient {
         URLSession(configuration: .ephemeral, delegate: DaedalusOriginRedirectGuard(), delegateQueue: nil)
     }
 
+    static func heartbeatRequest(reportEndpoint: String, apiKey: String, deviceIdentifier: String) -> URLRequest? {
+        guard apiKey.count >= 16, !deviceIdentifier.isEmpty, deviceIdentifier.count <= 256,
+              Config.isAllowedReportingEndpoint(reportEndpoint),
+              var components = URLComponents(string: reportEndpoint),
+              components.path.hasSuffix("/api/cis/report"),
+              components.query == nil, components.fragment == nil,
+              components.user == nil, components.password == nil else { return nil }
+        components.path = String(components.path.dropLast("/api/cis/report".count)) + "/api/cis/client/heartbeat"
+        guard let url = components.url,
+              let body = try? JSONSerialization.data(withJSONObject: ["device_identifier": deviceIdentifier]) else { return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 12
+        request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        return request
+    }
+
     static func profileEndpoint(configuredEndpoint: String, reportEndpoint: String) -> String? {
         let configured = configuredEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         if !configured.isEmpty {

@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import XCTest
 @testable import CSP_CIS_Audit
 
 struct CSP_CIS_AuditTests {
@@ -716,4 +717,24 @@ private final class UploadFixtureProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+}
+
+final class CISHeartbeatRequestTests: XCTestCase {
+    func testHeartbeatUsesSameOriginAndKeepsKeyOutOfBodyAndURL() throws {
+        let key = "fixture-private-key-123456"
+        let request = try XCTUnwrap(DaedalusProfileClient.heartbeatRequest(reportEndpoint: "https://example.test/api/cis/report", apiKey: key, deviceIdentifier: "fixture-device"))
+        XCTAssertEqual(request.url?.absoluteString, "https://example.test/api/cis/client/heartbeat")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-API-Key"), key)
+        let body = try XCTUnwrap(request.httpBody)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(payload, ["device_identifier": "fixture-device"])
+    }
+
+    func testHeartbeatRejectsUnsafeOrUnrelatedEndpoints() {
+        for endpoint in ["http://example.test/api/cis/report", "https://example.test/other", "https://example.test/api/cis/report?token=x", "https://example.test/api/cis/report#fragment", "https://user:pass@example.test/api/cis/report"] {
+            XCTAssertNil(DaedalusProfileClient.heartbeatRequest(reportEndpoint: endpoint, apiKey: "fixture-private-key-123456", deviceIdentifier: "fixture-device"))
+        }
+        XCTAssertNotNil(DaedalusProfileClient.heartbeatRequest(reportEndpoint: "http://127.0.0.1:8000/api/cis/report", apiKey: "fixture-private-key-123456", deviceIdentifier: "fixture-device"))
+    }
 }

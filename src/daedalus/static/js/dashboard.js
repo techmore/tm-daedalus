@@ -2020,11 +2020,15 @@
       var name = document.createElement("strong");
       name.textContent = device.name || "CIS endpoint";
       var details = document.createElement("small");
-      details.textContent = (device.platform || "unknown") + (device.os_version ? " · " + device.os_version : "") + " · last check-in " + dateLabel(device.last_seen_at);
+      details.textContent = (device.platform || "unknown") + (device.os_version ? " · " + device.os_version : "") + " · last report received " + dateLabel(device.last_seen_at);
       main.append(name, details);
       var state = document.createElement("span");
-      state.className = "cis-device-state is-" + (device.state === "online" ? "online" : "offline");
-      state.textContent = device.state === "online" ? "Online" : "Offline";
+      var clientState = device.client_state || "unknown";
+      state.className = "cis-device-state is-" + clientState;
+      state.textContent = clientState === "online" ? "Client checking in" : clientState === "offline" ? "Client check-in overdue" : "Client presence unknown";
+      var heartbeat = document.createElement("small");
+      heartbeat.textContent = device.last_client_heartbeat_at ? "Client check-in " + dateLabel(device.last_client_heartbeat_at) : "This device has not sent a separate client check-in.";
+      main.append(heartbeat);
       card.append(main, state);
       list.append(card);
     });
