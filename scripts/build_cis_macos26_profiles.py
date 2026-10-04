@@ -25,6 +25,7 @@ SOURCE_URL = "https://github.com/usnistgov/macos_security/tree/" + SOURCE_COMMIT
 # bounded audit filesystem/ACL evidence checks.
 # All other rules remain manual until a dedicated local implementation exists.
 SUPPORTED_RULE_IDS = {
+    "os_password_hint_remove",
     "audit_retention_configure",
     "os_internal_apfs_volumes_encrypted",
     "audit_auditd_enabled",

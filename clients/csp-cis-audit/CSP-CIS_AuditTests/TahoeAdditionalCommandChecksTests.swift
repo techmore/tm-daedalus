@@ -13,6 +13,26 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func passwordHintsRequireBoundedSuccessfulAccountEnumeration() {
+        let rule = "os_password_hint_remove"
+        let status = evaluate(rule) { executable, arguments in
+            #expect(executable == "/usr/bin/dscl")
+            #expect(arguments == [".", "-list", "/Users", "hint"])
+            return .init(output: "_daemon\nroot\nlocaluser\n")
+        }
+        #expect(status == "pass")
+        #expect(run(rule, .init(output: "root\nlocaluser    private hint\n")) == "fail")
+        for evidence in [MacOSChecks.CommandEvidence(), .init(output: "root", exitCode: 1), .init(output: "root", error: "denied"), .init(output: "root", unavailable: "timeout"), .init(output: "root\nroot hint"), .init(output: "invalid:user"), .init(output: "<xml>"), .init(output: String(repeating: "user\n", count: 10001))] {
+            #expect(run(rule, evidence) == "manual")
+        }
+        let check = CISCheck(id: rule, category: "macos", description: "Fixture", ruleID: rule)
+        let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { _, _ in .init(output: "secretaccount   secrethint") }, readPreference: { _, _ in nil })
+        #expect(result.status == "fail")
+        #expect(!result.details.contains("secretaccount"))
+        #expect(!result.details.contains("secrethint"))
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 27, command: { _, _ in .init(output: "root") }, readPreference: { _, _ in nil }).status == "manual")
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -150,6 +170,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_password_hint_remove": ("/usr/bin/dscl", [".", "-list", "/Users", "hint"]),
             "os_internal_apfs_volumes_encrypted": ("/usr/sbin/diskutil", ["list", "-plist", "internal"]),
             "audit_auditd_enabled": ("/bin/launchctl", ["print", "system/com.apple.auditd"]),
             "os_anti_virus_installed": ("/usr/bin/xprotect", ["status"]),

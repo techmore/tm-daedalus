@@ -7,7 +7,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -54,6 +54,24 @@ extension MacOSChecks {
              "os_safari_show_status_bar_enabled",
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
+
+        case "os_password_hint_remove":
+            let evidence = command("/usr/bin/dscl", [".", "-list", "/Users", "hint"])
+            guard usable(evidence) else { return result("manual", "Local account hint enumeration was unavailable; no hint content is uploaded.") }
+            let lines = evidence.output.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            guard !lines.isEmpty, lines.count <= 10000 else { return result("manual", "Local account enumeration was empty or exceeded the account limit.") }
+            var accounts = Set<String>()
+            var hints = 0
+            for line in lines {
+                let parts = line.split(whereSeparator: { $0.isWhitespace })
+                guard let name = parts.first,
+                      name.range(of: "^[A-Za-z0-9_.-]+$", options: .regularExpression) != nil,
+                      accounts.insert(String(name)).inserted else {
+                    return result("manual", "Local account enumeration was ambiguous or unsupported; no account names or hints are uploaded.")
+                }
+                if parts.count > 1 { hints += 1 }
+            }
+            return result(hints == 0 ? "pass" : "fail", "Enumerated " + String(accounts.count) + " local account records; " + String(hints) + " contain hint text. This does not establish external directory account policy. Account names and hint text are omitted.")
 
         case "os_internal_apfs_volumes_encrypted":
             return checkInternalAPFSEncryption(check: check, command: command)

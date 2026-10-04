@@ -561,3 +561,10 @@ Source bd11f9f is active on Incus with internal/public health checks passed and 
 ### 2026-10-04 — Scanner summary failure and transport validation
 
 Additional isolated fixtures prove oversized result artifacts are refused before loading, corrupted artifacts return 409, mixed scan/report metadata suppresses counts, and a failed newest scan is not replaced by an older successful scan. A real ephemeral HTTP listener also verifies artifact-backed summary counts and exact result-event identity while retaining unconfirmed target coverage. Full suite: 521 tests and 104 subtests; scanner suite 15 passed with the additional transport assertions. Production CIS report 5 retains seven changes and exactly one persistent cis_report notification, detected 2026-10-04T10:17:15.506743Z and routed to CIS. Private receipt /data/codex-cis-session-notification-validation-20261004.json. No production corruption or artificial failed scan was induced.
+
+
+### 2026-10-04 — Source-backed Tahoe local password-hint check
+
+Added bundled os_password_hint_remove using the pinned NIST mSCP dscl local-account hint enumeration. Successful complete recognized rows without hint text pass; explicit hint text fails. Empty, failed, timed-out, duplicate, malformed or over-10,000-record evidence remains manual. Account names and hint contents stay local; uploaded details contain only counts and scope. Command path/arguments are fixed and macOS 26 gating remains enforced. Native xcresult: 78 passed, zero failed/skipped. Supported mappings now total 87: 80/100 Level 1 and 85/119 Level 2. Published profile rule sets/versions are unchanged because this adds client implementation for an existing rule. Actual Tahoe execution and trusted distribution remain pending. Source: https://raw.githubusercontent.com/usnistgov/macos_security/beceac1d21baf9d924c2780f2e248577435bbfb1/rules/os/os_password_hint_remove.yaml
+
+Full backend suite for the Tahoe hint implementation passed 521 tests and 104 subtests. No public client package was enabled and no incompatible Tahoe run was executed on the macOS 27 host.
