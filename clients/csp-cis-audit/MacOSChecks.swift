@@ -191,12 +191,16 @@ struct MacOSChecks {
         appleSilicon: Bool? = localAppleSiliconEvidence,
         readHostPreference: (String, String) -> Any? = readCurrentHostPreference,
         readSystemPreference: (String, String) -> Any? = readSystemPlistPreference,
+        readAuditPolicy: (URL) -> Data? = readAuditControl,
         now: Date = Date(),
         calendar: Calendar = auditCalendar,
         readPreference: (String, String) -> Any?
     ) -> CheckResult {
         guard osMajorVersion == 26 else {
             return CheckResult(check: check, status: "manual", details: "This profile targets macOS 26.0; the local CSP check was not run on this OS version.")
+        }
+        if check.ruleID == "audit_retention_configure" {
+            return checkTahoeAuditRetention(check: check, readControl: readAuditPolicy)
         }
         if let ruleID = check.ruleID, additionalMacOS26RuleIDs.contains(ruleID) {
             return runAdditionalTahoeCommand(check: check, command: command)

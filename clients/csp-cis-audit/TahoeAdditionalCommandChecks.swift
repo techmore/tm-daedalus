@@ -28,8 +28,11 @@ extension MacOSChecks {
         "audit_acls_folders_configure", "audit_control_acls_configure"
     ]
 
+    static let additionalMacOS26PolicyRuleIDs: Set<String> = ["audit_retention_configure"]
+
     static let additionalMacOS26RuleIDs = additionalMacOS26CommandRuleIDs
         .union(additionalMacOS26AuditEvidenceRuleIDs)
+        .union(additionalMacOS26PolicyRuleIDs)
 
     static func runAdditionalTahoeCommand(
         check: CISCheck,
@@ -203,6 +206,31 @@ extension MacOSChecks {
     }
 
     // Shared with the legacy CSP auditing check; never infer success from an error mentioning auditd.
+    static func checkTahoeAuditRetention(
+        check: CISCheck,
+        readControl: (URL) -> Data? = readAuditControl
+    ) -> CheckResult {
+        func result(_ status: String, _ detail: String) -> CheckResult {
+            CheckResult(check: check, status: status, details: "Pinned CIS Tahoe retention policy check. " + detail)
+        }
+        guard let value = MacOSSystemChecks.auditPolicyField("expire-after", readControl: readControl) else {
+            return result("manual", "Audit expiration is missing, duplicated or inaccessible; no duration was inferred.")
+        }
+        if value == "30d" {
+            return result("pass", "The age-only expiration matches the pinned CIS value of 30d. This does not verify retained records or central storage.")
+        }
+        guard value.range(of: "^[0-9]{1,12}[shdy]$", options: .regularExpression) != nil,
+              let number = Double(value.dropLast()), let unit = value.last else {
+            return result("manual", "The policy is combined, unsupported or noncanonical and needs review against the pinned 30d value.")
+        }
+        let units: [Character: Double] = ["s":1, "h":3600, "d":86400, "y":31536000]
+        let days = number * (units[unit] ?? 0) / 86400
+        if days < 30 {
+            return result("fail", "The explicit age-only expiration is shorter than the pinned 30-day CIS value. Central retention exceptions require separate review.")
+        }
+        return result("manual", "This age-only policy differs from the pinned literal 30d value; review the alternative retention policy. No shortened retention was inferred.")
+    }
+
     static func checkInternalAPFSEncryption(
         check: CISCheck,
         command: (String, [String]) -> CommandEvidence,

@@ -498,3 +498,36 @@ struct TahoeInternalAPFSEncryptionTests {
         #expect(result.status == "manual" && calls == 1)
     }
 }
+
+struct TahoeRetentionPolicyTests {
+    private let check = CISCheck(id: "audit_retention_configure", category: "macos", description: "Fixture", ruleID: "audit_retention_configure")
+
+    private func evaluate(_ text: String?, os: Int = 26) -> CheckResult {
+        MacOSChecks.runTahoe(check: check, osMajorVersion: os, command: { _, _ in
+            Issue.record("Retention must not launch a command")
+            return .init(unavailable: "unexpected_command")
+        }, readAuditPolicy: { url in
+            #expect(url.path == "/etc/security/audit_control")
+            return text.map { Data($0.utf8) }
+        }, readPreference: { _, _ in nil })
+    }
+
+    @Test func retentionUsesPinnedCISValueRatherThanLegacySevenDays() {
+        #expect(evaluate("expire-after:30d\n").status == "pass")
+        #expect(evaluate("expire-after: 30d # pinned value\n").status == "pass")
+        #expect(evaluate("expire-after:7d\n").status == "fail")
+        #expect(evaluate("expire-after:29d\n").status == "fail")
+        #expect(evaluate("expire-after:24h\n").status == "fail")
+        #expect(evaluate("expire-after:60d\n").status == "manual")
+        #expect(evaluate("expire-after:720h\n").status == "manual")
+        #expect(evaluate("expire-after:30d\n", os:27).status == "manual")
+    }
+
+    @Test func retentionUnknownCombinedAndDuplicatedValuesStayManual() {
+        for value in [nil, "", "expire-after:30d\nexpire-after:7d\n", "expire-after:30d OR 5G\n", "expire-after:30d AND 5G\n", "expire-after:permission denied\n", "expire-after:30D\n", String(repeating:"x",count:65537)] {
+            #expect(evaluate(value).status == "manual")
+        }
+        let result = evaluate("expire-after:30d # private marker\n")
+        #expect(!result.details.contains("private marker"))
+    }
+}
