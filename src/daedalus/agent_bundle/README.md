@@ -121,6 +121,12 @@ It refuses a pending upgrade transaction, changed service descriptors, or
 unexpected systemd fragments/drop-ins, and verifies that each restarted
 process is active.
 
+Managed Linux validation also backs up its isolated running portal, makes a
+post-backup state change, stops that owned portal, activates the restored
+data, and starts a new process. It checks point-in-time state, saved scan
+events, PDF bytes, and the next scanner heartbeat. This is a disposable
+recovery rehearsal; customer production data is not replaced.
+
 `uninstall` stops and disables the bridge first, then NmapUI. It confirms
 systemd reports both inactive and disabled before removing their verified unit files.
 Enrollment credentials, scanner evidence, queues, logs, runtime releases, and

@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -191,7 +192,10 @@ def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, i
         portal = f"http://127.0.0.1:{portal_port}"
         scanner = f"http://127.0.0.1:{scanner_port}"
         environment = {key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR", "LANG") if key in os.environ}
-        environment.update(PYTHON_DOTENV_DISABLED="1", DAEDALUS_DATABASE_URL=f"sqlite:///{root / 'portal.db'}", DAEDALUS_DATA_DIR=str(root / "portal-data"), DAEDALUS_REPORTS_DIR=str(root / "reports"), DAEDALUS_SESSION_SECRET=secrets.token_urlsafe(48), DAEDALUS_ENV="development", DAEDALUS_DEMO_MODE="true", DAEDALUS_BASE_URL=portal, PYTHONPATH=str(REPO / "src"))
+        portal_data = root / 'portal-data'
+        portal_data.mkdir(mode=0o700)
+        portal_database = portal_data / 'daedalus.db'
+        environment.update(PYTHON_DOTENV_DISABLED="1", DAEDALUS_DATABASE_URL=f"sqlite:///{portal_database}", DAEDALUS_DATA_DIR=str(portal_data), DAEDALUS_REPORTS_DIR=str(portal_data / "reports"), DAEDALUS_SESSION_SECRET=secrets.token_urlsafe(48), DAEDALUS_ENV="development", DAEDALUS_DEMO_MODE="true", DAEDALUS_BASE_URL=portal, PYTHONPATH=str(REPO / "src"))
         if managed_linux:
             environment.update({key: os.environ[key] for key in ('XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS') if key in os.environ})
             environment.update(XDG_CONFIG_HOME=str(config_home), XDG_DATA_HOME=str(data_home))
@@ -274,7 +278,8 @@ raise SystemExit(completed.returncode)
             data.mkdir(parents=True)
             (data / "settings.json").write_text(json.dumps({"schema_version": 1, "scan_rules": {"scan_only_mode": True, "skip_host_discovery": True, "excluded_targets": [], "max_scan_minutes": 1}, "reports": {"save_to_desktop": False}}))
             scanner_env = dict(environment, PYTHONPATH=str(source), NMAPUI_HOST="127.0.0.1", NMAPUI_PORT=str(scanner_port), NMAPUI_DATA_DIR=str(data), NMAPUI_LOG_DIR=str(root / "scanner-logs"), NMAPUI_SKIP_LEGACY_MIGRATION="1", NMAPUI_STARTUP_TRACEROUTE="false", NMAPUI_ALLOW_UNSAFE_WERKZEUG="true", NMAPUI_ENABLE_UPDATE_CHECK="false", NMAPUI_ENABLE_VULNERS="false", NMAPUI_TRUST_LOCAL_UI="false", NMAPUI_USERNAME="isolated-fixture", NMAPUI_PASSWORD=secrets.token_urlsafe(40), PATH=str(guard_dir)+os.pathsep+environment.get("PATH", ""))
-            launch("portal", [sys.executable, "-m", "uvicorn", "daedalus.server:app", "--host", "127.0.0.1", "--port", str(portal_port)], environment, root)
+            portal_argv = [sys.executable, "-m", "uvicorn", "daedalus.server:app", "--host", "127.0.0.1", "--port", str(portal_port)]
+            portal_process = launch("portal", portal_argv, environment, root)
             if not managed_linux:
                 launch("nmapui", [str(nmap_python.absolute()), str(source / "app.py")], scanner_env, source)
             with httpx.Client(base_url=portal, timeout=10, follow_redirects=True) as client:
@@ -439,7 +444,7 @@ raise SystemExit(completed.returncode)
                         raise RuntimeError("Comparison inferred complete coverage from unqualified scan results")
                     comparison_proof = {"previous_run_id": run_id, "current_run_id": second_id, "second_run_event_count": second_detail["run"]["event_count"], "counts": comparison["counts"], "coverage_comparable": False, "coverage_reasons": comparison["coverage"]["reasons"]}
                 socket_live.close()
-                with sqlite3.connect(root / "portal.db") as db:
+                with sqlite3.connect(portal_database) as db:
                     acknowledgements = [json.loads(row[0]).get("status") for row in db.execute("SELECT details FROM audit_logs WHERE action='scanner.command_result_reported'")]
                 if acknowledgements != ["accepted", "succeeded"] * (2 if repeat_scan else 1):
                     raise RuntimeError("Expected persisted accepted and succeeded command acknowledgements")
@@ -451,7 +456,7 @@ raise SystemExit(completed.returncode)
                 invocations = [json.loads(line) for line in (root / "invocations.jsonl").read_text().splitlines()]
                 recovery_proof = None
                 if interrupt_bridge:
-                    with closing(sqlite3.connect(root / 'portal.db')) as db:
+                    with closing(sqlite3.connect(portal_database)) as db:
                         source_history = [dict(zip(['client_event_id', 'occurred_at', 'source_job_id', 'source_job_type', 'event_name'], row)) for row in db.execute('SELECT client_event_id,occurred_at,source_job_id,source_job_type,event_name FROM scan_events WHERE agent_id=?', (agent_id,))]
                     recovery_proof = validate_recovery_evidence(recovery_pending, source_history, run_id, invocations, listener_port)
                     claim = json.loads(claims[0].read_text())
@@ -523,6 +528,50 @@ raise SystemExit(completed.returncode)
                     if service_pid() == before_local_restart_pid or any(path.read_bytes() != contents for path, contents in retained_bytes.items()):
                         raise RuntimeError('Local restart did not replace NmapUI or retain enrollment/settings.')
                     managed_proof.update(local_restart_completed=True, local_restart_pid_changed=True, local_restart_heartbeat_recovered=True)
+                    # Rehearse point-in-time recovery on this owned isolated portal.
+                    backup_response = subprocess.run([sys.executable, str(REPO / 'scripts/backup_data.py')], env=environment, capture_output=True, text=True, check=True, timeout=60)
+                    backup_name = backup_response.stdout.strip()
+                    if not re.fullmatch(r'daedalus-data-\d{8}T\d{6}Z\.tar\.gz', backup_name):
+                        raise RuntimeError('Recovery backup returned an unexpected filename.')
+                    backup = portal_data / 'backups' / backup_name
+                    restored_data = root / 'portal-data-restored'
+                    subprocess.run([sys.executable, str(REPO / 'scripts/restore_data.py'), str(backup), '--destination', str(restored_data)], env=environment, capture_output=True, text=True, check=True, timeout=120)
+                    expected_name = next(a['name'] for a in client.get('/api/dashboard').json()['agents'] if a['id'] == agent_id)
+                    with sqlite3.connect(portal_database) as db:
+                        db.execute('UPDATE agents SET name=? WHERE id=?', ('post-backup recovery fixture', agent_id))
+                    changed = next(a for a in client.get('/api/dashboard').json()['agents'] if a['id'] == agent_id)
+                    if changed['name'] != 'post-backup recovery fixture':
+                        raise RuntimeError('Recovery marker was not visible before cutover.')
+                    portal_process.terminate()
+                    portal_process.wait(timeout=20)
+                    previous_data = root / 'portal-data-before-recovery'
+                    portal_data.rename(previous_data)
+                    restored_data.rename(portal_data)
+                    recovery_started_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                    recovered_portal = launch('portal-recovered', portal_argv, environment, root)
+                    wait_for(lambda: client.get('/readyz').status_code == 200)
+                    def online_after_recovery():
+                        observed = online()
+                        return observed if observed and observed['last_seen_at'] > recovery_started_at else None
+                    recovered_agent = wait_for(online_after_recovery)
+                    if recovered_agent['name'] != expected_name or recovered_portal.pid == portal_process.pid:
+                        raise RuntimeError('Recovered portal did not restore the backup state.')
+                    recovered_run = client.get(f'/api/agents/{agent_id}/runs/{run_id}')
+                    recovered_run.raise_for_status()
+                    if recovered_run.json()['events'] != run_detail['events']:
+                        raise RuntimeError('Recovered scan events differ from the saved backup.')
+                    recovered_pdf = client.get(report['download_url'])
+                    recovered_pdf.raise_for_status()
+                    if hashlib.sha256(recovered_pdf.content).digest() != hashlib.sha256(pdf).digest():
+                        raise RuntimeError('Recovered PDF bytes differ from the saved report.')
+                    artifact_restored = False
+                    if event.get('artifact_download_url'):
+                        recovered_artifact = client.get(event['artifact_download_url'])
+                        recovered_artifact.raise_for_status()
+                        if hashlib.sha256(recovered_artifact.content).hexdigest() != event['artifact_sha256']:
+                            raise RuntimeError('Recovered scanner artifact differs from its saved digest.')
+                        artifact_restored = True
+                    managed_proof.update(portal_recovery_completed=True, point_in_time_state_restored=True, recovered_run_unchanged=True, recovered_pdf_unchanged=True, recovered_artifact_verified=artifact_restored, scanner_heartbeat_after_recovery=True)
                     receipt['managed_linux'] = managed_proof
                     receipt['limits'][1] = 'No default scan coverage, external targets, persistence soak, or production readiness claimed'
                 receipt["repeated_scan_comparison"] = comparison_proof
@@ -549,8 +598,8 @@ raise SystemExit(completed.returncode)
                 print(json.dumps({'managed_failure_diagnostics': service_diagnostics}), flush=True)
             result_file = root / "nmap-results.jsonl"
             if result_file.exists(): failure["actual_nmap_results"] = [json.loads(line) for line in result_file.read_text().splitlines()]
-            if (root / "portal.db").exists():
-                with sqlite3.connect(root / "portal.db") as db:
+            if portal_database.exists():
+                with sqlite3.connect(portal_database) as db:
                     failure["command_states"] = [dict(zip(["action", "status", "delivered_at", "completed_at"], row)) for row in db.execute("SELECT action,status,delivered_at,completed_at FROM agent_commands")]
                     safe_reasons = {"The scan request was rate limited.", "A scan job is already running for this client", "Invalid scan target.", "Missing scan target.", "NmapUI restarted before this command completed.", "The Linux systemd user service could not restart NmapUI.", "Managed Linux service verification failed; refusing to restart NmapUI."}
                     failure["command_failure_reasons"] = [result if result in safe_reasons else "Other command failure (details withheld)" for (result,) in db.execute("SELECT result FROM agent_commands WHERE status='failed'")]
