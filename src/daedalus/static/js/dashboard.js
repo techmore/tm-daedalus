@@ -2051,6 +2051,19 @@
     });
   }
 
+  function renderCISCoverage(status) {
+    var host = document.getElementById("cis-assessment-coverage");
+    if (!host) return;
+    host.replaceChildren();
+    var counts = status.assessment_counts || {};
+    var keys = ["current", "stale", "unknown", "missing"];
+    var complete = keys.every(function (key) { return Number.isInteger(counts[key]) && counts[key] >= 0; }) && keys.reduce(function (total, key) { return total + counts[key]; }, 0) === status.device_count;
+    var labels = ["Recent assessments", "Overdue assessments", "Times needing review", "Without assessment"];
+    keys.forEach(function (key, index) {
+      host.append(makeAuditMetric(labels[index], complete ? String(counts[key]) : "Unknown", "Latest collected evidence per enrolled endpoint", key !== "current" && (!complete || counts[key] > 0) ? "attention" : "neutral"));
+    });
+  }
+
   function renderCISDevices(devices) {
     var list = document.getElementById("cis-device-list");
     if (!list) return;
@@ -2075,6 +2088,10 @@
       var heartbeat = document.createElement("small");
       heartbeat.textContent = device.last_client_heartbeat_at ? "Client check-in " + dateLabel(device.last_client_heartbeat_at) : "This device has not sent a separate client check-in.";
       main.append(heartbeat);
+      var assessment = document.createElement("small");
+      var assessmentLabels = {current: "Recent assessment", stale: "Assessment overdue", missing: "No saved assessment", unknown: "Assessment time needs review"};
+      assessment.textContent = (assessmentLabels[device.assessment_state] || "Assessment recency unknown") + (device.last_collected_at ? " · collected " + dateLabel(device.last_collected_at) : "");
+      main.append(assessment);
       card.append(main, state);
       list.append(card);
     });
@@ -2233,6 +2250,7 @@
       if (failed >= 0) throw new Error(bodies[failed].detail || "Could not load CIS workspace data");
       var status = bodies[0];
       renderCISProfiles(bodies[1].profiles || []);
+      renderCISCoverage(status);
       renderCISDevices(status.devices || []);
       renderCISReports(bodies[2].reports || [], status.device_count || 0);
       renderCISChanges(bodies[3].changes || []);
@@ -2262,7 +2280,7 @@
       }
     } catch (error) {
       text(document.getElementById("cis-assessment-scope"), "Could not refresh the latest endpoint assessment. Previously displayed headline counts may be out of date.");
-      ["cis-profile-list", "cis-device-list", "cis-report-list", "cis-change-list"].forEach(function (id) {
+      ["cis-assessment-coverage", "cis-profile-list", "cis-device-list", "cis-report-list", "cis-change-list"].forEach(function (id) {
         var list = document.getElementById(id);
         if (list) { list.replaceChildren(); appendEmpty(list, error.message); }
       });

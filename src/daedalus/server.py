@@ -3376,6 +3376,27 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
         .order_by(CISDevice.last_seen_at.desc(), CISDevice.id.desc())
         .limit(250)
     ).all()
+    ranked_reports = select(
+        CISReport.id, CISReport.device_id, CISReport.collected_at,
+        func.row_number().over(
+            partition_by=CISReport.device_id,
+            order_by=(CISReport.collected_at.desc(), CISReport.id.desc()),
+        ).label("recency_rank"),
+    ).where(CISReport.organization_id == organization.id).subquery()
+    latest_reports = {
+        row.device_id: row
+        for row in db.execute(select(ranked_reports).where(ranked_reports.c.recency_rank == 1))
+    }
+    def assessment_state(report):
+        if report is None:
+            return "missing"
+        if report.collected_at > now:
+            return "unknown"
+        return "current" if report.collected_at >= online_cutoff else "stale"
+    assessment_counts = {state: 0 for state in ("current", "stale", "unknown", "missing")}
+    assessment_counts["missing"] = max(0, devices - len(latest_reports))
+    for report in latest_reports.values():
+        assessment_counts[assessment_state(report)] += 1
     device_statuses = [
         {
             "id": device.id,
@@ -3385,6 +3406,9 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
             "last_seen_at": iso_utc(device.last_seen_at),
             "state": "online" if device.last_seen_at >= online_cutoff else "offline",
             "presence_source": "report_receipt",
+            "latest_report_id": latest_reports[device.id].id if device.id in latest_reports else None,
+            "last_collected_at": iso_utc(latest_reports[device.id].collected_at) if device.id in latest_reports else None,
+            "assessment_state": assessment_state(latest_reports.get(device.id)),
             "last_client_heartbeat_at": iso_utc(device.last_client_heartbeat_at),
             "client_state": "unknown" if device.last_client_heartbeat_at is None else "online" if device.last_client_heartbeat_at >= now - timedelta(minutes=15) else "offline",
         }
@@ -3398,6 +3422,7 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
         "online_device_count": online_device_count,
         "offline_device_count": max(0, devices - online_device_count),
         "report_recency_seconds": 36 * 60 * 60,
+        "assessment_counts": assessment_counts,
         "client_presence_seconds": 15 * 60,
         "online_client_count": db.scalar(select(func.count(CISDevice.id)).where(CISDevice.organization_id == organization.id, CISDevice.last_client_heartbeat_at >= now - timedelta(minutes=15))) or 0,
         "devices_truncated": devices > len(device_rows),

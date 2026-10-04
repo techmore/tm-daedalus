@@ -43,6 +43,65 @@ class CISHeartbeatTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.client.get('/api/cis/status').json()['devices'][0]['client_state'], 'offline')
 
+    def test_fresh_checkin_does_not_make_old_collection_current(self):
+        headers = self.enroll()
+        with self.session_factory() as db:
+            db.scalar(select(CISReport)).collected_at = server.utcnow() - timedelta(days=3)
+            db.commit()
+        self.client.post('/api/cis/client/heartbeat', headers=headers, json={'device_identifier':'heartbeat-fixture'})
+        status = self.client.get('/api/cis/status').json()
+        self.assertEqual(status['devices'][0]['client_state'], 'online')
+        self.assertEqual(status['devices'][0]['assessment_state'], 'stale')
+        self.assertEqual(status['assessment_counts'], {'current':0, 'stale':1, 'unknown':0, 'missing':0})
+
+    def test_collection_recency_handles_current_future_and_missing_evidence(self):
+        self.enroll()
+        for offset, expected in [(timedelta(hours=-1), 'current'), (timedelta(days=1), 'unknown')]:
+            with self.session_factory() as db:
+                db.scalar(select(CISReport)).collected_at = server.utcnow() + offset
+                db.commit()
+            status = self.client.get('/api/cis/status').json()
+            self.assertEqual(status['devices'][0]['assessment_state'], expected)
+            self.assertEqual(status['assessment_counts'][expected], 1)
+        with self.session_factory() as db:
+            db.delete(db.scalar(select(CISReport)))
+            db.commit()
+        status = self.client.get('/api/cis/status').json()
+        self.assertEqual(status['devices'][0]['assessment_state'], 'missing')
+        self.assertIsNone(status['devices'][0]['latest_report_id'])
+        self.assertEqual(status['assessment_counts']['missing'], 1)
+
+    def test_late_upload_does_not_replace_more_recent_collection(self):
+        self.enroll()
+        with self.session_factory() as db:
+            first = db.scalar(select(CISReport))
+            first.collected_at = server.utcnow() - timedelta(hours=1)
+            first_id = first.id
+            db.add(CISReport(organization_id=first.organization_id, device_id=first.device_id,
+                client_report_hash='f'*64, profile_slug=first.profile_slug, profile_version=first.profile_version,
+                collected_at=server.utcnow()-timedelta(days=3), summary=first.summary, results=first.results, created_at=server.utcnow()))
+            db.commit()
+        status = self.client.get('/api/cis/status').json()
+        self.assertEqual(status['devices'][0]['latest_report_id'], first_id)
+        self.assertEqual(status['devices'][0]['assessment_state'], 'current')
+        self.assertEqual(status['assessment_counts']['current'], 1)
+
+    def test_coverage_counts_include_devices_beyond_visible_list(self):
+        self.enroll()
+        with self.session_factory() as db:
+            existing = db.scalar(select(CISDevice))
+            now = server.utcnow()
+            for index in range(250):
+                db.add(CISDevice(organization_id=existing.organization_id, device_fingerprint=f'{index:064x}',
+                    name=f'Unassessed fixture {index}', first_seen_at=now, last_seen_at=now))
+            db.commit()
+        status = self.client.get('/api/cis/status').json()
+        self.assertEqual(status['device_count'], 251)
+        self.assertEqual(len(status['devices']), 250)
+        self.assertTrue(status['devices_truncated'])
+        self.assertEqual(status['assessment_counts']['missing'], 250)
+        self.assertEqual(sum(status['assessment_counts'].values()), 251)
+
     def test_unknown_endpoint_and_revoked_key_cannot_check_in(self):
         headers = self.enroll()
         unknown = self.client.post('/api/cis/client/heartbeat', headers=headers, json={'device_identifier': 'other-device'})

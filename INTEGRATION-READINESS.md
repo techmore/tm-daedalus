@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — endpoint assessment age and workspace coverage
+
+The CIS status API now reports each endpoint’s latest collection time, report ID and assessment age separately from report receipt and client heartbeat. Collections within 36 hours are current, older collections are stale, absent reports are missing, and future collection timestamps require review. Latest evidence is selected by collection time with report ID as the tie-breaker, so a late upload of old data does not replace a newer assessment. Existing heartbeat and receipt fields remain compatible.
+
+The dashboard displays workspace assessment-age totals and a per-device collection label. Counts include all enrolled devices, including those beyond the existing 250-device visible list limit. Incomplete or inconsistent count metadata remains unknown in the UI. These labels describe evidence age, not compliance. Fixture coverage includes fresh heartbeat with stale evidence, current/future/missing data, late uploads, a 251-device list boundary and malformed summary metadata. The complete local suite passed **493 tests and 98 subtests**. Broader real multi-endpoint deployment and browser visual review remain open.
+
+
 ## October 4, 2026 — concurrent workspace rejoin requests
 
 Existing revoked memberships now return to pending through a conditional database update. Concurrent rejoin requests create one membership request audit and one scoped admin notification, and the pending membership has the user role. If an approval wins the race, its approved status and role remain intact. A changed/deleted membership that cannot be resolved returns HTTP 409 instead of being silently overwritten.

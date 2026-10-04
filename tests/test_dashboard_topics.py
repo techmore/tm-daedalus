@@ -148,6 +148,25 @@ assert.match(cisAssessmentScope({}),/Profile not identified/);
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('text(document.getElementById("cis-assessment-scope"), cisAssessmentScope(reports[0]))', source)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_endpoint_coverage_keeps_incomplete_counts_unknown(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function renderCISCoverage('):source.index('  function renderCISDevices(')]
+        script = """const assert=require('node:assert/strict');
+const host={children:[],replaceChildren(){this.children=[];},append(item){this.children.push(item);}};
+const document={getElementById:()=>host};
+function makeAuditMetric(label,value,detail,tone){return {label,value,tone};}
+"""+helper+"""
+renderCISCoverage({device_count:3,assessment_counts:{current:1,stale:1,unknown:1,missing:0}});
+assert.deepEqual(host.children.map(x=>x.value),['1','1','1','0']);assert.equal(host.children[3].tone,'neutral');
+renderCISCoverage({device_count:4,assessment_counts:{current:1,stale:1,unknown:1,missing:0}});
+assert.ok(host.children.every(x=>x.value==='Unknown'));
+renderCISCoverage({device_count:1,assessment_counts:{current:'1',stale:0,unknown:0,missing:0}});
+assert.ok(host.children.every(x=>x.value==='Unknown'));
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_external_evidence_groups_keep_key_metrics_visible(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         evidence = template[template.index('<section class="topic-evidence"'):template.index('<summary>Exposure findings')]
