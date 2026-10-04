@@ -116,6 +116,11 @@ that account with `loginctl enable-linger <user>` if unattended startup is
 required. Daedalus does not change that host-wide login policy. After restart,
 check NmapUI readiness and the scanner's next portal heartbeat.
 
+Local restart shares the lifecycle lock with upgrade, removal and recovery.
+It refuses a pending upgrade transaction, changed service descriptors, or
+unexpected systemd fragments/drop-ins, and verifies that each restarted
+process is active.
+
 `uninstall` stops and disables the bridge first, then NmapUI. It confirms
 systemd reports both inactive and disabled before removing their verified unit files.
 Enrollment credentials, scanner evidence, queues, logs, runtime releases, and

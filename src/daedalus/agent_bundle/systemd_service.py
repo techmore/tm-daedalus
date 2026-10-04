@@ -301,7 +301,7 @@ def _resume(unit_dir: Path, config_dir: Path) -> dict:
 
 def manage(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> dict:
     """Remove/resume only fixed owned services, preserving enrollment and evidence."""
-    if action not in {"uninstall", "restore"}:
+    if action not in {"uninstall", "restore", "restart"}:
         raise ServiceError("Unsupported Linux service lifecycle action.")
     if (config_dir / UPGRADE_FILE).exists() or (config_dir / UPGRADE_FILE).is_symlink():
         raise ServiceError("Resolve the pending upgrade with upgrade-rollback before removal or recovery.")
@@ -317,10 +317,57 @@ def manage(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> d
             raise ServiceError("Another scanner lifecycle action is running; retry when it finishes.") from exc
         if (config_dir / UPGRADE_FILE).exists() or (config_dir / UPGRADE_FILE).is_symlink():
             raise ServiceError("Resolve the pending upgrade with upgrade-rollback before removal or recovery.")
+        if action == "restart":
+            return _restart_locked(unit_dir, config_dir, executor=executor)
         return _manage_locked(action, unit_dir, config_dir, executor=executor)
     finally:
         # Keep the lock file: unlinking it could let another process lock a different inode.
         os.close(lock)
+
+
+def _restart_locked(unit_dir: Path, config_dir: Path, *, executor=None) -> dict:
+    """Restart only loaded owned units while excluding every local lifecycle action."""
+    executor = executor or subprocess.run
+
+    def run(*arguments):
+        verify(unit_dir, config_dir)
+        try:
+            result = executor([SYSTEMCTL, "--user", *arguments], capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            raise ServiceError("Service restart timed out; inspect service status before retrying.") from exc
+        if result.returncode:
+            raise ServiceError("Service restart failed; inspect service status before retrying.")
+        return result
+
+    def observe(name):
+        response = run("show", "--property=LoadState", "--property=ActiveState", "--property=UnitFileState", "--property=MainPID", "--property=FragmentPath", "--property=DropInPaths", "--", name)
+        values = {}
+        for line in response.stdout.splitlines():
+            key, separator, value = line.partition("=")
+            if not separator or key in values:
+                raise ServiceError("Systemd service state is ambiguous; restart refused.")
+            values[key] = value
+        if (
+            set(values) != {"LoadState", "ActiveState", "UnitFileState", "MainPID", "FragmentPath", "DropInPaths"}
+            or values["LoadState"] != "loaded"
+            or values["FragmentPath"] != str(unit_dir / name)
+            or values["DropInPaths"]
+            or not values["MainPID"].isascii() or not values["MainPID"].isdigit()
+        ):
+            raise ServiceError("Systemd loaded an unexpected unit or override; restart refused.")
+        return values
+
+    for name in (NMAPUI_UNIT, BRIDGE_UNIT):
+        observe(name)
+    observations = []
+    for name in (NMAPUI_UNIT, BRIDGE_UNIT):
+        observe(name)
+        run("restart", name)
+        state = observe(name)
+        if state["ActiveState"] != "active" or state["MainPID"] == "0":
+            raise ServiceError("Restarted service startup is unconfirmed; inspect service status.")
+        observations.append({"unit": name, "active_state": state["ActiveState"]})
+    return {"action": "restart", "services": observations, "data_preserved": True}
 
 
 def _manage_locked(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> dict:
@@ -415,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("verify")
     check.add_argument("--unit-dir", required=True, type=Path)
     check.add_argument("--config-dir", required=True, type=Path)
-    for action in ("uninstall", "restore"):
+    for action in ("uninstall", "restore", "restart"):
         lifecycle = commands.add_parser(action)
         lifecycle.add_argument("--unit-dir", required=True, type=Path)
         lifecycle.add_argument("--config-dir", required=True, type=Path)

@@ -32,7 +32,7 @@ if [ "$ACTION" = upgrade ] || [ "$ACTION" = upgrade-rollback ]; then
   fi
   exec "$PYTHON_BIN" "$SCRIPT_DIR/linux_upgrade.py" "$ACTION" --unit-dir "$UNIT_DIR" --config-dir "$CONFIG_DIR" --data-home "$XDG_DATA_HOME"
 fi
-if [ "$ACTION" = uninstall ] || [ "$ACTION" = restore ]; then
+if [ "$ACTION" = uninstall ] || [ "$ACTION" = restore ] || [ "$ACTION" = restart ]; then
   exec "$PYTHON_BIN" "$SCRIPT_DIR/systemd_service.py" "$ACTION" --unit-dir "$UNIT_DIR" --config-dir "$CONFIG_DIR"
 fi
 "$PYTHON_BIN" "$SCRIPT_DIR/systemd_service.py" verify --unit-dir "$UNIT_DIR" --config-dir "$CONFIG_DIR" >/dev/null \
@@ -40,16 +40,9 @@ fi
 
 NMAPUI_UNIT=daedalus-nmapui.service
 BRIDGE_UNIT=daedalus-scanner-bridge.service
-if [ "$ACTION" = restart ]; then
-  systemctl --user restart "$NMAPUI_UNIT"
-  systemctl --user restart "$BRIDGE_UNIT"
-fi
 
 for unit in "$NMAPUI_UNIT" "$BRIDGE_UNIT"; do
   if systemctl --user is-active --quiet "$unit"; then active=active; else active=inactive; fi
   if systemctl --user is-enabled --quiet "$unit"; then enabled=enabled; else enabled=disabled; fi
   printf '%s: %s, %s\n' "$unit" "$active" "$enabled"
 done
-if [ "$ACTION" = restart ]; then
-  printf '%s\n' 'Restart requested for the verified Daedalus user services; check NmapUI readiness and the next portal heartbeat.'
-fi

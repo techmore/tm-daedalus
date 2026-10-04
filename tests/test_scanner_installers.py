@@ -1,5 +1,6 @@
 """Offline installer/lifecycle fixtures; no real pip, enrollment or launchctl."""
 import importlib.util
+import fcntl
 import json
 import os
 from argparse import Namespace
@@ -501,6 +502,52 @@ class LinuxSystemdUnitFixtures(unittest.TestCase):
         unrelated = self.unit_dir / 'unrelated.service'
         unrelated.write_bytes(b'unrelated unit')
         return {path: path.read_bytes() for path in (enrollment, spool, unrelated, self.config_dir / systemd_service.ENV_FILE, self.config_dir / systemd_service.STATE_FILE)}
+
+    def test_restart_preserves_files_and_orders_only_fixed_units(self):
+        original = self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        result = systemd_service.manage('restart', self.unit_dir, self.config_dir, executor=execute)
+        self.assertTrue(result['data_preserved'])
+        self.assertEqual([argv[-1] for argv in calls if argv[2] == 'restart'], [systemd_service.NMAPUI_UNIT, systemd_service.BRIDGE_UNIT])
+        for path, contents in original.items():
+            self.assertEqual(path.read_bytes(), contents)
+        self.assertFalse((self.config_dir / systemd_service.RESUME_FILE).exists())
+
+    def test_restart_refuses_pending_upgrade_without_manager_calls(self):
+        self.install_lifecycle_fixture()
+        (self.config_dir / systemd_service.UPGRADE_FILE).write_text('{}')
+        execute, calls, _ = self.lifecycle_executor()
+        with self.assertRaisesRegex(systemd_service.ServiceError, 'pending upgrade'):
+            systemd_service.manage('restart', self.unit_dir, self.config_dir, executor=execute)
+        self.assertEqual(calls, [])
+
+    def test_restart_refuses_concurrent_lifecycle_without_manager_calls(self):
+        self.install_lifecycle_fixture()
+        lock = os.open(self.config_dir / systemd_service.LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            execute, calls, _ = self.lifecycle_executor()
+            with self.assertRaisesRegex(systemd_service.ServiceError, 'Another scanner lifecycle'):
+                systemd_service.manage('restart', self.unit_dir, self.config_dir, executor=execute)
+            self.assertEqual(calls, [])
+        finally:
+            os.close(lock)
+
+    def test_restart_refuses_loaded_override_before_mutation(self):
+        self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        states[systemd_service.BRIDGE_UNIT]['DropInPaths'] = '/fixture/foreign.conf'
+        with self.assertRaisesRegex(systemd_service.ServiceError, 'unexpected unit or override'):
+            systemd_service.manage('restart', self.unit_dir, self.config_dir, executor=execute)
+        self.assertFalse(any(argv[2] == 'restart' for argv in calls))
+
+    def test_restart_refuses_unconfirmed_start_and_hides_manager_output(self):
+        self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        states[systemd_service.NMAPUI_UNIT].update(ActiveState='failed', MainPID='0')
+        with self.assertRaisesRegex(systemd_service.ServiceError, 'startup is unconfirmed'):
+            systemd_service.manage('restart', self.unit_dir, self.config_dir, executor=execute)
+        self.assertEqual([argv[-1] for argv in calls if argv[2] == 'restart'], [systemd_service.NMAPUI_UNIT])
 
     def test_uninstall_restore_preserves_enrollment_evidence_and_exact_private_units(self):
         retained = self.install_lifecycle_fixture()

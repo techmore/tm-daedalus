@@ -510,6 +510,19 @@ raise SystemExit(completed.returncode)
                     if again.returncode or not json.loads(again.stdout).get('already_current'):
                         raise RuntimeError('Repeated kit upgrade was not a no-op.')
                     managed_proof.update(local_upgrade_completed=True, enrollment_settings_preserved=True, saved_run_unchanged=True, repeated_upgrade_noop=True)
+                    before_local_restart_pid = service_pid()
+                    local_restart_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                    local_restart = subprocess.run(['/bin/sh', str(kit / 'manage-service-linux.sh'), 'restart'], env=environment, capture_output=True, text=True, timeout=120)
+                    if local_restart.returncode or json.loads(local_restart.stdout).get('action') != 'restart':
+                        raise RuntimeError('Managed Linux local restart failed.')
+                    def online_after_local_restart():
+                        observed = online()
+                        return observed if observed and observed['last_seen_at'] > local_restart_at else None
+                    wait_for(online_after_local_restart)
+                    wait_for(lambda: httpx.get(scanner + '/api/health/ready', auth=(scanner_env['NMAPUI_USERNAME'], scanner_env['NMAPUI_PASSWORD']), timeout=2).json().get('ready'))
+                    if service_pid() == before_local_restart_pid or any(path.read_bytes() != contents for path, contents in retained_bytes.items()):
+                        raise RuntimeError('Local restart did not replace NmapUI or retain enrollment/settings.')
+                    managed_proof.update(local_restart_completed=True, local_restart_pid_changed=True, local_restart_heartbeat_recovered=True)
                     receipt['managed_linux'] = managed_proof
                     receipt['limits'][1] = 'No default scan coverage, external targets, persistence soak, or production readiness claimed'
                 receipt["repeated_scan_comparison"] = comparison_proof
