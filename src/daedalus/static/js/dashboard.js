@@ -2877,7 +2877,7 @@
   }
 
   var vendorReviewContext = null, vendorReviewSequence = 0, vendorReviewPending = null;
-  var vendorReviewHistory = [], vendorReviewBefore = null, vendorReviewSaving = false;
+  var vendorReviewHistory = [], vendorReviewBefore = null, vendorReviewSaving = false, vendorReviewLoadFailed = false;
   var vendorReviewLabels = {reviewed: "Reviewed", needs_action: "Needs action", monitor: "Monitor"};
 
   function renderVendorDecisionList(host, rows) {
@@ -2902,6 +2902,7 @@
       var body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Review decisions unavailable.");
       if (sequence !== vendorReviewSequence || !vendorReviewContext || vendorReviewContext.runId !== runId) return;
+      if (vendorReviewLoadFailed) { text(document.getElementById("vendor-review-feedback"), "Review decisions refreshed."); vendorReviewLoadFailed = false; }
       renderVendorDecisionList(document.getElementById("vendor-review-decisions"), body.reviews || []);
       var expanded = vendorReviewHistory.length > 100;
       var merged = new Map(vendorReviewHistory.map(function (row) { return [row.id, row]; }));
@@ -2911,7 +2912,7 @@
       renderVendorDecisionList(document.getElementById("vendor-review-history"), vendorReviewHistory);
       var more = document.getElementById("vendor-review-older"); if (more) more.classList.toggle("hidden", !vendorReviewBefore);
     } catch (error) {
-      if (sequence === vendorReviewSequence) text(document.getElementById("vendor-review-feedback"), error.message);
+      if (sequence === vendorReviewSequence) { vendorReviewLoadFailed = true; text(document.getElementById("vendor-review-feedback"), error.message); }
     }
   }
 
@@ -2937,6 +2938,11 @@
     text(document.getElementById("vendor-review-scope"), vendorReviewContext ? "Decisions apply to saved website run #" + runId + ". Reviewed records a human decision; provider security remains unassessed." : "No saved inventory available for review.");
     var save = document.getElementById("vendor-review-save"); if (save) save.disabled = vendorReviewSaving || !vendorReviewContext || !resources.length;
     if (vendorReviewContext) fetchVendorReviews(false);
+    else {
+      renderVendorDecisionList(document.getElementById("vendor-review-decisions"), []);
+      renderVendorDecisionList(document.getElementById("vendor-review-history"), []);
+      var more = document.getElementById("vendor-review-older"); if (more) more.classList.toggle("hidden", true);
+    }
   }
 
   var vendorReviewForm = document.getElementById("vendor-review-form");

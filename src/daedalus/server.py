@@ -5268,7 +5268,7 @@ def save_vendor_review(payload: VendorReviewInput, request: Request, db: Session
                       request_id=str(payload.request_id), actor_user_id=user.id, origin=origin,
                       status=payload.status, note=note, created_at=utcnow())
     db.add(row)
-    audit(db, organization.id, user.id, "vendor.review.recorded", {"run_id": run.id, "resource_index": payload.resource_index, "status": payload.status})
+    audit(db, organization.id, user.id, "vendor.review.recorded", {"run_id": run.id, "resource_index": payload.resource_index, "status": payload.status, "request_id": str(payload.request_id)})
     try:
         db.commit()
     except IntegrityError:

@@ -30,6 +30,7 @@ fail=false;await vendorReviewForm.events.submit({preventDefault(){}});
 assert.equal(posts[0].request_id,posts[1].request_id);assert.equal(uuidCalls,1);assert.equal(posts[1].run_id,10);assert.equal(note.value,'');
 assert.equal(document.getElementById('vendor-review-decisions').children[0].children[1].textContent,'<script>literal</script>');
 loadVendorReviewContext(11,[{host:'new.test',scheme:'https'}]);assert.equal(vendorReviewContext.runId,11);
+loadVendorReviewContext(null,null);assert.equal(vendorReviewContext,null);assert.equal(document.getElementById('vendor-review-decisions').children.length,0);
 })().catch(e=>{console.error(e);process.exitCode=1;});
 """
         result = subprocess.run(['node','-e',script],capture_output=True,text=True)

@@ -501,3 +501,8 @@ External report snapshots now capture current decisions and up to 100 history en
 ### 2026-10-04 — Production report 37 with frozen vendor history
 
 Source 2cc7878 deployed with health/off-host backup checks passed; full suite 513 tests and 104 subtests. Production job 37 was observed queued at 0% then completed at 100%. Its frozen snapshot captures inventory 54 and review 1. Actual download: 17,392 bytes, SHA256 c2d8b5c0769a9718063bac76717252b4f0f4c6d089225bc1fad460d6b158dac1. All seven pages were rendered and visually reviewed, including reviewer/time, the labeled workflow-validation rationale, and scope disclaimers. No clipping or overlap was observed. Private receipt /data/codex-vendor-review-pdf-validation-20261004.json now records the production review. Automated provider assessment and browser visual review remain open.
+
+
+### 2026-10-04 — Vendor review race and stale-view checks
+
+A forced two-client flush race confirms identical request UUIDs produce one append-only review and one atomic audit entry, with both clients receiving the same review ID. Audit metadata now includes request_id for unambiguous retry correlation. The dashboard clears prior decision/history rows when no inventory context exists and replaces a failed-load message after recovery. Existing draft protection and literal rendering remain tested. These are fixture/renderer checks; browser visual review remains pending.

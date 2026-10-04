@@ -1,4 +1,9 @@
 import unittest
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 import json
 from uuid import uuid4
 from sqlalchemy import select
@@ -93,3 +98,26 @@ class VendorReviewTests(unittest.TestCase):
         with self.session_factory() as db:
             latest=server.capture_external_report_snapshot(db,db.get(Organization,org),db.get(User,user))
         self.assertEqual(latest['checks']['web']['vendor_reviews']['latest'],[])
+
+    def test_concurrent_identical_requests_save_one_decision_and_audit(self):
+        run=self.inventory();payload=self.payload(run)
+        barrier=threading.Barrier(2);original=Session.flush
+        def synchronized(db,*args,**kwargs):
+            if any(isinstance(row,VendorReview) for row in db.new):barrier.wait(timeout=5)
+            return original(db,*args,**kwargs)
+        clients=[TestClient(server.app),TestClient(server.app)]
+        for client in clients:client.cookies.update(self.client.cookies)
+        try:
+            with patch.object(Session,'flush',synchronized):
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    responses=[future.result(timeout=15) for future in [pool.submit(client.post,'/api/vendor-reviews',json=payload) for client in clients]]
+            self.assertEqual([r.status_code for r in responses],[200,200])
+            self.assertEqual(sum(r.json()['created'] for r in responses),1)
+            self.assertEqual(responses[0].json()['review']['id'],responses[1].json()['review']['id'])
+            with self.session_factory() as db:
+                self.assertEqual(len(db.scalars(select(VendorReview)).all()),1)
+                audit=db.scalars(select(AuditLog).where(AuditLog.action=='vendor.review.recorded')).all()
+                self.assertEqual(len(audit),1)
+                self.assertEqual(audit[0].details['request_id'],payload['request_id'])
+        finally:
+            for client in clients:client.close()
