@@ -386,6 +386,15 @@ def _append_website(story: list[Any], check: dict[str, Any], styles: dict[str, P
 
     resources = snapshot.get("external_resources")
     story.append(Paragraph("Linked vendors and external resources", styles["subsection"]))
+    dependencies = snapshot.get("dependency_observations") or {}
+    if dependencies.get("schema_version") == 1:
+        dependency_rows = [[_paragraph("Root-page dependency observation", styles["table_header"]), _paragraph("Count", styles["table_header"])]]
+        for label, key in (("HTTP references", "http_reference_count"), ("External scripts", "script_reference_count"), ("External stylesheets", "stylesheet_reference_count"), ("Script/style integrity declared", "integrity_declared_reference_count"), ("Script/style integrity not declared", "integrity_missing_reference_count")):
+            count = dependencies.get(key)
+            dependency_rows.append([_paragraph(label, styles["cell"]), _paragraph(count if type(count) is int and count >= 0 else "Unknown", styles["cell"])])
+        story.append(_table(dependency_rows, [4.95 * inch, 1.55 * inch]))
+        story.append(_paragraph("Returned HTML attributes only. Integrity declarations are not validated; missing metadata needs context and does not prove a vulnerable dependency. Linked content and vendor security were not assessed.", styles["small"]))
+
     if resources is None:
         story.append(_paragraph("This saved run predates the linked-resource inventory. Run another website check to collect it.", styles["body"]))
     elif not resources:

@@ -2871,6 +2871,18 @@
 
     if (vendors) {
       vendors.replaceChildren();
+      var dependency = snapshot.dependency_observations;
+      if (dependency && dependency.schema_version === 1) {
+        var dependencyMetrics = document.createElement("div"); dependencyMetrics.className = "audit-metric-grid";
+        [["HTTP references", "http_reference_count"], ["External scripts", "script_reference_count"], ["External stylesheets", "stylesheet_reference_count"], ["Script/style integrity not declared", "integrity_missing_reference_count"]].forEach(function (metric) {
+          var count = dependency[metric[1]];
+          dependencyMetrics.append(makeAuditMetric(metric[0], Number.isInteger(count) && count >= 0 ? String(count) : "Unknown", "Returned root-page attributes", (metric[1] === "http_reference_count" || metric[1] === "integrity_missing_reference_count") && count > 0 ? "attention" : "neutral"));
+        });
+        var dependencyScope = document.createElement("p"); dependencyScope.className = "muted";
+        dependencyScope.textContent = "Integrity attributes are counted, not validated. Missing metadata needs context; this does not prove a vulnerable dependency. Linked content and vendor security were not assessed.";
+        vendors.append(dependencyMetrics, dependencyScope);
+      }
+
       if (!Array.isArray(snapshot.external_resources)) {
         appendEmpty(vendors, "This saved run predates linked vendor inventory. Run a new website check to build the first inventory.");
       } else if (!snapshot.external_resources.length) {

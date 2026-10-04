@@ -103,13 +103,13 @@ class _PageResourceParser(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.references: list[tuple[str, str]] = []
+        self.references: list[tuple[str, str, bool]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {name.lower(): value for name, value in attrs if value}
         tag = tag.lower()
         if tag == "script" and values.get("src"):
-            self.references.append(("Script", values["src"] or ""))
+            self.references.append(("Script", values["src"] or "", bool((values.get("integrity") or "").strip())))
         elif tag == "link" and values.get("href"):
             rel = set((values.get("rel") or "").casefold().split())
             if "stylesheet" in rel:
@@ -122,15 +122,15 @@ class _PageResourceParser(HTMLParser):
                 kind = "Preconnect"
             else:
                 return
-            self.references.append((kind, values["href"] or ""))
+            self.references.append((kind, values["href"] or "", bool((values.get("integrity") or "").strip())))
         elif tag == "iframe" and values.get("src"):
-            self.references.append(("Embedded frame", values["src"] or ""))
+            self.references.append(("Embedded frame", values["src"] or "", False))
         elif tag in {"img", "source"} and values.get("src"):
-            self.references.append(("Image or media", values["src"] or ""))
+            self.references.append(("Image or media", values["src"] or "", False))
         elif tag in {"video", "audio", "embed", "object"}:
             resource_url = values.get("src") or values.get("data")
             if resource_url:
-                self.references.append(("Embedded media", resource_url))
+                self.references.append(("Embedded media", resource_url, False))
 
 
 def _vendor_for_host(host: str) -> tuple[str, str]:
@@ -151,7 +151,8 @@ def _external_resource_inventory(
     base_domain = domain.removeprefix("www.").rstrip(".").casefold()
     references: dict[tuple[str, str, int | None, str], int] = {}
 
-    for kind, raw_url in parser.references:
+    dependency_counts = {"http_reference_count": 0, "script_reference_count": 0, "stylesheet_reference_count": 0, "integrity_declared_reference_count": 0, "integrity_missing_reference_count": 0}
+    for kind, raw_url, integrity_declared in parser.references:
         candidate = raw_url.strip()
         if not candidate or len(candidate) > 2048:
             continue
@@ -165,6 +166,11 @@ def _external_resource_inventory(
             continue
         if host == base_domain or host.endswith("." + base_domain):
             continue
+        if parsed.scheme.casefold() == "http":
+            dependency_counts["http_reference_count"] += 1
+        if kind in {"Script", "Stylesheet"}:
+            dependency_counts["script_reference_count" if kind == "Script" else "stylesheet_reference_count"] += 1
+            dependency_counts["integrity_declared_reference_count" if integrity_declared else "integrity_missing_reference_count"] += 1
         key = (host, parsed.scheme.casefold(), port, kind)
         references[key] = references.get(key, 0) + 1
 
@@ -193,6 +199,7 @@ def _external_resource_inventory(
         item["resource_types"] = sorted(set(item["resource_types"]))
 
     return {
+        "dependency_observations": {"schema_version": 1, "scope": "returned_root_html_attributes", "integrity_validated": False, **dependency_counts},
         "external_host_count": len({item["host"] for item in origins}),
         "external_origin_count": len(origins),
         "external_reference_count": sum(item["reference_count"] for item in origins),
@@ -700,6 +707,11 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     page_incomplete = any(incomplete_page(snapshot) for snapshot in (previous, current))
     changes = []
     for path in sorted(paths | error_paths):
+        if path == "dependency_observations" or path.startswith("dependency_observations."):
+            if page_incomplete or not all((snapshot.get("dependency_observations") or {}).get("schema_version") == 1 for snapshot in (previous, current)):
+                continue
+            if path in {"dependency_observations.schema_version", "dependency_observations.scope", "dependency_observations.integrity_validated"}:
+                continue
         if path == "resolver_context" or path.startswith("resolver_context."):
             continue
         # Recursive resolver TTL is remaining cache lifetime, not an authoritative

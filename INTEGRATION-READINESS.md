@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — linked dependency attribute evidence
+
+The website collector now records a versioned dependency_observations block from the returned root HTML: HTTP references, external script/style counts, and declared/missing integrity attributes on those script/style tags. Counts exclude same-domain references and non-HTTP schemes, retain no resource URL paths/query tokens or integrity hashes, and do not fetch linked content. Declaration presence is not hash validation, browser enforcement, exploitability or a vendor-security verdict.
+
+The dashboard's dependency group and posture PDF expose these counts and their limits. Comparison skips this new namespace when either saved report lacks the same schema, preventing collector-upgrade alerts; incomplete page evidence does not generate dependency-change conclusions. Fixtures cover whitespace attributes, applicable tag types, private-token/hash omission, old-schema compatibility, meaningful changes, incomplete-page comparison and PDF wording. Deeper vendor assessment and approval remain open; this change is not yet deployed or validated against a fresh production website run.
+
+
 ## October 4, 2026 — fresh production posture PDF review
 
 Actual production posture report **33** completed and downloaded successfully. All seven pages were rendered and reviewed. The Nikto section explicitly shows latest cancelled attempt 52 and retained successful evidence from completed-with-warnings run 51, including all six observations. The PDF also retains DNS unknown lookup states, saved website response/header evidence and bounded exposure scope. Private generation receipt: /data/codex-posture-freshness-validation-20261004.json.
