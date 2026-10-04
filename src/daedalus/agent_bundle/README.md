@@ -91,7 +91,9 @@ connects outward to Daedalus. No inbound port, root service, shell command, or
 automatic software update is installed. NmapUI's local trust bypass is disabled.
 Unit files, enrollment config, and
 optional NmapUI Basic Authentication credentials are owner-only. Existing
-units or files with these names are never overwritten. If startup fails, the
+units or files with these names are never overwritten. The bridge uses the
+installation configuration directory for its durable event spool, even if
+the user manager inherited a different XDG configuration home. If startup fails, the
 installer attempts to stop every service it tried to start, including a
 partially successful systemd start. Enrollment and private service files are
 retained for recovery. A failed cleanup stop is reported explicitly because

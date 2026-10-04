@@ -146,6 +146,7 @@ def _bridge_unit(args: argparse.Namespace, env_path: Path) -> str:
         "Type=simple",
         f"WorkingDirectory={_unit_path(str(args.bridge_working_dir), 'bridge working directory')}",
         f"EnvironmentFile={_unit_path(str(env_path), 'NmapUI environment path')}",
+        f"Environment=XDG_CONFIG_HOME={_environment_quote(str(env_path.parent.parent), 'bridge configuration home')}",
         f"ExecStart={_exec_quote(str(args.agent_executable), 'Daedalus bridge path')} --config {_exec_quote(str(args.agent_config), 'agent config path')}",
         "Restart=always",
         "RestartSec=5",
