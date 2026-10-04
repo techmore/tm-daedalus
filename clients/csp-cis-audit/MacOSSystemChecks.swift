@@ -127,56 +127,11 @@ struct MacOSSystemChecks {
             details: "CSP criterion: the explicit age-only audit expiration must be at least seven days. This checks policy, not the presence or age of retained audit records.")
     }
 
-    // Check if login items are not added
     static func checkLoginItemsNotAdded(check: CISCheck) -> CheckResult {
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        let plistPath = homeDir.appendingPathComponent("Library/Preferences/com.apple.loginitems.plist").path
-        
-        guard FileManager.default.fileExists(atPath: plistPath) else {
-            // If the file doesn't exist, there are no login items
-            return CheckResult(check: check, status: "pass", details: "No login items are configured.")
-        }
-        
-        guard let plist = NSDictionary(contentsOfFile: plistPath),
-              let items = plist["SessionItems"] as? [String: Any],
-              let customListItems = items["CustomListItems"] as? [[String: Any]] else {
-            // If we can't read the plist or it doesn't have the expected structure, assume no login items
-            return CheckResult(check: check, status: "pass", details: "No login items appear to be configured.")
-        }
-        
-        if customListItems.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "No login items are configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "\(customListItems.count) login items are configured.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review current Login Items and background services against the organization's approved inventory. A missing or empty legacy loginitems plist does not establish a complete inventory. Supported current login-item evidence and an approval list were not collected; no registration was changed.")
     }
-    
-    // Check if Secure Empty Trash is enabled
+
     static func checkSecureEmptyTrash(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.finder", "EmptyTrashSecurely"]
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it might be because the setting doesn't exist, which means it's not enabled
-            return CheckResult(check: check, status: "fail", details: "Secure Empty Trash is not enabled.")
-        }
-        
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("1") {
-            return CheckResult(check: check, status: "pass", details: "Secure Empty Trash is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Secure Empty Trash is not enabled.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review data-removal requirements, storage type and the applicable platform erasure procedure. The legacy Finder EmptyTrashSecurely preference does not establish secure deletion of data on this device. Supported erasure evidence was not collected; no file was deleted or storage erased.")
     }
 }

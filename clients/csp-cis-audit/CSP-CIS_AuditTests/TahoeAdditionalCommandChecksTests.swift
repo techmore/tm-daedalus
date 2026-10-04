@@ -13,6 +13,12 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyLoginItemsAndTrashDoNotClaimCompleteEvidence() {
+        let check = CISCheck(id: "system", category: "macos", description: "System")
+        #expect(MacOSSystemChecks.checkLoginItemsNotAdded(check: check).status == "manual")
+        #expect(MacOSSystemChecks.checkSecureEmptyTrash(check: check).status == "manual")
+    }
+
     @Test func guestPreferencesDoNotGuessMissingDefaults() {
         let check = CISCheck(id: "guest", category: "macos", description: "Guest")
         let collectors: [(CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult] = [
