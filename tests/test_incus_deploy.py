@@ -3,18 +3,33 @@ from __future__ import annotations
 import contextlib
 import io
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.deploy_incus import DeployError, _validate, deploy
+from scripts.deploy_incus import DeployError, _validate, deploy, _run_streaming_ssh
 
 
 ROOT = Path(__file__).parents[1]
 
 
 class IncusDeployTests(unittest.TestCase):
+    def test_ssh_access_prompts_are_visible_without_streaming_other_output(self):
+        script = "import sys; print('# Tailscale SSH requires an additional check.',file=sys.stderr); print('# To authenticate, visit: https://login.tailscale.com/a/test12345678',file=sys.stderr); print('private diagnostic',file=sys.stderr); print('ready')"
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            result = _run_streaming_ssh([sys.executable, '-c', script])
+        self.assertEqual(result, 'ready')
+        self.assertIn('Tailscale SSH requires an additional check', output.getvalue())
+        self.assertIn('https://login.tailscale.com/a/test12345678', output.getvalue())
+        self.assertNotIn('private diagnostic', output.getvalue())
+
+    def test_streaming_ssh_retains_exit_failure(self):
+        with self.assertRaisesRegex(DeployError, r'Command failed \(7\): fixture failure'):
+            _run_streaming_ssh([sys.executable, '-c', "import sys; print('fixture failure',file=sys.stderr); sys.exit(7)"])
+
     def _deploy_with_mocked_release(self, ssh_side_effect, health_results):
         temporary_directory = tempfile.TemporaryDirectory(prefix="daedalus-deploy-test-")
         self.addCleanup(temporary_directory.cleanup)

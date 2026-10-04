@@ -12,6 +12,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from urllib.error import URLError
@@ -47,8 +48,36 @@ def _run(arguments: list[str], *, input_text: str | None = None) -> str:
     return result.stdout.strip()
 
 
+def _run_streaming_ssh(arguments: list[str]) -> str:
+    """Expose only SSH access-check prompts while retaining normal output."""
+    process = subprocess.Popen(arguments, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert process.stdout is not None and process.stderr is not None
+    errors: list[str] = []
+
+    def read_errors() -> None:
+        for line in process.stderr:
+            errors.append(line)
+            message = line.strip()
+            if message == "# Tailscale SSH requires an additional check." or re.fullmatch(
+                r"# To authenticate, visit: https://login\.tailscale\.com/a/[A-Za-z0-9_-]{8,128}", message
+            ):
+                print(message, file=sys.stderr, flush=True)
+
+    reader = threading.Thread(target=read_errors, daemon=True)
+    reader.start()
+    output = process.stdout.read()
+    status = process.wait()
+    reader.join()
+    process.stdout.close()
+    process.stderr.close()
+    if status:
+        detail = "".join(errors).strip() or output.strip()
+        raise DeployError(f"Command failed ({status}): {detail}")
+    return output.strip()
+
+
 def _ssh(host: str, command: list[str]) -> str:
-    return _run(["ssh", host, shlex.join(command)])
+    return _run_streaming_ssh(["ssh", host, shlex.join(command)])
 
 
 def _validate(host: str, instance: str, *, require_clean: bool = True) -> None:
