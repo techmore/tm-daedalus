@@ -3420,23 +3420,9 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
         .order_by(CISDevice.last_seen_at.desc(), CISDevice.id.desc())
         .limit(250)
     ).all()
-    ranked_reports = select(
-        CISReport.id, CISReport.device_id, CISReport.collected_at,
-        func.row_number().over(
-            partition_by=CISReport.device_id,
-            order_by=(CISReport.collected_at.desc(), CISReport.id.desc()),
-        ).label("recency_rank"),
-    ).where(CISReport.organization_id == organization.id).subquery()
-    latest_reports = {
-        row.device_id: row
-        for row in db.execute(select(ranked_reports).where(ranked_reports.c.recency_rank == 1))
-    }
+    latest_reports = _cis_latest_assessments(db, organization.id)
     def assessment_state(report):
-        if report is None:
-            return "missing"
-        if report.collected_at > now:
-            return "unknown"
-        return "current" if report.collected_at >= online_cutoff else "stale"
+        return _cis_assessment_state(report, now)
     assessment_counts = {state: 0 for state in ("current", "stale", "unknown", "missing")}
     assessment_counts["missing"] = max(0, devices - len(latest_reports))
     for report in latest_reports.values():
@@ -5160,6 +5146,25 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
+def _cis_latest_assessments(db: Session, organization_id: int):
+    ranked = select(
+        CISReport.id, CISReport.device_id, CISReport.collected_at, CISReport.summary,
+        func.row_number().over(
+            partition_by=CISReport.device_id,
+            order_by=(CISReport.collected_at.desc(), CISReport.id.desc()),
+        ).label("recency_rank"),
+    ).where(CISReport.organization_id == organization_id).subquery()
+    return {row.device_id: row for row in db.execute(select(ranked).where(ranked.c.recency_rank == 1))}
+
+
+def _cis_assessment_state(report, now):
+    if report is None:
+        return "missing"
+    if report.collected_at > now:
+        return "unknown"
+    return "current" if report.collected_at >= now - timedelta(hours=36) else "stale"
+
+
 @app.get("/api/workspace-posture")
 def workspace_posture(request: Request, db: Session = Depends(get_db)):
     """Summarize saved workspace evidence without exposing raw results or credentials."""
@@ -5203,14 +5208,24 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
     areas.append({"key":"scanners", "title":"Internal network", "state":"recorded" if agents and online == len(agents) and scoped == len(agents) else "attention" if agents else "not_assessed",
         "summary":f"{online}/{len(agents)} enabled scanners online · {scoped} with approved network ranges" if agents else "No enabled scanners in this workspace.", "updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
     devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
-    reporting = sum(device.last_seen_at >= utcnow()-timedelta(hours=36) for device in devices)
+    now = utcnow()
+    latest_assessments = _cis_latest_assessments(db, org.id)
+    coverage = {state: 0 for state in ("current", "stale", "unknown", "missing")}
+    for device in devices:
+        coverage[_cis_assessment_state(latest_assessments.get(device.id), now)] += 1
+    reporting = coverage["current"]
     cis = db.scalar(select(CISReport).where(CISReport.organization_id == org.id).order_by(CISReport.collected_at.desc(), CISReport.id.desc()).limit(1))
-    cis_summary = f"{reporting}/{len(devices)} devices with recent report receipts"
-    cis_needs_review = False
+    cis_summary = f"{reporting}/{len(devices)} devices with current assessments · {coverage['stale']} stale · {coverage['missing']} missing · {coverage['unknown']} unknown"
+    review_devices = sum(any(
+        type((report.summary or {}).get(name)) is not int or (report.summary or {}).get(name, 0) != 0
+        for name in ("fail", "manual", "error")
+    ) for report in latest_assessments.values())
+    cis_needs_review = review_devices > 0
+    cis_summary += f" · {review_devices} devices with checks needing review"
     if cis:
         counts = {name: value if type(value) is int and value >= 0 else None
                   for name in ("fail", "manual", "error") for value in [(cis.summary or {}).get(name)]}
-        cis_needs_review = any(value is None or value > 0 for value in counts.values())
+        cis_needs_review = cis_needs_review or any(value is None or value > 0 for value in counts.values())
         cis_summary += f" · latest report pass rate: {(cis.summary or {}).get('score', 'unknown')}%"
         cis_summary += " · " + " · ".join(
             f"{counts[name] if counts[name] is not None else 'unknown'} {label}"

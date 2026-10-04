@@ -441,3 +441,8 @@ Meraki separates its current assessment from saved-report evidence. Endpoint com
 ### 2026-10-04 — Workspace priorities
 
 Overview adds area-level review, failed-collection, and unassessed counts. Area cards are stably ordered with failed collections and review observations first, followed by unknown/missing assessments, active checks, and saved evidence. These are area counts, not a combined security score. Missing or empty API coverage produces an unavailable message rather than zero attention counts. Rendering preserves literal text, keyboard focus, and stale-response protection. Visual review remains pending.
+
+
+### 2026-10-04 — Consistent endpoint coverage on Overview
+
+Overview and endpoint status share the same latest-per-device collection-time classifier. Fresh receipts do not make stale assessments current; future timestamps stay unknown and devices without results stay missing. Overview also counts devices whose latest assessment needs review, so a later clean report from another device cannot clear their attention state. Latest-report detail remains explicitly scoped to that report. Fixtures cover stale/future/missing assessments with fresh receipts and two devices with different latest results.

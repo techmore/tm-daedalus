@@ -110,3 +110,31 @@ class WorkspacePostureTests(unittest.TestCase):
     def test_missing_meraki_findings_are_not_zero_reviews(self):
         self.assertNotIn('review_observation_count',server.meraki_review_summary({'summary':{}}))
         self.assertEqual(server.meraki_review_summary({'findings':[]})['review_observation_count'],0)
+
+    def test_cis_receipt_does_not_refresh_old_or_future_assessment(self):
+        org,_=self.context();now=server.utcnow()
+        with self.session_factory() as db:
+            for index,collected in enumerate((now-timedelta(days=3),now+timedelta(days=1),None)):
+                device=CISDevice(organization_id=org,device_fingerprint=f'coverage-{index}',name='Private endpoint',first_seen_at=now,last_seen_at=now)
+                db.add(device);db.flush()
+                if collected is not None:
+                    db.add(CISReport(organization_id=org,device_id=device.id,client_report_hash=f'coverage-{index}',collected_at=collected,created_at=now,summary={'score':100,'fail':0,'manual':0,'error':0},results=[]))
+            db.commit()
+        area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='cis')
+        self.assertEqual(area['state'],'attention')
+        self.assertIn('0/3 devices with current assessments',area['summary'])
+        self.assertIn('1 stale · 1 missing · 1 unknown',area['summary'])
+
+    def test_cis_review_includes_each_devices_latest_assessment(self):
+        org,_=self.context();now=server.utcnow()
+        with self.session_factory() as db:
+            for index,failures in enumerate((2,0)):
+                device=CISDevice(organization_id=org,device_fingerprint=f'multi-{index}',name='Private endpoint',first_seen_at=now,last_seen_at=now)
+                db.add(device);db.flush()
+                db.add(CISReport(organization_id=org,device_id=device.id,client_report_hash=f'multi-{index}',collected_at=now-timedelta(minutes=1-index),created_at=now,summary={'score':100,'fail':failures,'manual':0,'error':0},results=[]))
+            db.commit()
+        area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='cis')
+        self.assertEqual(area['state'],'attention')
+        self.assertIn('2/2 devices with current assessments',area['summary'])
+        self.assertIn('1 devices with checks needing review',area['summary'])
+        self.assertIn('0 failed · 0 manual · 0 errors',area['summary'])
