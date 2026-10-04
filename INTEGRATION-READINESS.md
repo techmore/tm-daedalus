@@ -431,3 +431,8 @@ Legacy source review also found an optional Nikto execution path in the original
 DNS and Website now group change history between the assessment and supporting evidence. Scope limitations sit with evidence; expandable details use quieter separators rather than competing card surfaces. Dashboard structure and refresh checks passed (35 tests); signed-in browser visual review remains pending.
 
 Ten active legacy macOS update/privacy Boolean collectors now require successful, canonical 0/1 output with no stderr or incomplete-command signal. Missing, malformed, failed, or timed-out preference reads remain manual instead of inferred pass/fail. These preserve the existing preference mappings, which do not establish managed enforcement for every user. Native client tests passed: 74, zero failures on macOS 27.0.1. Actual macOS 26 execution remains outstanding.
+
+
+### 2026-10-04 — Meraki and endpoint assessment grouping
+
+Meraki separates its current assessment from saved-report evidence. Endpoint compliance puts attention counts and their collection scope together in a prominent assessment, with separate labeled groups for coverage, baseline evidence, changes, and device presence. Setup remains collapsed. These are presentation changes; scope and collection semantics are unchanged. Browser visual review remains pending.

@@ -33,6 +33,9 @@ assert.equal(reportJobStatusSummary([{status:'failed'}]), '0 PDF(s) ready · 1 f
         self.assertLess(section.index('id="cis-change-list"'), section.index('id="cis-device-list"'))
         self.assertLess(section.index('id="cis-device-list"'), section.index('<summary>How endpoint check-ins work'))
         self.assertLess(section.index('id="cis-device-list"'), section.index('<summary>Profiles &amp; device setup'))
+        self.assertIn('class="topic-priority" aria-labelledby="cis-assessment-title"', section)
+        self.assertIn('class="topic-changes" aria-labelledby="cis-changes-title"', section)
+        self.assertLess(section.index('id="cis-assessment-scope"'), section.index('id="cis-results-title"'))
 
     def test_external_topics_lead_with_assessment_and_changes(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
@@ -189,7 +192,7 @@ notifyExternalCheck({run_id:3,status:'failed',check_type:'dns',source:'schedule'
 
     def test_external_evidence_groups_keep_key_metrics_visible(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
-        evidence = template[template.index('<section class="topic-evidence"'):template.index('<summary>Exposure findings')]
+        evidence = template[template.index('<section class="topic-evidence" aria-labelledby="{{ key }}-evidence-title"'):template.index('<summary>Exposure findings')]
         self.assertIn('aria-labelledby="{{ key }}-evidence-title"', evidence)
         self.assertLess(evidence.index('id="dns-record-grid"'), evidence.index('<details'))
         self.assertLess(evidence.index('id="web-summary-grid"'), evidence.index('<details'))
