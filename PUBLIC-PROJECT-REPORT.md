@@ -1,5 +1,15 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 072: DNS audit resolver provenance and repeat evidence
+
+Production application commit **94dd267a4adcd019e88cf56a977b7ad06fb0093b** is active and healthy. The 59-file archive SHA-256 is **8651afce71d705b15e7063b04a7796534c357ac788deb2bd4f3fcec01cb97a43**; verified off-host backup: daedalus-data-20261004T062105Z.tar.gz. All **448 tests and 96 subtests** passed. Current Python CI passed; managed Linux CI was still running at the checkpoint.
+
+Added operator-only `DAEDALUS_AUDIT_DNS_NAMESERVERS`, bounded to three literal unicast IP addresses, with no silent fallback. Saved snapshots record resolver mode/addresses, displayed in lookup evidence; resolver metadata is excluded from target-change comparisons. Website target validation and DNS TXT ownership verification retain their existing resolver behavior. Production now uses **1.1.1.1** for DNS/email audits. The original environment has a private 0600 backup.
+
+Direct service restart failed to stop the old process because of Incus control-group permissions. Initial run **47** therefore accurately recorded system resolver 127.0.0.53; it is not explicit-resolver validation. The normal Incus instance restart restored healthy service and applied the setting. Actual run **48** recorded explicit resolver 1.1.1.1: DS/DNSKEY no-answer observations, with three remaining www SERVFAIL lookups. Its **13** differences are lookup-availability/DNSSEC observation changes after the collector switch, not thirteen domain configuration/security failures. Repeat run **49**, using the same explicit resolver, saved **zero changes** and the same three unknown www lookups. No DNSSEC chain validation is claimed.
+
+Dated notices were saved for run 48 (changes_and_warnings) and run 49 (warnings). Repeated unchanged warnings still generate separate notices; reducing this inbox noise remains open. Private full run/history/notice receipt: /data/codex-dns-resolver-validation-20261004.json. The www failure requires further DNS diagnosis; visual review, real Tahoe execution, trusted persistent client distribution, approved VLAN coverage and other full-project requirements remain open. The full objective remains active.
+
 ## October 4, 2026 — Release 071: topic evidence grouping
 
 Production application commit **fa3546b4d4f7f97638b3dabdf99e3b08bba5a0c0** is active and healthy. The 58-file archive SHA-256 is **7df74284c67c6e0aa91c2ee7dd54e5219691a33d000751b3e7d7cf9f11a6e769**; verified off-host backup: daedalus-data-20261004T061718Z.tar.gz. The full suite passed **445 tests and 90 subtests**. JavaScript syntax and diff checks passed; current-release CI remains unconfirmed.
