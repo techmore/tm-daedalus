@@ -167,6 +167,7 @@ def _external_resource_inventory(
             resource_base = page_url
     references: dict[tuple[str, str, int | None, str], int] = {}
 
+    origin_counts: dict[tuple[str, str, int | None], dict[str, int]] = {}
     dependency_counts = {"http_reference_count": 0, "script_reference_count": 0, "stylesheet_reference_count": 0, "integrity_declared_reference_count": 0, "integrity_missing_reference_count": 0}
     for kind, raw_url, integrity_declared in parser.references:
         candidate = raw_url.strip()
@@ -182,11 +183,16 @@ def _external_resource_inventory(
             continue
         if host == base_domain or host.endswith("." + base_domain):
             continue
+        origin_key = (host, parsed.scheme.casefold(), port)
+        observed = origin_counts.setdefault(origin_key, {key: 0 for key in dependency_counts})
         if parsed.scheme.casefold() == "http":
+            observed["http_reference_count"] += 1
             dependency_counts["http_reference_count"] += 1
         if kind in {"Script", "Stylesheet"}:
             dependency_counts["script_reference_count" if kind == "Script" else "stylesheet_reference_count"] += 1
             dependency_counts["integrity_declared_reference_count" if integrity_declared else "integrity_missing_reference_count"] += 1
+            observed["script_reference_count" if kind == "Script" else "stylesheet_reference_count"] += 1
+            observed["integrity_declared_reference_count" if integrity_declared else "integrity_missing_reference_count"] += 1
         key = (host, parsed.scheme.casefold(), port, kind)
         references[key] = references.get(key, 0) + 1
 
@@ -219,6 +225,13 @@ def _external_resource_inventory(
         "external_host_count": len({item["host"] for item in origins}),
         "external_origin_count": len(origins),
         "external_reference_count": sum(item["reference_count"] for item in origins),
+        "dependency_origin_observations": {
+            "schema_version": 1, "scope": "returned_root_html_attributes", "integrity_validated": False,
+            "truncated": len(origins) > MAX_EXTERNAL_ORIGINS,
+            "origins": [{"host": item["host"], "scheme": item["scheme"], "port": item["port"],
+                         **origin_counts[(item["host"], item["scheme"], item["port"]) ]}
+                        for item in origins[:MAX_EXTERNAL_ORIGINS]],
+        },
         "external_resources": origins[:MAX_EXTERNAL_ORIGINS],
         "external_resources_truncated": len(origins) > MAX_EXTERNAL_ORIGINS,
     }
@@ -723,6 +736,14 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     page_incomplete = any(incomplete_page(snapshot) for snapshot in (previous, current))
     changes = []
     for path in sorted(paths | error_paths):
+        if path == "dependency_origin_observations" or path.startswith("dependency_origin_observations."):
+            if page_incomplete or not all(isinstance(snapshot.get("dependency_origin_observations"), dict)
+                and snapshot["dependency_origin_observations"].get("schema_version") == 1
+                and snapshot["dependency_origin_observations"].get("truncated") is False
+                for snapshot in (previous, current)):
+                continue
+            if path != "dependency_origin_observations.origins":
+                continue
         if path == "dependency_observations" or path.startswith("dependency_observations."):
             if page_incomplete or not all((snapshot.get("dependency_observations") or {}).get("schema_version") == 1 for snapshot in (previous, current)):
                 continue

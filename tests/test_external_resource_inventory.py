@@ -7,6 +7,35 @@ from daedalus.external_checks import (
 
 
 class ExternalResourceInventoryTests(unittest.TestCase):
+    def test_per_origin_attributes_identify_dependencies_without_urls_or_hashes(self):
+        html = '<script src="https://cdn.example.net/a.js?private=token" integrity="secret-hash"></script><script src="https://cdn.example.net/b.js"></script><link rel="stylesheet" href="http://style.example.net/a.css"><img src="http://style.example.net/a.png">'
+        inventory = _external_resource_inventory(html, 'https://example.com/', 'example.com')
+        block = inventory['dependency_origin_observations']
+        origins = {item['host']: item for item in block['origins']}
+        self.assertEqual(origins['cdn.example.net']['script_reference_count'], 2)
+        self.assertEqual(origins['cdn.example.net']['integrity_declared_reference_count'], 1)
+        self.assertEqual(origins['cdn.example.net']['integrity_missing_reference_count'], 1)
+        self.assertEqual(origins['style.example.net']['http_reference_count'], 2)
+        self.assertEqual(origins['style.example.net']['stylesheet_reference_count'], 1)
+        self.assertEqual(origins['style.example.net']['integrity_missing_reference_count'], 1)
+        self.assertFalse(block['integrity_validated'])
+        self.assertNotIn('token', str(block))
+        self.assertNotIn('secret-hash', str(block))
+
+    def test_origin_collector_upgrade_and_incomplete_evidence_do_not_alert(self):
+        import copy
+        current = _external_resource_inventory('<script src="https://cdn.example.net/a.js"></script>', 'https://example.com/', 'example.com')
+        previous = copy.deepcopy(current); previous.pop('dependency_origin_observations')
+        self.assertFalse(compare_snapshots(previous, current))
+        changed = copy.deepcopy(current)
+        changed['dependency_origin_observations']['origins'][0]['integrity_missing_reference_count'] = 2
+        self.assertEqual([path for path, _, _ in compare_snapshots(current, changed)], ['dependency_origin_observations.origins'])
+        changed['dependency_origin_observations']['truncated'] = True
+        self.assertFalse(compare_snapshots(current, changed))
+        changed['dependency_origin_observations']['truncated'] = False
+        changed['page_html_truncated'] = True
+        self.assertFalse(compare_snapshots(current, changed))
+
     def test_dependency_attributes_are_counted_without_storing_urls_or_hashes(self):
         html="""<script src="https://cdn.example.net/a.js?secret=private" integrity="private-hash"></script>
         <script src="http://cdn.example.net/b.js" integrity=" "></script>
@@ -31,7 +60,7 @@ class ExternalResourceInventoryTests(unittest.TestCase):
         self.assertEqual(compare_snapshots(old,first),[])
         current=_external_resource_inventory('<script src="https://cdn.example.net/a.js" integrity="declared"></script>','https://example.com/','example.com')
         paths={path for path,_,_ in compare_snapshots(first,current)}
-        self.assertEqual(paths,{'dependency_observations.integrity_declared_reference_count','dependency_observations.integrity_missing_reference_count'})
+        self.assertEqual(paths,{'dependency_observations.integrity_declared_reference_count','dependency_observations.integrity_missing_reference_count','dependency_origin_observations.origins'})
         current['page_html_truncated']=True
         self.assertFalse(any(path.startswith('dependency_observations') for path,_,_ in compare_snapshots(first,current)))
 
