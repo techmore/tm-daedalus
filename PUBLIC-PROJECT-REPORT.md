@@ -691,3 +691,9 @@ The readable real-assessment xcresult records 55 tests passed (54 fixtures plus 
 The real-platform CI step now runs scripts/verify_cis_platform_receipt.py as a required command after receipt creation, rejecting wrong checksum, incomplete IDs or inconsistent counts before success. Workflow parsing/structure checks passed; all 16 receipt-validator fixtures passed. This changed CI gate still needs its own successful run.
 
 All 100 published Level 1 check IDs are present in the 119-check Level 2 profile. Source comparison verified identical rule_id, category and description for each shared check. Projecting the verified real Level 2 receipt onto those 100 IDs yields 10 pass, 19 fail, 71 manual and zero errors. This is a derived subset of the same CI-host observations, not a separate Level 1 execution or a managed-endpoint conformance verdict. Latest actual SER8 report remains 21; broader acceptance gates remain open.
+
+## October 4, 2026 — required real-platform receipt gate passed
+
+[Run 37207321521](https://github.com/techmore/tm-daedalus/actions/runs/37207321521) completed successfully for source 1270bbdd036e897026f5f6c97bab92c3fcae3dd4. Its real macOS 26 assessment step ran the required receipt validator and logged 119 complete checks, counts 10 pass / 20 fail / 89 manual / 0 errors, metadata_consistent=true, conformance_verdict=false and production_acceptance=false. Regular tests, artifact upload, release-script syntax and local credential-free package build also completed. This validates the new automatic receipt gate, rather than merely the prior manual artifact check.
+
+Private full log: validation/github-receipt-gate-37207321521.log. No production report was created; latest actual SER8 endpoint report remains 21. Vendor-audit scope was requested to distinguish public dependency/DNS/TLS observations from questionnaires/compliance evidence. Managed rollout, signing, visual acceptance and remaining full-project gates stay open.
