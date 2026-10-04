@@ -1,5 +1,15 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 064: real Mac management and upgrade validation
+
+Production application commit **d8692c8cf7ed86bd6d33a139e914af6de36a6365** is active and healthy. The 58-file release archive SHA-256 is **ddf8752107a18e0e30b9edd5ec7b738ce49092cd7b12ef7ac2e80114a576a502**; verified off-host backup: daedalus-data-20261004T051203Z.tar.gz. **436 tests and 90 subtests** passed; Python CI 37179189498 and managed Linux CI 37179189477 passed.
+
+Actual production scanner 2 completed remote health refresh (command 14) and NmapUI release-channel check (15). OS catalog check 16 delivered and completed, but returned unknown. Direct read-only inspection proved Apple's successful no-updates message was on stderr; the bridge previously parsed stdout only. The parser now reads both bounded streams while retaining return-code validation and withholding raw output from reports.
+
+Downloaded the authenticated production kit and completed the normal managed macOS upgrade with kit SHA-256 **74853a583581ff7e26466a7caf73800cc3329a16c1e499e3663603bfcd6c81b9**. The upgrader reported both services running/readiness satisfied and retained descriptor backups. Production retained scanner ID 2 and earlier command records. Repeated OS check **17** completed at **2026-10-04T05:14:42.746652Z**, with status **no_updates** and update_count **0**. Private evidence: /data/codex-scanner-management-validation-20261004.json. No network scan or update installation was performed.
+
+This proves the management workflow on the available macOS **27.0.1** host, not macOS 26 compatibility. Browser visual review, authorized production VLAN coverage and the remaining full-project requirements are still open.
+
 ## October 4, 2026 — Release 063: current evidence first
 
 Production application commit **70b6571eef69ebea2a07496211c81c0af78648f9** is active and healthy. The 58-file archive SHA-256 is **fdf8247d6301570ef6efd953c5f88aa5a6a4455abffbe66ba31cd89f4deda156**; verified off-host backup: daedalus-data-20261004T045749Z.tar.gz. All **435 tests and 90 subtests** passed. Python CI 37178474507 and managed Linux scanner/recovery CI 37178474579 both passed.
