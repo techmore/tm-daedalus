@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — topic evidence hierarchy and CIS browser evidence
+
+Production runs source **ad8cd2a03ec1299e3902cd6e7bc1f89bda608940**, with verified 59-file release archive SHA-256 `ceb7d6f33c4eabfbd8f31e504e2257f14694efa370f34bad7cb16ad02c0b3c4e`. The Incus deployment verified an off-host backup and passed internal/public health checks. An authenticated production dashboard request returned HTTP 200; its parsed hierarchy keeps DNS/email and website summary metrics outside collapsed details, groups them under topic evidence headings, and places detailed browser policy evidence in an expandable section. The served JavaScript includes endpoint result grouping: failed checks first, then unassessed checks, then passing checks, each grouped by category. Unknown result statuses remain unassessed. This verifies served structure and fixture renderer behavior, not browser pixels or user experience acceptance. Private receipt: `/data/codex-topic-grouping-validation-20261004.json`.
+
+The local backend suite passed **485 tests and 98 subtests**. [Python CI run 37188596700](https://github.com/techmore/tm-daedalus/actions/runs/37188596700) passed for this source. The CIS client passed **71 local unit tests**, including missing/malformed Safe Browsing and Safari JavaScript evidence staying manual while explicit true/false values retain pass/fail semantics. Shared unavailable-preference handling now keeps those read failures unassessed; older saved reports remain immutable. Other browser routines that assume defaults still require review; this does not establish effective managed policies or real macOS 26 conformance. Trusted distribution, persistent endpoint installation, broader onboarding, production subnet coverage and browser visual review remain outstanding.
+
+
 ## October 4, 2026 — concurrent workspace access request handling
 
 Concurrent first access requests from the same user/domain can collide with the membership uniqueness constraint. The request handler now rolls back the losing insert and returns the already-saved pending/approved status; other changed-access cases return HTTP 409. This preserves the pending user role and avoids a duplicate membership request audit or admin notification.
