@@ -4936,6 +4936,7 @@ def download_report(report_id: int, request: Request, db: Session = Depends(get_
         artifact,
         media_type="application/pdf",
         filename=job.file_name,
+        headers={"Cache-Control": "no-store"},
     )
 
 

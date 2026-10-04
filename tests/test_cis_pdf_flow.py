@@ -172,6 +172,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         response = self.client.get(f"/api/reports/{report_id}/download")
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.content, b"%PDF-fixture")
+        self.assertEqual(response.headers["cache-control"], "no-store")
         artifact.unlink()
         other = self.root / "reports" / str(org_id + 1)
         other.mkdir(); (other / "migration.pdf").write_bytes(b"other-workspace")
