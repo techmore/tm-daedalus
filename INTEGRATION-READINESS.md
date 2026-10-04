@@ -551,3 +551,8 @@ Source 748131a is active on Incus. Internal/public readiness passed; off-host ba
 ### 2026-10-04 — Saved network observations per scanner
 
 Scanner cards now show the latest scan status and saved detailed-result counts (hosts, explicitly open ports, missing port states) before controls. Workspace-scoped assessment API selects the latest scan and latest detailed event without falling back to older malformed results; result artifacts retain size/digest validation and an 8 MiB summary bound. Metadata conflicts, absent detail and uninterpretable results remain unavailable. Counts are observations, not confirmed vulnerabilities or complete approved-range coverage. Renderer checks preserve unknown states and scope limits; scanner fixtures verify completion distinction, exact result identity, malformed-result handling and cross-workspace 404. Full suite: 518 tests and 104 subtests; scanner targeted suite 12 passed after the additional isolation assertion. Browser visual acceptance remains pending.
+
+
+### 2026-10-04 — Production saved scanner assessment
+
+Source bd11f9f is active on Incus with internal/public health checks passed and verified backup daedalus-data-20261004T102553Z.tar.gz. Authenticated production assessment for scanner 2 retains loopback run e9f020f1-d603-4616-a36c-f49c7aa8bc2c and detailed event 143: one host, 19 explicitly open ports, zero missing port states, collected 2026-10-04T07:13:36.503544Z. Reported covered targets remain null and coverage_complete remains false. Authenticated dashboard assets confirm version 094 and summary placement before controls. This is saved loopback evidence, not VLAN coverage or confirmed vulnerability assessment. Private receipt: /data/codex-scanner-assessment-validation-20261004.json.
