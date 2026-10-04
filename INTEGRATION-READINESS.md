@@ -583,3 +583,8 @@ Added system_settings_system_wide_preferences_configure for the eight static aut
 ### 2026-10-04 — Decoded authorization XML ambiguity checks
 
 Replaced literal-key matching in both Tahoe authorization readers with shared bounded XML validation. Duplicate decoded keys in a dictionary are rejected, including numeric character-reference and CDATA spellings; valid equivalent spelling is accepted. Separate nested dictionaries may reuse a key. XML size, nesting and key lengths are bounded; internal entity declarations are rejected and external entity resolution is disabled. Raw policies remain local. Native xcresult confirms 81 tests passed, zero failed/skipped; backend profile/coverage suite 10 passed. Coverage mappings remain 82/100 Level 1 and 87/119 Level 2. Live Tahoe and trusted distribution remain pending.
+
+
+### 2026-10-04 — Public marketing scope and repository validation
+
+Marketing source b374123 clarifies saved scanner host/port observations, human dependency decisions/rationale, published Tahoe profiles and pending live Tahoe/trusted client distribution. Six public-site tests passed. GitHub Pages run 37196212082 completed successfully; live cybersecuritypilot.org home and daedalus.html returned HTTPS 200 with portal links, and the product overview includes the new endpoint-pilot wording. Production /readyz returned 200 with database/report storage healthy. Backend CI 37196132939 passed source 1d6e347. Client CI 37196132972 remains in progress; no success claim is made while its tests/package step is pending.
