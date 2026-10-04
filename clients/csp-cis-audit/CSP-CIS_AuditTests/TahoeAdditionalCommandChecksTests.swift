@@ -13,6 +13,14 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func chromeExtensionCollectionsDoNotEstablishApproval() {
+        let preferences: [String: Any] = ["extensions": ["blocklist": ["one-id"], "allowed_types": ["extension"], "file_access": ["one-id": true], "script_injection": ["one-id": true]]]
+        for description in ["Configure extension installation blocklist", "Configure allowed Chrome Web Store extensions", "Control which extensions can access file URLs", "Control which extensions can inject scripts"] {
+            let check = CISCheck(id: "extension", category: "chrome", description: description)
+            #expect(ChromeChecks.run(check: check, readPreferences: { preferences }).status == "manual")
+        }
+    }
+
     @Test func legacyLoginItemsAndTrashDoNotClaimCompleteEvidence() {
         let check = CISCheck(id: "system", category: "macos", description: "System")
         #expect(MacOSSystemChecks.checkLoginItemsNotAdded(check: check).status == "manual")

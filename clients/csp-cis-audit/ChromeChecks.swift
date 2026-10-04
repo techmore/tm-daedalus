@@ -450,61 +450,21 @@ struct ChromeChecks {
     // MARK: - Extension Settings
     
     private static func checkExtensionBlocklist(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let extensions = prefs["extensions"] as? [String: Any],
-              let blocklist = extensions["blocklist"] as? [String] else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !blocklist.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Extension installation blocklist is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Extension installation blocklist is empty.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review effective Chrome extension installation block rules and their exceptions against the organization's approved policy. Nonempty local extension preference lists do not establish policy enforcement or approval. Supported effective ExtensionSettings and relevant policy precedence were not collected; no extension setting was changed.")
     }
-    
+
     private static func checkAllowedExtensions(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let extensions = prefs["extensions"] as? [String: Any],
-              let allowlist = extensions["allowed_types"] as? [String] else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !allowlist.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Allowed Chrome Web Store extensions list is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Allowed Chrome Web Store extensions list is empty.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review effective Chrome approved extension IDs and installation sources against the organization's approved policy. Nonempty local extension preference lists do not establish policy enforcement or approval. Supported effective ExtensionSettings and relevant policy precedence were not collected; no extension setting was changed.")
     }
-    
+
     private static func checkExtensionFileAccess(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let extensions = prefs["extensions"] as? [String: Any],
-              let fileAccess = extensions["file_access"] as? [String: Bool] else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !fileAccess.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Extension file URL access control is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Extension file URL access control is empty.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review effective Chrome extension file-URL permissions against the organization's approved policy. Nonempty local extension preference lists do not establish policy enforcement or approval. Supported effective ExtensionSettings and relevant policy precedence were not collected; no extension setting was changed.")
     }
-    
+
     private static func checkExtensionScriptInjection(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let extensions = prefs["extensions"] as? [String: Any],
-              let scriptInjection = extensions["script_injection"] as? [String: Bool] else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !scriptInjection.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Extension script injection control is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Extension script injection control is empty.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review effective Chrome extension host permissions and script-injection restrictions against the organization's approved policy. Nonempty local extension preference lists do not establish policy enforcement or approval. Supported effective ExtensionSettings and relevant policy precedence were not collected; no extension setting was changed.")
     }
-    
+
     // MARK: - Password Settings
     
     private static func checkPasswordSavingDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
