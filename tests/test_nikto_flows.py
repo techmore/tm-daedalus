@@ -3,7 +3,7 @@ import json
 from unittest.mock import patch
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import Organization, Membership
+from daedalus.models import Organization, Membership, ExternalCheckRun
 import test_active_website_flows as fixtures
 
 
@@ -49,6 +49,47 @@ class NiktoFlowsTests(unittest.TestCase):
             completed = server.process_next_website_audit()
         collector.assert_not_called()
         self.assertEqual(completed[1]['status'], 'failed')
+
+    def test_queue_refuses_collection_after_domain_verification_is_lost(self):
+        response = self.client.post('/api/external-checks/web-nikto/run')
+        self.assertEqual(response.status_code, 202)
+        org_id,_=self.context()
+        with self.session_factory() as db:
+            db.get(Organization,org_id).verification_status='pending'
+            db.commit()
+        with patch.object(server,'run_nikto_check') as collector:
+            completed=server.process_next_website_audit()
+        collector.assert_not_called()
+        self.assertEqual(completed[1]['status'],'failed')
+        self.assertEqual(completed[1]['id'],response.json()['id'])
+
+    def test_queue_refuses_collection_if_workspace_domain_changed(self):
+        response = self.client.post('/api/external-checks/web-nikto/run')
+        self.assertEqual(response.status_code,202)
+        org_id,_=self.context()
+        with self.session_factory() as db:
+            db.get(Organization,org_id).domain='different.example'
+            db.commit()
+        with patch.object(server,'run_nikto_check') as collector:
+            completed=server.process_next_website_audit()
+        collector.assert_not_called()
+        self.assertEqual(completed[1]['status'],'failed')
+        self.assertEqual(completed[1]['domain'],'cybersecuritypilot.org')
+
+    def test_queue_capacity_rejects_submission_without_creating_a_run(self):
+        org_id,user_id=self.context()
+        with self.session_factory() as db:
+            for _ in range(25):
+                db.add(ExternalCheckRun(organization_id=org_id,check_type='web-nikto',
+                    domain='cybersecuritypilot.org',status='queued',trigger_source='manual',
+                    triggered_by_user_id=user_id,started_at=server.utcnow(),change_count=0))
+            db.commit()
+        with patch.object(server,'run_nikto_check') as collector:
+            response=self.client.post('/api/external-checks/web-nikto/run')
+        self.assertEqual(response.status_code,429)
+        collector.assert_not_called()
+        with self.session_factory() as db:
+            self.assertEqual(len(db.scalars(select(ExternalCheckRun)).all()),25)
 
     def test_queued_pdf_does_not_describe_collection_as_started(self):
         from daedalus import reports

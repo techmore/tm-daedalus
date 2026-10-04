@@ -1,5 +1,12 @@
 # Daedalus project report
 
+## October 4, 2026 — production queue submission and authorization checks
+
+Source **99ec2bb9efbeb410cb75961c20d76fb8cb961089** is deployed to Incus with internal/public health checks passed and a verified off-host backup. Actual owned-domain audit **51** returned HTTP **202** with status **queued** in **0.079 seconds**, then its saved history reported **running**. Completion remains pending; no repeated submission or restart was made. Private receipt: /data/codex-nikto-queue-validation-20261004.json.
+
+Additional fixtures confirm collection is refused when domain verification is lost or the workspace domain changes after enqueue, preserving the original requested domain and terminal failed attempt. A full 25-job queue rejects submission with HTTP 429 and creates no additional row. These complement the existing role-revocation, duplicate, queued-recovery and single-claim checks. The full project remains active, with production terminal audit validation and earlier requirements still open.
+
+
 ## October 4, 2026 — persisted website audit queue
 
 Nikto submissions now save a queued ExternalCheckRun and return HTTP 202 before collection. A dedicated server worker atomically claims saved jobs in order, rechecks the requester’s current approved admin role, domain identity and ownership/override authorization, then stores the result and publishes its update. Enqueue uses SQLite write serialization, rejects duplicate queued/running workspace audits, and bounds the global pending queue to 25. Queued rows survive startup recovery; running rows interrupted by process loss become failed with a persistent workspace notice. Interrupted active scans are not automatically repeated.
