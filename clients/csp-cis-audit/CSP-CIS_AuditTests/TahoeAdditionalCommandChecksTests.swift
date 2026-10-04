@@ -13,6 +13,38 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func sharingServicesRequireExplicitMatchingOverride() {
+        let check = CISCheck(id: "sharing", category: "macos", description: "Sharing")
+        func status(_ output: String, exitCode: Int32 = 0) -> String {
+            MacOSNetworkChecks.checkFileSharingDisabled(check: check) { path, arguments in
+                #expect(path == "/bin/launchctl"); #expect(arguments == ["print-disabled", "system"])
+                return .init(output: output, exitCode: exitCode)
+            }.status
+        }
+        #expect(status("disabled services = {\n\"com.apple.smbd\" => disabled\n}") == "pass")
+        #expect(status("disabled services = {\n\"com.apple.smbd\" => enabled\n}") == "fail")
+        for output in ["", "disabled services = {}", "disabled services = {\n\"other\" => disabled\n}", "disabled services = {\n\"com.apple.smbd\" => disabled\n\"com.apple.smbd\" => enabled\n}"] {
+            #expect(status(output) == "manual")
+        }
+        #expect(status("disabled services = {\n\"com.apple.smbd\" => disabled\n}", exitCode: 1) == "manual")
+        #expect(MacOSNetworkChecks.checkBluetoothSharingDisabled(check: check).status == "manual")
+        #expect(MacOSNetworkChecks.checkContentCachingDisabled(check: check).status == "manual")
+    }
+
+    @Test func sharingConfigurationRequiresUniqueSuccessfulEvidence() {
+        let check = CISCheck(id: "sharing", category: "macos", description: "Sharing")
+        #expect(MacOSNetworkChecks.checkRemoteManagementDisabled(check: check, command: { _, _ in .init(output: "RemoteDesktopEnabled = 0;") }).status == "pass")
+        #expect(MacOSNetworkChecks.checkRemoteManagementDisabled(check: check, command: { _, _ in .init(output: "RemoteDesktopEnabled = 1;") }).status == "fail")
+        #expect(MacOSNetworkChecks.checkRemoteManagementDisabled(check: check, command: { _, _ in .init(output: "") }).status == "manual")
+        #expect(MacOSNetworkChecks.checkPrinterSharingDisabled(check: check, command: { _, _ in .init(output: "_share_printers=0") }).status == "pass")
+        #expect(MacOSNetworkChecks.checkPrinterSharingDisabled(check: check, command: { _, _ in .init(output: "_share_printers=1") }).status == "fail")
+        #expect(MacOSNetworkChecks.checkPrinterSharingDisabled(check: check, command: { _, _ in .init(output: "_share_printers=0", exitCode: 1) }).status == "manual")
+        #expect(MacOSNetworkChecks.checkInternetSharingDisabled(check: check, command: { _, _ in .init(output: "") }).status == "manual")
+        #expect(MacOSNetworkChecks.checkMediaSharingDisabled(check: check, command: { _, _ in .init(output: "0", error: "failed") }).status == "manual")
+        #expect(MacOSNetworkChecks.checkAirPlayReceiverDisabled(check: check, command: { _, _ in .init(output: "0") }).status == "pass")
+        #expect(MacOSNetworkChecks.checkAirDropDisabled(check: check, command: { _, _ in .init(output: "1") }).status == "pass")
+    }
+
     @Test func legacyNetworkStatusRequiresExactSuccessfulResponse() {
         let check = CISCheck(id: "network", category: "macos", description: "Network")
         let collectors: [(String, [String], String, String, (CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult)] = [
