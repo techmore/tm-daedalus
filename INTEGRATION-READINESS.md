@@ -506,3 +506,8 @@ Source 2cc7878 deployed with health/off-host backup checks passed; full suite 51
 ### 2026-10-04 — Vendor review race and stale-view checks
 
 A forced two-client flush race confirms identical request UUIDs produce one append-only review and one atomic audit entry, with both clients receiving the same review ID. Audit metadata now includes request_id for unambiguous retry correlation. The dashboard clears prior decision/history rows when no inventory context exists and replaces a failed-load message after recovery. Existing draft protection and literal rendering remain tested. These are fixture/renderer checks; browser visual review remains pending.
+
+
+### 2026-10-04 — Vendor history pagination and older current rationale
+
+A 102-entry fixture confirms two history pages contain every unique entry once, while latest decisions retain an origin whose current decision predates the first history page. Frozen snapshots retain both latest decisions and disclose the 100-history-entry limit. PDF rendering now includes full rationale for current decisions outside that recent-history window, avoiding silent omission. A separate two-page long-rationale fixture was rendered and visually reviewed without clipping or overlap. Full suite: 515 tests and 104 subtests. These are fixture checks; production has not been populated with artificial bulk history.

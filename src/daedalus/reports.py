@@ -440,6 +440,14 @@ def _append_website(story: list[Any], check: dict[str, Any], styles: dict[str, P
                 rows.append([_paragraph(host, styles["cell"]), _paragraph(labels.get(review.get("status"), "Unknown"), styles["cell"]), _paragraph(review.get("reviewer") or "Former member", styles["cell"]), _paragraph(_time_text(review.get("created_at")), styles["cell"])])
             story.append(_table(rows, [1.9 * inch, 1.0 * inch, 1.5 * inch, 2.1 * inch]))
         history = reviews.get("history") or []
+        history_ids = {review.get("id") for review in history}
+        older_current = [review for review in latest if review.get("id") not in history_ids]
+        if older_current:
+            story.append(Paragraph("Current decisions outside recent history", styles["subsection"]))
+            for review in older_current:
+                origin = review.get("origin") or {}
+                story.append(_paragraph(f"Review #{review.get('id')} - {origin.get('host', 'Unknown')} - {_time_text(review.get('created_at'))}", styles["small"]))
+                story.append(_paragraph(review.get("note") or "No rationale recorded", styles["body"]))
         if history:
             story.append(Paragraph("Decision history and rationale", styles["subsection"]))
             labels = {"reviewed": "Reviewed", "needs_action": "Needs action", "monitor": "Monitor"}

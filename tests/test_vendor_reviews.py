@@ -121,3 +121,35 @@ class VendorReviewTests(unittest.TestCase):
                 self.assertEqual(audit[0].details['request_id'],payload['request_id'])
         finally:
             for client in clients:client.close()
+
+    def test_paginated_history_keeps_older_current_decisions_and_frozen_rationale(self):
+        run=self.inventory();org,user=self.context();now=server.utcnow()
+        with self.session_factory() as db:
+            saved=db.get(ExternalCheckRun,run)
+            saved.snapshot={'external_resources':[{'host':'old.example','scheme':'https','port':None},{'host':'active.example','scheme':'https','port':None}]}
+            for index in range(102):
+                resource=0 if index==0 else 1
+                db.add(VendorReview(organization_id=org,run_id=run,resource_index=resource,request_id=str(uuid4()),actor_user_id=user,origin={'host':'old.example' if resource==0 else 'active.example','scheme':'https','port':None},status='needs_action' if resource==0 else 'monitor',note='Old current rationale remains essential.' if resource==0 else f'Revision {index} rationale.',created_at=now))
+            db.commit()
+        first=self.client.get('/api/vendor-reviews',params={'run_id':run}).json()
+        self.assertEqual(len(first['reviews']),2)
+        self.assertEqual(len(first['history']),100)
+        self.assertTrue(first['history_has_more'])
+        older=self.client.get('/api/vendor-reviews',params={'run_id':run,'before':first['history_next_before']}).json()
+        self.assertEqual(len(older['history']),2)
+        self.assertFalse(older['history_has_more'])
+        self.assertEqual(older['reviews'],first['reviews'])
+        ids=[row['id'] for row in first['history']+older['history']]
+        self.assertEqual(len(set(ids)),102)
+        with self.session_factory() as db:
+            frozen=server.capture_external_report_snapshot(db,db.get(Organization,org),db.get(User,user))
+        reviews=frozen['checks']['web']['vendor_reviews']
+        self.assertTrue(reviews['history_truncated'])
+        self.assertEqual(len(reviews['history']),100)
+        self.assertEqual(len(reviews['latest']),2)
+        from daedalus import reports
+        with patch.object(reports,'_paragraph',wraps=reports._paragraph) as paragraphs:
+            pdf=reports.build_external_posture_pdf(frozen)
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        values=[str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertIn('Old current rationale remains essential.',values)
