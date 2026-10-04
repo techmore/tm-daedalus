@@ -1,5 +1,17 @@
 # Integration readiness
 
+## October 4, 2026 — live rebuilt-client periodic check-in validation
+
+Production remains on release 075, application commit **f7536e87ae9548b8aa753d4e46d584feca69614c**. Rebuilt the credential-free, locally ad-hoc signed Mac demo package and launched its real menu-bar executable with a temporary exclusive 0600 config and the existing endpoint identity. Selected the published macOS 26 profile on this macOS **27.0.1** host. Production recorded actual check-ins at **06:46:14.200912 UTC** and **06:51:44.180219 UTC**, about 330 seconds apart, within the five-minute timer's 30-second allowance. The two pre-existing report responses remained byte-equivalent as parsed JSON; no new report/score was uploaded. Console output was buffered/empty, so no observed profile-skip log claim is made.
+
+Stopped the client (SIGTERM, exit -15), removed the temporary private config, and stored the receipt privately at /data/codex-cis-heartbeat-live-20261004.json and locally under validation/cis-heartbeat-live-20261004. Client presence remains recent until the real 15-minute expiry; production overdue transition is not yet observed. This validates actual launch and periodic delivery, not continuous deployment, macOS 26 rule execution or trusted public distribution.
+
+Current release Python CI **37183579199**, managed Linux CI **37183579184**, and full Mac client CI **37183579192** all passed. The client log contains **69 passing case records**, zero failures, including unit/UI cases and the local-package workflow. Local signing capability inspection found one **Apple Development** identity and no **Developer ID Application** identity. Distribution signing/notarization remains unresolved.
+
+Independent direct DNS queries to both ns1.hover.com and ns2.hover.com returned authoritative SERVFAIL for www.cybersecuritypilot.org A, AAAA and CNAME. This confirms failure at the authoritative layer; its root configuration cause is unproven. Receipt: /data/codex-www-authoritative-dns-20261004.json. No DNS records were changed.
+
+Marketing source **0a0eab6e2172de8a747a51c5a321984cb82a8db2** replaces unimplemented email-enumeration and unsupported device-audit wording with DNS change history/alerts and versioned endpoint checks/history. All five public-site tests passed. Pages run **37184088374** and source Python CI **37184088369** passed. Actual public HTTPS returned 200 and confirmed both new feature descriptions and removal of the old claims; local receipt: validation/cis-heartbeat-live-20261004/public-marketing-validation.json. The full goal remains active with real Tahoe, trusted persistent client distribution, browser review, approved VLAN coverage and prior scope gaps open.
+
 ## October 4, 2026 — Release 075: independent CIS client presence
 
 Production application commit **f7536e87ae9548b8aa753d4e46d584feca69614c** is active and healthy. The 59-file archive SHA-256 is **8002ea74ce5839229ab31f27803b13e40e430e6d0ebec36ab210d0cde1179d9a**; verified off-host backup: daedalus-data-20261004T064228Z.tar.gz. The backend suite passed **459 tests and 96 subtests**; after the fleet-count query refinement, all **36 affected tests and five subtests** passed again. Mac build-for-testing passed; the two new request-builder XCTest cases passed with zero skips/failures, confirmed through xcresulttool. Current CI: Python 37183579199, CIS client 37183579192 and managed Linux 37183579184 are running.
