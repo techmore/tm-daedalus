@@ -1,5 +1,16 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 061 and actual CSP audit evidence
+
+Production application commit `ce7374760dbacd337590da16ffd90d2fa54daf07` is active and healthy. The 58-file release archive SHA-256 is `281ae2170695a1a8d8cae039370d891e9c394d426ed05eda02c4cb4894661412`. Deployment backed up current data off-host (`daedalus-data-20261004T042205Z.tar.gz`) and passed internal/public readiness checks. The source suite passed **427 tests and 90 subtests**. Python CI `37176679762` and real managed Linux scanner/recovery CI `37176679713` passed.
+
+A real ten-minute Nikto audit of the authorized CSP website completed as run **43**, under the named CSP-only Codex operator. It saved six observations, 23 scoped HTTPS tunnels, zero rejected proxy connections, no collection error, and an explicit incomplete-coverage warning. These observations are not six confirmed vulnerabilities; test exhaustion is unproven. History retains the actor and timestamps, with dated warning notice **7**. DNS/email run **44** saved 14 differences and five unknown lookups; website run **45** saved two page-content differences. Each has exactly one dated source-run notice.
+
+Actual PDF job **28** reached 100%, downloaded successfully (17,419 bytes), and all seven pages passed visual review. It includes DNS/email, HTTPS, vendors, fixed-path and Nikto evidence. Lookup-state differences are labeled recorded differences, and PDFs captured while an audit is running now show its start time and pending-results explanation. The generated report does not initiate another scan. Browser visual review of the dashboard remains pending; PDF review does not prove browser layout quality.
+
+The full project goal remains active. Real macOS 26 checks and trusted client distribution, multi-VLAN production coverage, broader authorized Meraki inventory, independent backup replication, and production recovery evidence remain open. Older checkpoints below retain their historical release and readiness claims.
+
+
 ## October 4, 2026 deployment checkpoint
 
 Release 058 adds per-user access keys for API authentication and dashboard sign-in. Keys are hashed, expire within 90 days, are revocable, and are bound to one workspace with live membership/role checks. A named Codex operator was explicitly provisioned only for CSP with a 30-day key; production bearer access, token login, secret-free key listing, and rejected workspace switching were validated. The source suite passed 423 tests and 90 subtests. Incus deployment and public readiness checks passed. Browser visual review remains pending.
