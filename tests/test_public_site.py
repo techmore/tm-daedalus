@@ -40,6 +40,15 @@ class PublicSiteTests(unittest.TestCase):
         self.assertNotIn("Domain email enumeration", home)
         self.assertNotIn("CIS v8 level 1, 2, and 3 device audits", home)
 
+    def test_product_overview_explains_current_evidence_and_endpoint_pilot_scope(self):
+        overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
+        self.assertIn("saved host and port observations", overview)
+        self.assertIn("human review decisions and rationale", overview)
+        self.assertIn("macOS 26 Tahoe profiles", overview)
+        self.assertIn("Unassessed checks stay visible", overview)
+        self.assertIn("Live Tahoe validation and trusted client distribution remain in progress", overview)
+        self.assertNotIn("ongoing alignment work for current macOS releases", overview)
+
     def test_existing_csp_school_resources_are_preserved(self):
         home = (SITE / "index.html").read_text(encoding="utf-8")
         legacy_directory = SITE / "Chrome_Moysle_googleadmin"
