@@ -456,3 +456,8 @@ Overview now distinguishes online scanners, confirmed scan-engine readiness, app
 ### 2026-10-04 — Website certificate overview
 
 Website overview shows saved certificate expiry independently of HTTP response and selected browser headers. Unknown/malformed/naive expiry timestamps, expired certificates, and expiry within 30 days require review; timestamps must identify a timezone. Labels explicitly refer to the saved certificate, alongside the saved assessment time. Queued checks use the active-attempt state while preserving previous evidence. Fixtures cover unknown, malformed, naive, expired, soon-expiring, and later-expiring timestamps.
+
+
+### 2026-10-04 — Real legacy Boolean collector validation
+
+A private ad hoc client built from production source 4506665 ran on macOS 27.0.1 and uploaded report 4 at approximately 09:30 UTC. Production saved 154 checks: 24 pass, 47 fail, 78 manual, 5 errors; 71 assessed (46.1%). Against report 3, exactly macos_2, macos_68, and macos_72 changed fail to manual; all other statuses were unchanged. API history retained three changes and one persistent CIS notification at 2026-10-04T09:30:20.174850Z. This is classification correction, not remediation or macOS 26 conformance. The owned client terminated and matching temporary configuration was removed. Private production receipt: /data/codex-cis-boolean-evidence-live-validation-20261004.json.
