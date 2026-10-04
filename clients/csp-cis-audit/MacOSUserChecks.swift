@@ -70,78 +70,33 @@ struct MacOSUserChecks {
     }
 
     // Check if Fast User Switching is disabled
-    static func checkFastUserSwitchingDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/.GlobalPreferences", "MultipleSessionEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (default is disabled)
-            return CheckResult(check: check, status: "pass", details: "Fast User Switching appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Fast User Switching is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Fast User Switching is ENABLED.")
-        }
+    static func checkFastUserSwitchingDisabled(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/.GlobalPreferences", key: "MultipleSessionEnabled", expected: false, command: command)
     }
     
     // Check if Show All Users on Login Screen is disabled
-    static func checkShowAllUsersDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.loginwindow", "SHOWFULLNAME"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Show All Users on Login Screen appears to be enabled (default).")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Show All Users on Login Screen is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Show All Users on Login Screen is ENABLED.")
-        }
+    static func checkShowAllUsersDisabled(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.loginwindow", key: "SHOWFULLNAME", expected: true, command: command)
     }
     
     // Check if Show password hints is disabled
-    static func checkPasswordHintsDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.loginwindow", "RetriesUntilHint"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Password hints appear to be enabled (default).")
+    static func checkPasswordHintsDisabled(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let evidence = command("/usr/bin/defaults", ["read", "/Library/Preferences/com.apple.loginwindow", "RetriesUntilHint"])
+        let value = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let attempts = Int(value), attempts >= 0, String(attempts) == value else {
+            return CheckResult.unavailablePreference(check: check,
+                detail: "An explicit supported password-hint retry count could not be read. Login-window behavior was not inferred.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "0" {
-            return CheckResult(check: check, status: "pass", details: "Password hints are disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password hints are ENABLED.")
-        }
+        return CheckResult(check: check, status: attempts == 0 ? "pass" : "fail",
+            details: "RetriesUntilHint explicitly reads " + String(attempts) + ". This check expects zero. Local preference evidence does not establish managed enforcement for every user.")
     }
     
     // Check if the screensaver is enabled and set to begin after 20 minutes or less

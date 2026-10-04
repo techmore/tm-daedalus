@@ -128,6 +128,8 @@ struct CSP_CIS_AuditTests {
     @Test func legacyMacOSBooleanCollectorsRequireSuccessfulCanonicalEvidence() {
         typealias Reader = (String, [String]) -> MacOSChecks.CommandEvidence
         let cases: [(String, String, Bool, (CISCheck, Reader) -> CheckResult)] = [
+            ("/Library/Preferences/.GlobalPreferences", "MultipleSessionEnabled", false, { check, reader in MacOSUserChecks.checkFastUserSwitchingDisabled(check: check, command: reader) }),
+            ("/Library/Preferences/com.apple.loginwindow", "SHOWFULLNAME", true, { check, reader in MacOSUserChecks.checkShowAllUsersDisabled(check: check, command: reader) }),
             ("/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticCheckEnabled", true, { check, reader in MacOSUpdateChecks.checkAutoUpdate(check: check, command: reader) }),
             ("/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticDownload", true, { check, reader in MacOSUpdateChecks.checkDownloadNewUpdates(check: check, command: reader) }),
             ("/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticallyInstallMacOSUpdates", true, { check, reader in MacOSUpdateChecks.checkInstallMacOSUpdates(check: check, command: reader) }),
@@ -155,6 +157,22 @@ struct CSP_CIS_AuditTests {
             #expect(evaluate(.init(output: expected ? "1\n" : "0\n")).status == "pass")
             #expect(evaluate(.init(output: expected ? "0" : "1")).status == "fail")
         }
+    }
+
+    @Test func legacyPasswordHintsRequireCanonicalSuccessfulIntegerEvidence() {
+        let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
+        func evaluate(_ evidence: MacOSChecks.CommandEvidence) -> String {
+            MacOSUserChecks.checkPasswordHintsDisabled(check: check) { path, arguments in
+                #expect(path == "/usr/bin/defaults")
+                #expect(arguments == ["read", "/Library/Preferences/com.apple.loginwindow", "RetriesUntilHint"])
+                return evidence
+            }.status
+        }
+        for evidence in [MacOSChecks.CommandEvidence(), .init(output: "-1"), .init(output: "00"), .init(output: "false"), .init(output: "9999999999999999999999999"), .init(output: "0", exitCode: 1), .init(output: "0", error: "denied"), .init(output: "0", unavailable: "timeout")] {
+            #expect(evaluate(evidence) == "manual")
+        }
+        #expect(evaluate(.init(output: "0\n")) == "pass")
+        #expect(evaluate(.init(output: "3")) == "fail")
     }
 
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
