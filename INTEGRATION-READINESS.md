@@ -496,3 +496,8 @@ Source f14337e is deployed on Incus; health checks and verified off-host backup 
 ### 2026-10-04 — Frozen vendor decisions in external reports
 
 External report snapshots now capture current decisions and up to 100 history entries for exactly the selected saved website inventory, including origin, status, rationale, reviewer label, and time. Later decisions or account-label changes do not rewrite a saved report snapshot; a newer inventory does not inherit earlier decisions. PDFs show decision summaries and full captured history rationales, explicitly marking human review as distinct from provider security assessment. Long rationales are normal paragraphs that can flow across pages rather than oversized table rows. Fixtures check snapshot immutability, exact inventory scope, long notes, reviewer attribution, and bounded-history disclosure. Production generation and all-page visual review remain pending.
+
+
+### 2026-10-04 — Production report 37 with frozen vendor history
+
+Source 2cc7878 deployed with health/off-host backup checks passed; full suite 513 tests and 104 subtests. Production job 37 was observed queued at 0% then completed at 100%. Its frozen snapshot captures inventory 54 and review 1. Actual download: 17,392 bytes, SHA256 c2d8b5c0769a9718063bac76717252b4f0f4c6d089225bc1fad460d6b158dac1. All seven pages were rendered and visually reviewed, including reviewer/time, the labeled workflow-validation rationale, and scope disclaimers. No clipping or overlap was observed. Private receipt /data/codex-vendor-review-pdf-validation-20261004.json now records the production review. Automated provider assessment and browser visual review remain open.
