@@ -157,6 +157,27 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.engine.dispose()
         self.temp_dir.cleanup()
 
+    def test_migrated_pdf_download_uses_current_workspace_storage(self):
+        with self.session_factory() as db:
+            org = db.scalar(select(Organization))
+            now = server.utcnow()
+            job = ReportJob(organization_id=org.id, report_type="external_posture", domain=org.domain,
+                status="completed", progress=100, stage="Completed", file_name="migration.pdf",
+                artifact_path="/old-machine/reports/1/migration.pdf", size_bytes=12,
+                report_snapshot={}, created_at=now, updated_at=now, completed_at=now)
+            db.add(job); db.commit(); report_id = job.id; org_id = org.id
+        directory = self.root / "reports" / str(org_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        artifact = directory / "migration.pdf"; artifact.write_bytes(b"%PDF-fixture")
+        response = self.client.get(f"/api/reports/{report_id}/download")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.content, b"%PDF-fixture")
+        artifact.unlink()
+        other = self.root / "reports" / str(org_id + 1)
+        other.mkdir(); (other / "migration.pdf").write_bytes(b"other-workspace")
+        artifact.symlink_to(other / "migration.pdf")
+        self.assertEqual(self.client.get(f"/api/reports/{report_id}/download").status_code, 404)
+
     def test_dashboard_route_supports_direct_reload_of_a_selected_tab(self):
         response = self.client.get("/dashboard")
 

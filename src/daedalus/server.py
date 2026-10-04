@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .report_storage import report_artifact
+
 import asyncio
 import hashlib
 import hmac
@@ -4927,12 +4929,9 @@ def download_report(report_id: int, request: Request, db: Session = Depends(get_
     if job.status != "completed" or not job.artifact_path:
         raise HTTPException(status_code=409, detail="Report PDF is not ready yet")
     try:
-        artifact = Path(job.artifact_path).resolve(strict=True)
-        reports_root = REPORTS_DIR.resolve()
-    except OSError as exc:
+        artifact = report_artifact(REPORTS_DIR, organization.id, job.file_name)
+    except (OSError, ValueError) as exc:
         raise HTTPException(status_code=404, detail="Report PDF is unavailable") from exc
-    if not artifact.is_relative_to(reports_root) or not artifact.is_file():
-        raise HTTPException(status_code=404, detail="Report PDF is unavailable")
     return FileResponse(
         artifact,
         media_type="application/pdf",
