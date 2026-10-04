@@ -175,6 +175,40 @@ struct CSP_CIS_AuditTests {
         #expect(evaluate(.init(output: "3")) == "fail")
     }
 
+    @Test func legacyScreensaverRequiresReadableSupportedValues() {
+        let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
+        for timeout in [true, false] {
+            func evaluate(_ evidence: MacOSChecks.CommandEvidence) -> String {
+                let reader: (String, [String]) -> MacOSChecks.CommandEvidence = { path, args in
+                    #expect(path == "/usr/bin/defaults")
+                    #expect(args == (timeout ? ["-currentHost", "read", "com.apple.screensaver", "idleTime"] : ["read", "com.apple.screensaver", "askForPasswordDelay"]))
+                    return evidence
+                }
+                return timeout ? MacOSUserChecks.checkScreensaverTimeout(check: check, command: reader).status : MacOSUserChecks.checkScreensaverGracePeriod(check: check, command: reader).status
+            }
+            for value in ["", "-1", "NaN", "inf", "00", "1e2", "true", "denied"] {
+                #expect(evaluate(.init(output: value)) == "manual")
+            }
+            for evidence in [MacOSChecks.CommandEvidence(output: "1", exitCode: 1), .init(output: "1", error: "denied"), .init(output: "1", unavailable: "timeout")] {
+                #expect(evaluate(evidence) == "manual")
+            }
+            #expect(evaluate(.init(output: "1\n")) == "pass")
+            #expect(evaluate(.init(output: timeout ? "1201" : "5.1")) == "fail")
+            #expect(evaluate(.init(output: "0")) == (timeout ? "fail" : "pass"))
+            #expect(evaluate(.init(output: timeout ? "1200" : "5.0")) == "pass")
+            if timeout { #expect(evaluate(.init(output: "1.5")) == "manual") }
+        }
+        for evidence in [MacOSChecks.CommandEvidence(), .init(output: "true"), .init(output: "1", exitCode: 1), .init(output: "1", error: "denied"), .init(output: "1", unavailable: "timeout")] {
+            #expect(MacOSUserChecks.checkScreensaverPasswordRequired(check: check, command: { _, _ in evidence }).status == "manual")
+        }
+        let passwordResult = MacOSUserChecks.checkScreensaverPasswordRequired(check: check, command: { _, args in
+            #expect(args == ["read", "com.apple.screensaver", "askForPassword"])
+            return .init(output: "1")
+        })
+        #expect(passwordResult.status == "pass")
+        #expect(MacOSUserChecks.checkScreensaverPasswordRequired(check: check, command: { _, _ in .init(output: "0") }).status == "fail")
+    }
+
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
         let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
         func flags(_ text: String?) -> String {

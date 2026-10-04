@@ -99,84 +99,46 @@ struct MacOSUserChecks {
             details: "RetriesUntilHint explicitly reads " + String(attempts) + ". This check expects zero. Local preference evidence does not establish managed enforcement for every user.")
     }
     
-    // Check if the screensaver is enabled and set to begin after 20 minutes or less
-    static func checkScreensaverTimeout(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["-currentHost", "read", "com.apple.screensaver", "idleTime"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Screensaver timeout setting not found.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if let idleTime = Int(output), idleTime <= 1200 { // 1200 seconds = 20 minutes
-            return CheckResult(check: check, status: "pass", details: "Screensaver is set to begin after \(idleTime/60) minutes.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Screensaver is NOT set to begin after 20 minutes or less.")
-        }
+    // Legacy profile thresholds are retained; unreadable settings remain unassessed.
+    static func checkScreensaverTimeout(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyScreensaverNumber(check: check, key: "idleTime", currentHost: true, integer: true, command: command) { $0 > 0 && $0 <= 1200 }
     }
-    
-    // Check if screensaver requires a password
-    static func checkScreensaverPasswordRequired(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.screensaver", "askForPassword"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Screensaver password requirement not found.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Screensaver requires a password.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Screensaver does NOT require a password.")
-        }
+
+    static func checkScreensaverPasswordRequired(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.screensaver", key: "askForPassword", expected: true, command: command)
     }
-    
-    // Check if password screensaver grace period is set to 5 seconds or less
-    static func checkScreensaverGracePeriod(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.screensaver", "askForPasswordDelay"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Screensaver password delay setting not found.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if let delay = Double(output), delay <= 5.0 {
-            return CheckResult(check: check, status: "pass", details: "Screensaver grace period is set to \(delay) seconds.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Screensaver grace period is NOT set to 5 seconds or less.")
-        }
+
+    static func checkScreensaverGracePeriod(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        legacyScreensaverNumber(check: check, key: "askForPasswordDelay", currentHost: false, integer: false, command: command) { $0 <= 5 }
     }
-    
+
+    private static func legacyScreensaverNumber(check: CISCheck, key: String,
+        currentHost: Bool, integer: Bool,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence,
+        compliant: (Double) -> Bool
+    ) -> CheckResult {
+        let arguments = (currentHost ? ["-currentHost"] : []) + ["read", "com.apple.screensaver", key]
+        let evidence = command("/usr/bin/defaults", arguments)
+        let value = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = integer ? "^(0|[1-9][0-9]*)$" : "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              value.range(of: pattern, options: .regularExpression) != nil,
+              let number = Double(value), number.isFinite, number >= 0,
+              !integer || Int(value) != nil else {
+            return CheckResult.unavailablePreference(check: check,
+                detail: "A supported explicit screensaver setting could not be read. Session-lock behavior was not inferred.")
+        }
+        return CheckResult(check: check, status: compliant(number) ? "pass" : "fail",
+            details: key + " explicitly reads " + value + " seconds. Local preference evidence does not establish effective session-lock behavior or managed enforcement for every user.")
+    }
+
     // Check if root account is disabled
     static func checkRootAccountDisabled(check: CISCheck) -> CheckResult {
         let process = Process()

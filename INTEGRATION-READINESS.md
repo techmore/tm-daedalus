@@ -521,3 +521,8 @@ DNS and Website now place collection controls in a collapsed Refresh assessment 
 ### 2026-10-04 — Production topic ordering release
 
 Source 7cad122 is active on Incus, with internal/public health checks and verified off-host backup daedalus-data-20261004T101051Z.tar.gz. Full suite: 515 tests and 104 subtests. An authenticated token-session request to /dashboard confirms DNS changes precede evidence, collection controls follow evidence, and CIS changes precede report detail. This confirms deployed markup, not rendered visual quality. Browser visual review and the full-project completion gates remain open.
+
+
+### 2026-10-04 — Legacy screensaver evidence correction
+
+Three legacy screensaver collectors now use the bounded reader. Password requirements require explicit successful Boolean evidence. Timer zero fails because it does not activate a screensaver; positive integral seconds must meet the retained legacy 1200-second threshold. Grace-period evidence accepts finite nonnegative decimal seconds and retains the legacy five-second threshold. Failed, missing, malformed, negative or timed-out reads are manual. Results explicitly limit claims to local preferences, not effective session-lock behavior or enforcement for every user. Native xcresult confirms 76 tests passed, zero failed/skipped, including boundary and unavailable-evidence fixtures. Initial test compilation exposed a nested Swift Testing macro; moving the collector call outside the assertion corrected the fixture. No live macOS 26 assessment or trusted public client distribution is claimed.
