@@ -1,0 +1,71 @@
+name: Test managed Linux scanner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/daedalus/**'
+      - 'pyproject.toml'
+      - 'requirements-production.txt'
+      - 'scripts/validate_scanner_local.py'
+      - '.github/workflows/linux-scanner-managed.yml'
+  pull_request:
+    paths:
+      - 'src/daedalus/**'
+      - 'pyproject.toml'
+      - 'requirements-production.txt'
+      - 'scripts/validate_scanner_local.py'
+      - '.github/workflows/linux-scanner-managed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-managed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  managed:
+    name: Fresh install, loopback scan, and portal restart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-venv nmap unzip dbus-user-session
+      - name: Validate with a disposable user and an isolated portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home --shell /bin/bash daedalusqa
+          qa_uid=$(id -u daedalusqa)
+          cleanup() {
+            sudo systemctl stop "user@${qa_uid}.service" || true
+            sudo loginctl disable-linger daedalusqa || true
+            sudo userdel --remove daedalusqa || true
+          }
+          trap cleanup EXIT
+          sudo mkdir /home/daedalusqa/project
+          git archive HEAD | sudo tar -x -C /home/daedalusqa/project
+          sudo chown -R daedalusqa:daedalusqa /home/daedalusqa/project
+          sudo loginctl enable-linger daedalusqa
+          sudo systemctl start "user@${qa_uid}.service"
+          sudo runuser -u daedalusqa -- python3 -m venv /home/daedalusqa/project/.venv
+          sudo runuser -u daedalusqa -- /home/daedalusqa/project/.venv/bin/pip install \
+            -r /home/daedalusqa/project/requirements-production.txt
+          sudo runuser -u daedalusqa -- /home/daedalusqa/project/.venv/bin/pip install \
+            --no-deps /home/daedalusqa/project
+          sudo runuser -u daedalusqa -- env \
+            XDG_CONFIG_HOME="/home/daedalusqa/.config" \
+            XDG_DATA_HOME="/home/daedalusqa/.local/share" \
+            XDG_RUNTIME_DIR="/run/user/${qa_uid}" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${qa_uid}/bus" \
+            /home/daedalusqa/project/.venv/bin/python \
+              /home/daedalusqa/project/scripts/validate_scanner_local.py \
+              --managed-linux --run-loopback \
+              --nmapui-python /home/daedalusqa/project/.venv/bin/python \
+              --receipt /home/daedalusqa/managed-scanner.json

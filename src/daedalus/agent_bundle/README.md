@@ -132,6 +132,21 @@ are refused. Only the two fixed Daedalus units are operated. The managed Linux
 workflow still needs an in-place upgrade path. Concurrent uninstall/restore
 commands are refused until the current lifecycle operation releases its lock.
 
+## Validating a managed Linux scanner
+
+The repository's opt-in `scripts/validate_scanner_local.py --managed-linux`
+mode uses a disposable, non-root Linux user with an active systemd user
+manager. It runs the shipped fresh installer against an isolated loopback
+portal, approves only `127.0.0.1/32`, executes real Nmap against one guarded
+listener port, checks saved results and realtime broadcasts, generates the
+scan PDF, and requests a managed restart through the portal. It verifies a
+new NmapUI PID, fresh portal heartbeat, and direct readiness before cleanup.
+Use this only in a disposable environment: it temporarily changes that
+user manager's PATH for the scan guard and removes its generated enrollment
+and scanner data afterward. It refuses an existing Daedalus installation.
+The `Test managed Linux scanner` workflow runs this validation on Ubuntu.
+This does not establish broader subnet coverage or production fleet scale.
+
 ## Foreground install on Linux
 
 Python 3.11 or newer, Nmap, and `unzip` are required. Start NmapUI and keep it

@@ -75,7 +75,7 @@ case "$(uname -s)" in
   Linux)
     DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
     APP_SUPPORT="$DATA_HOME/daedalus"
-    DATA_ROOT="$DATA_HOME/nmapui"
+    DATA_ROOT=${DAEDALUS_NMAPUI_DATA_ROOT:-"$DATA_HOME/nmapui"}
     reject_symlink "$HOME/.local"
     reject_symlink "$DATA_HOME"
     reject_symlink "$APP_SUPPORT"

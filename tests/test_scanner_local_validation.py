@@ -9,6 +9,27 @@ spec.loader.exec_module(validation)
 
 
 class ScannerLocalEvidenceTests(unittest.TestCase):
+    def test_managed_validation_refuses_root_or_non_linux_before_manager_operations(self):
+        import sys
+        from unittest.mock import patch
+        for platform, uid in [('darwin', 501), ('linux', 0)]:
+            with patch.object(validation.sys, 'platform', platform), patch.object(validation.os, 'getuid', return_value=uid), patch.object(validation.shutil, 'which', return_value='/usr/bin/nmap'), patch.object(validation.subprocess, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'disposable non-root Linux'):
+                    validation.validate(Path(sys.executable), Path('/unused-receipt'), managed_linux=True)
+                run.assert_not_called()
+
+    def test_managed_validation_refuses_existing_installation_without_running_services(self):
+        import sys
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            (home / '.config/daedalus').mkdir(parents=True)
+            with patch.object(validation.sys, 'platform', 'linux'), patch.object(validation.os, 'getuid', return_value=1001), patch.object(validation.Path, 'home', return_value=home), patch.object(validation.shutil, 'which', return_value='/usr/bin/nmap'), patch.object(validation.subprocess, 'run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'Existing Daedalus'):
+                    validation.validate(Path(sys.executable), home / 'receipt', managed_linux=True)
+                run.assert_not_called()
+
     def test_recovery_requires_exact_original_identity_and_single_side_effect(self):
         import copy
         pending = [{'client_event_id': 'event-1', 'occurred_at': '2026-09-29T10:00:00+00:00', 'source_job_id': 'run-one', 'source_job_type': 'scan', 'event_name': 'job_status'}]

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Opt-in real packaged scanner smoke; loopback only, no install or live workspace.
+"""Opt-in real packaged scanner smoke; loopback only, no live workspace.
+
+Managed mode installs real user services; use a disposable Linux user only.
 
 The test toolchain executes real Nmap with a single ephemeral listener port,
 no DNS/NSE/privilege escalation, and a 15-second host deadline. This validates
@@ -158,15 +160,31 @@ def validate_recovery_evidence(pending, history, run_id, invocations, listener_p
     return {'pending_events_recovered': len(pending), 'original_event_ids': [event['client_event_id'] for event in pending], 'original_occurred_at': [event['occurred_at'] for event in pending], 'source_job_id': run_id, 'deep_nmap_invocations': 1, 'event_identity_unchanged': True}
 
 
-def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True) -> dict:
+def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True, managed_linux: bool = False) -> dict:
     nmap = shutil.which("nmap")
     if not nmap:
         raise RuntimeError("nmap is unavailable on PATH")
     if not nmap_python.is_file():
         raise RuntimeError("Provide Python with shipped NmapUI runtime dependencies")
+    if managed_linux:
+        if not sys.platform.startswith('linux') or os.getuid() == 0 or interrupt_bridge or repeat_scan:
+            raise RuntimeError('Managed validation requires a disposable non-root Linux user and one uninterrupted scan.')
+        config_home = Path.home() / '.config'
+        data_home = Path.home() / '.local/share'
+        managed_config = config_home / 'daedalus'
+        managed_data = data_home / 'daedalus'
+        units = config_home / 'systemd/user'
+        for path in (managed_config, managed_data, units / 'daedalus-nmapui.service', units / 'daedalus-scanner-bridge.service'):
+            if path.exists() or path.is_symlink():
+                raise RuntimeError('Existing Daedalus installation found; refusing managed validation.')
+        manager_env = subprocess.run(['systemctl', '--user', 'show-environment'], check=True, capture_output=True, text=True, timeout=10).stdout
+        original_manager_path = next((line[5:] for line in manager_env.splitlines() if line.startswith('PATH=')), None)
+    managed_attempted = False
+    manager_path_changed = False
+    managed_proof = None
     processes = []
     live = []
-    with tempfile.TemporaryDirectory(prefix="daedalus-real-scanner-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="daedalus-real-scanner-", dir=Path.home() if managed_linux else None) as temporary:
         root = Path(temporary)
         root.chmod(0o700)
         portal_port, scanner_port = port(), port()
@@ -174,6 +192,29 @@ def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, i
         scanner = f"http://127.0.0.1:{scanner_port}"
         environment = {key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR", "LANG") if key in os.environ}
         environment.update(PYTHON_DOTENV_DISABLED="1", DAEDALUS_DATABASE_URL=f"sqlite:///{root / 'portal.db'}", DAEDALUS_DATA_DIR=str(root / "portal-data"), DAEDALUS_REPORTS_DIR=str(root / "reports"), DAEDALUS_SESSION_SECRET=secrets.token_urlsafe(48), DAEDALUS_ENV="development", DAEDALUS_DEMO_MODE="true", DAEDALUS_BASE_URL=portal, PYTHONPATH=str(REPO / "src"))
+        if managed_linux:
+            environment.update({key: os.environ[key] for key in ('XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS') if key in os.environ})
+            environment.update(XDG_CONFIG_HOME=str(config_home), XDG_DATA_HOME=str(data_home))
+        managed_cleaned = False
+        def cleanup_managed():
+            nonlocal managed_cleaned
+            if not managed_linux or managed_cleaned:
+                return
+            if managed_attempted and (managed_config / '.daedalus-scanner-services.json').exists():
+                cleanup = subprocess.run(['/bin/sh', str(kit / 'manage-service-linux.sh'), 'uninstall'], env=environment, capture_output=True, timeout=90)
+                if cleanup.returncode:
+                    raise RuntimeError('Managed cleanup failed; recovery files remain in the disposable user home.')
+            if any((units / name).exists() for name in ('daedalus-nmapui.service', 'daedalus-scanner-bridge.service')):
+                raise RuntimeError('Managed cleanup left a service descriptor; retained recovery data.')
+            if manager_path_changed:
+                argv = ['systemctl', '--user', 'unset-environment', 'PATH'] if original_manager_path is None else ['systemctl', '--user', 'set-environment', 'PATH=' + original_manager_path]
+                subprocess.run(argv, check=True, capture_output=True, timeout=10)
+            shutil.rmtree(managed_config, ignore_errors=True)
+            shutil.rmtree(managed_data, ignore_errors=True)
+            if managed_config.exists() or managed_data.exists():
+                raise RuntimeError('Disposable enrollment or scanner data cleanup is incomplete.')
+            managed_cleaned = True
+
         def launch(name, argv, env, cwd):
             log = (root / f"{name}.log").open("wb")
             process = subprocess.Popen(argv, env=env, cwd=cwd, stdout=log, stderr=subprocess.STDOUT)
@@ -229,37 +270,57 @@ sys.stderr.write(completed.stderr)
 raise SystemExit(completed.returncode)
 ''')
             wrapper.chmod(0o700)
-            data = root / "scanner-data"
-            data.mkdir()
+            data = managed_data / "nmapui-data" if managed_linux else root / "scanner-data"
+            data.mkdir(parents=True)
             (data / "settings.json").write_text(json.dumps({"schema_version": 1, "scan_rules": {"scan_only_mode": True, "skip_host_discovery": True, "excluded_targets": [], "max_scan_minutes": 1}, "reports": {"save_to_desktop": False}}))
             scanner_env = dict(environment, PYTHONPATH=str(source), NMAPUI_HOST="127.0.0.1", NMAPUI_PORT=str(scanner_port), NMAPUI_DATA_DIR=str(data), NMAPUI_LOG_DIR=str(root / "scanner-logs"), NMAPUI_SKIP_LEGACY_MIGRATION="1", NMAPUI_STARTUP_TRACEROUTE="false", NMAPUI_ALLOW_UNSAFE_WERKZEUG="true", NMAPUI_ENABLE_UPDATE_CHECK="false", NMAPUI_ENABLE_VULNERS="false", NMAPUI_TRUST_LOCAL_UI="false", NMAPUI_USERNAME="isolated-fixture", NMAPUI_PASSWORD=secrets.token_urlsafe(40), PATH=str(guard_dir)+os.pathsep+environment.get("PATH", ""))
             launch("portal", [sys.executable, "-m", "uvicorn", "daedalus.server:app", "--host", "127.0.0.1", "--port", str(portal_port)], environment, root)
-            launch("nmapui", [str(nmap_python.absolute()), str(source / "app.py")], scanner_env, source)
+            if not managed_linux:
+                launch("nmapui", [str(nmap_python.absolute()), str(source / "app.py")], scanner_env, source)
             with httpx.Client(base_url=portal, timeout=10, follow_redirects=True) as client:
                 wait_for(lambda: client.get("/healthz").status_code == 200)
                 client.post("/dev/login").raise_for_status()
-                wait_for(lambda: httpx.get(scanner + "/api/health/ready", auth=(scanner_env["NMAPUI_USERNAME"], scanner_env["NMAPUI_PASSWORD"]), timeout=2).json().get("ready"))
+                if not managed_linux:
+                    wait_for(lambda: httpx.get(scanner + "/api/health/ready", auth=(scanner_env["NMAPUI_USERNAME"], scanner_env["NMAPUI_PASSWORD"]), timeout=2).json().get("ready"))
                 code = client.post("/api/enrollment-tokens").json()["code"]
-                enrollment = client.post("/api/agents/enroll", json={"code": code, "name": "Isolated real loopback scanner"})
-                enrollment.raise_for_status()
-                config = dict(enrollment.json(), server=portal)
-                if interrupt_bridge:
-                    transport = FixtureHTTPServer(('127.0.0.1', 0), BridgeTransport)
-                    transport.portal = portal
-                    transport.uploads_allowed = threading.Event()
-                    threading.Thread(target=transport.serve_forever, daemon=True).start()
-                    config['server'] = f'http://127.0.0.1:{transport.server_address[1]}'
-                secret_file = root / "bridge-credentials.json"
-                secret_file.write_text(json.dumps(config))
-                secret_file.chmod(0o600)
-                bridge_env = dict(scanner_env, PYTHONPATH=str(kit / "src"))
-                bridge_code = "import json,pathlib,sys;from daedalus.agent import NmapUIBridge;NmapUIBridge(json.loads(pathlib.Path(sys.argv[1]).read_text()),sys.argv[2],spool_dir=pathlib.Path(sys.argv[3])).run()"
-                bridge_argv = [sys.executable, "-c", bridge_code, str(secret_file), scanner, str(root / "spool")]
-                bridge_process = launch("bridge", bridge_argv, bridge_env, root)
+                if managed_linux:
+                    # The user manager inherits the guard only for this disposable validation.
+                    subprocess.run(['systemctl', '--user', 'set-environment', 'PATH=' + scanner_env['PATH']], check=True, capture_output=True, timeout=10)
+                    manager_path_changed = True
+                    install_env = dict(scanner_env, PYTHON_BIN=sys.executable, NMAPUI_PORT=str(scanner_port))
+                    managed_attempted = True
+                    install_log = root / 'managed-install.log'
+                    with install_log.open('wb') as log:
+                        installed = subprocess.run(['/bin/sh', str(kit / 'install-service-linux.sh'), portal, 'Isolated managed Linux scanner'],
+                            input=(code + '\n').encode(), env=install_env, cwd=kit, stdout=log, stderr=subprocess.STDOUT, timeout=900)
+                    if installed.returncode:
+                        raise RuntimeError('Managed Linux installer failed; private log retained until cleanup.')
+                    config = json.loads((managed_config / 'managed-agent.json').read_text())
+                    config['organization_id'] = client.get('/api/dashboard').json()['organization']['id']
+                    managed_proof = {'fresh_installer_completed': True, 'enrollment_config_mode': oct((managed_config / 'managed-agent.json').stat().st_mode & 0o777)}
+                else:
+                    enrollment = client.post("/api/agents/enroll", json={"code": code, "name": "Isolated real loopback scanner"})
+                    enrollment.raise_for_status()
+                    config = dict(enrollment.json(), server=portal)
+                    if interrupt_bridge:
+                        transport = FixtureHTTPServer(('127.0.0.1', 0), BridgeTransport)
+                        transport.portal = portal
+                        transport.uploads_allowed = threading.Event()
+                        threading.Thread(target=transport.serve_forever, daemon=True).start()
+                        config['server'] = f'http://127.0.0.1:{transport.server_address[1]}'
+                    secret_file = root / "bridge-credentials.json"
+                    secret_file.write_text(json.dumps(config))
+                    secret_file.chmod(0o600)
+                    bridge_env = dict(scanner_env, PYTHONPATH=str(kit / "src"))
+                    bridge_code = "import json,pathlib,sys;from daedalus.agent import NmapUIBridge;NmapUIBridge(json.loads(pathlib.Path(sys.argv[1]).read_text()),sys.argv[2],spool_dir=pathlib.Path(sys.argv[3])).run()"
+                    bridge_argv = [sys.executable, "-c", bridge_code, str(secret_file), scanner, str(root / "spool")]
+                    bridge_process = launch("bridge", bridge_argv, bridge_env, root)
                 agent_id = config["agent_id"]
                 def online():
                     return next((a for a in client.get("/api/dashboard").json()["agents"] if a["id"] == agent_id and a["status"] == "online" and a["nmapui_ready"] is True and a["command_protocol_version"] >= 2), None)
                 agent = wait_for(online)
+                approved_scope = client.put(f"/api/agents/{agent_id}/network-scope", json={'authorized_networks': ['127.0.0.1/32']})
+                approved_scope.raise_for_status()
                 # Observe real portal websocket broadcasts as well as persisted REST history.
                 import websocket
                 cookie = "; ".join(f"{key}={value}" for key, value in client.cookies.items())
@@ -399,15 +460,43 @@ raise SystemExit(completed.returncode)
                     if list((root / 'spool').glob('*.json')) or list((root / 'spool').rglob('*.rejected')) or list((root / 'spool').glob('commands-*/result-*.json')):
                         raise RuntimeError('Recovery queues did not drain cleanly')
                     recovery_proof.update(command_claim_unchanged=True, terminal_acknowledged=True, own_bridge_interruption='SIGKILL', source_process_restarted=False, pending_queues_drained=True, upload_hold='loopback transport shim returned 503', interruption_scope='owned bridge killed while source workflow awaited guarded real Nmap output')
-                receipt = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-packaged-loopback-scanner", "target": "127.0.0.1", "scanner_bundle_sha256": hashlib.sha256(bundled).hexdigest(), "source_tree_sha256": json.loads((source / "manifest.json").read_text())["source_tree_sha256"], "bridge_protocol": agent["command_protocol_version"], "product_skip_host_discovery": True, "per_scan_skip_host_discovery": skip_host_discovery, "command_acknowledgement_states": acknowledgements, "command_status": command["status"], "command_completed_at": command["completed_at"], "host_count": len(matched), "open_port_count": len(open_ports), "loopback_listener_port": listener_port, "observed_port_protocol": "tcp", "persisted_json_artifact_downloaded": bool(event.get("artifact_download_url")), "saved_event_names": sorted({e["event_name"] for e in history if e["agent_id"] == agent_id}), "realtime_messages": len(live), "realtime_types": sorted({str(m.get("type", "")) for m in live}), "nmap_invocations": [[Path(v).name if i == 0 else "<isolated-output>" if 'actual-scan' in v else v for i,v in enumerate(argv)] for argv in invocations], "nmap_xml_sha256": hashlib.sha256(xml).hexdigest(), "source_job_id": run_id, "grouped_run_status": run_detail["run"]["status"], "grouped_run_event_count": run_detail["run"]["event_count"], "pdf_scope": "explicit-run-snapshot", "pdf_status": report["status"], "pdf_bytes": len(pdf), "pdf_sha256": hashlib.sha256(pdf).hexdigest(), "limits": ["Single ephemeral loopback listener port; PATHguard executes real Nmap with bounded options", "No default scan coverage, service install, external targets, persistence soak, or production readiness claimed", "Ephemeral credentials/database/logs/spool removed; only sanitized receipt and PDF retained"]}
+                receipt = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "target": "127.0.0.1", "scanner_bundle_sha256": hashlib.sha256(bundled).hexdigest(), "source_tree_sha256": json.loads((source / "manifest.json").read_text())["source_tree_sha256"], "bridge_protocol": agent["command_protocol_version"], "product_skip_host_discovery": True, "per_scan_skip_host_discovery": skip_host_discovery, "command_acknowledgement_states": acknowledgements, "command_status": command["status"], "command_completed_at": command["completed_at"], "host_count": len(matched), "open_port_count": len(open_ports), "loopback_listener_port": listener_port, "observed_port_protocol": "tcp", "persisted_json_artifact_downloaded": bool(event.get("artifact_download_url")), "saved_event_names": sorted({e["event_name"] for e in history if e["agent_id"] == agent_id}), "realtime_messages": len(live), "realtime_types": sorted({str(m.get("type", "")) for m in live}), "nmap_invocations": [[Path(v).name if i == 0 else "<isolated-output>" if 'actual-scan' in v else v for i,v in enumerate(argv)] for argv in invocations], "nmap_xml_sha256": hashlib.sha256(xml).hexdigest(), "source_job_id": run_id, "grouped_run_status": run_detail["run"]["status"], "grouped_run_event_count": run_detail["run"]["event_count"], "pdf_scope": "explicit-run-snapshot", "pdf_status": report["status"], "pdf_bytes": len(pdf), "pdf_sha256": hashlib.sha256(pdf).hexdigest(), "limits": ["Single ephemeral loopback listener port; PATHguard executes real Nmap with bounded options", "No default scan coverage, service install, external targets, persistence soak, or production readiness claimed", "Ephemeral credentials/database/logs/spool removed; only sanitized receipt and PDF retained"]}
+                if managed_linux:
+                    def service_pid():
+                        return int(subprocess.run(['systemctl', '--user', 'show', '--property=MainPID', '--value', 'daedalus-nmapui.service'], check=True, capture_output=True, text=True, timeout=10).stdout.strip())
+                    old_pid = service_pid()
+                    restart = client.post(f"/api/agents/{agent_id}/commands", json={'action': 'restart_nmapui'})
+                    restart.raise_for_status()
+                    restart_id = restart.json()['id']
+                    def restarted():
+                        item = next(c for c in client.get(f"/api/agents/{agent_id}/commands").json()['commands'] if c['id'] == restart_id)
+                        return item if item['status'] in {'succeeded', 'failed', 'timed_out'} else None
+                    restart_result = wait_for(restarted, 90)
+                    if restart_result['status'] != 'succeeded':
+                        raise RuntimeError('Managed Linux remote restart failed.')
+                    created = restart_result['created_at']
+                    def online_after_restart():
+                        observed = online()
+                        return observed if observed and observed['last_seen_at'] > created else None
+                    wait_for(online_after_restart)
+                    wait_for(lambda: httpx.get(scanner + '/api/health/ready', auth=(scanner_env['NMAPUI_USERNAME'], scanner_env['NMAPUI_PASSWORD']), timeout=2).json().get('ready'))
+                    new_pid = service_pid()
+                    if old_pid <= 0 or new_pid <= 0 or old_pid == new_pid:
+                        raise RuntimeError('Remote restart did not produce a different live NmapUI process.')
+                    managed_proof.update(remote_restart_status='succeeded', nmapui_pid_changed=True, portal_readiness_recovered=True)
+                    receipt['managed_linux'] = managed_proof
+                    receipt['limits'][1] = 'No default scan coverage, external targets, persistence soak, or production readiness claimed'
                 receipt["repeated_scan_comparison"] = comparison_proof
                 receipt['bridge_interruption_recovery'] = recovery_proof
+                if managed_linux:
+                    cleanup_managed()
+                    receipt['managed_linux']['cleanup_completed'] = True
                 receipt_path.parent.mkdir(parents=True, exist_ok=True)
                 receipt_path.write_text(json.dumps(receipt, indent=2)+"\n")
                 receipt_path.with_suffix(".pdf").write_bytes(pdf)
                 return receipt
         except Exception as exc:
-            failure = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-packaged-loopback-scanner", "result": "incomplete", "error_type": type(exc).__name__, "target": "127.0.0.1", "realtime_messages": len(live), "own_processes": [{"name": log.name.rsplit("/", 1)[-1], "pid": process.pid, "exit_code_before_cleanup": process.poll()} for process, log in processes], "limits": ["No full scan success claimed; isolated temporary data/credentials removed after own-process cleanup"]}
+            failure = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "result": "incomplete", "error_type": type(exc).__name__, "target": "127.0.0.1", "realtime_messages": len(live), "own_processes": [{"name": log.name.rsplit("/", 1)[-1], "pid": process.pid, "exit_code_before_cleanup": process.poll()} for process, log in processes], "limits": ["No full scan success claimed; isolated temporary data/credentials removed after own-process cleanup"]}
             result_file = root / "nmap-results.jsonl"
             if result_file.exists(): failure["actual_nmap_results"] = [json.loads(line) for line in result_file.read_text().splitlines()]
             if (root / "portal.db").exists():
@@ -421,6 +510,11 @@ raise SystemExit(completed.returncode)
             receipt_path.write_text(json.dumps(failure, indent=2)+"\n")
             raise
         finally:
+            cleanup_failure = None
+            try:
+                cleanup_managed()
+            except Exception as exc:
+                cleanup_failure = exc
             for process, log in reversed(processes):
                 if process.poll() is None:
                     process.terminate()
@@ -429,6 +523,8 @@ raise SystemExit(completed.returncode)
                 log.close()
             if 'listener' in locals(): listener.shutdown(); listener.server_close()
             if 'transport' in locals(): transport.shutdown(); transport.server_close()
+            if cleanup_failure:
+                raise cleanup_failure
 
 
 def main():
@@ -439,9 +535,10 @@ def main():
     parser.add_argument("--repeat-scan", action="store_true", help="Repeat the bounded scan and validate distinct run IDs and comparison")
     parser.add_argument('--interrupt-bridge', action='store_true', help='Interrupt only the owned bridge during one in-flight loopback job, then validate durable recovery')
     parser.add_argument('--allow-host-discovery', action='store_true', help='Use normal host discovery for the loopback target instead of the default per-scan -Pn override')
+    parser.add_argument("--managed-linux", action="store_true", help="Run the real managed installer and portal restart as a disposable Linux user")
     args = parser.parse_args()
     if not args.run_loopback: parser.error("--run-loopback is required")
     if args.interrupt_bridge and args.repeat_scan: parser.error('Select either repeat comparison or bridge interruption for one bounded validation')
-    print(json.dumps(validate(args.nmapui_python, args.receipt, args.repeat_scan, args.interrupt_bridge, not args.allow_host_discovery), indent=2))
+    print(json.dumps(validate(args.nmapui_python, args.receipt, args.repeat_scan, args.interrupt_bridge, not args.allow_host_discovery, args.managed_linux), indent=2))
 
 if __name__ == "__main__": main()

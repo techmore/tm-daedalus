@@ -144,6 +144,8 @@ exit 0
         unit_dir = self.root/'config-home/systemd/user'
         units = [unit_dir/'daedalus-nmapui.service',unit_dir/'daedalus-scanner-bridge.service']
         self.assertTrue(config.is_file())
+        self.assertFalse((self.root / 'data-home/nmapui').exists())
+        self.assertTrue((self.root / 'data-home/daedalus/nmapui-data/logs').is_dir())
         self.assertEqual(config.stat().st_mode & 0o777, 0o600)
         self.assertTrue(all(unit.is_file() for unit in units))
         self.assertIn('NMAPUI_TRUST_LOCAL_UI="false"', units[0].read_text())
