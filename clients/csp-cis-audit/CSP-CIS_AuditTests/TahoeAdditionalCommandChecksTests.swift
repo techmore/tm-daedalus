@@ -59,6 +59,39 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(run(rule, .init(output: duplicate)) == "manual")
     }
 
+    @Test func systemPreferencesRequireCompleteTypedAdminAuthorizationPolicies() {
+        let rule = "system_settings_system_wide_preferences_configure"
+        let compliant: [String: Any] = ["shared": false, "group": "admin", "authenticate-user": true, "session-owner": false]
+        func plist(_ policy: [String: Any]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: policy, format: .xml, options: 0), encoding: .utf8)!
+        }
+        var calls = [String]()
+        let status = evaluate(rule) { executable, arguments in
+            #expect(executable == "/usr/bin/security")
+            #expect(Array(arguments.prefix(3)) == ["-q", "authorizationdb", "read"])
+            calls.append(arguments[3])
+            return .init(output: plist(compliant))
+        }
+        #expect(status == "pass")
+        #expect(calls == ["system.preferences", "system.preferences.energysaver", "system.preferences.network", "system.preferences.printing", "system.preferences.sharing", "system.preferences.softwareupdate", "system.preferences.startupdisk", "system.preferences.timemachine"])
+        for (key, value) in [("shared", true as Any), ("group", "staff" as Any), ("authenticate-user", false as Any), ("session-owner", true as Any)] {
+            var policy = compliant; policy[key] = value
+            #expect(run(rule, .init(output: plist(policy))) == "fail")
+        }
+        for key in compliant.keys {
+            var policy = compliant; policy.removeValue(forKey: key)
+            #expect(run(rule, .init(output: plist(policy))) == "manual")
+        }
+        var wrongType = compliant; wrongType["shared"] = 0
+        #expect(run(rule, .init(output: plist(wrongType))) == "manual")
+        #expect(run(rule, .init(output: plist(compliant), error: "denied")) == "manual")
+        #expect(run(rule, .init(output: plist(compliant), exitCode: 1)) == "manual")
+        #expect(run(rule, .init(output: plist(compliant), unavailable: "timeout")) == "manual")
+        #expect(run(rule, .init(output: "malformed")) == "manual")
+        let lastUnavailable = evaluate(rule) { _, args in args.last == "system.preferences.timemachine" ? .init(unavailable: "denied") : .init(output: plist(compliant)) }
+        #expect(lastUnavailable == "manual")
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -196,6 +229,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "system_settings_system_wide_preferences_configure": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.preferences"]),
             "os_unlock_active_user_session_disable": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.login.screensaver"]),
             "os_password_hint_remove": ("/usr/bin/dscl", [".", "-list", "/Users", "hint"]),
             "os_internal_apfs_volumes_encrypted": ("/usr/sbin/diskutil", ["list", "-plist", "internal"]),
@@ -220,7 +254,11 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(Set(commands.keys) == MacOSChecks.additionalMacOS26CommandRuleIDs)
         for (rule, expected) in commands {
             let status = evaluate(rule) { executable, arguments in
-                #expect(executable == expected.0 && arguments == expected.1)
+                if rule == "system_settings_system_wide_preferences_configure" {
+                    #expect(executable == "/usr/bin/security")
+                    #expect(Array(arguments.prefix(3)) == ["-q", "authorizationdb", "read"])
+                    #expect(arguments.count == 4 && arguments[3].hasPrefix("system.preferences"))
+                } else { #expect(executable == expected.0 && arguments == expected.1) }
                 return .init(unavailable: "Fixture deliberately denies access")
             }
             #expect(status == "manual")

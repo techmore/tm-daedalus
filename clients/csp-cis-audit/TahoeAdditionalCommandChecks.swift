@@ -7,7 +7,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -54,6 +54,30 @@ extension MacOSChecks {
              "os_safari_show_status_bar_enabled",
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
+
+        case "system_settings_system_wide_preferences_configure":
+            let rights = ["system.preferences", "system.preferences.energysaver", "system.preferences.network", "system.preferences.printing", "system.preferences.sharing", "system.preferences.softwareupdate", "system.preferences.startupdisk", "system.preferences.timemachine"]
+            let keys = ["shared", "group", "authenticate-user", "session-owner"]
+            let deadline = Date().addingTimeInterval(6)
+            var unavailable = 0
+            var mismatches = 0
+            for (index, right) in rights.enumerated() {
+                guard Date() < deadline else { unavailable += rights.count - index; break }
+                let evidence = command("/usr/bin/security", ["-q", "authorizationdb", "read", right])
+                guard usable(evidence), evidence.output.utf8.count <= 65536,
+                      !evidence.output.contains("&#"),
+                      keys.allSatisfy({ evidence.output.components(separatedBy: "<key>" + $0 + "</key>").count == 2 }),
+                      let object = try? PropertyListSerialization.propertyList(from: Data(evidence.output.utf8), options: [], format: nil),
+                      let policy = object as? [String: Any],
+                      let shared = policy["shared"] as? NSNumber, CFGetTypeID(shared) == CFBooleanGetTypeID(),
+                      let authenticate = policy["authenticate-user"] as? NSNumber, CFGetTypeID(authenticate) == CFBooleanGetTypeID(),
+                      let owner = policy["session-owner"] as? NSNumber, CFGetTypeID(owner) == CFBooleanGetTypeID(),
+                      let group = policy["group"] as? String else { unavailable += 1; continue }
+                if shared.boolValue || !authenticate.boolValue || owner.boolValue || group != "admin" { mismatches += 1 }
+            }
+            if mismatches > 0 { return result("fail", "Explicit authorization policy mismatches were observed for " + String(mismatches) + " system-preference rights. Unavailable evidence count: " + String(unavailable) + ". No policy was changed.") }
+            if unavailable > 0 { return result("manual", "Complete typed authorization evidence for all eight system-preference rights was unavailable. No successful policy was inferred.") }
+            return result("pass", "All eight captured system-preference rights require authentication by the admin group with shared and session-owner authorization disabled. This is policy evidence, not a live interaction test.")
 
         case "os_unlock_active_user_session_disable":
             func rules(_ right: String) -> [String]? {
