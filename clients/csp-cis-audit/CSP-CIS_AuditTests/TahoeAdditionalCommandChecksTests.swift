@@ -13,6 +13,14 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyDeferralCountCannotEstablishDayBasedCompliance() {
+        let check = CISCheck(id: "deferrals", category: "macos", description: "Defer no more than 30 days")
+        let result = MacOSUpdateChecks.checkSoftwareUpdateDeferment(check: check)
+        #expect(result.status == "manual")
+        #expect(result.details.contains("MaxDeferrals preference does not establish"))
+        #expect(result.details.contains("no effective managed declaration was collected"))
+    }
+
     @Test func legacyPrivacyRequiresExplicitReadEvidence() {
         let check = CISCheck(id: "privacy", category: "macos", description: "Privacy")
         let collectors: [(String, String, (CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult)] = [

@@ -62,6 +62,9 @@ class CISMDMPackageTests(unittest.TestCase):
 
     def test_release_requires_notary_and_install_assessment(self):
         source = SCRIPT.read_text()
+        client = SCRIPT.parent.parent
+        self.assertFalse((client / "com.csp.cis-compliance.plist").exists())
+        self.assertNotIn("com.csp.cis-compliance.plist", (client / "CSP-CIS_Audit.xcodeproj/project.pbxproj").read_text())
         self.assertIn('BundleIsRelocatable false', source)
         self.assertIn('Installer and application signing teams must match', source)
         self.assertIn('notarytool submit', source)

@@ -30,32 +30,11 @@ struct MacOSUpdateChecks {
         MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.SoftwareUpdate", key: "ConfigDataInstall", expected: true, command: command)
     }
     
-    // Check if Software Update Deferment is 30 days or less
+    // The retired MaxDeferrals query does not establish a delay measured in days.
     static func checkSoftwareUpdateDeferment(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.SoftwareUpdate", "MaxDeferrals"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (no deferment)
-            return CheckResult(check: check, status: "pass", details: "Software Update Deferment appears to be not configured (default).")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if let deferrals = Int(output), deferrals <= 30 {
-            return CheckResult(check: check, status: "pass", details: "Software Update Deferment is set to \(deferrals) days.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Software Update Deferment is set to more than 30 days or is invalid.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review the effective software-update deferral policy and its delay in days. The legacy MaxDeferrals preference does not establish this 30-day criterion. On macOS 26 and later, review the declarative SoftwareUpdateSettings policy, including major, minor and system update delays; no effective managed declaration was collected by this client.")
     }
-    
+
     // Check if all Apple-provided software is current
     static func checkAppleSoftwareCurrent(check: CISCheck,
         command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand

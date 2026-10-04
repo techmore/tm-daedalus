@@ -25,7 +25,6 @@
 		B6C6712E2DE0C9D300862FB0 /* MenuBarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C6711D2DE0C9D300862FB0 /* MenuBarManager.swift */; };
 		B6C6712F2DE0C9D300862FB0 /* ChecklistLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C671102DE0C9D300862FB0 /* ChecklistLoader.swift */; };
 		B6C6713E2DE0CA3C00862FB0 /* checklist.yaml in Resources */ = {isa = PBXBuildFile; fileRef = B6C6713D2DE0CA3C00862FB0 /* checklist.yaml */; };
-		B6C671412DE0CA4800862FB0 /* com.csp.cis-compliance.plist in Resources */ = {isa = PBXBuildFile; fileRef = B6C6713F2DE0CA4800862FB0 /* com.csp.cis-compliance.plist */; };
 		B6C671442DE0CA4E00862FB0 /* openapi.yaml in Resources */ = {isa = PBXBuildFile; fileRef = B6C671432DE0CA4E00862FB0 /* openapi.yaml */; };
 		B6C671472DE0CA5400862FB0 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = B6C671452DE0CA5400862FB0 /* README.md */; };
 		B6C671482DE0CA5400862FB0 /* README_DISTRIBUTION.md in Resources */ = {isa = PBXBuildFile; fileRef = B6C671462DE0CA5400862FB0 /* README_DISTRIBUTION.md */; };
@@ -71,7 +70,6 @@
 		B6C6711E2DE0C9D300862FB0 /* Reporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reporter.swift; sourceTree = "<group>"; };
 		B6C6711F2DE0C9D300862FB0 /* SafariChecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariChecks.swift; sourceTree = "<group>"; };
 		B6C6713D2DE0CA3C00862FB0 /* checklist.yaml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = checklist.yaml; sourceTree = "<group>"; };
-		B6C6713F2DE0CA4800862FB0 /* com.csp.cis-compliance.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "com.csp.cis-compliance.plist"; sourceTree = "<group>"; };
 		B6C671432DE0CA4E00862FB0 /* openapi.yaml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = openapi.yaml; sourceTree = "<group>"; };
 		B6C671452DE0CA5400862FB0 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		B6C671462DE0CA5400862FB0 /* README_DISTRIBUTION.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README_DISTRIBUTION.md; sourceTree = "<group>"; };
@@ -146,7 +144,6 @@
 				B6C670F62DE0C92600862FB0 /* CSP-CIS_AuditTests */,
 				B6C671002DE0C92600862FB0 /* CSP-CIS_AuditUITests */,
 				B6C670E62DE0C92500862FB0 /* Products */,
-				B6C6713F2DE0CA4800862FB0 /* com.csp.cis-compliance.plist */,
 				B6C671432DE0CA4E00862FB0 /* openapi.yaml */,
 				B6C671452DE0CA5400862FB0 /* README.md */,
 				B6C671462DE0CA5400862FB0 /* README_DISTRIBUTION.md */,
@@ -291,7 +288,6 @@
 				B6C671472DE0CA5400862FB0 /* README.md in Resources */,
 				B6C671482DE0CA5400862FB0 /* README_DISTRIBUTION.md in Resources */,
 				B6C671442DE0CA4E00862FB0 /* openapi.yaml in Resources */,
-				B6C671412DE0CA4800862FB0 /* com.csp.cis-compliance.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
