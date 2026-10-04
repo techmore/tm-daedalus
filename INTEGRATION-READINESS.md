@@ -531,3 +531,8 @@ Three legacy screensaver collectors now use the bounded reader. Password require
 ### 2026-10-04 — Legacy root query evidence
 
 The legacy root collector now uses bounded directory reads and does not infer disabled root login from missing attributes, failed commands or unfamiliar authentication mechanisms. Both readable and unreadable mechanisms remain manual pending a supported platform-specific interpretation. This removes a false-pass path without claiming root-state assessment coverage. Native xcresult: 77 passed, zero failed/skipped. The separate pinned Tahoe rule remains distinct; actual Tahoe validation is still pending.
+
+
+### 2026-10-04 — Real revised legacy session audit
+
+Private source ab5b073 client build on macOS 27.0.1 uploaded production report 5: 154 checks, 23 pass, 41 fail, 85 manual, 5 errors; 14.94% pass rate and 41.56% assessment coverage. Production comparison retained seven transitions to manual (six formerly failed and one formerly passed); browser classifications remained unchanged. These are corrected evidence classifications, not device remediation or macOS 26 proof. The owned client process was stopped and its matching temporary configuration removed. Local ignored receipt: validation/cis-session-evidence-local-20261004/live-receipt.json. Public trusted distribution and supported root-state assessment remain unfinished.
