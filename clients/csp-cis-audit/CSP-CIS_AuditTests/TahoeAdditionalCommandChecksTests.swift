@@ -150,6 +150,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_internal_apfs_volumes_encrypted": ("/usr/sbin/diskutil", ["list", "-plist", "internal"]),
             "audit_auditd_enabled": ("/bin/launchctl", ["print", "system/com.apple.auditd"]),
             "os_anti_virus_installed": ("/usr/bin/xprotect", ["status"]),
             "os_guest_folder_removed": ("/bin/ls", ["-1", "/Users"]),
@@ -427,5 +428,73 @@ private struct AuditFixture {
         _ = chmod(auditFile.path, 0o600)
         _ = chmod(configuration.path, 0o600)
         try? FileManager.default.removeItem(at: root)
+    }
+}
+
+struct TahoeInternalAPFSEncryptionTests {
+    private let check = CISCheck(id: "os_internal_apfs_volumes_encrypted", category: "macos", description: "Fixture", ruleID: "os_internal_apfs_volumes_encrypted")
+
+    private func plist(_ value: [String: Any]) -> MacOSChecks.CommandEvidence {
+        let data = try! PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0)
+        return .init(output: String(decoding: data, as: UTF8.self))
+    }
+
+    private func evaluate(volumes: [[String: Any]], infos: [String: [String: Any]]) -> CheckResult {
+        MacOSChecks.checkInternalAPFSEncryption(check: check, command: { executable, arguments in
+            #expect(executable == "/usr/sbin/diskutil")
+            if arguments == ["list", "-plist", "internal"] {
+                return plist(["AllDisksAndPartitions": [["APFSVolumes": volumes]]])
+            }
+            #expect(arguments.count == 3 && arguments[0] == "info" && arguments[1] == "-plist")
+            guard let info = infos[arguments[2]] else { return .init(error: "Unavailable", exitCode: 1) }
+            return plist(info)
+        })
+    }
+
+    private func info(_ identifier: String, name: String = "Sensitive user volume", encryption: Any = true) -> [String: Any] {
+        ["DeviceIdentifier": identifier, "Internal": true, "FilesystemType": "apfs", "VolumeName": name, "FileVault": encryption]
+    }
+
+    @Test func internalVolumesRequireExplicitEncryptionAndDoNotDiscloseNames() {
+        let volumes = [["DeviceIdentifier": "disk3s1"], ["DeviceIdentifier": "disk3s2"]]
+        let pass = evaluate(volumes: volumes, infos: ["disk3s1": info("disk3s1"), "disk3s2": info("disk3s2", name: "Preboot", encryption: false)])
+        #expect(pass.status == "pass")
+        #expect(!pass.details.contains("Sensitive") && !pass.details.contains("disk3s1"))
+        #expect(evaluate(volumes: volumes, infos: ["disk3s1": info("disk3s1", encryption: false)]).status == "fail")
+        #expect(evaluate(volumes: volumes, infos: ["disk3s1": info("disk3s1")]).status == "manual")
+        #expect(evaluate(volumes: [["DeviceIdentifier": "disk3s1"]], infos: ["disk3s1": info("disk3s1", name: "Recovery", encryption: false)]).status == "manual")
+    }
+
+    @Test func malformedOrUnknownInternalVolumeEvidenceStaysManual() {
+        let volumes = [["DeviceIdentifier": "disk3s1"]]
+        let incompleteContainer = MacOSChecks.checkInternalAPFSEncryption(check: check, command: { _, _ in
+            plist(["AllDisksAndPartitions": [["Content": "Apple_APFS"]]])
+        })
+        #expect(incompleteContainer.status == "manual")
+        #expect(evaluate(volumes: [], infos: [:]).status == "manual")
+        #expect(evaluate(volumes: [["DeviceIdentifier": "disk3s1;touch /tmp/unsafe"]], infos: [:]).status == "manual")
+        #expect(evaluate(volumes: volumes + volumes, infos: [:]).status == "manual")
+        #expect(evaluate(volumes: volumes, infos: ["disk3s1": info("disk3s1", encryption: 1)]).status == "manual")
+        var wrong = info("disk3s1"); wrong["Internal"] = false
+        #expect(evaluate(volumes: volumes, infos: ["disk3s1": wrong]).status == "manual")
+        wrong = info("disk4s1")
+        #expect(evaluate(volumes: volumes, infos: ["disk3s1": wrong]).status == "manual")
+        wrong = info("disk3s1"); wrong.removeValue(forKey: "FileVault")
+        #expect(evaluate(volumes: volumes, infos: ["disk3s1": wrong]).status == "manual")
+        for evidence in [MacOSChecks.CommandEvidence(output: "not a plist"), .init(error: "Permission denied", exitCode: 1), .init(output: String(repeating: "x", count: 65537)), .init(unavailable: "timed_out")] {
+            let result = MacOSChecks.checkInternalAPFSEncryption(check: check, command: { _, _ in evidence })
+            #expect(result.status == "manual")
+        }
+    }
+
+    @Test func internalVolumeCollectionHasCountAndTimeBounds() {
+        let volumes = (1...33).map { ["DeviceIdentifier": "disk3s" + String($0)] }
+        #expect(evaluate(volumes: volumes, infos: [:]).status == "manual")
+        var ticks = [0.0, 6.0]; var calls = 0
+        let result = MacOSChecks.checkInternalAPFSEncryption(check: check, command: { _, _ in
+            calls += 1
+            return plist(["AllDisksAndPartitions": [["APFSVolumes": [["DeviceIdentifier": "disk3s1"]]]]])
+        }, clock: { ticks.removeFirst() })
+        #expect(result.status == "manual" && calls == 1)
     }
 }

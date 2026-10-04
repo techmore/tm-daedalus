@@ -1,12 +1,13 @@
 import Foundation
 import Darwin
+import CoreFoundation
 
 extension MacOSChecks {
     // Static, read-only checks derived from NIST mSCP Tahoe rev3, commit
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -50,6 +51,9 @@ extension MacOSChecks {
              "os_safari_show_status_bar_enabled",
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
+
+        case "os_internal_apfs_volumes_encrypted":
+            return checkInternalAPFSEncryption(check: check, command: command)
 
         case "audit_auditd_enabled":
             return checkAuditServiceEnabled(check: check, command: command)
@@ -199,6 +203,73 @@ extension MacOSChecks {
     }
 
     // Shared with the legacy CSP auditing check; never infer success from an error mentioning auditd.
+    static func checkInternalAPFSEncryption(
+        check: CISCheck,
+        command: (String, [String]) -> CommandEvidence,
+        clock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) -> CheckResult {
+        func result(_ status: String, _ detail: String) -> CheckResult {
+            CheckResult(check: check, status: status, details: "Pinned Tahoe internal APFS encryption check. " + detail)
+        }
+        func plist(_ evidence: CommandEvidence) -> [String: Any]? {
+            guard evidence.unavailable == nil, evidence.exitCode == 0,
+                  evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !evidence.output.isEmpty, evidence.output.utf8.count <= 65536,
+                  let value = try? PropertyListSerialization.propertyList(from: Data(evidence.output.utf8), options: [], format: nil) as? [String: Any] else { return nil }
+            return value
+        }
+        let started = clock()
+        guard let inventory = plist(command("/usr/sbin/diskutil", ["list", "-plist", "internal"])),
+              let disks = inventory["AllDisksAndPartitions"] as? [[String: Any]], !disks.isEmpty, disks.count <= 32 else {
+            return result("manual", "Internal disk inventory is missing, unsupported or unavailable.")
+        }
+        var identifiers: [String] = []
+        for disk in disks {
+            guard let rawVolumes = disk["APFSVolumes"] else {
+                if disk["Content"] as? String == "Apple_APFS" {
+                    return result("manual", "An internal APFS container did not include volume evidence.")
+                }
+                continue
+            }
+            guard let volumes = rawVolumes as? [[String: Any]], !volumes.isEmpty else {
+                return result("manual", "Internal APFS volume enumeration was incomplete.")
+            }
+            for volume in volumes {
+                guard let identifier = volume["DeviceIdentifier"] as? String,
+                      identifier.utf8.count <= 32,
+                      identifier.range(of: "^disk[0-9]+s[0-9]+$", options: .regularExpression) != nil,
+                      !identifiers.contains(identifier), identifiers.count < 32 else {
+                    return result("manual", "Volume identifiers were missing, duplicated, unsupported or exceeded the collection bound.")
+                }
+                identifiers.append(identifier)
+            }
+        }
+        guard !identifiers.isEmpty else { return result("manual", "No internal APFS volumes were captured; encryption was not inferred.") }
+        var eligible = 0
+        for identifier in identifiers {
+            guard clock() - started < 6 else { return result("manual", "Volume inspection reached its bounded collection deadline.") }
+            guard let info = plist(command("/usr/sbin/diskutil", ["info", "-plist", identifier])),
+                  info["DeviceIdentifier"] as? String == identifier,
+                  (info["FilesystemType"] as? String)?.lowercased() == "apfs",
+                  let internalFlag = info["Internal"] as? NSNumber,
+                  CFGetTypeID(internalFlag) == CFBooleanGetTypeID(), internalFlag.boolValue,
+                  let name = info["VolumeName"] as? String, !name.isEmpty else {
+                return result("manual", "An internal volume's identity or metadata could not be verified.")
+            }
+            // Same named exclusions as the pinned mSCP rule; names stay local.
+            if ["Preboot", "Recovery", "VM"].contains(name) { continue }
+            eligible += 1
+            guard let encrypted = info["FileVault"] as? NSNumber, CFGetTypeID(encrypted) == CFBooleanGetTypeID() else {
+                return result("manual", "An eligible internal volume did not report an explicit encryption state.")
+            }
+            if !encrypted.boolValue {
+                return result("fail", "An eligible internal APFS volume explicitly reports FileVault disabled; other volumes may remain unassessed.")
+            }
+        }
+        guard eligible > 0 else { return result("manual", "Only excluded infrastructure volumes were observed; user-storage coverage is unconfirmed.") }
+        return result("pass", "All " + String(eligible) + " captured eligible internal APFS volumes explicitly report FileVault enabled.")
+    }
+
     static func checkAuditServiceEnabled(
         check: CISCheck,
         command: (String, [String]) -> CommandEvidence = readCommand
