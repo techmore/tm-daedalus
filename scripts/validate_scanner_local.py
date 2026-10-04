@@ -497,6 +497,17 @@ raise SystemExit(completed.returncode)
                 return receipt
         except Exception as exc:
             failure = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "result": "incomplete", "error_type": type(exc).__name__, "target": "127.0.0.1", "realtime_messages": len(live), "own_processes": [{"name": log.name.rsplit("/", 1)[-1], "pid": process.pid, "exit_code_before_cleanup": process.poll()} for process, log in processes], "limits": ["No full scan success claimed; isolated temporary data/credentials removed after own-process cleanup"]}
+            if managed_linux:
+                service_diagnostics = {}
+                for name in ('daedalus-nmapui.service', 'daedalus-scanner-bridge.service'):
+                    state = subprocess.run(['systemctl', '--user', 'show', '--property=ActiveState,SubState,MainPID,ExecMainStatus', name], capture_output=True, text=True, timeout=10)
+                    journal = subprocess.run(['journalctl', '--user', '--unit=' + name, '--no-pager', '-n', '100'], capture_output=True, text=True, timeout=10)
+                    text = journal.stdout
+                    categories = [category for category in ('PermissionError', 'ModuleNotFoundError', 'FileNotFoundError', 'ConnectionError', 'ConnectError', 'ImportError', 'RuntimeError') if category in text]
+                    service_diagnostics[name] = {'manager_state': state.stdout.splitlines(), 'journal_error_categories': categories}
+                failure['managed_service_diagnostics'] = service_diagnostics
+                # Only fixed state fields and exception categories reach CI logs.
+                print(json.dumps({'managed_failure_diagnostics': service_diagnostics}), flush=True)
             result_file = root / "nmap-results.jsonl"
             if result_file.exists(): failure["actual_nmap_results"] = [json.loads(line) for line in result_file.read_text().splitlines()]
             if (root / "portal.db").exists():

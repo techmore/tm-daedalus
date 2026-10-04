@@ -44,6 +44,9 @@ jobs:
           sudo useradd --create-home --shell /bin/bash daedalusqa
           qa_uid=$(id -u daedalusqa)
           cleanup() {
+            if sudo test -f /home/daedalusqa/managed-scanner.json; then
+              sudo cat /home/daedalusqa/managed-scanner.json
+            fi
             sudo systemctl stop "user@${qa_uid}.service" || true
             sudo loginctl disable-linger daedalusqa || true
             sudo userdel --remove daedalusqa || true
