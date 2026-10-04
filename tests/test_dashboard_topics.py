@@ -19,6 +19,33 @@ class DashboardTopicTests(unittest.TestCase):
         self.assertNotIn('<details', evidence)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_deeper_audit_refresh_failure_is_visible_and_stale_errors_ignored(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  async function loadNikto('):source.index('  var niktoButton =')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(){this.children=['old'];this.textContent='';}replaceChildren(){this.children=[];this.textContent='';}}
+const ids=new Map(),document={getElementById(id){if(!ids.has(id))ids.set(id,new Node());return ids.get(id);}};
+const orgId=1,niktoHistory={hasMore:true,cursor:1,sequence:0};
+function text(node,value){node.textContent=value;}function appendEmpty(node,value){node.textContent=value;}
+let rejectRequest;let fetch=async()=>{throw new Error('Unavailable');};
+"""+helper+"""
+(async()=>{
+await loadNikto();assert.match(document.getElementById('web-nikto-outcome').textContent,/unavailable/);
+assert.equal(document.getElementById('web-audit-review').children.length,0);
+assert.match(document.getElementById('web-audit-review').textContent,/could not be refreshed/);
+document.getElementById('web-audit-review').textContent='Current saved review';
+await loadNikto(true);assert.equal(document.getElementById('web-audit-review').textContent,'Current saved review');
+fetch=()=>new Promise((resolve,reject)=>{rejectRequest=reject;});
+const pending=loadNikto();niktoHistory.sequence++;
+document.getElementById('web-nikto-outcome').textContent='Newer evidence';
+rejectRequest(new Error('Old request failed'));await pending;
+assert.equal(document.getElementById('web-nikto-outcome').textContent,'Newer evidence');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_exposure_review_preserves_latest_attempt_and_literal_evidence(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function renderExposureReview('):source.index('  function renderActiveExposure(')]

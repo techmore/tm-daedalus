@@ -3642,7 +3642,15 @@
       document.getElementById("older-nikto").classList.toggle("hidden", !niktoHistory.hasMore);
       var button = document.getElementById("run-nikto");
       if (button) button.disabled = !controlsEnabled || niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "queued" || run.status === "running"; });
-    } catch (error) { text(document.getElementById("web-nikto-feedback"), error.message); }
+    } catch (error) {
+      if (sequence !== niktoHistory.sequence) return;
+      if (!older) {
+        var review = document.getElementById("web-audit-review");
+        if (review) { review.replaceChildren(); appendEmpty(review, "Current deeper audit evidence could not be refreshed. Review is unavailable until the request succeeds."); }
+        text(document.getElementById("web-nikto-outcome"), "Deeper website audit: current evidence unavailable.");
+      }
+      text(document.getElementById("web-nikto-feedback"), error.message);
+    }
   }
   var niktoButton = document.getElementById("run-nikto");
   if (niktoButton) niktoButton.addEventListener("click", async function () {
