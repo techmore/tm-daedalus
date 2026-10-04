@@ -1,83 +1,84 @@
 import Foundation
 
 struct ChromeChecks {
-    static func run(check: CISCheck) -> CheckResult {
+    static func run(check: CISCheck, readPreferences: () -> [String: Any]? = { getChromePreferences() }) -> CheckResult {
+        let preferences = readPreferences()
         switch check.description {
         // Privacy and Security
         case let desc where desc.contains("Safe Browsing settings are enabled"):
-            return checkSafeBrowsing(check: check)
+            return checkSafeBrowsing(check: check, preferences: preferences)
         case let desc where desc.contains("Safe Browsing Protection Level"):
-            return checkSafeBrowsingProtectionLevel(check: check)
+            return checkSafeBrowsingProtectionLevel(check: check, preferences: preferences)
         case let desc where desc.contains("Allow Google Cast to connect to Cast devices"):
-            return checkGoogleCastDisabled(check: check)
+            return checkGoogleCastDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Allow queries to a Google time service"):
-            return checkGoogleTimeService(check: check)
+            return checkGoogleTimeService(check: check, preferences: preferences)
         case let desc where desc.contains("Allow the audio sandbox to run"):
-            return checkAudioSandbox(check: check)
+            return checkAudioSandbox(check: check, preferences: preferences)
         case let desc where desc.contains("Ask where to save each file before downloading"):
-            return checkAskWhereToSave(check: check)
+            return checkAskWhereToSave(check: check, preferences: preferences)
         case let desc where desc.contains("Continue running background apps when Chrome is closed"):
-            return checkBackgroundAppsDisabled(check: check)
+            return checkBackgroundAppsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Control SafeSites adult content filtering"):
-            return checkSafeSitesContentFiltering(check: check)
+            return checkSafeSitesContentFiltering(check: check, preferences: preferences)
         case let desc where desc.contains("Disable Certificate Transparency enforcement"):
-            return checkCertificateTransparency(check: check)
+            return checkCertificateTransparency(check: check, preferences: preferences)
         case let desc where desc.contains("Disable saving browser history"):
-            return checkSavingBrowserHistory(check: check)
+            return checkSavingBrowserHistory(check: check, preferences: preferences)
         case let desc where desc.contains("DNS interception checks enabled"):
-            return checkDNSInterceptionChecks(check: check)
+            return checkDNSInterceptionChecks(check: check, preferences: preferences)
         case let desc where desc.contains("Enable component updates in Google Chrome"):
-            return checkComponentUpdatesEnabled(check: check)
+            return checkComponentUpdatesEnabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable third party software injection blocking"):
-            return checkThirdPartySoftwareInjection(check: check)
+            return checkThirdPartySoftwareInjection(check: check, preferences: preferences)
             
         // Privacy Features
         case let desc where desc.contains("Import autofill form data from default browser"):
-            return checkImportAutofillDisabled(check: check)
+            return checkImportAutofillDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Import of homepage from default browser"):
-            return checkImportHomepageDisabled(check: check)
+            return checkImportHomepageDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Import search engines from default browser"):
-            return checkImportSearchEnginesDisabled(check: check)
+            return checkImportSearchEnginesDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable security warnings for command-line flags"):
-            return checkSecurityWarningsEnabled(check: check)
+            return checkSecurityWarningsEnabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable reporting of usage and crash-related data"):
-            return checkReportingDisabled(check: check)
+            return checkReportingDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable Safe Browsing for trusted sources"):
-            return checkSafeBrowsingTrustedSourcesDisabled(check: check)
+            return checkSafeBrowsingTrustedSourcesDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable search suggestions"):
-            return checkSearchSuggestionsDisabled(check: check)
+            return checkSearchSuggestionsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Set disk cache size"):
-            return checkDiskCacheSize(check: check)
+            return checkDiskCacheSize(check: check, preferences: preferences)
             
         // Cookie and Site Data Settings
         case let desc where desc.contains("Block third-party cookies"):
-            return checkBlockThirdPartyCookies(check: check)
+            return checkBlockThirdPartyCookies(check: check, preferences: preferences)
         case let desc where desc.contains("Clear cookies and site data when you quit Chrome"):
-            return checkClearCookiesOnQuit(check: check)
+            return checkClearCookiesOnQuit(check: check, preferences: preferences)
         case let desc where desc.contains("Default cookies setting"):
-            return checkDefaultCookiesSetting(check: check)
+            return checkDefaultCookiesSetting(check: check, preferences: preferences)
         case let desc where desc.contains("Enable Do Not Track"):
-            return checkDoNotTrackEnabled(check: check)
+            return checkDoNotTrackEnabled(check: check, preferences: preferences)
             
         // Extension Settings
         case let desc where desc.contains("Configure extension installation blocklist"):
-            return checkExtensionBlocklist(check: check)
+            return checkExtensionBlocklist(check: check, preferences: preferences)
         case let desc where desc.contains("Configure allowed Chrome Web Store extensions"):
-            return checkAllowedExtensions(check: check)
+            return checkAllowedExtensions(check: check, preferences: preferences)
         case let desc where desc.contains("Control which extensions can access file URLs"):
-            return checkExtensionFileAccess(check: check)
+            return checkExtensionFileAccess(check: check, preferences: preferences)
         case let desc where desc.contains("Control which extensions can inject scripts"):
-            return checkExtensionScriptInjection(check: check)
+            return checkExtensionScriptInjection(check: check, preferences: preferences)
             
         // Password Settings
         case let desc where desc.contains("Enable saving passwords to the password manager"):
-            return checkPasswordSavingDisabled(check: check)
+            return checkPasswordSavingDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable Autofill for addresses"):
-            return checkAutofillAddressesDisabled(check: check)
+            return checkAutofillAddressesDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable Autofill for credit cards"):
-            return checkAutofillCreditCardsDisabled(check: check)
+            return checkAutofillCreditCardsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable Autofill for payment methods"):
-            return checkAutofillPaymentMethodsDisabled(check: check)
+            return checkAutofillPaymentMethodsDisabled(check: check, preferences: preferences)
             
         default:
             return CheckResult(check: check, status: "manual", details: "Not yet implemented")
@@ -99,11 +100,11 @@ struct ChromeChecks {
     
     // MARK: - Privacy and Security Checks
     
-    private static func checkSafeBrowsing(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSafeBrowsing(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let safebrowsing = prefs["safebrowsing"] as? [String: Any],
               let enabled = safebrowsing["enabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome Safe Browsing setting.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome Safe Browsing setting.")
         }
         if enabled {
             return CheckResult(check: check, status: "pass", details: "Safe Browsing is enabled.")
@@ -112,11 +113,11 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkSafeBrowsingProtectionLevel(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSafeBrowsingProtectionLevel(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let safebrowsing = prefs["safebrowsing"] as? [String: Any],
               let level = safebrowsing["protection_level"] as? String else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome Safe Browsing Protection Level.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome Safe Browsing Protection Level.")
         }
         if level == "enhanced" {
             return CheckResult(check: check, status: "pass", details: "Safe Browsing Protection Level is set to enhanced.")
@@ -125,12 +126,12 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkGoogleCastDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkGoogleCastDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let discovery = prefs["discovery"] as? [String: Any],
               let deviceDiscoveryConfig = discovery["device_discovery_config"] as? [String: Any],
               let mdnsEnabled = deviceDiscoveryConfig["mdns_enabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome Google Cast settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome Google Cast settings.")
         }
         if !mdnsEnabled {
             return CheckResult(check: check, status: "pass", details: "Google Cast is disabled from connecting to Cast devices on all IP addresses.")
@@ -139,11 +140,11 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkGoogleTimeService(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkGoogleTimeService(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let enableTimeService = browser["enable_time_service"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome time service settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome time service settings.")
         }
         if enableTimeService {
             return CheckResult(check: check, status: "pass", details: "Queries to Google time service are enabled.")
@@ -152,11 +153,11 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkAudioSandbox(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkAudioSandbox(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let audioSandboxEnabled = browser["audio_sandbox_enabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome audio sandbox settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome audio sandbox settings.")
         }
         if audioSandboxEnabled {
             return CheckResult(check: check, status: "pass", details: "Audio sandbox is enabled.")
@@ -166,11 +167,11 @@ struct ChromeChecks {
     }
 
     // Check if 'Ask where to save each file before downloading' is enabled
-    private static func checkAskWhereToSave(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkAskWhereToSave(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let download = prefs["download"] as? [String: Any],
               let promptForDownload = download["prompt_for_download"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome download preferences.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome download preferences.")
         }
         
         if promptForDownload {
@@ -180,11 +181,11 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkSafeSitesContentFiltering(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSafeSitesContentFiltering(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let safebrowsing = prefs["safebrowsing"] as? [String: Any],
               let safeSitesFiltering = safebrowsing["safe_sites_filtering_enabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome SafeSites content filtering settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome SafeSites content filtering settings.")
         }
         
         if safeSitesFiltering {
@@ -194,8 +195,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkCertificateTransparency(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkCertificateTransparency(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let certificateTransparency = prefs["certificate_transparency"] as? [String: Any],
               let disabledForLegacyCas = certificateTransparency["disabled_for_legacy_cas"] as? Bool else {
             // Default is disabled, which is good
@@ -209,8 +210,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkSavingBrowserHistory(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSavingBrowserHistory(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let savingBrowserHistoryDisabled = prefs["savingBrowserHistoryDisabled"] as? Bool else {
             // Default is enabled (not disabled), which is good
             return CheckResult(check: check, status: "pass", details: "Saving browser history is enabled.")
@@ -223,8 +224,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkDNSInterceptionChecks(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkDNSInterceptionChecks(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let dnsInterceptionChecksEnabled = browser["dns_interception_checks_enabled"] as? Bool else {
             // Default is enabled, which is good
@@ -239,11 +240,11 @@ struct ChromeChecks {
     }
 
     // Check if 'Continue running background apps when Chrome is closed' is disabled
-    private static func checkBackgroundAppsDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkBackgroundAppsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let backgroundMode = prefs["background_mode"] as? [String: Any],
               let enabled = backgroundMode["enabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome background mode settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome background mode settings.")
         }
         
         if !enabled {
@@ -254,11 +255,11 @@ struct ChromeChecks {
     }
 
     // Check if 'Enable component updates in Google Chrome' is enabled
-    private static func checkComponentUpdatesEnabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkComponentUpdatesEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let componentUpdater = prefs["component_updater"] as? [String: Any],
               let enableComponentUpdates = componentUpdater["enable_component_updates"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome component updater settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome component updater settings.")
         }
         
         if enableComponentUpdates {
@@ -268,11 +269,11 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkThirdPartySoftwareInjection(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkThirdPartySoftwareInjection(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let thirdPartySoftwareInjectionBlocking = browser["third_party_software_injection_blocking_enabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Chrome third party software injection settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Chrome third party software injection settings.")
         }
         
         if thirdPartySoftwareInjectionBlocking {
@@ -284,8 +285,8 @@ struct ChromeChecks {
     
     // MARK: - Privacy Features
     
-    private static func checkImportAutofillDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkImportAutofillDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let importAutofillFormData = prefs["import_autofill_form_data"] as? Bool else {
             // If not set, default is enabled which fails the check
             return CheckResult(check: check, status: "fail", details: "Import autofill form data from default browser is enabled.")
@@ -298,8 +299,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkImportHomepageDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkImportHomepageDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let importHomepage = prefs["import_homepage"] as? Bool else {
             // If not set, default is enabled which fails the check
             return CheckResult(check: check, status: "fail", details: "Import of homepage from default browser is enabled.")
@@ -312,8 +313,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkImportSearchEnginesDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkImportSearchEnginesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let importSearchEngine = prefs["import_search_engine"] as? Bool else {
             // If not set, default is enabled which fails the check
             return CheckResult(check: check, status: "fail", details: "Import search engines from default browser is enabled.")
@@ -326,8 +327,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkSecurityWarningsEnabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSecurityWarningsEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let securityWarnings = browser["enable_security_warnings_for_command_line_flags"] as? Bool else {
             // If not set, default is enabled which passes the check
@@ -341,8 +342,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkReportingDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkReportingDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let reporting = prefs["reporting"] as? [String: Any],
               let enabled = reporting["enabled"] as? Bool else {
             // If not set, default is enabled which fails the check
@@ -356,8 +357,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkSafeBrowsingTrustedSourcesDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSafeBrowsingTrustedSourcesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let safebrowsing = prefs["safebrowsing"] as? [String: Any],
               let trustedSourcesEnabled = safebrowsing["trusted_sources_enabled"] as? Bool else {
             // Default is disabled, which is good
@@ -371,8 +372,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkSearchSuggestionsDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkSearchSuggestionsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let searchSuggestEnabled = prefs["search_suggest_enabled"] as? Bool else {
             // Default is enabled, which fails the check
             return CheckResult(check: check, status: "fail", details: "Search suggestions appear to be enabled.")
@@ -385,8 +386,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkDiskCacheSize(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkDiskCacheSize(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let net = prefs["net"] as? [String: Any],
               let diskCacheSize = net["disk_cache_size"] as? Int else {
             // Default is not set, which fails the check
@@ -403,8 +404,8 @@ struct ChromeChecks {
     
     // MARK: - Cookie and Site Data Settings
     
-    private static func checkBlockThirdPartyCookies(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkBlockThirdPartyCookies(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let blockThirdPartyCookies = prefs["block_third_party_cookies"] as? Bool else {
             // Default is disabled, which fails the check
             return CheckResult(check: check, status: "fail", details: "Block third-party cookies appears to be disabled.")
@@ -417,8 +418,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkClearCookiesOnQuit(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkClearCookiesOnQuit(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let clearOnExit = prefs["clear_on_exit"] as? Bool else {
             // Default is disabled, which fails the check
             return CheckResult(check: check, status: "fail", details: "Clear cookies and site data when quitting Chrome appears to be disabled.")
@@ -431,8 +432,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkDefaultCookiesSetting(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkDefaultCookiesSetting(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let cookieControls = prefs["cookie_controls"] as? [String: Any],
               let mode = cookieControls["mode"] as? Int else {
             // Default is keep until session end (2), which passes the check
@@ -447,8 +448,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkDoNotTrackEnabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkDoNotTrackEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let doNotTrack = prefs["enable_do_not_track"] as? Bool else {
             // Default is disabled, which fails the check
             return CheckResult(check: check, status: "fail", details: "Do Not Track appears to be disabled.")
@@ -463,8 +464,8 @@ struct ChromeChecks {
     
     // MARK: - Extension Settings
     
-    private static func checkExtensionBlocklist(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkExtensionBlocklist(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let blocklist = extensions["blocklist"] as? [String] else {
             // Default is no blocklist, which fails the check
@@ -478,8 +479,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkAllowedExtensions(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkAllowedExtensions(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let allowlist = extensions["allowed_types"] as? [String] else {
             // Default is no allowlist, which fails the check
@@ -493,8 +494,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkExtensionFileAccess(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkExtensionFileAccess(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let fileAccess = extensions["file_access"] as? [String: Bool] else {
             // Default is no restrictions, which fails the check
@@ -508,8 +509,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkExtensionScriptInjection(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkExtensionScriptInjection(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let scriptInjection = extensions["script_injection"] as? [String: Bool] else {
             // Default is no restrictions, which fails the check
@@ -525,8 +526,8 @@ struct ChromeChecks {
     
     // MARK: - Password Settings
     
-    private static func checkPasswordSavingDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkPasswordSavingDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let passwordManager = prefs["password_manager"] as? [String: Any],
               let savingEnabled = passwordManager["saving_enabled"] as? Bool else {
             // Default is enabled, which fails the check
@@ -540,8 +541,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkAutofillAddressesDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkAutofillAddressesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let autofill = prefs["autofill"] as? [String: Any],
               let addressEnabled = autofill["address_enabled"] as? Bool else {
             // Default is enabled, which fails the check
@@ -555,8 +556,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkAutofillCreditCardsDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkAutofillCreditCardsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let autofill = prefs["autofill"] as? [String: Any],
               let creditCardEnabled = autofill["credit_card_enabled"] as? Bool else {
             // Default is enabled, which fails the check
@@ -570,8 +571,8 @@ struct ChromeChecks {
         }
     }
     
-    private static func checkAutofillPaymentMethodsDisabled(check: CISCheck) -> CheckResult {
-        guard let prefs = getChromePreferences(),
+    private static func checkAutofillPaymentMethodsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let prefs = preferences,
               let autofill = prefs["autofill"] as? [String: Any],
               let paymentMethodEnabled = autofill["payment_method_enabled"] as? Bool else {
             // Default is enabled, which fails the check

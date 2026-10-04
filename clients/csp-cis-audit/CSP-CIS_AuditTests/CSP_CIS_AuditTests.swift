@@ -12,6 +12,25 @@ import XCTest
 
 struct CSP_CIS_AuditTests {
 
+    @Test func missingBrowserPreferencesRemainManualWithoutGuessingDefaults() {
+        let chrome = CISCheck(id: "chrome_1", category: "chrome", description: "Ensure Safe Browsing settings are enabled")
+        let chromeMissing: [[String: Any]?] = [nil, [:], ["safebrowsing": ["enabled": "unknown"]]]
+        for evidence in chromeMissing {
+            let result = ChromeChecks.run(check: chrome, readPreferences: { evidence })
+            #expect(result.status == "manual")
+            #expect(result.details.contains("effective default or managed policy"))
+        }
+        #expect(ChromeChecks.run(check: chrome, readPreferences: { ["safebrowsing": ["enabled": true]] }).status == "pass")
+        #expect(ChromeChecks.run(check: chrome, readPreferences: { ["safebrowsing": ["enabled": false]] }).status == "fail")
+        let safari = CISCheck(id: "safari_8", category: "safari", description: "Ensure JavaScript is disabled")
+        let safariMissing: [[String: Any]?] = [nil, [:], ["WebKitJavaScriptEnabled": "unknown"]]
+        for evidence in safariMissing {
+            #expect(SafariChecks.run(check: safari, readPreferences: { evidence }).status == "manual")
+        }
+        #expect(SafariChecks.run(check: safari, readPreferences: { ["WebKitJavaScriptEnabled": false] }).status == "pass")
+        #expect(SafariChecks.run(check: safari, readPreferences: { ["WebKitJavaScriptEnabled": true] }).status == "fail")
+    }
+
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
         let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
         func flags(_ text: String?) -> String {

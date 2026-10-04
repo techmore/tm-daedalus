@@ -1,61 +1,62 @@
 import Foundation
 
 struct SafariChecks {
-    static func run(check: CISCheck) -> CheckResult {
+    static func run(check: CISCheck, readPreferences: () -> [String: Any]? = { getSafariPreferences() as? [String: Any] }) -> CheckResult {
+        let preferences = readPreferences()
         switch check.description {
         // Privacy and Security
         case let desc where desc.contains("Open safe files after downloading"):
-            return checkOpenSafeFilesDisabled(check: check)
+            return checkOpenSafeFilesDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("AutoFill is disabled"):
-            return checkAutoFillDisabled(check: check)
+            return checkAutoFillDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("AutoFill web forms is disabled"):
-            return checkAutoFillWebFormsDisabled(check: check)
+            return checkAutoFillWebFormsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("AutoFill credit cards is disabled"):
-            return checkAutoFillCreditCardsDisabled(check: check)
+            return checkAutoFillCreditCardsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("AutoFill contact information is disabled"):
-            return checkAutoFillContactInfoDisabled(check: check)
+            return checkAutoFillContactInfoDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("AutoFill usernames and passwords is disabled"):
-            return checkAutoFillPasswordsDisabled(check: check)
+            return checkAutoFillPasswordsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Block pop-up windows is enabled"):
-            return checkBlockPopupsEnabled(check: check)
+            return checkBlockPopupsEnabled(check: check, preferences: preferences)
         case let desc where desc.contains("JavaScript is disabled"):
-            return checkJavaScriptDisabled(check: check)
+            return checkJavaScriptDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Warn when visiting a fraudulent website"):
-            return checkFraudulentWebsiteWarningEnabled(check: check)
+            return checkFraudulentWebsiteWarningEnabled(check: check, preferences: preferences)
             
         // Privacy Features
         case let desc where desc.contains("Prevent cross-site tracking"):
-            return checkPreventCrossSiteTracking(check: check)
+            return checkPreventCrossSiteTracking(check: check, preferences: preferences)
         case let desc where desc.contains("Block all cookies"):
-            return checkBlockAllCookies(check: check)
+            return checkBlockAllCookies(check: check, preferences: preferences)
         case let desc where desc.contains("Website tracking"):
-            return checkWebsiteTracking(check: check)
+            return checkWebsiteTracking(check: check, preferences: preferences)
         case let desc where desc.contains("Ask websites not to track me"):
-            return checkAskWebsitesNotToTrack(check: check)
+            return checkAskWebsitesNotToTrack(check: check, preferences: preferences)
         case let desc where desc.contains("Privacy preserving ad measurement"):
-            return checkPrivacyPreservingAdMeasurement(check: check)
+            return checkPrivacyPreservingAdMeasurement(check: check, preferences: preferences)
             
         // Extension Settings
         case let desc where desc.contains("Allow Extensions"):
-            return checkExtensionsDisabled(check: check)
+            return checkExtensionsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Enable JavaScript") && desc.contains("untrusted sites"):
-            return checkJavaScriptDisabledForUntrustedSites(check: check)
+            return checkJavaScriptDisabledForUntrustedSites(check: check, preferences: preferences)
         case let desc where desc.contains("Internet plug-ins"):
-            return checkInternetPluginsDisabled(check: check)
+            return checkInternetPluginsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Java") && !desc.contains("JavaScript"):
-            return checkJavaDisabled(check: check)
+            return checkJavaDisabled(check: check, preferences: preferences)
             
         // Advanced Settings
         case let desc where desc.contains("Show full website address"):
-            return checkShowFullWebsiteAddress(check: check)
+            return checkShowFullWebsiteAddress(check: check, preferences: preferences)
         case let desc where desc.contains("Show Develop menu in menu bar"):
-            return checkShowDevelopMenu(check: check)
+            return checkShowDevelopMenu(check: check, preferences: preferences)
         case let desc where desc.contains("Show status bar"):
-            return checkShowStatusBar(check: check)
+            return checkShowStatusBar(check: check, preferences: preferences)
         case let desc where desc.contains("Smart Search Field") && desc.contains("search suggestions"):
-            return checkSmartSearchFieldSuggestionsDisabled(check: check)
+            return checkSmartSearchFieldSuggestionsDisabled(check: check, preferences: preferences)
         case let desc where desc.contains("Default search engine"):
-            return checkDefaultSearchEngine(check: check)
+            return checkDefaultSearchEngine(check: check, preferences: preferences)
             
         default:
             return CheckResult(check: check, status: "manual", details: "Not yet implemented")
@@ -76,8 +77,8 @@ struct SafariChecks {
     
     // MARK: - Privacy and Security Checks
     
-    private static func checkOpenSafeFilesDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkOpenSafeFilesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let openSafeFiles = plist["AutoOpenSafeDownloads"] as? Bool else {
             // If not found, default is false (disabled) in newer macOS versions
             return CheckResult(check: check, status: "pass", details: "'Open safe files after downloading' appears to be disabled.")
@@ -90,9 +91,9 @@ struct SafariChecks {
     }
 
     // Check if AutoFill is disabled in Safari
-    private static func checkAutoFillDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences() else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari preferences.")
+    private static func checkAutoFillDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences else {
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
         // Check for AutoFill settings
@@ -112,9 +113,9 @@ struct SafariChecks {
     }
     
     // Check if AutoFill web forms is disabled
-    private static func checkAutoFillWebFormsDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences() else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari preferences.")
+    private static func checkAutoFillWebFormsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences else {
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
         let autoFillFormsEnabled = plist["AutoFillMiscellaneousForms"] as? Bool ?? true
@@ -127,9 +128,9 @@ struct SafariChecks {
     }
     
     // Check if AutoFill credit cards is disabled
-    private static func checkAutoFillCreditCardsDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences() else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari preferences.")
+    private static func checkAutoFillCreditCardsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences else {
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
         let autoFillCreditCardsEnabled = plist["AutoFillCreditCardData"] as? Bool ?? true
@@ -142,9 +143,9 @@ struct SafariChecks {
     }
     
     // Check if AutoFill contact information is disabled
-    private static func checkAutoFillContactInfoDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences() else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari preferences.")
+    private static func checkAutoFillContactInfoDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences else {
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
         let autoFillAddressesEnabled = plist["AutoFillFromAddressBook"] as? Bool ?? true
@@ -157,9 +158,9 @@ struct SafariChecks {
     }
     
     // Check if AutoFill usernames and passwords is disabled
-    private static func checkAutoFillPasswordsDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences() else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari preferences.")
+    private static func checkAutoFillPasswordsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences else {
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
         let autoFillPasswordsEnabled = plist["AutoFillPasswords"] as? Bool ?? true
@@ -172,10 +173,10 @@ struct SafariChecks {
     }
 
     // Check if Block pop-up windows is enabled in Safari
-    private static func checkBlockPopupsEnabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkBlockPopupsEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let blockPopups = plist["WebKitJavaScriptCanOpenWindowsAutomatically"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari pop-up blocker settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari pop-up blocker settings.")
         }
         
         // Note: The setting is inverted - when false, pop-ups are blocked
@@ -187,10 +188,10 @@ struct SafariChecks {
     }
 
     // Check if JavaScript is disabled in Safari
-    private static func checkJavaScriptDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkJavaScriptDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let javascriptEnabled = plist["WebKitJavaScriptEnabled"] as? Bool else {
-            return CheckResult(check: check, status: "error", details: "Could not read Safari JavaScript settings.")
+            return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari JavaScript settings.")
         }
         
         if !javascriptEnabled {
@@ -201,8 +202,8 @@ struct SafariChecks {
     }
     
     // Check if fraudulent website warning is enabled
-    private static func checkFraudulentWebsiteWarningEnabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkFraudulentWebsiteWarningEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let warnAboutFraudulentWebsites = plist["WarnAboutFraudulentWebsites"] as? Bool else {
             // Default is enabled in modern macOS
             return CheckResult(check: check, status: "pass", details: "Warn when visiting a fraudulent website appears to be enabled.")
@@ -218,8 +219,8 @@ struct SafariChecks {
     // MARK: - Privacy Features
     
     // Check if prevent cross-site tracking is enabled
-    private static func checkPreventCrossSiteTracking(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkPreventCrossSiteTracking(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let preventCrossSiteTracking = plist["WebKitPreferences.storageBlockingPolicy"] as? Int else {
             // Default is enabled (policy 1) in modern macOS
             return CheckResult(check: check, status: "pass", details: "Prevent cross-site tracking appears to be enabled.")
@@ -233,8 +234,8 @@ struct SafariChecks {
     }
     
     // Check if block all cookies is enabled
-    private static func checkBlockAllCookies(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkBlockAllCookies(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let blockAllCookies = plist["BlockAllCookies"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Block all cookies appears to be disabled.")
@@ -248,8 +249,8 @@ struct SafariChecks {
     }
     
     // Check if website tracking is set to prevent cross-site tracking
-    private static func checkWebsiteTracking(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkWebsiteTracking(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let trackingPolicy = plist["WebKitPreferences.trackingPreventionEnabled"] as? Bool else {
             // Default is enabled in modern macOS
             return CheckResult(check: check, status: "pass", details: "Website tracking prevention appears to be enabled.")
@@ -263,8 +264,8 @@ struct SafariChecks {
     }
     
     // Check if 'Ask websites not to track me' is enabled
-    private static func checkAskWebsitesNotToTrack(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkAskWebsitesNotToTrack(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let sendDoNotTrack = plist["SendDoNotTrackHTTPHeader"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Ask websites not to track me appears to be disabled.")
@@ -278,8 +279,8 @@ struct SafariChecks {
     }
     
     // Check if privacy preserving ad measurement is disabled
-    private static func checkPrivacyPreservingAdMeasurement(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkPrivacyPreservingAdMeasurement(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let adMeasurementEnabled = plist["WebKitPreferences.privateClickMeasurementEnabled"] as? Bool else {
             // Default is enabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Privacy preserving ad measurement appears to be enabled.")
@@ -295,8 +296,8 @@ struct SafariChecks {
     // MARK: - Extension Settings
     
     // Check if extensions are disabled
-    private static func checkExtensionsDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkExtensionsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let extensionsEnabled = plist["ExtensionsEnabled"] as? Bool else {
             // Default is enabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Extensions appear to be enabled.")
@@ -310,8 +311,8 @@ struct SafariChecks {
     }
     
     // Check if JavaScript is disabled for untrusted sites
-    private static func checkJavaScriptDisabledForUntrustedSites(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkJavaScriptDisabledForUntrustedSites(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let javascriptFromUntrustedSites = plist["WebKitPreferences.javaScriptCanOpenWindowsAutomatically"] as? Bool else {
             // Default is enabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "JavaScript for untrusted sites appears to be enabled.")
@@ -325,8 +326,8 @@ struct SafariChecks {
     }
     
     // Check if Internet plug-ins are disabled
-    private static func checkInternetPluginsDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkInternetPluginsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let pluginsEnabled = plist["WebKitPluginsEnabled"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "pass", details: "Internet plug-ins appear to be disabled.")
@@ -340,8 +341,8 @@ struct SafariChecks {
     }
     
     // Check if Java is disabled
-    private static func checkJavaDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkJavaDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let javaEnabled = plist["WebKitJavaEnabled"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "pass", details: "Java appears to be disabled.")
@@ -357,8 +358,8 @@ struct SafariChecks {
     // MARK: - Advanced Settings
     
     // Check if full website address is shown
-    private static func checkShowFullWebsiteAddress(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkShowFullWebsiteAddress(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let showFullURL = plist["ShowFullURLInSmartSearchField"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Show full website address appears to be disabled.")
@@ -372,8 +373,8 @@ struct SafariChecks {
     }
     
     // Check if Develop menu is shown in menu bar
-    private static func checkShowDevelopMenu(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkShowDevelopMenu(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let showDevelopMenu = plist["IncludeDevelopMenu"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Show Develop menu in menu bar appears to be disabled.")
@@ -387,8 +388,8 @@ struct SafariChecks {
     }
     
     // Check if status bar is shown
-    private static func checkShowStatusBar(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkShowStatusBar(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let showStatusBar = plist["ShowStatusBar"] as? Bool else {
             // Default is disabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Show status bar appears to be disabled.")
@@ -402,8 +403,8 @@ struct SafariChecks {
     }
     
     // Check if Smart Search Field suggestions are disabled
-    private static func checkSmartSearchFieldSuggestionsDisabled(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkSmartSearchFieldSuggestionsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let suggestionsEnabled = plist["UniversalSearchEnabled"] as? Bool else {
             // Default is enabled in modern macOS
             return CheckResult(check: check, status: "fail", details: "Smart Search Field suggestions appear to be enabled.")
@@ -417,8 +418,8 @@ struct SafariChecks {
     }
     
     // Check if default search engine is set to a privacy-focused engine
-    private static func checkDefaultSearchEngine(check: CISCheck) -> CheckResult {
-        guard let plist = getSafariPreferences(),
+    private static func checkDefaultSearchEngine(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
+        guard let plist = preferences,
               let searchEngine = plist["SearchProviderIdentifier"] as? String else {
             // Default is Google in modern macOS
             return CheckResult(check: check, status: "fail", details: "Default search engine appears to be set to Google.")

@@ -9,6 +9,10 @@ struct CheckResult: Codable {
     let check: CISCheck
     let status: String  // "pass", "fail", "manual", "error"
     let details: String
+
+    static func unavailablePreference(check: CISCheck, detail: String) -> CheckResult {
+        CheckResult(check: check, status: "manual", details: detail + " This setting remains unassessed. Missing local preference evidence does not establish the effective default or managed policy.")
+    }
 }
 
 struct CheckRunner {

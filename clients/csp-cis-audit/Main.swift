@@ -360,7 +360,7 @@ class CISApp: NSObject, NSApplicationDelegate {
                 case "macos_1":
                     timeoutDetails += ". This check verifies if all Apple-provided software is current. Try running 'softwareupdate -l' manually."
                 case "macos_64", "macos_65", "macos_66", "macos_67":
-                    timeoutDetails += ". This check involves scanning user directories which can be time-consuming. Try increasing the timeout or running with elevated permissions."
+                    timeoutDetails += ". Directory inspection exceeded its configured time budget. This result is unassessed; keep the per-user client unprivileged and review its coverage and timeout configuration."
                 case "macos_82":
                     timeoutDetails += ". This check verifies Gatekeeper settings. Try running 'spctl --status' manually to check Gatekeeper status."
                 default:
