@@ -41,38 +41,12 @@ struct MacOSPasswordChecks {
     }
     
     // Check if password minimum length is configured
-    static func checkPasswordMinLength(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/pwpolicy"
-        process.arguments = ["getaccountpolicies"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check password minimum length: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("minChars") {
-            // Extract the value
-            if let range = output.range(of: "minChars\\s*=\\s*\\d+", options: .regularExpression),
-               let valueRange = output[range].range(of: "\\d+", options: .regularExpression) {
-                let value = output[range][valueRange]
-                if let length = Int(value), length >= 8 {
-                    return CheckResult(check: check, status: "pass", details: "Password minimum length is configured to \(length) characters.")
-                } else {
-                    return CheckResult(check: check, status: "fail", details: "Password minimum length is configured but less than 8 characters.")
-                }
-            }
-            return CheckResult(check: check, status: "pass", details: "Password minimum length is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password minimum length is NOT configured.")
-        }
+    static func checkPasswordMinLength(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let mapped = CISCheck(id: check.id, category: check.category, description: check.description, ruleID: "pwpolicy_minimum_length_enforce")
+        let evidence = MacOSChecks.runAdditionalTahoeCommand(check: mapped, command: command, legacyPasswordCriteria: true)
+        return CheckResult(check: check, status: evidence.status, details: evidence.details)
     }
     
     // Check if password complexity is configured
@@ -117,38 +91,12 @@ struct MacOSPasswordChecks {
     }
     
     // Check if password history is configured
-    static func checkPasswordHistory(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/pwpolicy"
-        process.arguments = ["getaccountpolicies"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check password history: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("usingHistory") {
-            // Extract the value
-            if let range = output.range(of: "usingHistory\\s*=\\s*\\d+", options: .regularExpression),
-               let valueRange = output[range].range(of: "\\d+", options: .regularExpression) {
-                let value = output[range][valueRange]
-                if let history = Int(value), history >= 5 {
-                    return CheckResult(check: check, status: "pass", details: "Password history is configured to remember \(history) passwords.")
-                } else {
-                    return CheckResult(check: check, status: "fail", details: "Password history is configured but remembers fewer than 5 passwords.")
-                }
-            }
-            return CheckResult(check: check, status: "pass", details: "Password history is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password history is NOT configured.")
-        }
+    static func checkPasswordHistory(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let mapped = CISCheck(id: check.id, category: check.category, description: check.description, ruleID: "pwpolicy_history_enforce")
+        let evidence = MacOSChecks.runAdditionalTahoeCommand(check: mapped, command: command, legacyPasswordCriteria: true)
+        return CheckResult(check: check, status: evidence.status, details: evidence.details)
     }
     
     // Check if password maximum age is configured

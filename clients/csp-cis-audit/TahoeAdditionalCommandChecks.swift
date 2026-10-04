@@ -80,10 +80,12 @@ extension MacOSChecks {
 
     static func runAdditionalTahoeCommand(
         check: CISCheck,
-        command: (String, [String]) -> CommandEvidence
+        command: (String, [String]) -> CommandEvidence,
+        legacyPasswordCriteria: Bool = false
     ) -> CheckResult {
         func result(_ status: String, _ detail: String) -> CheckResult {
-            CheckResult(check: check, status: status, details: "Pinned NIST mSCP Tahoe read-only check for \(check.ruleID ?? check.id). " + detail)
+            let prefix = legacyPasswordCriteria ? "Legacy CSP read-only account-policy check. " : "Pinned NIST mSCP Tahoe read-only check for \(check.ruleID ?? check.id). "
+            return CheckResult(check: check, status: status, details: prefix + detail)
         }
         func usable(_ evidence: CommandEvidence, exits: Set<Int32> = [0]) -> Bool {
             evidence.unavailable == nil && exits.contains(evidence.exitCode)
@@ -137,7 +139,8 @@ extension MacOSChecks {
                     lengths.append(minimum)
                 }
                 let maximum = lengths.max()!
-                return result(maximum >= 15 ? "pass" : "fail", "Captured " + String(lengths.count) + " explicit minimum-length condition(s); strongest minimum " + String(maximum) + ", pinned CIS threshold 15. This is local policy evidence, not a password-creation attempt or external directory assessment. Raw policy is omitted.")
+                let threshold = legacyPasswordCriteria ? 8 : 15
+                return result(maximum >= threshold ? "pass" : "fail", "Captured " + String(lengths.count) + " explicit minimum-length condition(s); strongest minimum " + String(maximum) + ", bundled threshold " + String(threshold) + ". This is local policy evidence, not a password-creation attempt or external directory assessment. Raw policy is omitted.")
             }
             var depths = [Int]()
             var invalid = false
@@ -156,8 +159,9 @@ extension MacOSChecks {
             guard !invalid, !depths.isEmpty else {
                 return result("manual", "Explicit supported password-history depths were absent or wrongly typed.")
             }
-            return result(depths.allSatisfy { $0 >= 24 } ? "pass" : "fail",
-                "Captured " + String(depths.count) + " history-depth value(s); minimum " + String(depths.min()!) + ", pinned CIS threshold 24. This is global local-account policy evidence, not a password-reuse attempt or external directory assessment. Raw policy is omitted.")
+            let threshold = legacyPasswordCriteria ? 5 : 24
+            return result(depths.allSatisfy { $0 >= threshold } ? "pass" : "fail",
+                "Captured " + String(depths.count) + " history-depth value(s); minimum " + String(depths.min()!) + ", bundled threshold " + String(threshold) + ". This is global local-account policy evidence, not a password-reuse attempt or external directory assessment. Raw policy is omitted.")
 
         case "system_settings_system_wide_preferences_configure":
             let rights = ["system.preferences", "system.preferences.energysaver", "system.preferences.network", "system.preferences.printing", "system.preferences.sharing", "system.preferences.softwareupdate", "system.preferences.startupdisk", "system.preferences.timemachine"]

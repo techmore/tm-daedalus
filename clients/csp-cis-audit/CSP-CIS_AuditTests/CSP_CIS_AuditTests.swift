@@ -221,6 +221,30 @@ struct CSP_CIS_AuditTests {
         }
     }
 
+    @Test func legacyPasswordLengthAndHistoryUseStructuredEvidenceAndTheirOwnThresholds() {
+        let check = CISCheck(id: "legacy", category: "macos", description: "Legacy fixture")
+        func xml(_ object: [String: Any]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: object, format: .xml, options: 0), encoding: .utf8)!
+        }
+        func length(_ value: Int) -> String { xml(["policyCategoryPasswordContent": [["policyContent": "policyAttributePassword matches '.{" + String(value) + ",}'"]]]) }
+        func history(_ value: Int) -> String { xml(["policyParameters": ["policyAttributePasswordHistoryDepth": value]]) }
+        let result = MacOSPasswordChecks.checkPasswordMinLength(check: check) { executable, arguments in
+            #expect(executable == "/usr/bin/pwpolicy" && arguments == ["-getaccountpolicies"])
+            return .init(output: length(8))
+        }
+        #expect(result.status == "pass")
+        #expect(result.check.ruleID == nil && result.check.id == "legacy")
+        #expect(result.details.contains("Legacy CSP"))
+        #expect(!result.details.contains("Pinned NIST"))
+        #expect(MacOSPasswordChecks.checkPasswordMinLength(check: check, command: { _, _ in .init(output: length(7)) }).status == "fail")
+        #expect(MacOSPasswordChecks.checkPasswordHistory(check: check, command: { _, _ in .init(output: history(5)) }).status == "pass")
+        #expect(MacOSPasswordChecks.checkPasswordHistory(check: check, command: { _, _ in .init(output: history(4)) }).status == "fail")
+        for evidence in [MacOSChecks.CommandEvidence(output: "minChars usingHistory"), .init(output: "minChars=8 usingHistory=5"), .init(output: length(8), exitCode: 1), .init(output: history(5), error: "denied"), .init(output: history(5), unavailable: "timeout")] {
+            #expect(MacOSPasswordChecks.checkPasswordMinLength(check: check, command: { _, _ in evidence }).status == "manual")
+            #expect(MacOSPasswordChecks.checkPasswordHistory(check: check, command: { _, _ in evidence }).status == "manual")
+        }
+    }
+
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
         let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
         func flags(_ text: String?) -> String {
