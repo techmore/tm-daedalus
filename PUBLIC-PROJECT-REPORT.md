@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## October 4, 2026 — Release 074: internal network evidence before controls
+
+Production application commit **69c7308bd45cc250f8a29f49fdd1d1860c1cd105** is active and healthy. The 59-file archive SHA-256 is **15e746d1d8611e7df8bc4d1c7a60cc55c59722fe6333e74a7b17acce749fdc27**; verified off-host backup: daedalus-data-20261004T063327Z.tar.gz. Full local validation passed **454 tests and 96 subtests** before the final DOM regression was added; all **nine topic tests**, including that new regression, then passed. JavaScript syntax/diff checks passed. Release 073 Python and managed Linux CI passed; current release CI remains unconfirmed.
+
+Internal Network now leads with enabled scanner availability, confirmed online scan-engine readiness and approved-range assignment. These counts explicitly do not imply network scan coverage. Per-location saved runs and comparisons precede collapsed scan/management controls and command history. Open control panels are remembered across card rebuilding; existing target/scope buffers and inline confirmations retain their behavior. The page title uses the security topic. Server-rendered controls also start collapsed. Node DOM fixtures verify node order, literal scanner names, panel-open state, and disabled scanning without approved scope.
+
+Authenticated production checks confirmed version-074 assets, the summary-before-scanner template order and hosted script ordering. Independent calculation from the actual dashboard API found **two enabled scanners, one online, one with a confirmed ready engine, zero with approved ranges**. No private scan was performed or scope inferred. Readiness is healthy. Private receipt: /data/codex-scanner-topic-validation-20261004.json. This is served-structure/data validation, not browser visual review. Approved production VLAN coverage, real Tahoe execution, trusted persistent CIS distribution, visual review and the other full-project requirements remain open. The goal remains active.
+
 ## October 4, 2026 — Release 073: unchanged warning notices are quiet
 
 Production application commit **b3f54e94374abae74391b67bd11797f674862b9d** is active and healthy. The 59-file archive SHA-256 is **90e5c3550b149083aab4ed241cc80a12ac1cd9ab217d850045c6bf3639dddc16**; verified off-host backup: daedalus-data-20261004T062754Z.tar.gz. All **452 tests and 96 subtests** passed locally. Release 072 Python and managed Linux CI passed; current release CI remains unconfirmed.
