@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-086">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-087">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -329,16 +329,12 @@
             {% endif %}
           </div>
 
-          <div class="section-heading check-subheading"><div><p class="eyebrow">DETECTED DIFFERENCES</p><h3>Change history</h3></div></div>
+          <section class="topic-changes" aria-labelledby="{{ key }}-changes-title">
+          <div class="section-heading check-subheading"><div><p class="eyebrow">SINCE THE PREVIOUS ASSESSMENT</p><h3 id="{{ key }}-changes-title">What changed</h3></div></div>
           <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
           <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="changes">Load older changes</button>
-          <details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>
-          {% if key == 'dns' %}
-          <p class="check-scope-note">DNS and email records can be checked on demand or on a daily/weekly schedule after TXT domain verification. Results include root and www address/alias records, mail routing, SPF, DMARC, and six common DKIM selectors; selector discovery and local DNSSEC chain validation are not included.</p>
-          {% else %}
-          <p class="check-scope-note">Passive checks make one HTTPS request to the domain root and inventory linked references. Separate fixed-path exposure checks are explicit, bounded requests against this registered domain and never use Nmap. Results are signature observations that need review, not an assurance that the site is free of vulnerabilities.</p>
-          {% endif %}
-          </details>
+          </section>
+
           <section class="topic-evidence" aria-labelledby="{{ key }}-evidence-title"><div class="section-heading check-subheading"><div><p class="eyebrow">SUPPORTING EVIDENCE</p><h3 id="{{ key }}-evidence-title">{{ 'Domain resolution & email protection' if key == 'dns' else 'Availability & browser protection' }}</h3></div></div>
           {% if key == 'dns' %}
           <div class="check-record-grid" id="dns-record-grid" aria-live="polite"><div class="empty-events">Loading stored DNS results…</div></div>
@@ -354,6 +350,13 @@
           <div class="check-record-grid" id="web-vendor-grid" aria-live="polite"><div class="empty-events">External dependency results will appear after a website check.</div></div>
           </details>
           {% endif %}
+          <details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>
+          {% if key == 'dns' %}
+          <p class="check-scope-note">DNS and email records can be checked on demand or on a daily/weekly schedule after TXT domain verification. Results include root and www address/alias records, mail routing, SPF, DMARC, and six common DKIM selectors; selector discovery and local DNSSEC chain validation are not included.</p>
+          {% else %}
+          <p class="check-scope-note">Passive checks make one HTTPS request to the domain root and inventory linked references. Separate fixed-path exposure checks are explicit, bounded requests against this registered domain and never use Nmap. Results are signature observations that need review, not an assurance that the site is free of vulnerabilities.</p>
+          {% endif %}
+          </details>
           </section>
 
           {% if key == 'web' %}

@@ -11,6 +11,22 @@ struct MacOSChecks {
         }
     }
 
+    static func legacyBooleanPreference(
+        check: CISCheck, domain: String, key: String, expected: Bool,
+        command: (String, [String]) -> CommandEvidence = readCommand
+    ) -> CheckResult {
+        let evidence = command("/usr/bin/defaults", ["read", domain, key])
+        let value = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              value == "0" || value == "1" else {
+            return CheckResult.unavailablePreference(check: check, detail: "An explicit macOS Boolean preference could not be read for " + key + ".")
+        }
+        let observed = value == "1"
+        return CheckResult(check: check, status: observed == expected ? "pass" : "fail",
+            details: key + " explicitly reads " + (observed ? "enabled" : "disabled") + ". This check expects " + (expected ? "enabled" : "disabled") + ". This is local preference evidence; managed enforcement for every user was not established.")
+    }
+
     enum PreferenceValue {
         case boolean(Bool)
         case integer(Int)

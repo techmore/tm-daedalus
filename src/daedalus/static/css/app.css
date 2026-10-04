@@ -822,3 +822,21 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .cis-evidence-group { margin-top: 24px; }
 .cis-evidence-group > h4 { color: var(--brown-900); margin: 0 0 12px; }
 .cis-evidence-group > .topic-secondary { margin: 10px 0; }
+
+/* Separate assessment, changes, and evidence without making every detail a card. */
+.topic-changes { min-width: 0; padding: 8px 0 20px; border-bottom: 1px solid var(--card-line); }
+.topic-changes > .section-heading { margin-top: 8px; }
+.topic-evidence > .topic-secondary,
+.external-check-workspace > .topic-secondary,
+.cis-workspace > .topic-secondary,
+.meraki-workspace > .topic-secondary {
+  margin: 0;
+  padding: 18px 0;
+  border: 0;
+  border-top: 1px solid var(--card-line);
+  border-radius: 0;
+  background: transparent;
+}
+.topic-evidence { margin-top: 12px; }
+.topic-priority > .eyebrow { color: var(--olive-600); }
+.topic-priority > h3 { font-size: 24px; }

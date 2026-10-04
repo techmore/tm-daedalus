@@ -125,6 +125,38 @@ struct CSP_CIS_AuditTests {
         #expect(SafariChecks.run(check: creditCards, readPreferences: { ["AutoFillCreditCardData": true] }).status == "fail")
     }
 
+    @Test func legacyMacOSBooleanCollectorsRequireSuccessfulCanonicalEvidence() {
+        typealias Reader = (String, [String]) -> MacOSChecks.CommandEvidence
+        let cases: [(String, String, Bool, (CISCheck, Reader) -> CheckResult)] = [
+            ("/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticCheckEnabled", true, { check, reader in MacOSUpdateChecks.checkAutoUpdate(check: check, command: reader) }),
+            ("/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticDownload", true, { check, reader in MacOSUpdateChecks.checkDownloadNewUpdates(check: check, command: reader) }),
+            ("/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticallyInstallMacOSUpdates", true, { check, reader in MacOSUpdateChecks.checkInstallMacOSUpdates(check: check, command: reader) }),
+            ("/Library/Preferences/com.apple.commerce", "AutoUpdate", true, { check, reader in MacOSUpdateChecks.checkInstallAppStoreUpdates(check: check, command: reader) }),
+            ("/Library/Preferences/com.apple.SoftwareUpdate", "ConfigDataInstall", true, { check, reader in MacOSUpdateChecks.checkInstallSecurityResponses(check: check, command: reader) }),
+            ("/var/db/locationd/Library/Preferences/ByHost/com.apple.locationd", "LocationServicesEnabled", false, { check, reader in MacOSPrivacyChecks.checkLocationServicesDisabled(check: check, command: reader) }),
+            ("/Library/Application Support/CrashReporter/DiagnosticMessagesHistory.plist", "AutoSubmit", false, { check, reader in MacOSPrivacyChecks.checkDiagnosticDataDisabled(check: check, command: reader) }),
+            ("com.apple.AdLib", "allowApplePersonalizedAdvertising", false, { check, reader in MacOSPrivacyChecks.checkLimitAdTracking(check: check, command: reader) }),
+            ("com.apple.assistant.support", "Assistant Enabled", false, { check, reader in MacOSPrivacyChecks.checkSiriDisabled(check: check, command: reader) }),
+            ("com.apple.speech.recognition.AppleSpeechRecognition.prefs", "DictationIMMasterDictationEnabled", false, { check, reader in MacOSPrivacyChecks.checkDictationDisabled(check: check, command: reader) })
+        ]
+        let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
+        for (domain, key, expected, run) in cases {
+            func evaluate(_ evidence: MacOSChecks.CommandEvidence) -> CheckResult {
+                run(check) { path, arguments in
+                    #expect(path == "/usr/bin/defaults")
+                    #expect(arguments == ["read", domain, key])
+                    return evidence
+                }
+            }
+            let unknown = [MacOSChecks.CommandEvidence(), .init(output: "1970 error"), .init(output: "10"), .init(output: "true"), .init(output: "1", exitCode: 1), .init(output: "0", error: "permission denied"), .init(output: "1", unavailable: "timeout")]
+            for evidence in unknown {
+                #expect(evaluate(evidence).status == "manual")
+            }
+            #expect(evaluate(.init(output: expected ? "1\n" : "0\n")).status == "pass")
+            #expect(evaluate(.init(output: expected ? "0" : "1")).status == "fail")
+        }
+    }
+
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
         let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
         func flags(_ text: String?) -> String {

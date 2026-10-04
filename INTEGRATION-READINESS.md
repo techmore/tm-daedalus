@@ -424,3 +424,10 @@ After deployment, a new production backup was copied off-host and restored into 
 [Managed Linux CI run 37173669066](https://github.com/techmore/tm-daedalus/actions/runs/37173669066) backed up its running isolated portal, made a visible post-backup state change, stopped the owned portal, activated the restored data directory and started a new process. The earlier state was restored; saved scan events and PDF bytes were unchanged, readiness recovered, and the scanner authenticated a fresh heartbeat. Cleanup completed. The scan used only an ephemeral loopback listener. No scanner artifact download existed in this run, so artifact recovery remains covered by fixtures. Production data was not replaced; production remains on Release 056. The current source suite and Python CI run 37173669119 passed 401 tests and 79 subtests.
 
 Legacy source review also found an optional Nikto execution path in the original website audit script. The current five-path exposure check does not replace that broader audit; integrating its reporting and authorization flow remains product work.
+
+
+### 2026-10-04 — Assessment hierarchy and legacy Boolean evidence
+
+DNS and Website now group change history between the assessment and supporting evidence. Scope limitations sit with evidence; expandable details use quieter separators rather than competing card surfaces. Dashboard structure and refresh checks passed (35 tests); signed-in browser visual review remains pending.
+
+Ten active legacy macOS update/privacy Boolean collectors now require successful, canonical 0/1 output with no stderr or incomplete-command signal. Missing, malformed, failed, or timed-out preference reads remain manual instead of inferred pass/fail. These preserve the existing preference mappings, which do not establish managed enforcement for every user. Native client tests passed: 74, zero failures on macOS 27.0.1. Actual macOS 26 execution remains outstanding.

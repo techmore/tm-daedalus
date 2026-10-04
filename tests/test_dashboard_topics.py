@@ -40,6 +40,9 @@ assert.equal(reportJobStatusSummary([{status:'failed'}]), '0 PDF(s) ready · 1 f
         self.assertLess(section.index('id="{{ key }}-priorities"'), section.index('data-run-external-check'))
         self.assertLess(section.index('id="{{ key }}-check-changes"'), section.index('id="dns-record-grid"'))
         self.assertIn('<details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>', section)
+        self.assertIn('class="topic-changes" aria-labelledby="{{ key }}-changes-title"', section)
+        self.assertLess(section.index('id="{{ key }}-changes-title"'), section.index('class="topic-evidence"'))
+        self.assertLess(section.index('id="dns-record-grid"'), section.index('<summary>Assessment scope'))
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_scanner_card_controls_preserve_open_state_and_scope_guard(self):

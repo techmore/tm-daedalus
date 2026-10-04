@@ -6,119 +6,28 @@ struct MacOSUpdateChecks {
     // MARK: - Software Updates
     
     // Check if Auto Update is enabled
-    static func checkAutoUpdate(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticCheckEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Auto Update: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Auto Update is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Auto Update is NOT enabled.")
-        }
+    static func checkAutoUpdate(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.SoftwareUpdate", key: "AutomaticCheckEnabled", expected: true, command: command)
     }
     
     // Check if Download New Updates When Available is enabled
-    static func checkDownloadNewUpdates(check: CISCheck) -> CheckResult {
-        // Check if 'AutomaticDownload' is enabled in com.apple.SoftwareUpdate
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticDownload"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check automatic download: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Download New Updates When Available is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Download New Updates When Available is NOT enabled.")
-        }
+    static func checkDownloadNewUpdates(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.SoftwareUpdate", key: "AutomaticDownload", expected: true, command: command)
     }
     
     // Check if Install of macOS Updates is enabled
-    static func checkInstallMacOSUpdates(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.SoftwareUpdate", "AutomaticallyInstallMacOSUpdates"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check macOS updates installation: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Install of macOS Updates is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Install of macOS Updates is NOT enabled.")
-        }
+    static func checkInstallMacOSUpdates(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.SoftwareUpdate", key: "AutomaticallyInstallMacOSUpdates", expected: true, command: command)
     }
     
     // Check if Install Application Updates from the App Store is enabled
-    static func checkInstallAppStoreUpdates(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.commerce", "AutoUpdate"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check App Store updates installation: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Install Application Updates from the App Store is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Install Application Updates from the App Store is NOT enabled.")
-        }
+    static func checkInstallAppStoreUpdates(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.commerce", key: "AutoUpdate", expected: true, command: command)
     }
     
     // Check if Install Security Responses and System Files is enabled
-    static func checkInstallSecurityResponses(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.SoftwareUpdate", "ConfigDataInstall"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check security responses installation: \(error)")
-        }
-        process.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Install Security Responses and System Files is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Install Security Responses and System Files is NOT enabled.")
-        }
+    static func checkInstallSecurityResponses(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Preferences/com.apple.SoftwareUpdate", key: "ConfigDataInstall", expected: true, command: command)
     }
     
     // Check if Software Update Deferment is 30 days or less
