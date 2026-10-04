@@ -44,6 +44,15 @@ real systemd user services and inert processes on a disposable Linux account.
 It validates lifecycle behavior without issuing network scans or connecting to
 a customer workspace. The Linux lifecycle workflow runs this check in CI.
 
+The separate `scripts/validate_scanner_local.py --managed-linux --run-loopback`
+mode runs a fresh installer and one-time enrollment against an isolated portal,
+approves only loopback scope, collects a guarded real Nmap run and PDF, then
+requests a portal restart and confirms a new PID plus recovered readiness.
+It requires a disposable non-root Linux user and an active user manager;
+existing Daedalus installations are refused. The managed scanner workflow
+runs this path on Ubuntu 24.04. Generated credentials and runtime data are
+removed after the check; the sanitized receipt and PDF are retained.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:
