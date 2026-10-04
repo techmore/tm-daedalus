@@ -541,3 +541,8 @@ Private source ab5b073 client build on macOS 27.0.1 uploaded production report 5
 ### 2026-10-04 — DNS evidence grouped by assessment topic
 
 Domain resolution and email protection now each retain their visible summary metrics followed by a separate collapsed record drawer. Resolver lookup details, coverage errors and upstream DNSSEC observations share a diagnostic drawer. Unknown lookup state remains visible in summary metrics; failures are not recast as absent records. A renderer fixture verifies topic-to-record placement, collapsed detail semantics, unknown resolution state and empty-snapshot handling. Dashboard/refresh suite: 39 passed. Visual browser acceptance remains pending.
+
+
+### 2026-10-04 — Production DNS topic grouping release
+
+Source 748131a is active on Incus. Internal/public readiness passed; off-host backup daedalus-data-20261004T102041Z.tar.gz was verified. Full suite: 516 passed and 104 subtests. Authenticated production HTML/JavaScript checks confirm asset version 093, domain/email evidence groups and the diagnostics drawer. These are deployment and renderer checks; browser visual acceptance remains open.
