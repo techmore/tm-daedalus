@@ -721,6 +721,9 @@ def serialize_report_job(job: ReportJob, actor: User | None = None) -> dict[str,
         "updated_at": iso_utc(job.updated_at),
         "completed_at": iso_utc(job.completed_at),
         "download_url": f"/api/reports/{job.id}/download" if job.status == "completed" else None,
+        "meraki_summary": {key: value for key, value in ((job.report_snapshot or {}).get("meraki", {}).get("summary", {}) or {}).items()
+            if key in {"network_count", "device_count", "security_controls_collected", "security_controls_unavailable"}
+            and isinstance(value, int) and not isinstance(value, bool)} if job.report_type == "meraki_security" and job.status == "completed" else None,
         "meraki_comparison": {key: comparison.get(key) for key in (
             "baseline", "previous_report_id", "changed_control_count", "coverage_change_count",
             "inventory_change_count", "inventory_coverage_change_count",

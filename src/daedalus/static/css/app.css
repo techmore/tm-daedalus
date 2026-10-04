@@ -753,3 +753,41 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 }
 .scanner-inventory dt { color: #66583f; font-weight: 600; }
 .scanner-inventory dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Topic pages lead with assessment and keep supporting controls quiet. */
+.topic-priority {
+  padding: 24px 28px;
+  margin: 20px 0;
+  background: var(--selected-surface);
+  border: 1px solid var(--card-line);
+  border-left: 4px solid var(--olive-600);
+  border-radius: 16px;
+}
+.topic-priority h3 { margin: 4px 0 14px; color: var(--brown-900); }
+.topic-priority ul { padding-left: 20px; margin: 0; }
+.topic-priority li { margin: 10px 0; line-height: 1.6; max-width: 90ch; }
+.topic-secondary {
+  display: block;
+  margin: 20px 0;
+  padding: 18px 22px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--cream-50);
+  min-width: 0;
+}
+.topic-secondary > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--brown-800);
+  line-height: 1.5;
+}
+.topic-secondary > summary:focus-visible { outline: 2px solid var(--olive-600); outline-offset: 5px; }
+.topic-secondary[open] > summary { margin-bottom: 20px; }
+.topic-secondary .external-schedule-card { background: transparent; }
+.check-record-grid > .topic-secondary, .website-summary-grid > .topic-secondary { grid-column: 1 / -1; }
+.external-check-workspace > .check-scope-note { max-width: 85ch; font-size: 12px; }
+@media (max-width: 640px) {
+  .topic-priority, .topic-secondary { padding: 18px; }
+}
+.topic-audit-outcomes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--card-line); }
+.topic-audit-outcomes p { line-height: 1.6; font-size: 13px; }

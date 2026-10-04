@@ -64,7 +64,7 @@
     meraki: "Meraki security report",
     dns: "DNS & email health",
     web: "Website health",
-    cis: "CIS profiles",
+    cis: "Endpoint compliance",
     reports: "Report library",
     members: "Members & access",
     notifications: "Security notifications"
@@ -1394,6 +1394,24 @@
     var status = document.getElementById(statusId);
     if (!list) return;
     reports = matchingReportJobs(reports, reportType);
+    if (reportType === "meraki_security") {
+      var overview = document.getElementById("meraki-current-summary");
+      if (overview) {
+        overview.replaceChildren();
+        var completed = reports.find(function (job) { return job.status === "completed"; });
+        if (!completed) appendEmpty(overview, "No completed network assessment yet. Connect an organization below to establish a baseline.");
+        else {
+          var captured = document.createElement("p"); captured.className = "muted";
+          captured.textContent = "Latest completed report · " + dateLabel(completed.completed_at || completed.created_at);
+          var totals = completed.meraki_summary || {};
+          var grid = document.createElement("div"); grid.className = "audit-metric-grid";
+          [["Networks", "network_count"], ["Devices", "device_count"], ["Controls read", "security_controls_collected"], ["Controls unavailable", "security_controls_unavailable"]].forEach(function (metric) {
+            grid.append(makeAuditMetric(metric[0], totals[metric[1]] == null ? "Not captured" : String(totals[metric[1]]), "Latest saved report", "neutral"));
+          });
+          overview.append(captured, grid);
+        }
+      }
+    }
     list.replaceChildren();
     if (!reports.length) {
       var reportTypes = Array.isArray(reportType) ? reportType : [reportType];
@@ -1905,7 +1923,7 @@
       metrics.replaceChildren();
       [
         [String(enrolledDeviceCount), "Enrolled devices"],
-        [String(Number((document.getElementById("cis-profile-list") || {}).dataset?.profileCount) || 0), "Published profiles"],
+        [latest ? Number(latest.summary.score).toFixed(1) + "%" : "—", "Latest report pass rate"],
         [String(reports.length), "Recent reports"]
       ].forEach(function (metric, index) {
         var card = document.createElement("div");
@@ -2450,6 +2468,37 @@
     ];
   }
 
+  function renderTopicPriorities(type, snapshot) {
+    var container = document.getElementById(type + "-priorities");
+    if (!container) return;
+    container.replaceChildren();
+    if (!snapshot) { appendEmpty(container, "No saved assessment yet. Run a check to establish a baseline."); return; }
+    var items = [];
+    if (type === "dns") {
+      var errors = snapshot.resolver_errors || {};
+      emailAuthenticationMetrics(snapshot.email_authentication_assessment).forEach(function (metric) {
+        if (metric.state !== "good") items.push(metric.label + ": " + metric.value + ". " + metric.detail);
+      });
+      if (Object.keys(errors).length) items.push("Some DNS lookups failed. Those records remain unknown; review the lookup evidence below.");
+      items.push("DKIM coverage is limited to the common selectors checked. A missing selector does not establish that mail is unsigned.");
+    } else {
+      var code = Number(snapshot.http_status || 0);
+      if (!code || code >= 400) items.push("Website response needs review: " + (code || "no HTTP response") + ".");
+      var expiry = snapshot.tls && snapshot.tls.valid_until ? Date.parse(snapshot.tls.valid_until) : NaN;
+      var days = Number.isNaN(expiry) ? null : Math.ceil((expiry - Date.now()) / 86400000);
+      if (days === null) items.push("Certificate expiry was not captured in this snapshot.");
+      else if (days < 30) items.push(days < 0 ? "The observed TLS certificate has expired." : "The observed TLS certificate expires in " + days + " days.");
+      var policies = snapshot.security_headers || {};
+      var missing = Object.keys(policies).filter(function (name) { return !policies[name]; });
+      if (missing.length) items.push("Browser policy headers absent from the response: " + missing.join(", ") + ". Review which policies are appropriate for this site.");
+      if (!Object.keys(policies).length) items.push("Browser policy header evidence is unavailable.");
+      if (!items.length) items.push("No response, certificate-expiry, or missing-header concern was identified in this saved snapshot. Deeper audit coverage is separate.");
+    }
+    var list = document.createElement("ul");
+    items.forEach(function (item) { var row = document.createElement("li"); row.textContent = item; list.append(row); });
+    container.append(list);
+  }
+
   function renderDnsSnapshot(snapshot) {
     var grid = document.getElementById("dns-record-grid");
     if (!grid) return;
@@ -2517,9 +2566,14 @@
       makeAuditMetric("DKIM selectors", selectorMetricValue, selectorMetricDetail, publishedSelectors ? "good" : "attention")
     );
     grid.append(summary);
-    grid.append(makeAuditTable("DNS record inventory", "@ is the root of " + (snapshot.domain || "the workspace domain") + "; www records are checked separately.", inventoryRows));
-    grid.append(makeAuditTable("Email routing and authentication", "MX, SPF, DMARC, and the common DKIM selectors checked by Daedalus. Names are relative to the domain.", authRows));
+    var recordDetails = document.createElement("details");
+    recordDetails.className = "topic-secondary";
+    var recordHeading = document.createElement("summary"); recordHeading.textContent = "DNS & email record evidence";
+    recordDetails.append(recordHeading);
+    recordDetails.append(makeAuditTable("DNS record inventory", "@ is the root of " + (snapshot.domain || "the workspace domain") + "; www records are checked separately.", inventoryRows));
+    recordDetails.append(makeAuditTable("Email routing and authentication", "MX, SPF, DMARC, and the common DKIM selectors checked by Daedalus. Names are relative to the domain.", authRows));
 
+    grid.append(recordDetails);
     if (snapshot.query_observations) {
       var lookupDetails = document.createElement("details");
       lookupDetails.className = "agent-command-history";
@@ -2635,7 +2689,9 @@
     if (snapshot.page_content) {
       details.append(makeCheckCard("Fetched page evidence · dynamic content may change legitimately", snapshot.page_content));
     }
-    summary.append(details);
+    var evidence = document.createElement("details"); evidence.className = "topic-secondary";
+    var evidenceHeading = document.createElement("summary"); evidenceHeading.textContent = "Certificate, cookies & response evidence";
+    evidence.append(evidenceHeading, details); summary.append(evidence);
     headerNames.forEach(function (name) {
       headers.append(makePolicyCard(name, policies[name]));
     });
@@ -2811,6 +2867,7 @@
       olderChangesButton.disabled = Boolean(historyState && historyState.loading === "changes");
       olderChangesButton.textContent = historyState && historyState.loading === "changes" ? "Loading older changes…" : "Load older changes";
     }
+    renderTopicPriorities(type, body.latest_snapshot);
     if (type === "dns") renderDnsSnapshot(body.latest_snapshot);
     if (type === "web") renderWebsiteSnapshot(body.latest_snapshot);
     renderExternalCheckSchedule(type, body.schedule);
@@ -2844,12 +2901,26 @@
     }
   }
 
+  function renderWebsiteAuditOutcome(id, label, run) {
+    var node = document.getElementById(id);
+    if (!node) return;
+    if (!run) { text(node, label + ": no assessment saved yet."); return; }
+    if (run.status === "failed" || run.status === "running") {
+      text(node, label + ": latest attempt " + run.status + ". Review the audit details below."); return;
+    }
+    var snapshot = run.snapshot || {};
+    var findings = Array.isArray(snapshot.findings) ? snapshot.findings.length : 0;
+    text(node, label + ": " + findings + " observation(s) in the latest run · " + dateLabel(run.completed_at || run.started_at)
+      + (snapshot.coverage_complete === true ? ". Fixed-path coverage completed; observations need review." : ". Coverage incomplete; absence does not establish resolution."));
+  }
+
   function renderActiveExposure(body) {
     var status = document.getElementById("web-active-status");
     var list = document.getElementById("web-active-runs");
     var changesList = document.getElementById("web-active-changes");
     if (!list) return;
     var runs = body.runs || [];
+    renderWebsiteAuditOutcome("web-exposure-outcome", "Public exposure paths", runs[0]);
     if (status) {
       var latest = runs[0];
       status.className = "check-status" + (latest && latest.status === "failed" ? " status-failed" : "");
@@ -2969,6 +3040,7 @@
       if (!response.ok) throw new Error(body.detail || "Could not load Nikto history");
       if (sequence !== niktoHistory.sequence) return;
       niktoHistory.runs = older ? niktoHistory.runs.concat(body.runs || []) : (body.runs || []);
+      renderWebsiteAuditOutcome("web-nikto-outcome", "Deeper website audit", niktoHistory.runs[0]);
       niktoHistory.cursor = body.runs_next_before;
       niktoHistory.hasMore = body.runs_has_more;
       host.replaceChildren();
