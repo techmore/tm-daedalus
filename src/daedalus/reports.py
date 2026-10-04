@@ -529,12 +529,12 @@ def _append_posture_overview(story: list[Any], checks: dict[str, Any], styles: d
         for check in checks.values()
         if isinstance(check, dict) and isinstance(check.get("changes") or [], list)
     )
-    changes_detail = "Confirmed field differences in saved comparisons; not a security score."
+    changes_detail = "Saved evidence differences, including lookup-state changes; not a security score."
     cards = [
         ("DNS and email", dns_status, dns_detail),
         ("Website health", web_value, web_detail),
         ("Bounded path checks", active_value, active_detail),
-        ("Confirmed changes", str(changes), changes_detail if changes else "No confirmed field differences were saved."),
+        ("Recorded differences", str(changes), changes_detail if changes else "No field differences were saved."),
     ]
     story.append(Paragraph("At-a-glance coverage", styles["section"]))
     card_width = (content_width - 10) / 2
@@ -669,7 +669,12 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
         story.append(Paragraph("Nikto website audit", styles["section"]))
         run = nikto.get("run") or nikto.get("latest_attempt") or {}
         snapshot = run.get("snapshot") or {}
-        story.append(_paragraph(f"Run #{run.get('id')} · {run.get('status')} · {_time_text(run.get('completed_at'))}", styles["small"]))
+        run_time = run.get("completed_at") or run.get("started_at")
+        time_label = "Completed" if run.get("completed_at") else "Started"
+        status_label = str(run.get("status") or "unknown").replace("_", " ")
+        story.append(_paragraph(f"Run #{run.get('id')} · {status_label} · {time_label} {_time_text(run_time)}", styles["small"]))
+        if run.get("status") == "running":
+            story.append(_paragraph("This audit was still running when the report snapshot was captured. Findings are not available in this snapshot; generate a new report after it finishes.", styles["body"]))
         story.append(_paragraph("Standard HTTPS tests excluding denial-of-service tests. Test exhaustion is not confirmed; missing findings do not prove resolution.", styles["body"]))
         if run.get("error_summary"):
             story.append(_paragraph(run["error_summary"], styles["body"]))

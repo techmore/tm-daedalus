@@ -63,3 +63,12 @@ class NiktoFlowsTests(unittest.TestCase):
         snapshot=self.snapshot([{'test_id':'1234','method':'GET','path':'/fixture','description':'Missing header <script>fixture</script>'}])
         pdf=build_external_posture_pdf({'domain':'cybersecuritypilot.org','checks':{'web-nikto':{'run':{'id':1,'status':'completed_with_warnings','snapshot':snapshot}}}})
         self.assertTrue(pdf.startswith(b'%PDF-'))
+
+    def test_running_nikto_pdf_has_start_time_and_pending_findings_note(self):
+        from daedalus import reports
+        with patch.object(reports, '_paragraph', wraps=reports._paragraph) as paragraphs:
+            pdf=reports.build_external_posture_pdf({'domain':'cybersecuritypilot.org','checks':{'web-nikto':{'latest_attempt':{'id':43,'status':'running','started_at':'2026-10-04T04:11:44Z'}}}})
+        values=[str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertTrue(pdf.startswith(b'%PDF-'))
+        self.assertTrue(any('Started Oct 4' in value for value in values))
+        self.assertTrue(any('still running when the report snapshot was captured' in value for value in values))

@@ -68,7 +68,7 @@ class ExternalPostureReportTests(unittest.TestCase):
         values = [str(call.args[0]) for call in paragraphs.call_args_list]
         self.assertTrue(pdf.startswith(b"%PDF-"))
         self.assertIn("DNS AND EMAIL", values)
-        self.assertIn("CONFIRMED CHANGES", values)
+        self.assertIn("RECORDED DIFFERENCES", values)
         self.assertIn("1", values)
         self.assertTrue(any("TLS certificate valid at collection" in value for value in values))
         self.assertTrue(any("does not calculate a combined security score" in value for value in values))
