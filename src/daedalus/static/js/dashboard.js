@@ -1405,20 +1405,54 @@
     }
   }
 
+  function fetchMerakiDashboardDetails(reportId) {
+    var cached = merakiDashboardDetailCache.get(reportId);
+    if (!cached) {
+      cached = fetch("/api/meraki/reports/" + encodeURIComponent(reportId) + "/details", {credentials: "same-origin"})
+        .then(async function (response) {
+          var body = await response.json();
+          if (!response.ok) throw new Error(body.detail || "Could not load Meraki report details");
+          return body;
+        });
+      merakiDashboardDetailCache.set(reportId, cached);
+    }
+    return cached;
+  }
+
+  async function loadMerakiSummaryObservations(reportId, container) {
+    container.textContent = "Loading saved review observations…";
+    try {
+      var details = await fetchMerakiDashboardDetails(reportId);
+      if (container.isConnected === false) return;
+      container.replaceChildren();
+      if (!Array.isArray(details.findings)) {
+        appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        return;
+      }
+      var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
+      if (!review.length) {
+        appendEmpty(container, "No saved observations are labeled Review.");
+        return;
+      }
+      var heading = document.createElement("h3"); heading.textContent = "Review observations";
+      container.append(heading);
+      review.slice(0, 5).forEach(function (item) {
+        var row = document.createElement("article"); row.className = "audit-policy-card";
+        var title = document.createElement("strong"); title.textContent = item.title || "Observation requires review";
+        var detail = document.createElement("p"); detail.textContent = item.detail || "Open the saved report for supporting evidence.";
+        row.append(title, detail); container.append(row);
+      });
+      if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+    } catch (error) {
+      merakiDashboardDetailCache.delete(reportId);
+      if (container.isConnected !== false) container.textContent = "Saved review observations could not be loaded. Open the report details or retry refresh.";
+    }
+  }
+
   async function loadMerakiDashboardDetails(reportId, container) {
     container.textContent = "Loading saved report details…";
     try {
-      var cached = merakiDashboardDetailCache.get(reportId);
-      if (!cached) {
-        cached = fetch("/api/meraki/reports/" + encodeURIComponent(reportId) + "/details", {credentials: "same-origin"})
-          .then(async function (response) {
-            var body = await response.json();
-            if (!response.ok) throw new Error(body.detail || "Could not load Meraki report details");
-            return body;
-          });
-        merakiDashboardDetailCache.set(reportId, cached);
-      }
-      renderMerakiDashboardDetails(container, await cached);
+      renderMerakiDashboardDetails(container, await fetchMerakiDashboardDetails(reportId));
     } catch (error) {
       merakiDashboardDetailCache.delete(reportId);
       container.textContent = error.message;
@@ -1445,6 +1479,9 @@
             grid.append(makeAuditMetric(metric[0], totals[metric[1]] == null ? "Not captured" : String(totals[metric[1]]), (metric[1] === "security_controls_unavailable" && totals.security_controls_collected != null ? String(totals.security_controls_collected) + " controls read · latest saved report" : "Latest saved report"), (metric[1] === "review_observation_count" || metric[1] === "security_controls_unavailable") && (totals[metric[1]] == null || totals[metric[1]] > 0) ? "attention" : "neutral"));
           });
           overview.append(captured, grid);
+          var observations = document.createElement("div"); observations.className = "check-summary";
+          overview.append(observations);
+          loadMerakiSummaryObservations(completed.id, observations);
         }
       }
     }

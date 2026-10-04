@@ -96,3 +96,31 @@ host.children[0].events.click();assert.equal(opened,'dns');
 '''
         result=subprocess.run(['node','-e',script],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_meraki_summary_observations_are_literal_bounded_and_shared(self):
+        source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
+        code=source[source.index('  function fetchMerakiDashboardDetails('):source.index('  async function loadMerakiDashboardDetails(')]
+        script="""const assert=require('node:assert/strict');
+class Node {constructor(){this.children=[];this.textContent='';this.isConnected=true;} replaceChildren(){this.children=[];this.textContent='';} append(...items){this.children.push(...items);}}
+const document={createElement:()=>new Node()};
+const merakiDashboardDetailCache=new Map(); let calls=0;
+let findings=[{status:'Review',title:'<script>literal</script>',detail:'Saved review detail'},{status:'Coverage warning',title:'Not a review item'}];
+async function fetch(){calls++;return {ok:true,json:async()=>({findings})};}
+function appendEmpty(node,message){const child=new Node();child.textContent=message;node.append(child);}
+function flatten(node){return node.textContent+' '+node.children.map(flatten).join(' ');}
+"""+code+"""
+(async()=>{
+const host=new Node();await loadMerakiSummaryObservations(31,host);
+assert.ok(flatten(host).includes("<script>literal</script>"));assert.doesNotMatch(flatten(host),/Not a review item/);
+const second=new Node();await loadMerakiSummaryObservations(31,second);assert.equal(calls,1);
+findings=Array.from({length:9},()=>({status:'Review',title:'Review row'}));await loadMerakiSummaryObservations(32,host);
+assert.equal(host.children.filter(x=>x.className==='audit-policy-card').length,5);
+assert.match(flatten(host),/Additional review observations/);
+findings=undefined;await loadMerakiSummaryObservations(33,host);assert.match(flatten(host),/evidence is unavailable/);
+findings=[];await loadMerakiSummaryObservations(34,host);assert.match(flatten(host),/No saved observations/);
+const detached=new Node();detached.isConnected=false;await loadMerakiSummaryObservations(34,detached);assert.equal(detached.children.length,0);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
