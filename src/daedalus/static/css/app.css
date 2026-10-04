@@ -808,3 +808,5 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .posture-card small { display: block; color: var(--muted); line-height: 1.5; }
 .posture-card .module-link { display: block; margin-top: 16px; }
 @media (max-width: 640px) { .posture-grid { grid-template-columns: 1fr; } }
+
+.topic-group-heading { margin: 20px 0 0; padding-bottom: 10px; border-bottom: 1px solid var(--card-line); color: var(--brown-900); font-size: 16px; }

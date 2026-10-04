@@ -6,6 +6,16 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_external_topics_put_results_before_review_and_controls(self):
+        root = Path(__file__).parents[1]
+        template = (root / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertLess(template.index('id="dns-record-grid"'), template.index('id="{{ key }}-priority-title"'))
+        self.assertLess(template.index('id="web-summary-grid"'), template.index('id="{{ key }}-priority-title"'))
+        self.assertLess(template.index('id="{{ key }}-priority-title"'), template.index('<summary>Exposure findings'))
+        source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
+        self.assertIn('grid.append(networkHeading, networkMetrics, mailHeading, summary)', source)
+        self.assertIn('A lookup failed; review the saved evidence', source)
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_assessment_summaries_preserve_unknown_and_partial_coverage(self):
         source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()

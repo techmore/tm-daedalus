@@ -2638,7 +2638,31 @@
       makeAuditMetric(emailMetrics[1].label, emailMetrics[1].value, emailMetrics[1].detail, emailMetrics[1].state),
       makeAuditMetric("DKIM selectors", selectorMetricValue, selectorMetricDetail, publishedSelectors ? "good" : "attention")
     );
-    grid.append(summary);
+    var networkHeading = document.createElement("h3");
+    networkHeading.className = "topic-group-heading";
+    networkHeading.textContent = "Domain resolution & trust";
+    var networkMetrics = document.createElement("div");
+    networkMetrics.className = "audit-metric-grid";
+    function resolutionMetric(label, keys) {
+      var captured = keys.every(function (key) { return Object.prototype.hasOwnProperty.call(records, key); });
+      var unavailable = keys.some(function (key) { return Boolean(errors[key.replace("WWW_", "www ")]); });
+      var published = keys.some(function (key) { return Array.isArray(records[key]) && records[key].length > 0; });
+      return makeAuditMetric(label, unavailable ? "Unknown" : !captured ? "Not assessed" : published ? "Records observed" : "No records observed",
+        unavailable ? "A lookup failed; review the saved evidence" : "Address and alias records in this snapshot",
+        unavailable || !captured || !published ? "attention" : "good");
+    }
+    var dnssec = snapshot.dnssec_observations || {};
+    var signingLabels = {lookup_incomplete: "Unknown", records_observed: "Records observed", no_records_observed: "No records observed"};
+    networkMetrics.append(
+      resolutionMetric("Root domain", ["A", "AAAA", "CNAME"]),
+      resolutionMetric("www domain", ["WWW_A", "WWW_AAAA", "WWW_CNAME"]),
+      makeAuditMetric("Signing evidence", signingLabels[dnssec.assessment] || "Not assessed", "DNSSEC chain has not been validated locally", "neutral"),
+      makeAuditMetric("Lookup coverage", String(Object.keys(errors).length) + " unavailable", "Failed lookups remain unknown", Object.keys(errors).length ? "attention" : "neutral")
+    );
+    var mailHeading = document.createElement("h3");
+    mailHeading.className = "topic-group-heading";
+    mailHeading.textContent = "Email routing & protection";
+    grid.append(networkHeading, networkMetrics, mailHeading, summary);
     var recordDetails = document.createElement("details");
     recordDetails.className = "topic-secondary";
     var recordHeading = document.createElement("summary"); recordHeading.textContent = "DNS & email record evidence";
