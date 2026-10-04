@@ -68,7 +68,7 @@ def has_matching_txt(domain: str, token_hashes: set[str], token_digest) -> bool:
     record_name = challenge_record_name(domain)
     try:
         answers = dns.resolver.resolve(record_name, "TXT", lifetime=5)
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
         return False
     except dns.exception.DNSException as exc:
         raise RuntimeError("DNS lookup failed. Try again in a moment.") from exc

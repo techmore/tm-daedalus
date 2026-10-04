@@ -767,6 +767,24 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         self.assertTrue(verified.json()["verified"])
         verify_txt.assert_called_once()
 
+    def test_domain_verification_resolver_failure_preserves_probation_and_challenge(self):
+        import dns.resolver
+        created = self.admin_client.post('/api/workspaces', json={'name': 'DNS outage', 'domain': 'outage.example.org'})
+        self.assertEqual(created.status_code, 200, created.text)
+        organization_id = created.json()['organization_id']
+        with patch('daedalus.domain_verification.dns.resolver.resolve', side_effect=dns.resolver.NoNameservers()):
+            response = self.admin_client.post(f'/api/workspaces/{organization_id}/verify-domain')
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertIn('DNS lookup failed', response.json()['detail'])
+        with self.session_factory() as db:
+            organization = db.get(Organization, organization_id)
+            self.assertNotEqual(organization.verification_status, 'verified')
+            challenges = db.scalars(select(DomainChallenge).where(DomainChallenge.organization_id == organization_id)).all()
+            self.assertTrue(challenges)
+            self.assertTrue(all(challenge.verified_at is None for challenge in challenges))
+            self.assertEqual(db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.organization_id == organization_id, AuditLog.action == 'domain.verified')), 0)
+        self.assertEqual(self.admin_client.post('/api/enrollment-tokens').status_code, 403)
+
     def test_workspace_owner_probation_override_and_txt_verification(self):
         created = self.admin_client.post(
             "/api/workspaces",
