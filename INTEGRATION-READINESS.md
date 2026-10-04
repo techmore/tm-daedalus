@@ -436,3 +436,8 @@ Ten active legacy macOS update/privacy Boolean collectors now require successful
 ### 2026-10-04 — Meraki and endpoint assessment grouping
 
 Meraki separates its current assessment from saved-report evidence. Endpoint compliance puts attention counts and their collection scope together in a prominent assessment, with separate labeled groups for coverage, baseline evidence, changes, and device presence. Setup remains collapsed. These are presentation changes; scope and collection semantics are unchanged. Browser visual review remains pending.
+
+
+### 2026-10-04 — Workspace priorities
+
+Overview adds area-level review, failed-collection, and unassessed counts. Area cards are stably ordered with failed collections and review observations first, followed by unknown/missing assessments, active checks, and saved evidence. These are area counts, not a combined security score. Missing or empty API coverage produces an unavailable message rather than zero attention counts. Rendering preserves literal text, keyboard focus, and stale-response protection. Visual review remains pending.

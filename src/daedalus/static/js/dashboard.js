@@ -970,6 +970,22 @@
     text(document.getElementById("event-count"), data.events.length + " recent");
   }
 
+  function workspaceAssessmentSummary(areas) {
+    var counts = {attention: 0, unavailable: 0, not_assessed: 0, running: 0, recorded: 0, unknown: 0};
+    (Array.isArray(areas) ? areas : []).forEach(function (area) {
+      var state = Object.prototype.hasOwnProperty.call(counts, area.state) ? area.state : "unknown";
+      counts[state] += 1;
+    });
+    var ranks = {unavailable: 0, attention: 1, unknown: 2, not_assessed: 3, running: 4, recorded: 5};
+    var ordered = (Array.isArray(areas) ? areas : []).map(function (area, index) { return {area: area, index: index}; });
+    ordered.sort(function (left, right) {
+      var a = Object.prototype.hasOwnProperty.call(ranks, left.area.state) ? ranks[left.area.state] : ranks.unknown;
+      var b = Object.prototype.hasOwnProperty.call(ranks, right.area.state) ? ranks[right.area.state] : ranks.unknown;
+      return a - b || left.index - right.index;
+    });
+    return {counts: counts, areas: ordered.map(function (entry) { return entry.area; })};
+  }
+
   async function loadWorkspacePosture() {
     var host = document.getElementById("workspace-posture");
     if (!host || !orgId) return;
@@ -977,12 +993,27 @@
     try {
       var response = await fetch("/api/workspace-posture", { credentials: "same-origin" });
       var body = await response.json();
-      if (!response.ok) throw new Error("Workspace assessments could not be loaded.");
+      if (!response.ok || !Array.isArray(body.areas) || !body.areas.length) throw new Error("Workspace assessments could not be loaded.");
       if (sequence !== postureRequestSequence) return;
       var focusedKey = host.contains(document.activeElement) ? document.activeElement.dataset.postureKey : null;
       host.replaceChildren();
       var labels = {recorded:"Evidence saved", attention:"Review evidence", not_assessed:"Not assessed", running:"Check running", unavailable:"Latest attempt failed"};
-      body.areas.forEach(function (area) {
+      var assessment = workspaceAssessmentSummary(body.areas);
+      var priorities = document.getElementById("workspace-priorities");
+      if (priorities) {
+        priorities.replaceChildren();
+        var metrics = document.createElement("div"); metrics.className = "audit-metric-grid";
+        metrics.append(
+          makeAuditMetric("Areas to review", String(assessment.counts.attention), "Saved observations requiring review", assessment.counts.attention ? "attention" : "neutral"),
+          makeAuditMetric("Failed collections", String(assessment.counts.unavailable), "Latest attempt unavailable; review prior evidence", assessment.counts.unavailable ? "attention" : "neutral"),
+          makeAuditMetric("Unassessed areas", String(assessment.counts.not_assessed + assessment.counts.unknown), "Missing or unknown assessment evidence", "neutral")
+        );
+        priorities.append(metrics);
+        var note = document.createElement("p"); note.className = "check-scope-note";
+        note.textContent = "Review areas below in priority order. Saved evidence and active checks do not establish that an area is secure.";
+        priorities.append(note);
+      }
+      assessment.areas.forEach(function (area) {
         var card = document.createElement("button"); card.type = "button"; card.className = "posture-card"; card.dataset.postureKey = area.key;
         var heading = document.createElement("strong"); heading.textContent = area.title;
         var state = document.createElement("span"); state.className = "posture-state is-" + area.state; state.textContent = labels[area.state] || "Unknown";
@@ -1000,7 +1031,11 @@
         host.append(card);
       });
       if (focusedKey) { var focused = host.querySelector('[data-posture-key="' + focusedKey + '"]'); if (focused) focused.focus({preventScroll:true}); }
-    } catch (error) { if (sequence === postureRequestSequence) { host.replaceChildren(); appendEmpty(host, error.message); } }
+    } catch (error) { if (sequence === postureRequestSequence) {
+      host.replaceChildren(); appendEmpty(host, error.message);
+      var priorities = document.getElementById("workspace-priorities");
+      if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Current assessment coverage is unavailable. Refresh to try again."); }
+    } }
   }
 
   function refresh(force) {
