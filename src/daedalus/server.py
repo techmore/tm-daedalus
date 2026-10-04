@@ -4873,6 +4873,62 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/api/workspace-posture")
+def workspace_posture(request: Request, db: Session = Depends(get_db)):
+    """Summarize saved workspace evidence without exposing raw results or credentials."""
+    _, org, _ = get_org_context(request, db)
+    areas = []
+    for kind, title in (("dns", "DNS & email"), ("web", "Website")):
+        conditions = (ExternalCheckRun.organization_id == org.id, ExternalCheckRun.check_type == kind)
+        latest = db.scalar(select(ExternalCheckRun).where(*conditions).order_by(ExternalCheckRun.id.desc()).limit(1))
+        saved = db.scalar(select(ExternalCheckRun).where(*conditions, ExternalCheckRun.status.in_(("completed", "completed_with_warnings"))).order_by(ExternalCheckRun.id.desc()).limit(1))
+        snapshot = (saved.snapshot or {}) if saved else {}
+        state = "not_assessed" if saved is None else "recorded"
+        summary = "No completed assessment yet."
+        if saved and kind == "dns":
+            assessment = snapshot.get("email_authentication_assessment") or {}
+            spf = (assessment.get("spf") or {}).get("label") or "Not assessed"
+            dmarc = (assessment.get("dmarc") or {}).get("label") or "Not assessed"
+            unknown = len(snapshot.get("resolver_errors") or {})
+            summary = f"SPF: {spf} · DMARC: {dmarc} · {unknown} unknown lookup(s)"
+            if unknown or saved.status == "completed_with_warnings" or any((assessment.get(policy) or {}).get("tone") != "good" for policy in ("spf", "dmarc")): state = "attention"
+        elif saved:
+            headers = snapshot.get("security_headers") or {}
+            absent = sum(not value for value in headers.values())
+            summary = f"HTTPS {snapshot.get('http_status') or 'unknown'} · {absent} selected header(s) absent"
+            if absent or not headers or not (200 <= int(snapshot.get("http_status") or 0) < 400): state = "attention"
+        if latest and latest.status in {"running", "failed"}:
+            state = "running" if latest.status == "running" else "unavailable"
+        areas.append({"key":kind, "title":title, "state":state, "summary":summary,
+            "updated_at":iso_utc(saved.completed_at) if saved else None,
+            "latest_attempt_status":latest.status if latest else None})
+    nikto = db.scalar(select(ExternalCheckRun).where(
+        ExternalCheckRun.organization_id == org.id, ExternalCheckRun.check_type == "web-nikto",
+        ExternalCheckRun.status.in_(("completed", "completed_with_warnings"))
+    ).order_by(ExternalCheckRun.id.desc()).limit(1))
+    if nikto:
+        areas[1]["audit_summary"] = f"Deeper audit: {len((nikto.snapshot or {}).get('findings') or [])} observations · coverage remains unconfirmed"
+        areas[1]["audit_updated_at"] = iso_utc(nikto.completed_at)
+        if areas[1]["state"] in {"recorded", "not_assessed"}: areas[1]["state"] = "attention"
+    agents = db.scalars(select(Agent).where(Agent.organization_id == org.id, Agent.enabled.is_(True))).all()
+    online = sum(agent_status(agent) == "online" for agent in agents)
+    scoped = sum(bool(agent.authorized_networks) for agent in agents)
+    areas.append({"key":"scanners", "title":"Internal network", "state":"recorded" if agents and online == len(agents) and scoped == len(agents) else "attention" if agents else "not_assessed",
+        "summary":f"{online}/{len(agents)} enabled scanners online · {scoped} with approved network ranges" if agents else "No enabled scanners in this workspace.", "updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
+    devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
+    reporting = sum(device.last_seen_at >= utcnow()-timedelta(hours=36) for device in devices)
+    cis = db.scalar(select(CISReport).where(CISReport.organization_id == org.id).order_by(CISReport.collected_at.desc(), CISReport.id.desc()).limit(1))
+    areas.append({"key":"cis", "title":"Endpoint compliance", "state":"recorded" if cis and reporting == len(devices) else "attention" if devices else "not_assessed",
+        "summary":f"{reporting}/{len(devices)} devices reporting" + (f" · latest report pass rate: {cis.summary.get('score', 'unknown')}%" if cis else " · no baseline results yet"),
+        "updated_at":iso_utc(cis.collected_at) if cis else None})
+    meraki = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "meraki_security", ReportJob.status == "completed").order_by(ReportJob.id.desc()).limit(1))
+    totals = ((meraki.report_snapshot or {}).get("meraki", {}).get("summary", {}) or {}) if meraki else {}
+    areas.append({"key":"meraki", "title":"Meraki network", "state":"recorded" if meraki else "not_assessed",
+        "summary":f"{totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} assigned devices" if meraki else "No completed network report yet.",
+        "updated_at":iso_utc(meraki.completed_at) if meraki else None})
+    return JSONResponse({"domain":org.domain, "areas":areas, "assessed_at":iso_utc(utcnow())}, headers={"Cache-Control":"no-store"})
+
+
 @app.get("/api/dashboard")
 def dashboard_data(request: Request, db: Session = Depends(get_db)):
     _, organization, membership = get_org_context(request, db)

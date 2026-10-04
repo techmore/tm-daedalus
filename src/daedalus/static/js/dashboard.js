@@ -36,6 +36,7 @@
 
   var shell = document.querySelector(".app-shell");
   var orgId = shell ? shell.dataset.organizationId : null;
+  var postureRequestSequence = 0;
   var role = shell ? shell.dataset.role : null;
   var verificationStatus = shell ? shell.dataset.verificationStatus : null;
   var controlsEnabled = shell ? shell.dataset.controlsEnabled === "true" : false;
@@ -165,6 +166,7 @@
 
     if (activeTab === name) return;
     activeTab = name;
+    if (name === "overview") loadWorkspacePosture();
     if (name === "meraki") loadMeraki();
     if (name === "cis") { loadCIS(); loadReports(); }
     if (name === "dns" || name === "web") loadExternalCheck(name);
@@ -926,6 +928,39 @@
     text(document.getElementById("event-count"), data.events.length + " recent");
   }
 
+  async function loadWorkspacePosture() {
+    var host = document.getElementById("workspace-posture");
+    if (!host || !orgId) return;
+    var sequence = ++postureRequestSequence;
+    try {
+      var response = await fetch("/api/workspace-posture", { credentials: "same-origin" });
+      var body = await response.json();
+      if (!response.ok) throw new Error("Workspace assessments could not be loaded.");
+      if (sequence !== postureRequestSequence) return;
+      var focusedKey = host.contains(document.activeElement) ? document.activeElement.dataset.postureKey : null;
+      host.replaceChildren();
+      var labels = {recorded:"Evidence saved", attention:"Review evidence", not_assessed:"Not assessed", running:"Check running", unavailable:"Latest attempt failed"};
+      body.areas.forEach(function (area) {
+        var card = document.createElement("button"); card.type = "button"; card.className = "posture-card"; card.dataset.postureKey = area.key;
+        var heading = document.createElement("strong"); heading.textContent = area.title;
+        var state = document.createElement("span"); state.className = "posture-state is-" + area.state; state.textContent = labels[area.state] || "Unknown";
+        var summary = document.createElement("p"); summary.textContent = area.summary;
+        var date = document.createElement("small"); date.textContent = area.updated_at ? "Saved evidence / check-in " + dateLabel(area.updated_at) : "No saved assessment time";
+        var link = document.createElement("span"); link.className = "module-link"; link.textContent = "Review this area →";
+        card.append(heading, state, summary, date);
+        if (area.audit_summary) {
+          var audit = document.createElement("p"); audit.textContent = area.audit_summary;
+          var captured = document.createElement("small"); captured.textContent = "Audit evidence " + dateLabel(area.audit_updated_at);
+          card.append(audit, captured);
+        }
+        card.append(link);
+        card.addEventListener("click", function () { activateTab(area.key, true); });
+        host.append(card);
+      });
+      if (focusedKey) { var focused = host.querySelector('[data-posture-key="' + focusedKey + '"]'); if (focused) focused.focus({preventScroll:true}); }
+    } catch (error) { if (sequence === postureRequestSequence) { host.replaceChildren(); appendEmpty(host, error.message); } }
+  }
+
   function refresh(force) {
     if (dashboardRefreshPromise) {
       if (force) return dashboardRefreshPromise.then(function () { return refresh(true); });
@@ -938,6 +973,7 @@
         var data = await response.json();
         if (!force && document.querySelector(".inline-confirmation")) return;
         render(data);
+        if (activeTab === "overview") await loadWorkspacePosture();
       } catch (_error) {
         // Periodic refresh retries transient failures without changing saved evidence.
       }

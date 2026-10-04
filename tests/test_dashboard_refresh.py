@@ -61,6 +61,7 @@ const window = {
 const titleMap = {overview: 'Overview', cis: 'CIS profiles'};
 let activeTab = 'overview';
 const text = (element, value) => { element.textContent = value; };
+let postureLoads = 0; const loadWorkspacePosture = () => { postureLoads++; };
 const loadCIS = () => {}; const loadReports = () => {};
 const loadMeraki = () => {}; const loadExternalCheck = () => {};
 const loadActiveExposure = () => {}; const loadNotifications = () => {};
@@ -76,6 +77,7 @@ assert.equal(pushes[0][2], '/dashboard#cis');
 activateTab('unsupported', false);
 assert.equal(items[0].attributes['aria-current'], 'page');
 assert.equal(items[1].attributes['aria-current'], undefined);
+assert.equal(postureLoads, 1);
 """
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

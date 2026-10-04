@@ -797,3 +797,14 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .topic-observation-group summary { cursor: pointer; }
 .topic-observation-group p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .topic-observation-group small { display: block; color: var(--muted); line-height: 1.5; }
+
+.posture-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.posture-card { text-align: left; padding: 24px; border: 1px solid var(--card-line); border-radius: 16px; background: var(--cream-50); color: var(--ink); cursor: pointer; }
+.posture-card:hover, .posture-card:focus-visible { background: var(--card-surface); outline: 2px solid var(--olive-600); outline-offset: 2px; }
+.posture-card > strong { display: block; font-size: 18px; color: var(--brown-900); }
+.posture-state { display: inline-block; margin-top: 12px; padding: 4px 8px; border-radius: 6px; background: var(--olive-100); font-size: 12px; }
+.posture-state.is-attention, .posture-state.is-unavailable { background: #eee1c8; }
+.posture-card p { line-height: 1.6; margin: 14px 0; }
+.posture-card small { display: block; color: var(--muted); line-height: 1.5; }
+.posture-card .module-link { display: block; margin-top: 16px; }
+@media (max-width: 640px) { .posture-grid { grid-template-columns: 1fr; } }

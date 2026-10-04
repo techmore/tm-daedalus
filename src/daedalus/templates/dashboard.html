@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-062">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-063">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -92,40 +92,6 @@
       </header>
 
       <section class="tab-panel active" id="tab-overview">
-        <div class="welcome-row overview-hero">
-          <div class="overview-hero-copy">
-            <p class="eyebrow">CURRENT WORKSPACE</p>
-            <h2>Security overview</h2>
-            <p class="muted">Review each security area, its latest evidence, and changes that need attention.</p>
-          </div>
-          {% set scanner_state = namespace(online=0) %}
-          {% for agent in agents %}
-          {% if agent_status(agent) == 'online' %}{% set scanner_state.online = scanner_state.online + 1 %}{% endif %}
-          {% endfor %}
-          <aside class="overview-preview" aria-label="Workspace security cadence">
-            <div class="overview-preview-head">
-              <div><p class="eyebrow">SECURITY CADENCE</p><h3>Workspace pulse</h3></div>
-              <span class="overview-status {{ 'is-verified' if organization.verification_status == 'verified' else 'is-pending' }}"><i></i>{{ organization.verification_status|title }}</span>
-            </div>
-            <p class="overview-preview-copy">A shared view of scanner activity and domain ownership.</p>
-            <div class="overview-preview-metrics">
-              <div><strong>{{ scanner_state.online }}/{{ agents|length }}</strong><span>Scanners online</span></div>
-              <div><strong>{{ recent_events|length }}</strong><span>Recent scan events</span></div>
-              <div><strong>{{ organization.verification_status|title }}</strong><span>Domain ownership</span></div>
-            </div>
-            <div class="overview-preview-activity">
-              <span class="overview-activity-icon" aria-hidden="true">⌘</span>
-              <span><strong>Internal scan activity</strong><small>{{ 'Live updates are flowing from NmapUI.' if scanner_state.online else 'Scan events appear here when a scanner connects.' }}</small></span>
-              <span class="overview-live-state {{ 'connected' if scanner_state.online else 'waiting' }}"><i></i>{{ 'Live' if scanner_state.online else 'Waiting' }}</span>
-            </div>
-          </aside>
-        </div>
-        <div class="stat-grid">
-          <article class="stat-card"><span>Scanner nodes</span><strong id="stat-agents">{{ agents|length }}</strong><small>Mac or Ubuntu NmapUI instances</small></article>
-          <article class="stat-card"><span>Active scanners</span><strong id="stat-online">0</strong><small>Connected to Daedalus now</small></article>
-          <article class="stat-card"><span>Scan events</span><strong id="stat-events">{{ recent_events|length }}</strong><small>Live progress and result history</small></article>
-          <article class="stat-card"><span>Workspace</span><strong class="stat-status" id="stat-domain-status">{{ organization.verification_status|title }}</strong><small>{{ organization.domain }}</small></article>
-        </div>
         {% if membership.role == 'admin' and organization.verification_status != 'verified' %}
         <section class="verification-card" aria-labelledby="verify-domain-title">
             <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; Nikto and bounded exposure checks require a verified domain or an active admin override.</p></div>
@@ -156,13 +122,17 @@
         {% endif %}
         {% endif %}
         {% endif %}
-        <div class="section-heading"><div><p class="eyebrow">YOUR MODULES</p><h2>Security overview</h2></div></div>
-        <div class="module-grid">
-          <button class="module-card module-live" data-tab="scanners"><span class="module-icon teal">⌘</span><span class="module-title">Internal network scans</span><span class="module-description">Run local NmapUI scanners across VLANs and subnets.</span><span class="module-link">Open scanner fleet →</span></button>
-          <button class="module-card" data-tab="meraki"><span class="module-icon violet">◈</span><span class="module-title">Meraki security</span><span class="module-description">Connect an API key, review an organization, and build a report.</span><span class="module-link">Open Meraki →</span></button>
-          <button class="module-card" data-tab="dns"><span class="module-icon blue">⌁</span><span class="module-title">DNS &amp; email health</span><span class="module-description">Review DNS posture, SPF, DKIM, DMARC, and MX.</span><span class="module-link">Open DNS &amp; email →</span></button>
-          <button class="module-card" data-tab="cis"><span class="module-icon amber">▤</span><span class="module-title">CIS profiles</span><span class="module-description">Distribute audit profiles and review endpoint results.</span><span class="module-link">Open CIS profiles →</span></button>
+        <div class="section-heading"><div><p class="eyebrow">CURRENT EVIDENCE</p><h2>Security areas</h2><p class="muted">Latest saved results and check-in state. Missing evidence remains unassessed.</p></div></div>
+        <div class="posture-grid" id="workspace-posture" aria-live="polite"><p class="muted">Loading workspace assessments…</p></div>
+        <details class="topic-secondary"><summary>Scanner activity counters</summary>
+        <div class="stat-grid">
+          <article class="stat-card"><span>Scanner nodes</span><strong id="stat-agents">{{ agents|length }}</strong><small>Mac or Ubuntu NmapUI instances</small></article>
+          <article class="stat-card"><span>Active scanners</span><strong id="stat-online">0</strong><small>Connected to Daedalus now</small></article>
+          <article class="stat-card"><span>Scan events</span><strong id="stat-events">{{ recent_events|length }}</strong><small>Live progress and result history</small></article>
+          <article class="stat-card"><span>Workspace</span><strong class="stat-status" id="stat-domain-status">{{ organization.verification_status|title }}</strong><small>{{ organization.domain }}</small></article>
         </div>
+        </details>
+
       </section>
 
       <section class="tab-panel" id="tab-scanners">
@@ -486,6 +456,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-062" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-063" defer></script>
 </body>
 </html>

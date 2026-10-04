@@ -63,3 +63,36 @@ assert.match(flatten(host),/No completed deeper audit/);
 '''
         result=subprocess.run(['node','-e',script],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_overview_rejects_stale_responses_and_preserves_keyboard_focus(self):
+        source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
+        renderer=source[source.index('  async function loadWorkspacePosture('):source.index('  function refresh(force)')]
+        script='''const assert=require('node:assert/strict');
+let focused=null;
+class Node { constructor(){this.children=[];this.textContent='';this.dataset={};this.events={};}
+replaceChildren(){this.children=[];} append(...items){this.children.push(...items);}
+contains(node){return this.children.includes(node);} addEventListener(name,cb){this.events[name]=cb;}
+querySelector(){return this.children.find(n=>n.dataset.postureKey==='dns');}
+focus(){focused=this.dataset.postureKey;document.activeElement=this;}}
+const host=new Node(); const document={activeElement:null,getElementById:()=>host,createElement:()=>new Node()};
+let postureRequestSequence=0; const orgId='1'; const requests=[];
+const fetch=()=>new Promise(resolve=>requests.push(resolve));
+function dateLabel(value){return value;} function appendEmpty(node,value){node.textContent=value;}
+let opened=null; function activateTab(key){opened=key;}
+const response=(summary)=>({ok:true,json:async()=>({areas:[{key:'dns',title:'DNS',state:'not_assessed',summary,updated_at:null}]})});
+'''+renderer+'''
+(async()=>{
+const first=loadWorkspacePosture();requests.shift()(response('Initial'));await first;
+document.activeElement=host.children[0];
+const old=loadWorkspacePosture();const current=loadWorkspacePosture();
+requests[1](response('<script>new evidence</script>'));await current;
+requests[0](response('Stale evidence'));await old;
+assert.equal(host.children[0].children[2].textContent,'<script>new evidence</script>');
+assert.equal(host.children[0].children[1].textContent,'Not assessed');
+assert.equal(focused,'dns');
+host.children[0].events.click();assert.equal(opened,'dns');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
