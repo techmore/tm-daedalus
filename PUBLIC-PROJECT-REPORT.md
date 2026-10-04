@@ -1,5 +1,12 @@
 # Daedalus project report
 
+## October 4, 2026 — production linked dependency validation
+
+Source **edeb6505f4c316b00b0be2a0e6ac8d524bd8d0a2** is deployed to Incus; internal/public health checks and off-host backup verification passed. Actual website check **53** completed with two external scripts, one external stylesheet, zero HTTP dependencies, zero declared integrity attributes and three missing script/style integrity attributes. Four external hosts were retained. These are root-HTML metadata observations, not validated hashes or a vendor-security assessment.
+
+Run 53 compared with the older collection and recorded only page-content sampled-byte/fingerprint differences; the newly collected dependency namespace caused no artificial changes. Repeat check **54** completed with identical dependency observations and **zero differences**. Actual posture PDF **34** completed and downloaded; all seven rendered pages were reviewed, including dependency counts/limits, latest cancelled Nikto attempt 52 and retained completed audit 51. Private receipt: /data/codex-dependency-validation-20261004.json. Browser visual review and other original project requirements remain open.
+
+
 ## October 4, 2026 — linked dependency attribute evidence
 
 The website collector now records a versioned dependency_observations block from the returned root HTML: HTTP references, external script/style counts, and declared/missing integrity attributes on those script/style tags. Counts exclude same-domain references and non-HTTP schemes, retain no resource URL paths/query tokens or integrity hashes, and do not fetch linked content. Declaration presence is not hash validation, browser enforcement, exploitability or a vendor-security verdict.
