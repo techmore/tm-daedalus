@@ -92,6 +92,25 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(lastUnavailable == "manual")
     }
 
+    @Test func authorizationPoliciesRejectSemanticDuplicateXmlKeys() {
+        func document(_ content: String) -> String { "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict>" + content + "</dict></plist>" }
+        for secondKey in ["rule", "rul&#101;", "<![CDATA[rule]]>"] {
+            let xml = document("<key>rule</key><array><string>authenticate-session-owner-or-admin</string></array><key>" + secondKey + "</key><array><string>authenticate-session-owner</string></array>")
+            #expect(MacOSChecks.authorizationPolicy(xml) == nil)
+            #expect(run("os_unlock_active_user_session_disable", .init(output: xml)) == "manual")
+        }
+        let encoded = document("<key>rul&#101;</key><array><string>authenticate-session-owner</string></array>")
+        #expect(run("os_unlock_active_user_session_disable", .init(output: encoded)) == "pass")
+        let nested = document("<key>nested</key><dict><key>a</key><true/><key>a</key><false/></dict>")
+        #expect(MacOSChecks.authorizationPolicy(nested) == nil)
+        let valid = document("<key>one</key><dict><key>a</key><true/></dict><key>two</key><dict><key>a</key><false/></dict>")
+        #expect(MacOSChecks.authorizationPolicy(valid) != nil)
+        let deep = document(String(repeating: "<key>a</key><dict>", count: 40) + String(repeating: "</dict>", count: 40))
+        #expect(MacOSChecks.authorizationPolicy(deep) == nil)
+        #expect(MacOSChecks.authorizationPolicy(document("<key>" + String(repeating: "a", count: 257) + "</key><true/>")) == nil)
+        #expect(MacOSChecks.authorizationPolicy("<!DOCTYPE plist [<!ENTITY key 'rule'>]>" + encoded) == nil)
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {

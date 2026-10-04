@@ -2,6 +2,37 @@ import Foundation
 import Darwin
 import CoreFoundation
 
+private final class AuthorizationKeyValidator: NSObject, XMLParserDelegate {
+    var dictionaries = [Set<String>]()
+    var key: String? = nil
+    var valid = true
+    var depth = 0
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+        depth += 1
+        if depth > 32 || key != nil { valid = false; parser.abortParsing(); return }
+        if elementName == "dict" { dictionaries.append([]) }
+        if elementName == "key" {
+            guard !dictionaries.isEmpty else { valid = false; parser.abortParsing(); return }
+            key = ""
+        }
+    }
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        if key != nil { key! += string; if key!.utf8.count > 256 { valid = false; parser.abortParsing() } }
+    }
+    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
+        guard let string = String(data: CDATABlock, encoding: .utf8) else { valid = false; parser.abortParsing(); return }
+        self.parser(parser, foundCharacters: string)
+    }
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        if elementName == "key", let value = key {
+            if dictionaries.isEmpty || !dictionaries[dictionaries.count - 1].insert(value).inserted { valid = false; parser.abortParsing() }
+            key = nil
+        }
+        if elementName == "dict", !dictionaries.isEmpty { dictionaries.removeLast() }
+        depth -= 1
+    }
+}
+
 extension MacOSChecks {
     // Static, read-only checks derived from NIST mSCP Tahoe rev3, commit
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
@@ -34,6 +65,19 @@ extension MacOSChecks {
         .union(additionalMacOS26AuditEvidenceRuleIDs)
         .union(additionalMacOS26PolicyRuleIDs)
 
+    static func authorizationPolicy(_ output: String) -> [String: Any]? {
+        guard output.utf8.count <= 65536, !output.contains("<!ENTITY") else { return nil }
+        let data = Data(output.utf8)
+        let validator = AuthorizationKeyValidator()
+        let parser = XMLParser(data: data)
+        parser.shouldResolveExternalEntities = false
+        parser.delegate = validator
+        guard parser.parse(), validator.valid, validator.depth == 0, validator.dictionaries.isEmpty,
+              let object = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+              let dictionary = object as? [String: Any] else { return nil }
+        return dictionary
+    }
+
     static func runAdditionalTahoeCommand(
         check: CISCheck,
         command: (String, [String]) -> CommandEvidence
@@ -57,18 +101,13 @@ extension MacOSChecks {
 
         case "system_settings_system_wide_preferences_configure":
             let rights = ["system.preferences", "system.preferences.energysaver", "system.preferences.network", "system.preferences.printing", "system.preferences.sharing", "system.preferences.softwareupdate", "system.preferences.startupdisk", "system.preferences.timemachine"]
-            let keys = ["shared", "group", "authenticate-user", "session-owner"]
             let deadline = Date().addingTimeInterval(6)
             var unavailable = 0
             var mismatches = 0
             for (index, right) in rights.enumerated() {
                 guard Date() < deadline else { unavailable += rights.count - index; break }
                 let evidence = command("/usr/bin/security", ["-q", "authorizationdb", "read", right])
-                guard usable(evidence), evidence.output.utf8.count <= 65536,
-                      !evidence.output.contains("&#"),
-                      keys.allSatisfy({ evidence.output.components(separatedBy: "<key>" + $0 + "</key>").count == 2 }),
-                      let object = try? PropertyListSerialization.propertyList(from: Data(evidence.output.utf8), options: [], format: nil),
-                      let policy = object as? [String: Any],
+                guard usable(evidence), let policy = authorizationPolicy(evidence.output),
                       let shared = policy["shared"] as? NSNumber, CFGetTypeID(shared) == CFBooleanGetTypeID(),
                       let authenticate = policy["authenticate-user"] as? NSNumber, CFGetTypeID(authenticate) == CFBooleanGetTypeID(),
                       let owner = policy["session-owner"] as? NSNumber, CFGetTypeID(owner) == CFBooleanGetTypeID(),
@@ -82,10 +121,7 @@ extension MacOSChecks {
         case "os_unlock_active_user_session_disable":
             func rules(_ right: String) -> [String]? {
                 let evidence = command("/usr/bin/security", ["-q", "authorizationdb", "read", right])
-                guard usable(evidence), evidence.output.utf8.count <= 65536,
-                      evidence.output.components(separatedBy: "<key>rule</key>").count == 2,
-                      let object = try? PropertyListSerialization.propertyList(from: Data(evidence.output.utf8), options: [], format: nil),
-                      let dictionary = object as? [String: Any],
+                guard usable(evidence), let dictionary = authorizationPolicy(evidence.output),
                       let values = dictionary["rule"] as? [String], values.count == 1,
                       let value = values.first, !value.isEmpty, value.utf8.count <= 128 else { return nil }
                 return values
