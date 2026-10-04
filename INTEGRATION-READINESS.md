@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — separate website queue and collection timestamps
+
+Website jobs now record nullable queued_at and collection_started_at fields. Submission records queue entry, while the atomic worker claim records collection start. API history and frozen report snapshots expose both times, and Nikto history displays them separately. Existing started_at is retained for compatibility. Migration adds the fields without reconstructing timestamps for legacy runs; an idempotent old-schema fixture verifies preserved timestamps/snapshots and null new fields.
+
+The concurrency fixtures also passed: simultaneous enqueue creates one job and one HTTP 409 rejection; competing workers collect one saved job once. Expiration of a previously valid override blocks collection. Production remains on source 99ec2bb while actual audit 51 is active; timestamp changes are not yet deployed.
+
+
 ## October 4, 2026 — production queue submission and authorization checks
 
 Source **99ec2bb9efbeb410cb75961c20d76fb8cb961089** is deployed to Incus with internal/public health checks passed and a verified off-host backup. Actual owned-domain audit **51** returned HTTP **202** with status **queued** in **0.079 seconds**, then its saved history reported **running**. Completion remains pending; no repeated submission or restart was made. Private receipt: /data/codex-nikto-queue-validation-20261004.json.

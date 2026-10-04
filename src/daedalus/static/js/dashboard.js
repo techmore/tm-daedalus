@@ -3263,6 +3263,11 @@
         var note = document.createElement("p"); note.className = "muted";
         note.textContent = run.error_summary || "Coverage remains unconfirmed. Comparisons record new observations; absent findings do not prove resolution.";
         card.append(title, note);
+        if (run.queued_at) {
+          var timing = document.createElement("p"); timing.className = "muted";
+          timing.textContent = "Queued " + dateLabel(run.queued_at) + (run.collection_started_at ? " · Collection started " + dateLabel(run.collection_started_at) : " · Collection start not recorded");
+          card.append(timing);
+        }
         var findings = (run.snapshot || {}).findings || [];
         var details = document.createElement("details");
         var summary = document.createElement("summary"); summary.textContent = findings.length + " retained observation(s) · " + (run.change_count || 0) + " new compared observation(s)";

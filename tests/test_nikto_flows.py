@@ -4,7 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from unittest.mock import patch
-from sqlalchemy import select
+from sqlalchemy import select, create_engine, text
 from daedalus import server
 from daedalus.models import Organization, Membership, ExternalCheckRun, ProbationOverride
 import test_active_website_flows as fixtures
@@ -32,12 +32,17 @@ class NiktoFlowsTests(unittest.TestCase):
             response = self.client.post('/api/external-checks/web-nikto/run')
             self.assertEqual(response.status_code, 202, response.text)
             self.assertEqual(response.json()['status'], 'queued')
+            self.assertEqual(response.json()['queued_at'],response.json()['started_at'])
+            self.assertIsNone(response.json()['collection_started_at'])
             collector.assert_not_called()
             self.assertEqual(self.client.post('/api/external-checks/web-nikto/run').status_code, 409)
             self.assertEqual(server.recover_interrupted_external_checks(), 0)
             completed = server.process_next_website_audit()
             self.assertEqual(completed[1]['id'], response.json()['id'])
             self.assertEqual(completed[1]['status'], 'completed_with_warnings')
+            self.assertEqual(completed[1]['queued_at'],response.json()['queued_at'])
+            self.assertIsNotNone(completed[1]['collection_started_at'])
+            self.assertGreaterEqual(completed[1]['collection_started_at'],completed[1]['queued_at'])
             collector.assert_called_once()
             self.assertIsNone(server.process_next_website_audit())
 
@@ -140,6 +145,21 @@ class NiktoFlowsTests(unittest.TestCase):
             completed=server.process_next_website_audit()
         collector.assert_not_called()
         self.assertEqual(completed[1]['status'],'failed')
+
+    def test_queue_timestamp_migration_preserves_legacy_rows_and_is_idempotent(self):
+        engine=create_engine('sqlite://')
+        try:
+            with engine.begin() as connection:
+                connection.execute(text("CREATE TABLE external_check_runs (id INTEGER PRIMARY KEY, trigger_source VARCHAR(24), started_at TIMESTAMP, snapshot JSON)"))
+                connection.execute(text("INSERT INTO external_check_runs VALUES (1, 'manual', '2026-01-01', :snapshot)"), {'snapshot':json.dumps({'legacy':True})})
+                server.ensure_external_check_columns(connection)
+                server.ensure_external_check_columns(connection)
+                row=connection.execute(text('SELECT started_at,snapshot,queued_at,collection_started_at FROM external_check_runs')).one()
+                self.assertEqual(row[0],'2026-01-01')
+                self.assertEqual(json.loads(row[1]),{'legacy':True})
+                self.assertIsNone(row[2]);self.assertIsNone(row[3])
+        finally:
+            engine.dispose()
 
     def test_queued_pdf_does_not_describe_collection_as_started(self):
         from daedalus import reports

@@ -313,6 +313,9 @@ def ensure_external_check_columns(connection) -> None:
                 "VARCHAR(24) NOT NULL DEFAULT 'manual'"
             )
         )
+    for column in ("queued_at", "collection_started_at"):
+        if column not in existing:
+            connection.execute(text(f"ALTER TABLE external_check_runs ADD COLUMN {column} TIMESTAMP"))
 
 
 def ensure_cis_presence_columns(connection) -> None:
@@ -704,6 +707,8 @@ def serialize_external_run(run: ExternalCheckRun, actor: User | None = None) -> 
             "Scheduled check" if run.trigger_source == "schedule" else None
         ),
         "started_at": iso_utc(run.started_at),
+        "queued_at": iso_utc(run.queued_at),
+        "collection_started_at": iso_utc(run.collection_started_at),
         "completed_at": iso_utc(run.completed_at),
         "duration_ms": run.duration_ms,
         "change_count": run.change_count,
@@ -789,6 +794,8 @@ def capture_external_report_snapshot(
             "id": latest.id,
             "status": latest.status,
             "started_at": iso_utc(latest.started_at),
+            "queued_at": iso_utc(latest.queued_at),
+            "collection_started_at": iso_utc(latest.collection_started_at),
             "completed_at": iso_utc(latest.completed_at),
             "error_summary": latest.error_summary,
         } if latest is not None else None
@@ -1444,6 +1451,10 @@ def _execute_external_check(
                 snapshot=None,
                 change_count=0,
             )
+            if enqueue_only:
+                run.queued_at = run.started_at
+            else:
+                run.collection_started_at = run.started_at
             db.add(run)
             db.flush()
             if check_type in {"web-active", "web-nikto"}:
@@ -1671,7 +1682,7 @@ def process_next_website_audit() -> tuple[int, dict[str, Any]] | None:
             return None
         claimed = db.execute(update(ExternalCheckRun).where(
             ExternalCheckRun.id == run.id, ExternalCheckRun.status == "queued",
-        ).values(status="running"))
+        ).values(status="running", collection_started_at=utcnow()))
         if claimed.rowcount != 1:
             db.rollback()
             return None

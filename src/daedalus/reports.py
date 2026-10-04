@@ -674,6 +674,8 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
         time_label = "Completed" if run.get("completed_at") else ("Queued" if run.get("status") == "queued" else "Started")
         status_label = str(run.get("status") or "unknown").replace("_", " ")
         story.append(_paragraph(f"Run #{run.get('id')} · {status_label} · {time_label} {_time_text(run_time)}", styles["small"]))
+        if run.get("collection_started_at"):
+            story.append(_paragraph(f"Collection started {_time_text(run['collection_started_at'])}", styles["small"]))
         if run.get("status") == "queued":
             story.append(_paragraph("This audit was queued when the report snapshot was captured. Collection has not started and no assessment is available in this snapshot.", styles["body"]))
         if run.get("status") == "running":
