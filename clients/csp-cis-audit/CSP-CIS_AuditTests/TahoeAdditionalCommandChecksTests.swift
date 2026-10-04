@@ -111,6 +111,30 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(MacOSChecks.authorizationPolicy("<!DOCTYPE plist [<!ENTITY key 'rule'>]>" + encoded) == nil)
     }
 
+    @Test func passwordHistoryUsesPinnedCisDepthAndTypedPolicyValues() {
+        let rule = "pwpolicy_history_enforce"
+        func xml(_ depths: [Any]) -> String {
+            let policy: [String: Any] = ["policyCategoryPasswordChange": depths.map { ["policyParameters": ["policyAttributePasswordHistoryDepth": $0]] }]
+            return String(data: try! PropertyListSerialization.data(fromPropertyList: policy, format: .xml, options: 0), encoding: .utf8)!
+        }
+        #expect(run(rule, .init(output: xml([24]))) == "pass")
+        #expect(run(rule, .init(output: "Getting global account policies\n" + xml([30, 24]))) == "pass")
+        #expect(run(rule, .init(output: xml([23]))) == "fail")
+        #expect(run(rule, .init(output: xml([24, 5]))) == "fail")
+        for values: [Any] in [[], [-1], [true], [24.5], ["24"], [10001]] {
+            #expect(run(rule, .init(output: xml(values))) == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(output: xml([24]), exitCode: 1), .init(output: xml([24]), error: "denied"), .init(output: xml([24]), unavailable: "timeout"), .init(output: "Unexpected heading\n" + xml([24]))] {
+            #expect(run(rule, evidence) == "manual")
+        }
+        let status = evaluate(rule) { executable, arguments in
+            #expect(executable == "/usr/bin/pwpolicy")
+            #expect(arguments == ["-getaccountpolicies"])
+            return .init(output: xml([24]))
+        }
+        #expect(status == "pass")
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -248,6 +272,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "pwpolicy_history_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "system_settings_system_wide_preferences_configure": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.preferences"]),
             "os_unlock_active_user_session_disable": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.login.screensaver"]),
             "os_password_hint_remove": ("/usr/bin/dscl", [".", "-list", "/Users", "hint"]),

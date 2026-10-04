@@ -38,7 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -98,6 +98,42 @@ extension MacOSChecks {
              "os_safari_show_status_bar_enabled",
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
+
+        case "pwpolicy_history_enforce":
+            let evidence = command("/usr/bin/pwpolicy", ["-getaccountpolicies"])
+            guard usable(evidence), evidence.output.utf8.count <= 65536 else {
+                return result("manual", "Account-policy evidence was unavailable or exceeded its limit.")
+            }
+            var xml = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !xml.hasPrefix("<?xml") {
+                let lines = xml.components(separatedBy: .newlines)
+                guard lines.count > 1, lines[0] == "Getting global account policies" else {
+                    return result("manual", "Account-policy output has an unsupported format.")
+                }
+                xml = lines.dropFirst().joined(separator: "\n")
+            }
+            guard let policy = authorizationPolicy(xml) else {
+                return result("manual", "Account-policy XML could not be read unambiguously.")
+            }
+            var depths = [Int]()
+            var invalid = false
+            func visit(_ object: Any) {
+                if let dictionary = object as? [String: Any] {
+                    if let raw = dictionary["policyAttributePasswordHistoryDepth"] {
+                        guard let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+                              number.doubleValue.isFinite, number.doubleValue >= 0,
+                              number.doubleValue <= 10000, number.doubleValue == Double(number.intValue) else { invalid = true; return }
+                        depths.append(number.intValue)
+                    }
+                    for value in dictionary.values { visit(value) }
+                } else if let array = object as? [Any] { for value in array { visit(value) } }
+            }
+            visit(policy)
+            guard !invalid, !depths.isEmpty else {
+                return result("manual", "Explicit supported password-history depths were absent or wrongly typed.")
+            }
+            return result(depths.allSatisfy { $0 >= 24 } ? "pass" : "fail",
+                "Captured " + String(depths.count) + " history-depth value(s); minimum " + String(depths.min()!) + ", pinned CIS threshold 24. This is global local-account policy evidence, not a password-reuse attempt or external directory assessment. Raw policy is omitted.")
 
         case "system_settings_system_wide_preferences_configure":
             let rights = ["system.preferences", "system.preferences.energysaver", "system.preferences.network", "system.preferences.printing", "system.preferences.sharing", "system.preferences.softwareupdate", "system.preferences.startupdisk", "system.preferences.timemachine"]
