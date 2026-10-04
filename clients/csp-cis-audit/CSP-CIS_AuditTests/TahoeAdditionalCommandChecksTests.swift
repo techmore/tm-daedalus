@@ -13,6 +13,27 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyMinimumPasswordAgeRequiresExplicitNumericEvidence() {
+        let check = CISCheck(id: "legacy-min-age", category: "macos", description: "Minimum age")
+        func result(_ evidence: MacOSChecks.CommandEvidence) -> CheckResult {
+            MacOSPasswordChecks.checkPasswordMinAge(check: check) { executable, arguments in
+                #expect(executable == "/usr/bin/pwpolicy")
+                #expect(arguments == ["-getglobalpolicy"])
+                return evidence
+            }
+        }
+        #expect(result(.init(output: "minMinutesUntilChangePassword=1440 minChars=8")).status == "pass")
+        #expect(result(.init(output: "minMinutesUntilChangePassword=1439")).status == "fail")
+        #expect(result(.init(output: "minMinutesUntilChangePassword=0")).status == "fail")
+        for output in ["", "minMinutesUntilChangePassword", "minMinutesUntilChangePassword=", "minMinutesUntilChangePassword=1440 OR TRUE", "minMinutesUntilChangePassword=1440 minMinutesUntilChangePassword=0", "minMinutesUntilChangePassword=-1", "minMinutesUntilChangePassword=01440", "minMinutesUntilChangePassword=1440.0", "minMinutesUntilChangePassword=999999999999999999999", "unrelated=1440"] {
+            #expect(result(.init(output: output)).status == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(output: "minMinutesUntilChangePassword=1440", exitCode: 1), .init(output: "minMinutesUntilChangePassword=1440", error: "denied"), .init(output: "minMinutesUntilChangePassword=1440", unavailable: "timeout")] {
+            #expect(result(evidence).status == "manual")
+        }
+        #expect(result(.init(output: "minMinutesUntilChangePassword=1440")).details.contains("reported legacy field only"))
+    }
+
     @Test func passwordHintsRequireBoundedSuccessfulAccountEnumeration() {
         let rule = "os_password_hint_remove"
         let status = evaluate(rule) { executable, arguments in

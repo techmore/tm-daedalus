@@ -83,43 +83,33 @@ struct MacOSPasswordChecks {
     }
     
     // Check if password minimum age is configured
-    static func checkPasswordMinAge(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/pwpolicy"
-        process.arguments = ["getaccountpolicies"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check password minimum age: \(error)")
+    static func checkPasswordMinAge(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let evidence = command("/usr/bin/pwpolicy", ["-getglobalpolicy"])
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "A supported explicit legacy minimum password age was not available. Modern account-policy enforcement and directory accounts require separate review.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("minMinutesUntilChangePassword") {
-            // Extract the value
-            if let range = output.range(of: "minMinutesUntilChangePassword\\s*=\\s*\\d+", options: .regularExpression),
-               let valueRange = output[range].range(of: "\\d+", options: .regularExpression) {
-                let value = output[range][valueRange]
-                if let minutes = Int(value) {
-                    let days = minutes / 1440 // Convert minutes to days
-                    if days >= 1 {
-                        return CheckResult(check: check, status: "pass", details: "Password minimum age is configured to \(days) days.")
-                    } else {
-                        return CheckResult(check: check, status: "fail", details: "Password minimum age is configured but less than 1 day.")
-                    }
-                }
-            }
-            return CheckResult(check: check, status: "pass", details: "Password minimum age is configured.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password minimum age is NOT configured.")
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              evidence.output.utf8.count <= 65_536 else { return unknown() }
+        let tokens = evidence.output.split(whereSeparator: { $0.isWhitespace })
+        guard !tokens.isEmpty, tokens.count <= 1_000 else { return unknown() }
+        var values: [String: String] = [:]
+        for token in tokens {
+            let parts = token.split(separator: "=", omittingEmptySubsequences: false)
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty,
+                  parts[0].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }),
+                  values[String(parts[0])] == nil else { return unknown() }
+            values[String(parts[0])] = String(parts[1])
         }
+        guard let raw = values["minMinutesUntilChangePassword"],
+              let minutes = Int(raw), minutes >= 0, minutes <= 5_256_000,
+              String(minutes) == raw else { return unknown() }
+        return CheckResult(check: check, status: minutes >= 1_440 ? "pass" : "fail",
+            details: "Captured legacy minimum password age: \(minutes) minutes; legacy criterion is at least 1440 minutes. This evaluates the reported legacy field only, not modern account-policy or directory enforcement.")
     }
-    
+
     // Check if login keychain is locked when system sleeps
     static func checkLoginKeychainLocked(check: CISCheck) -> CheckResult {
         let process = Process()
