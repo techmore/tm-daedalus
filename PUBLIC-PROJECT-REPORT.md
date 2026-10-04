@@ -32,9 +32,9 @@ The Pages workflow intentionally publishes only `site/`. Private deployment runb
 
 ## Validation snapshot
 
-As of October 3, 2026, the Daedalus source suite passes **397 tests and 77 subtests** locally. [Python CI run 37173085088](https://github.com/techmore/tm-daedalus/actions/runs/37173085088) passed on Python 3.11/3.12, and [Linux lifecycle CI run 37172870664](https://github.com/techmore/tm-daedalus/actions/runs/37172870664) passed against a real systemd user manager. The lifecycle check uses inert processes and synthetic enrollment/evidence; it proves service removal and exact restoration, without claiming a Linux NmapUI engine or portal workflow.
+As of October 3, 2026, the Daedalus source suite passes **401 tests and 79 subtests** locally. [Python CI run 37173415923](https://github.com/techmore/tm-daedalus/actions/runs/37173415923) passed on Python 3.11/3.12, and [Linux lifecycle CI run 37172870664](https://github.com/techmore/tm-daedalus/actions/runs/37172870664) passed against a real systemd user manager. The lifecycle check uses inert processes and synthetic enrollment/evidence; it proves service removal and exact restoration, without claiming a Linux NmapUI engine or portal workflow.
 
-Production Release 055 runs commit `11ad49967190dd169309ce0669bfdc97589f7c08`; its 53-file archive SHA-256 is `e86b271e8eab12b69233b1df84dff480fee6497f0a9e2d74584f44e8b97a6b9e`. Internal and public readiness checks passed after activation, and the deployment created a verified off-host backup. See [`INTEGRATION-READINESS.md`](INTEGRATION-READINESS.md) for current deployment and validation details.
+Production Release 056 runs commit `60e6c8cded1f6cf40fe0a75b5ad5623e10075ded`; its 53-file archive SHA-256 is `928cd42641c4422f5e4aa721a766cf719ba0430fbb0f60b33029778579d2b3ac`. Internal and public readiness checks passed after activation, and the deployment created a verified off-host backup. See [`INTEGRATION-READINESS.md`](INTEGRATION-READINESS.md) for current deployment and validation details.
 
 The local CSP demo audit completed DNS/email, HTTPS, and five fixed-path website checks and generated a visually reviewed six-page PDF. A separate local loopback scanner run uploaded 18 complete events and produced a visually reviewed two-page PDF. The adjacent NmapUI suite passed 660 tests with 28 skipped; its packaged runtime matched the generated bundle, including source-worktree provenance. These earlier audit results were not rerun as part of the Linux lifecycle release.
 
@@ -52,10 +52,16 @@ The dashboard uses in-page confirmation panels for managed scanner restarts, sca
 
 The upgrade kit reader hashes and extracts the same bounded byte snapshot, with file-replacement, FIFO, and size-limit fixtures.
 
-## Release 055 update
+## Release 056 update
 
-Production now runs commit `11ad49967190dd169309ce0669bfdc97589f7c08`, archive SHA-256 `e86b271e8eab12b69233b1df84dff480fee6497f0a9e2d74584f44e8b97a6b9e` (53 files). Internal and public health checks passed, and the deployed service is active. The local suite passed **397 tests and 77 subtests**; [Python CI](https://github.com/techmore/tm-daedalus/actions/runs/37173085088) also passed.
+Production now runs commit `60e6c8cded1f6cf40fe0a75b5ad5623e10075ded`, archive SHA-256 `928cd42641c4422f5e4aa721a766cf719ba0430fbb0f60b33029778579d2b3ac` (53 files). Internal and public health checks passed, and the deployed service is active. The local suite passed **401 tests and 79 subtests**; [Python CI](https://github.com/techmore/tm-daedalus/actions/runs/37173415923) also passed.
 
 Linux in-place upgrades are implemented. [Managed Linux CI](https://github.com/techmore/tm-daedalus/actions/runs/37173085078) exercised the shipped installer, real loopback scan, portal restart, and local upgrade under systemd. It confirmed retained enrollment/settings, unchanged saved scan events, a fresh heartbeat, a repeated-upgrade no-op, and cleanup. Twelve Linux fixtures cover rollback, interrupted recovery, partial writes, locks, and tamper refusal. Production Linux enrollment and multi-VLAN coverage remain outstanding.
 
 Release 055 puts local and portal-issued Linux restarts under the shared lifecycle lock. Both refuse an interrupted upgrade; local restart also checks the loaded unit path/drop-ins and active process state. Full managed CI confirmed the shipped local restart changed the PID, recovered readiness and a fresh heartbeat, and retained enrollment/settings. No installed scanner was upgraded by deploying the portal release.
+
+## Release 056 backup integrity
+
+The backup manifest hashes the exact bounded bytes consumed by the tar writer through one no-follow regular-file descriptor. Regression checks cover replacement paths, file growth, truncation, symlinks and FIFOs. Source and Python 3.11/3.12 CI passed 401 tests and 79 subtests.
+
+After deployment, a new production backup was copied off-host and restored into a temporary private directory. SQLite integrity passed and all 27 manifest files matched their sizes and hashes, including 26 PDFs. This snapshot had zero scanner artifacts; artifact restoration remains covered by fixtures. The temporary restore was removed. Replacing live data and independent backup replication remain open.
