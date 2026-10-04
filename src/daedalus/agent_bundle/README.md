@@ -131,8 +131,37 @@ If stop, disable, or startup cannot be confirmed, the helper reports an error
 and retains its recovery files. Retrying uses the same installation and
 credentials. Changed, symlinked, incorrectly owned, or public service files
 are refused. Only the two fixed Daedalus units are operated. The managed Linux
-workflow still needs an in-place upgrade path. Concurrent uninstall/restore
+workflow includes an explicit local in-place upgrade path. Concurrent uninstall/restore
 commands are refused until the current lifecycle operation releases its lock.
+
+## Upgrading a managed Linux scanner
+
+Extract the newly downloaded kit, then run its helper against that kit ZIP:
+
+```sh
+sh manage-service-linux.sh upgrade /path/to/daedalus-scanner-kit.zip
+```
+
+Both existing services must be active and enabled. The helper stages private,
+content-versioned runtimes, retains the same enrollment, credentials, data
+paths, settings and spool, then stops the bridge before NmapUI. It switches
+only the two verified units and their ownership record. NmapUI must become
+ready before the bridge starts. Repeating the same installed kit is a no-op.
+The portal does not install upgrades remotely.
+
+Failures attempt to restore the exact previous descriptors and start both
+previous services. If interrupted or recovery fails, the private transaction
+record stays in the configuration directory. From the same extracted kit run:
+
+```sh
+sh manage-service-linux.sh upgrade-rollback
+```
+
+Changed descriptors, recovery records, enrollment or credentials are refused.
+Removal/restore and another upgrade are blocked until the pending transaction
+is resolved. Runtime releases remain available for rollback; this command
+retains them and does not revoke portal enrollment. Verify the next portal
+heartbeat after upgrading. An explicit service cutover interrupts running work.
 
 ## Validating a managed Linux scanner
 
@@ -142,7 +171,9 @@ manager. It runs the shipped fresh installer against an isolated loopback
 portal, approves only `127.0.0.1/32`, executes real Nmap against one guarded
 listener port, checks saved results and realtime broadcasts, generates the
 scan PDF, and requests a managed restart through the portal. It verifies a
-new NmapUI PID, fresh portal heartbeat, and direct readiness before cleanup.
+new NmapUI PID, fresh portal heartbeat, and direct readiness. It also runs the
+local upgrade command, checks retained configuration/settings and saved scan
+history, and confirms a repeated kit is a no-op before cleanup.
 Use this only in a disposable environment: it temporarily changes that
 user manager's PATH for the scan guard and removes its generated enrollment
 and scanner data afterward. It refuses an existing Daedalus installation.

@@ -218,6 +218,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
                 prefix + "macos_service.py",
                 prefix + "systemd_service.py",
                 prefix + "upgrade_service.py",
+                prefix + "linux_upgrade.py",
                 prefix + "nmapui-source.zip",
                 prefix + "pyproject.toml",
                 prefix + "src/daedalus/__init__.py",

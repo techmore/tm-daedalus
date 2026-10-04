@@ -484,6 +484,32 @@ raise SystemExit(completed.returncode)
                     if old_pid <= 0 or new_pid <= 0 or old_pid == new_pid:
                         raise RuntimeError('Remote restart did not produce a different live NmapUI process.')
                     managed_proof.update(remote_restart_status='succeeded', nmapui_pid_changed=True, portal_readiness_recovered=True)
+                    # Exercise the shipped local upgrade command on the live managed installation.
+                    kit_zip = root / 'upgrade-kit.zip'
+                    kit_zip.write_bytes(bundled)
+                    retained_paths = (managed_config / 'managed-agent.json', managed_config / 'daedalus-nmapui.env', data / 'settings.json')
+                    retained_bytes = {path: path.read_bytes() for path in retained_paths}
+                    before_upgrade_pid = service_pid()
+                    upgrade_started_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                    upgraded = subprocess.run(['/bin/sh', str(kit / 'manage-service-linux.sh'), 'upgrade', str(kit_zip)], env=environment, capture_output=True, text=True, timeout=900)
+                    if upgraded.returncode or not json.loads(upgraded.stdout).get('upgraded'):
+                        raise RuntimeError('Managed Linux local upgrade failed.')
+                    def online_after_upgrade():
+                        observed = online()
+                        return observed if observed and observed['last_seen_at'] > upgrade_started_at else None
+                    wait_for(online_after_upgrade)
+                    wait_for(lambda: httpx.get(scanner + '/api/health/ready', auth=(scanner_env['NMAPUI_USERNAME'], scanner_env['NMAPUI_PASSWORD']), timeout=2).json().get('ready'))
+                    if service_pid() == before_upgrade_pid or any(path.read_bytes() != contents for path, contents in retained_bytes.items()):
+                        raise RuntimeError('Upgrade did not change the process or preserve enrollment/settings.')
+                    after_upgrade = client.get(f"/api/agents/{agent_id}/runs/{run_id}")
+                    after_upgrade.raise_for_status()
+                    validate_run_evidence(after_upgrade.json(), event)
+                    if after_upgrade.json()['events'] != run_detail['events']:
+                        raise RuntimeError('Saved scan history changed during upgrade.')
+                    again = subprocess.run(['/bin/sh', str(kit / 'manage-service-linux.sh'), 'upgrade', str(kit_zip)], env=environment, capture_output=True, text=True, timeout=120)
+                    if again.returncode or not json.loads(again.stdout).get('already_current'):
+                        raise RuntimeError('Repeated kit upgrade was not a no-op.')
+                    managed_proof.update(local_upgrade_completed=True, enrollment_settings_preserved=True, saved_run_unchanged=True, repeated_upgrade_noop=True)
                     receipt['managed_linux'] = managed_proof
                     receipt['limits'][1] = 'No default scan coverage, external targets, persistence soak, or production readiness claimed'
                 receipt["repeated_scan_comparison"] = comparison_proof

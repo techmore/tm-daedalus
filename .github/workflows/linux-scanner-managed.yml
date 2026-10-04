@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   managed:
-    name: Fresh install, loopback scan, and portal restart
+    name: Fresh install, scan, portal restart, and local upgrade
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

@@ -123,6 +123,11 @@ def _rebase_bridge_launcher(launcher: Path, staged_python: Path, final_python: P
 def _default_prepare(files: dict[str, bytes], user_root: Path, kit_digest: str) -> tuple[Path, Path]:
     """Materialize immutable release source trees and their Python runtimes."""
     support = user_root / "Library/Application Support/Daedalus"
+    return prepare_releases(files, support)
+
+
+def prepare_releases(files: dict[str, bytes], support: Path) -> tuple[Path, Path]:
+    """Prepare content-versioned runtimes under a validated platform support directory."""
     nmap_hash = hashlib.sha256(files["nmapui-source.zip"]).hexdigest()
     bridge_hash = hashlib.sha256(b"".join(files[k] for k in sorted(REQUIRED_KIT_FILES - {"nmapui-source.zip"}))).hexdigest()
     nmap_release = support / "nmapui/releases" / nmap_hash
@@ -131,7 +136,13 @@ def _default_prepare(files: dict[str, bytes], user_root: Path, kit_digest: str) 
         rel.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         if rel.parent.is_symlink() or rel.is_symlink():
             raise ValueError("Refusing to stage through a symbolic link")
+        parent_info = rel.parent.stat()
+        if parent_info.st_uid != os.getuid() or stat.S_IMODE(parent_info.st_mode) & 0o077:
+            raise ValueError("Runtime release parent must be private and owned by the current user")
         if rel.exists():
+            info = rel.stat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+                raise ValueError("Cached runtime release must be private and owned by the current user")
             continue
         stage = Path(tempfile.mkdtemp(prefix=".stage-", dir=rel.parent))
         try:

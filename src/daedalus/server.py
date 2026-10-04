@@ -151,6 +151,7 @@ def build_agent_bundle() -> bytes:
         "macos_service.py": bundle_dir / "macos_service.py",
         "systemd_service.py": bundle_dir / "systemd_service.py",
         "upgrade_service.py": bundle_dir / "upgrade_service.py",
+        "linux_upgrade.py": bundle_dir / "linux_upgrade.py",
         "nmapui-source.zip": bundle_dir / "nmapui-source.zip",
         "pyproject.toml": bundle_dir / "pyproject.toml",
         "src/daedalus/__init__.py": PACKAGE_DIR / "__init__.py",

@@ -20,6 +20,7 @@ ENV_FILE = "daedalus-nmapui.env"
 STATE_FILE = ".daedalus-scanner-services.json"
 RESUME_FILE = ".daedalus-scanner-services-resume.json"
 LOCK_FILE = ".daedalus-scanner-services.lock"
+UPGRADE_FILE = ".daedalus-scanner-upgrade.json"
 SYSTEMCTL = "/usr/bin/systemctl"
 
 
@@ -302,6 +303,8 @@ def manage(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> d
     """Remove/resume only fixed owned services, preserving enrollment and evidence."""
     if action not in {"uninstall", "restore"}:
         raise ServiceError("Unsupported Linux service lifecycle action.")
+    if (config_dir / UPGRADE_FILE).exists() or (config_dir / UPGRADE_FILE).is_symlink():
+        raise ServiceError("Resolve the pending upgrade with upgrade-rollback before removal or recovery.")
     _ownership(unit_dir, config_dir)
     lock = os.open(config_dir / LOCK_FILE, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
@@ -312,6 +315,8 @@ def manage(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> d
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             raise ServiceError("Another scanner lifecycle action is running; retry when it finishes.") from exc
+        if (config_dir / UPGRADE_FILE).exists() or (config_dir / UPGRADE_FILE).is_symlink():
+            raise ServiceError("Resolve the pending upgrade with upgrade-rollback before removal or recovery.")
         return _manage_locked(action, unit_dir, config_dir, executor=executor)
     finally:
         # Keep the lock file: unlinking it could let another process lock a different inode.
