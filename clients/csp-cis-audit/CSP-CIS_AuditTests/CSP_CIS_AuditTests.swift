@@ -11,6 +11,22 @@ import Testing
 
 struct CSP_CIS_AuditTests {
 
+    @Test func legacyAutomaticLoginDoesNotInferStateOrDiscloseAccountNames() {
+        let check = CISCheck(id: "macos_13", category: "macos", description: "Ensure Automatic Login is disabled")
+        for value in [nil, "", " ", NSNumber(value: true), ["unexpected"]] as [Any?] {
+            let result = MacOSUserChecks.checkAutomaticLoginDisabled(check: check) { path, key in
+                #expect(path == "/Library/Preferences/com.apple.loginwindow.plist")
+                #expect(key == "autoLoginUser")
+                return value
+            }
+            #expect(result.status == "manual")
+        }
+        let result = MacOSUserChecks.checkAutomaticLoginDisabled(check: check) { _, _ in "private-fixture-account" }
+        #expect(result.status == "fail")
+        #expect(!result.details.contains("private-fixture-account"))
+    }
+
+
     @Test func queuedReportsCannotMoveToAnotherWorkspace() {
         let report = Data(#"{"domain":"csp.example","device_uuid":"test-device","report_id":"test-report"}"#.utf8)
         #expect(CISUploadOutbox.matchesWorkspace(report, domain: "CSP.EXAMPLE"))

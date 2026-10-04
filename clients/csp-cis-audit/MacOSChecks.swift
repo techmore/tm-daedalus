@@ -1189,26 +1189,6 @@ struct MacOSChecks {
     
     // Check if Automatic Login is disabled
     private static func checkAutomaticLoginDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.loginwindow", "autoLoginUser"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (no auto login)
-            return CheckResult(check: check, status: "pass", details: "Automatic Login appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Automatic Login is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Automatic Login is ENABLED for user: \(output.trimmingCharacters(in: .whitespacesAndNewlines))")
-        }
+        MacOSUserChecks.checkAutomaticLoginDisabled(check: check)
     }
 }

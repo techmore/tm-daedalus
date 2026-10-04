@@ -56,30 +56,19 @@ struct MacOSUserChecks {
     }
     
     // Check if Automatic Login is disabled
-    static func checkAutomaticLoginDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Preferences/com.apple.loginwindow", "autoLoginUser"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist, which is good (no auto login)
-            return CheckResult(check: check, status: "pass", details: "Automatic Login appears to be disabled.")
+    static func checkAutomaticLoginDisabled(
+        check: CISCheck,
+        readPreference: (String, String) -> Any? = MacOSChecks.readSystemPlistPreference
+    ) -> CheckResult {
+        guard let value = readPreference("/Library/Preferences/com.apple.loginwindow.plist", "autoLoginUser") as? String,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return CheckResult(check: check, status: "manual",
+                details: "No explicit automatic-login account could be read. Missing, inaccessible or unsupported preference evidence does not prove login enabled or disabled.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Automatic Login is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Automatic Login is ENABLED for user: \(output.trimmingCharacters(in: .whitespacesAndNewlines))")
-        }
+        return CheckResult(check: check, status: "fail",
+            details: "The system login-window preference explicitly names an automatic-login account. The account name is not collected in the report.")
     }
-    
+
     // Check if Fast User Switching is disabled
     static func checkFastUserSwitchingDisabled(check: CISCheck) -> CheckResult {
         let process = Process()
