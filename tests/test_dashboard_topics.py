@@ -7,6 +7,64 @@ import unittest
 
 class DashboardTopicTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_scanner_card_controls_preserve_open_state_and_scope_guard(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        renderer = source[source.index('  function makeAgentCard('):source.index('  function makeEventRow(')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.style={};this.events={};this.open=false;}
+get childNodes(){return this.children;}
+append(...nodes){for(const n of nodes){if(n.parent)n.parent.children=n.parent.children.filter(x=>x!==n);n.parent=this;this.children.push(n);}}
+setAttribute(){} addEventListener(name,callback){this.events[name]=callback;}}
+const document={createElement:tag=>new Node(tag)};
+const role='admin',controlsEnabled=true;
+const openScannerControls=new Set(),openCommandHistories=new Set(),openScanHistories=new Set(),openComparisonHistories=new Set();
+const scannerNetworkInputs=new Map(),scannerScopeFeedback=new Map(),scannerTargets=new Map(),scannerSkipDiscovery=new Map();
+function canViewScannerCommandHistory(){return true;} function supportsMacOSUpdateCheck(){return false;}
+function flatten(n){return [n,...n.children.flatMap(flatten)];}
+""" + renderer + """
+const agent={id:2,name:'<script>literal</script>',status:'online',enabled:true,authorized_networks:[],command_protocol_version:3,nmapui_ready:true};
+let card=makeAgentCard(agent,'example.test');
+let controls=card.children.find(n=>n.className==='topic-secondary scanner-controls');
+assert.equal(controls.open,false);
+assert.equal(flatten(controls).find(n=>n.dataset.command==='start_scan').disabled,true);
+assert.ok(card.children.indexOf(card.children.find(n=>n.className==='agent-command-history agent-run-history'))<card.children.indexOf(controls));
+assert.equal(card.children.find(n=>n.tag==='h3').textContent,'<script>literal</script>');
+controls.open=true;controls.events.toggle();
+card=makeAgentCard({...agent,authorized_networks:['10.0.0.0/24']},'example.test');
+controls=card.children.find(n=>n.className==='topic-secondary scanner-controls');
+assert.equal(controls.open,true);
+assert.equal(flatten(controls).find(n=>n.dataset.command==='start_scan').disabled,false);
+controls.open=false;controls.events.toggle();assert.equal(openScannerControls.has(2),false);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_scanner_structure_keeps_evidence_before_controls(self):
+        root = Path(__file__).parents[1]
+        template = (root / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertLess(template.index('id="scanner-assessment"'), template.index('id="agent-list"'))
+        source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
+        self.assertIn('controlDetails.open = openScannerControls.has(agent.id)', source)
+        self.assertIn('card.append(scanHistory, comparisonHistory);', source)
+        self.assertIn('if (controlDetails.childNodes.length > 1) card.append(controlDetails);\n    if (history) card.append(history);', source)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_scanner_coverage_excludes_revoked_nodes_and_requires_ready_evidence(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function scannerCoverageMetrics('):source.index('  function renderScannerAssessment(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.deepEqual(scannerCoverageMetrics([]),{enabled:0,online:0,ready:0,scoped:0});
+assert.deepEqual(scannerCoverageMetrics([
+ {status:'online',enabled:true,nmapui_ready:true,authorized_networks:[]},
+ {status:'offline',enabled:true,nmapui_ready:true,authorized_networks:['10.0.0.0/24']},
+ {status:'online',enabled:false,nmapui_ready:true,authorized_networks:['10.1.0.0/24']},
+ {status:'online',enabled:true,nmapui_ready:null,authorized_networks:[]}
+]),{enabled:3,online:2,ready:1,scoped:1});
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_endpoint_priority_metrics_keep_unknown_counts(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function cisPriorityMetrics('):source.index('  function renderCISReports(')]

@@ -45,6 +45,7 @@
   var activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
   var niktoHistory = { runs: [], cursor: null, hasMore: false, busy: false, sequence: 0 };
   var openCommandHistories = new Set();
+  var openScannerControls = new Set();
   var openScanHistories = new Set();
   var openRunDetails = new Set();
   var openRunEvents = new Set();
@@ -61,7 +62,7 @@
   var scannerComparisonCache = new Map();
   var titleMap = {
     overview: "Workspace overview",
-    scanners: "NmapUI scanner fleet",
+    scanners: "Internal network",
     meraki: "Meraki security report",
     dns: "DNS & email health",
     web: "Website health",
@@ -326,6 +327,32 @@
     return labels[name] || String(name).replace(/_/g, " ");
   }
 
+  function scannerCoverageMetrics(agents) {
+    var enabled = agents.filter(function (agent) { return agent.enabled !== false && agent.status !== "disabled"; });
+    var online = enabled.filter(function (agent) { return agent.status === "online"; }).length;
+    var ready = enabled.filter(function (agent) { return agent.status === "online" && agent.nmapui_ready === true; }).length;
+    var scoped = enabled.filter(function (agent) { return Array.isArray(agent.authorized_networks) && agent.authorized_networks.length > 0; }).length;
+    return {enabled: enabled.length, online: online, ready: ready, scoped: scoped};
+  }
+
+  function renderScannerAssessment(agents) {
+    var host = document.getElementById("scanner-assessment");
+    if (!host) return;
+    host.replaceChildren();
+    var counts = scannerCoverageMetrics(agents);
+    var metrics = document.createElement("div"); metrics.className = "audit-metric-grid";
+    metrics.append(
+      makeAuditMetric("Online scanners", counts.online + "/" + counts.enabled, "Enabled scanners reporting ready status", counts.enabled && counts.online === counts.enabled ? "good" : "attention"),
+      makeAuditMetric("Scan engine ready", String(counts.ready), "Online scanners with confirmed NmapUI readiness", counts.ready ? "good" : "attention"),
+      makeAuditMetric("Approved scope", counts.scoped + "/" + counts.enabled, "Scanners assigned one or more private network ranges", counts.enabled && counts.scoped === counts.enabled ? "good" : "attention")
+    );
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = !counts.enabled ? "No enabled scanner is enrolled. Add a scanner for each network location you want to assess."
+      : counts.scoped === 0 ? "No private networks are approved yet. Internal network exposure remains unassessed."
+      : "Approved scope and scanner availability do not establish scan coverage. Review saved runs for targets, dates, results and collection limits.";
+    host.append(metrics, note);
+  }
+
   function makeAgentCard(agent, domain) {
     var card = document.createElement("article");
     card.className = "agent-card";
@@ -380,6 +407,15 @@
       : "No approved network scope. This scanner cannot receive scan commands until an admin assigns a CIDR.";
     card.append(scopeSummary);
 
+    var controlDetails = document.createElement("details");
+    controlDetails.className = "topic-secondary scanner-controls";
+    controlDetails.open = openScannerControls.has(agent.id);
+    var controlTitle = document.createElement("summary"); controlTitle.textContent = "Scan & manage this location";
+    controlDetails.append(controlTitle);
+    controlDetails.addEventListener("toggle", function () {
+      if (controlDetails.open) openScannerControls.add(agent.id);
+      else openScannerControls.delete(agent.id);
+    });
     if (role === "admin" && controlsEnabled) {
       var scopeEditor = document.createElement("div");
       scopeEditor.className = "scanner-network-editor";
@@ -403,7 +439,7 @@
       scopeFeedback.setAttribute("aria-live", "polite");
       scopeFeedback.textContent = scannerScopeFeedback.get(agent.id) || "";
       scopeEditor.append(scopeLabel, saveScope, scopeFeedback);
-      card.append(scopeEditor);
+      controlDetails.append(scopeEditor);
     }
 
     if (role === "admin" && controlsEnabled) {
@@ -478,7 +514,7 @@
           actions.append(diagnostic);
         });
       }
-      card.append(actions);
+      controlDetails.append(actions);
     }
     if (role === "admin" && agent.enabled !== false && agent.status !== "disabled") {
       var enrollmentActions = document.createElement("div");
@@ -492,8 +528,9 @@
       var revokeNote = document.createElement("span");
       revokeNote.className = "scanner-revoke-feedback";
       enrollmentActions.append(disable, revokeNote);
-      card.append(enrollmentActions);
+      controlDetails.append(enrollmentActions);
     }
+    if (controlDetails.childNodes.length > 1) card.append(controlDetails);
     if (canViewScannerCommandHistory(role)) {
       var history = document.createElement("details");
       history.className = "agent-command-history";
@@ -824,6 +861,10 @@
       } catch (error) { savedComparisonBody.textContent = error.message; }
     });
     card.append(comparisonHistory);
+    // Move saved evidence ahead of operational controls without replacing nodes.
+    card.append(scanHistory, comparisonHistory);
+    if (controlDetails.childNodes.length > 1) card.append(controlDetails);
+    if (history) card.append(history);
 
     return card;
   }
@@ -885,6 +926,7 @@
       verificationPill.className = "verification-pill verification-" + verificationStatus;
       verificationPill.textContent = "Domain " + verificationStatus;
     }
+    renderScannerAssessment(data.agents);
     var agentList = document.getElementById("agent-list");
     if (agentList) {
       var activeScannerField = document.activeElement;
