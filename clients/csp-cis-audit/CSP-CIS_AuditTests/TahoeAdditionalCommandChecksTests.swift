@@ -13,6 +13,26 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyUpdateQueryRequiresCompletedRecognizedEvidence() {
+        let check = CISCheck(id: "updates", category: "macos", description: "Updates")
+        func status(_ evidence: MacOSChecks.CommandEvidence) -> String {
+            MacOSUpdateChecks.checkAppleSoftwareCurrent(check: check) { path, arguments in
+                #expect(path == "/usr/sbin/softwareupdate")
+                #expect(arguments == ["-l"])
+                return evidence
+            }.status
+        }
+        #expect(status(.init(output: "Software Update Tool\nFinding available software", error: "No new software available.")) == "pass")
+        #expect(status(.init(output: "Software Update found the following new or updated software:\n* Label: fixture-update\nTitle: Fixture, Version: 1")) == "fail")
+        #expect(status(.init(output: "Software Update found the following new or updated software:\n* Label: fixture\n* Label: fixture")) == "manual")
+        for output in ["", "No new software available. Network error", "Software Update found", "No new software available.\nunknown diagnostic", "Software Update found the following new or updated software:", "No new software available.\nSoftware Update found the following new or updated software:\n* Label: fixture"] {
+            #expect(status(.init(output: output)) == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(output: "No new software available.", exitCode: 1), .init(output: "No new software available.", error: "failed query"), .init(output: "No new software available.", unavailable: "timeout")] {
+            #expect(status(evidence) == "manual")
+        }
+    }
+
     @Test func strictGatekeeperNeedsExplicitPolicyBeyondEnabledAssessments() {
         let check = CISCheck(id: "gatekeeper-strict", category: "macos", description: "App Store only")
         func result(_ evidence: MacOSChecks.CommandEvidence, _ preference: Any?) -> CheckResult {

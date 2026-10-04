@@ -57,32 +57,30 @@ struct MacOSUpdateChecks {
     }
     
     // Check if all Apple-provided software is current
-    static func checkAppleSoftwareCurrent(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/softwareupdate"
-        process.arguments = ["-l"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check software updates: \(error)")
+    static func checkAppleSoftwareCurrent(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        let evidence = command("/usr/sbin/softwareupdate", ["-l"])
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "A complete supported Software Update query was unavailable. A timeout, failed query or unsupported catalog response does not establish that software is current.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        if output.contains("No new software available") {
-            return CheckResult(check: check, status: "pass", details: "All Apple-provided software is current.")
-        } else if output.contains("Software Update found") {
-            return CheckResult(check: check, status: "fail", details: "Updates are available: \(output)")
-        } else {
-            return CheckResult(check: check, status: "error", details: "Unable to determine software update status.")
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.output.utf8.count + evidence.error.utf8.count <= 65_536 else { return unknown() }
+        let lines = (evidence.output + "\n" + evidence.error).components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let progress: Set<String> = ["Software Update Tool", "Finding available software"]
+        let none: Set<String> = ["No new software available", "No new software available."]
+        let noUpdateLines = lines.filter { none.contains($0) }
+        if noUpdateLines.count == 1 && lines.allSatisfy({ progress.contains($0) || none.contains($0) }) {
+            return CheckResult(check: check, status: "pass", details: "The completed Software Update query offered no new updates. This records the current catalog response, not exhaustive installed-software or patch compliance.")
         }
+        let heading = "Software Update found the following new or updated software:"
+        let labels = lines.filter { $0.hasPrefix("* Label: ") && $0.count > 9 && $0.count <= 512 }
+        guard noUpdateLines.isEmpty, lines.filter({ $0 == heading }).count == 1, !labels.isEmpty, Set(labels).count == labels.count,
+              lines.allSatisfy({ progress.contains($0) || $0 == heading || labels.contains($0) || ($0.hasPrefix("Title: ") && $0.count <= 2048) }) else { return unknown() }
+        return CheckResult(check: check, status: "fail", details: "The completed Software Update query offered \(labels.count) update(s). No updates were installed; catalog availability can change.")
     }
-    
+
     // MARK: - Privacy Settings
     
     // Check if Location Services is disabled
