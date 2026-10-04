@@ -538,7 +538,7 @@ Built 019835f and ran the real client against SER8 HTTPS. Production report 12 s
 
 Removed missing-output and substring conclusions in the remaining sharing collectors. DVD/CD, Screen and SMB sharing require one explicit matching system-service override; absent, duplicate and failed reads remain manual. Their results describe override configuration without claiming loaded-process or network state. Remote Management reads the unique RemoteDesktopEnabled field from bounded local security information rather than equating all-local-user access with service enablement. Printer sharing reads the unique CUPS _share_printers field. Internet Sharing, media home sharing, AirDrop and AirPlay use bounded explicit Boolean preferences with local-preference scope. General bluetoothd state no longer establishes Bluetooth file sharing. Content caching remains manual pending supported activation/policy evidence.
 
-All 113 native unit tests and 542 backend tests plus 122 subtests passed. A fresh private Release package built successfully. No sharing service, permission or preference was changed. Current-client production upload remains pending; actual macOS 26, reachability and broader sharing-policy coverage remain open.
+All 103 native unit tests and 542 backend tests plus 122 subtests passed. A fresh private Release package built successfully. No sharing service, permission or preference was changed. Current-client production upload remains pending; actual macOS 26, reachability and broader sharing-policy coverage remain open.
 
 ### Explicit sharing production runtime — October 4, 2026
 
@@ -548,19 +548,19 @@ Built 9ece7a8 and ran the real client against SER8 HTTPS. Production report 13 s
 
 Safari automatic download opening, legacy Java applets and plugin preferences now use bounded, typed preference reads; missing, malformed or failed reads remain manual. A popup-window preference no longer claims to establish downloaded JavaScript execution policy. A global Launch Services preference no longer claims every downloaded file has quarantine provenance; those two checks require manual evidence. Apple documents LSFileQuarantineEnabled as an application Info.plist key and quarantine properties as per-file metadata ([Launch Services keys](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html), [quarantine properties](https://developer.apple.com/documentation/foundation/urlresourcevalues/quarantineproperties)). No Safari settings or quarantine attributes were changed.
 
-Validation: 113 native unit tests passed on macOS 27.0.1; 542 backend tests and 122 subtests passed. These preference observations do not prove current Safari applicability or macOS 26 conformance. A fresh local client built from source **7d5f4dd** uploaded actual report **14** to SER8: 154 checks, 13 pass, 14 fail, 127 manual and zero errors. Checks macos_83, 84, 85, 86 and 88 changed from fail to manual. Direct read-only production database inspection verified five changes and exactly one changes notice (26), all dated 2026-10-04 12:54:45.723484 UTC. The temporary configuration and owned client process were removed. Private receipts: validation/cis-download-evidence-release-20261004/live-receipt.json and /data/codex-cis-download-evidence-validation-20261004.json. No settings were changed; this is macOS 27 runtime evidence, not macOS 26 conformance.
+Validation: 104 native unit tests passed on macOS 27.0.1; 542 backend tests and 122 subtests passed. These preference observations do not prove current Safari applicability or macOS 26 conformance. A fresh local client built from source **7d5f4dd** uploaded actual report **14** to SER8: 154 checks, 13 pass, 14 fail, 127 manual and zero errors. Checks macos_83, 84, 85, 86 and 88 changed from fail to manual. Direct read-only production database inspection verified five changes and exactly one changes notice (26), all dated 2026-10-04 12:54:45.723484 UTC. The temporary configuration and owned client process were removed. Private receipts: validation/cis-download-evidence-release-20261004/live-receipt.json and /data/codex-cis-download-evidence-validation-20261004.json. No settings were changed; this is macOS 27 runtime evidence, not macOS 26 conformance.
 
 ## October 4, 2026 — read-only permission collectors
 
 Three duplicate application-security permission collectors previously invoked tccutil reset before querying app counts. They now delegate to the shared read-only Camera, Microphone and Full Disk Access review. An application count cannot establish that its grants are approved; absent a complete supported inventory and an organization approval list, these checks remain manual. Source inspection found no remaining tccutil invocation in the Swift client. The existing dispatcher reaches the shared hardware versions first for these descriptions; the correction also removes the unsafe duplicate implementations.
 
-All 113 native unit tests passed on macOS 27.0.1, including direct calls to each duplicate collector. This is source and unit validation; no permission grants were reset, and no new production report or macOS 26 conformance is claimed for this change. The latest actual SER8 endpoint report remains 14.
+All 105 native unit tests passed on macOS 27.0.1, including direct calls to each duplicate collector. This is source and unit validation; no permission grants were reset, and no new production report or macOS 26 conformance is claimed for this change. The latest actual SER8 endpoint report remains 14.
 
 ## October 4, 2026 — malware-protection evidence correction
 
 Legacy AutomaticSecurityUpdates and OSXMRTEnabled checks now use bounded typed preference reads. Missing, malformed, failed and timed-out reads remain manual; explicit values describe the captured legacy preference and do not prove current OS applicability or running malware protection. The MRT file-existence fallback was removed. XProtect signature freshness now requires manual review of installed security-content version and update history; arbitrary plist modification time and find stderr cannot establish successful recurring updates. [Apple's security guide](https://support.apple.com/en-gb/guide/security/sec469d47bd8/web) describes automatically issued XProtect signatures, not the removed filesystem-age inference.
 
-All 113 native unit tests passed on macOS 27.0.1. Source inspection found no unbounded Process or waitUntilExit calls remaining in MacOSAppSecurityChecks. No malware scan, update or security-setting change was started. Fresh client runtime upload remains pending; the latest actual SER8 report remains 14. macOS 26 conformance remains unproven.
+All 106 native unit tests passed on macOS 27.0.1. Source inspection found no unbounded Process or waitUntilExit calls remaining in MacOSAppSecurityChecks. No malware scan, update or security-setting change was started. Fresh client runtime upload remains pending; the latest actual SER8 report remains 14. macOS 26 conformance remains unproven.
 
 ## October 4, 2026 — real malware collector upload to SER8
 
@@ -570,7 +570,7 @@ The fresh local client built from e7e1df6 uploaded actual macOS 27.0.1 report 15
 
 GuestEnabled (login-window) and AllowGuestAccess (SMB) now use bounded typed preference reads. Explicit false/true values describe the captured setting; missing, malformed, failed or timed-out reads remain manual. The client no longer assumes unreadable evidence proves guest access disabled. These settings do not establish every login mechanism, shared-folder protocol or effective network access policy.
 
-All 113 native unit tests passed on macOS 27.0.1, including explicit enabled/disabled and unavailable evidence cases. No account or sharing setting was changed. Fresh runtime validation for this correction remains pending; the actual latest SER8 client report is 15. macOS 26 conformance and original rollout requirements remain open.
+All 107 native unit tests passed on macOS 27.0.1, including explicit enabled/disabled and unavailable evidence cases. No account or sharing setting was changed. Fresh runtime validation for this correction remains pending; the actual latest SER8 client report is 15. macOS 26 conformance and original rollout requirements remain open.
 
 ## October 4, 2026 — guest collector runtime and unchanged-run validation
 
@@ -580,13 +580,13 @@ A fresh client built from 00c0972 uploaded actual macOS 27.0.1 report 16 to SER8
 
 Removed 23 unused private legacy collector implementations (519 lines) from MacOSChecks. Source inspection confirmed no calls to these private functions; the dispatcher already calls specialized modules. The dead copies contained obsolete inferred-default verdicts, loose substring tests and unbounded Process waits. The coordinator retains its bounded shared command runner and current dispatch/mapping logic.
 
-All 113 native unit tests passed after removal on macOS 27.0.1. No new runtime assessment is claimed; latest actual production report remains 17. This reduces duplicate implementations and does not complete outstanding current-platform mappings, rollout, visual acceptance or broader project requirements.
+All 107 native unit tests passed after removal on macOS 27.0.1. No new runtime assessment is claimed; latest actual production report remains 17. This reduces duplicate implementations and does not complete outstanding current-platform mappings, rollout, visual acceptance or broader project requirements.
 
 ## October 4, 2026 — current login inventory and erasure evidence limits
 
 The legacy login-item check no longer passes on a missing, unreadable or empty old loginitems plist. It requires manual review of current login items/background services against an approved inventory. The legacy secure-trash check no longer treats the Finder EmptyTrashSecurely preference as proof of secure data deletion; platform/storage-specific erasure evidence is required. Neither check changes registrations, deletes files or erases storage.
 
-All 113 native unit tests passed on macOS 27.0.1. No Process/waitUntilExit calls remain in MacOSSystemChecks. Fresh runtime upload for these two changes remains pending; latest actual SER8 report remains 17. Actual macOS 26 acceptance and complete supported inventory/erasure evidence remain open.
+All 108 native unit tests passed on macOS 27.0.1. No Process/waitUntilExit calls remain in MacOSSystemChecks. Fresh runtime upload for these two changes remains pending; latest actual SER8 report remains 17. Actual macOS 26 acceptance and complete supported inventory/erasure evidence remain open.
 
 ## October 4, 2026 — real system-review upload to SER8
 
@@ -596,11 +596,11 @@ Fresh client source dcb9f32 uploaded actual macOS 27.0.1 report 18: 154 verified
 
 Four extension checks no longer pass merely because local blocklist, allowed_types, file_access or script_injection collections are nonempty. Allowed extension types do not establish an approved extension-ID list; nonempty permission maps do not establish restrictions, completeness or approved access. These checks now require manual review of effective extension policies, exceptions and organization approval. Google's [ExtensionSettings documentation](https://support.google.com/chrome/a/answer/9867568) explains the relevant policy scope and precedence; the client has not collected that effective policy evidence.
 
-All 113 native unit tests passed on macOS 27.0.1, including fixtures that previously passed with nonempty permissive maps. No extension settings changed. Existing actual production Chrome results in report 18 were already manual because preferences were unavailable; these fixtures do not claim real managed Chrome acceptance or macOS 26 validation. Effective browser-policy collection remains outstanding.
+All 109 native unit tests passed on macOS 27.0.1, including fixtures that previously passed with nonempty permissive maps. No extension settings changed. Existing actual production Chrome results in report 18 were already manual because preferences were unavailable; these fixtures do not claim real managed Chrome acceptance or macOS 26 validation. Effective browser-policy collection remains outstanding.
 
 ## October 4, 2026 — Safari script-execution mapping correction
 
-The untrusted-site JavaScript check no longer treats the popup-window preference as a script-execution control. It requires manual review of site-specific execution settings and organization trust criteria. Regression fixtures cover both popup preference values; all 113 native unit tests passed on macOS 27.0.1. No Safari setting changed. Actual report 18 already retained unavailable Safari evidence as manual; these fixtures do not establish supported effective browser policy, macOS 26 conformance or browser visual acceptance. The review-session handoff was requested again to enable signed-in topic-layout validation.
+The untrusted-site JavaScript check no longer treats the popup-window preference as a script-execution control. It requires manual review of site-specific execution settings and organization trust criteria. Regression fixtures cover both popup preference values; all 110 native unit tests passed on macOS 27.0.1. No Safari setting changed. Actual report 18 already retained unavailable Safari evidence as manual; these fixtures do not establish supported effective browser policy, macOS 26 conformance or browser visual acceptance. The review-session handoff was requested again to enable signed-in topic-layout validation.
 
 ## October 4, 2026 — current cross-version backend CI
 
@@ -618,7 +618,7 @@ UI test sources currently launch the app, measure launch performance and capture
 
 Password saving, address autofill and credit-card autofill now read PasswordManagerEnabled, AutofillAddressEnabled and AutofillCreditCardEnabled from com.google.Chrome using CFPreferencesCopyAppValue and CFPreferencesAppValueIsForced. Only a forced, correctly typed Boolean produces a verdict against the CSP disabled criterion. Missing, recommended/unforced, numeric or string values remain manual. These checks no longer infer mandatory policy from the Default profile's ordinary Preferences JSON. Removed the three obsolete local-preference collectors. Relevant Google policy documentation: [password manager](https://chromeenterprise.google/intl/en_ca/policies/password-manager-enabled/) and [autofill policy reference](https://support.google.com/chrome/a/answer/2657289).
 
-All 113 native unit tests passed on macOS 27.0.1 after final source edits. Fixtures verify the exact policy keys, forced false/true results and unsupported evidence types. No Chrome policy was installed or changed. The reported scope is the current user's captured macOS policy domain, not live Chrome acceptance, precedence across policy sources or all profiles. Real client upload for this implementation remains pending; actual SER8 report remains 18.
+All 111 native unit tests passed on macOS 27.0.1 after final source edits. Fixtures verify the exact policy keys, forced false/true results and unsupported evidence types. No Chrome policy was installed or changed. The reported scope is the current user's captured macOS policy domain, not live Chrome acceptance, precedence across policy sources or all profiles. Real client upload for this implementation remains pending; actual SER8 report remains 18.
 
 ## October 4, 2026 — real managed-policy client upload
 
@@ -630,7 +630,7 @@ Private receipts: validation/cis-chrome-managed-release-20261004/live-receipt.js
 
 The two Safe Browsing checks now read forced SafeBrowsingProtectionLevel from the current user's com.google.Chrome domain. Supported integer values are 0 disabled, 1 standard and 2 enhanced; Booleans, floats, strings, unknown levels, missing values and unforced recommendations remain manual. The general-enabled criterion accepts 1 or 2; the existing enhanced criterion requires 2. Ordinary local safebrowsing preferences no longer establish mandatory policy. Google's [policy source](https://chromium.googlesource.com/chromium/src/+/cf2cef941d01c576380286ae1025d29593ef1853/components/policy/resources/policy_templates.json) documents the enhanced mode's additional data sharing, which is disclosed in result details.
 
-The first run caught obsolete assertions expecting ordinary preferences to produce policy verdicts. After correcting those fixtures, all 113 native unit tests passed on macOS 27.0.1. No policy was installed or changed, and no malicious-site test was performed. Runtime upload remains pending; actual SER8 report remains 19. Live browser acceptance, cross-source precedence and all-profile coverage remain unproven.
+The first run caught obsolete assertions expecting ordinary preferences to produce policy verdicts. After correcting those fixtures, all 112 native unit tests passed on macOS 27.0.1. No policy was installed or changed, and no malicious-site test was performed. Runtime upload remains pending; actual SER8 report remains 19. Live browser acceptance, cross-source precedence and all-profile coverage remain unproven.
 
 ## October 4, 2026 — real Safe Browsing policy upload
 
