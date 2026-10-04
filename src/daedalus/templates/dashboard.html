@@ -265,13 +265,13 @@
           <p class="check-scope-note" id="cis-assessment-scope" aria-live="polite">Loading the latest saved endpoint assessment…</p>
           </section>
           <section class="topic-evidence" aria-labelledby="cis-coverage-title"><h3 id="cis-coverage-title">Assessment coverage</h3><p class="check-scope-note">Recent assessments were collected within 36 hours. Client check-ins are tracked separately and do not refresh assessment evidence.</p><div class="audit-metric-grid" id="cis-assessment-coverage" aria-live="polite">Loading endpoint coverage…</div></section>
-          <section class="topic-evidence" aria-labelledby="cis-results-title">
-          <div class="section-heading check-subheading"><div><p class="eyebrow">SUPPORTING EVIDENCE</p><h3 id="cis-results-title">Baseline results</h3></div></div>
-          <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
-          </section>
           <section class="topic-changes" aria-labelledby="cis-changes-title">
           <div class="section-heading check-subheading"><div><p class="eyebrow">CHANGES BETWEEN REPORTS</p><h3 id="cis-changes-title">What changed</h3></div></div>
           <div class="cis-change-list" id="cis-change-list" aria-live="polite"><div class="empty-events">Changes appear after an endpoint sends a later report.</div></div>
+          </section>
+          <section class="topic-evidence" aria-labelledby="cis-results-title">
+          <div class="section-heading check-subheading"><div><p class="eyebrow">SUPPORTING EVIDENCE</p><h3 id="cis-results-title">Baseline results</h3></div></div>
+          <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
           </section>
           <section class="topic-evidence" aria-labelledby="cis-presence-title">
           <div class="section-heading check-subheading"><div><p class="eyebrow">DEVICE AVAILABILITY</p><h3 id="cis-presence-title">Endpoint check-ins</h3></div></div>
@@ -330,16 +330,6 @@
             <div id="{{ key }}-priorities" aria-live="polite"><p class="muted">Loading saved evidence…</p></div>
             {% if key == 'web' %}<div class="topic-audit-outcomes"><p id="web-exposure-outcome">Exposure assessment: loading saved evidence…</p><p id="web-nikto-outcome">Deeper website assessment: loading saved evidence…</p><div id="web-audit-review" aria-live="polite"></div></div>{% endif %}
           </section>
-          <div class="check-toolbar">
-            <div>
-              <span class="check-status" id="{{ key }}-check-status">No check run yet</span>
-              <p class="muted" id="{{ key }}-check-last-run">Run a check to establish the first baseline.</p>
-            </div>
-            {% if membership.role == 'admin' %}
-            <button class="button button-primary" type="button" data-run-external-check="{{ key }}">Run {{ 'DNS' if key == 'dns' else 'website' }} check</button>
-            {% endif %}
-          </div>
-
           <section class="topic-changes" aria-labelledby="{{ key }}-changes-title">
           <div class="section-heading check-subheading"><div><p class="eyebrow">SINCE THE PREVIOUS ASSESSMENT</p><h3 id="{{ key }}-changes-title">What changed</h3></div></div>
           <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
@@ -384,6 +374,18 @@
           </details>
           </section>
 
+          <details class="topic-secondary"><summary>Refresh assessment</summary>
+          <div class="check-toolbar">
+            <div>
+              <span class="check-status" id="{{ key }}-check-status">No check run yet</span>
+              <p class="muted" id="{{ key }}-check-last-run">Run a check to establish the first baseline.</p>
+            </div>
+            {% if membership.role == 'admin' %}
+            <button class="button button-primary" type="button" data-run-external-check="{{ key }}">Run {{ 'DNS' if key == 'dns' else 'website' }} check</button>
+            {% endif %}
+          </div>
+
+          </details>
           {% if key == 'web' %}
           <details class="topic-secondary"><summary>Exposure findings &amp; deeper website audits</summary>
           <section class="external-schedule-card active-exposure-card" aria-labelledby="web-active-title">
