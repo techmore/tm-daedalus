@@ -516,3 +516,8 @@ A 102-entry fixture confirms two history pages contain every unique entry once, 
 ### 2026-10-04 — Topic reading order and login preference evidence
 
 DNS and Website now place collection controls in a collapsed Refresh assessment group after supporting evidence. CIS changes precede detailed baseline reports. All 38 dashboard-topic and refresh tests pass; browser visual review remains pending. Three legacy login preference collectors now use bounded command evidence and require explicit successful canonical values; absent, failed, malformed or timed-out reads remain manual rather than inferred pass/fail. Native xcresult confirms 75 tests passed, zero failed or skipped. These collector fixtures do not establish live macOS 26 conformance or managed enforcement for every user.
+
+
+### 2026-10-04 — Production topic ordering release
+
+Source 7cad122 is active on Incus, with internal/public health checks and verified off-host backup daedalus-data-20261004T101051Z.tar.gz. Full suite: 515 tests and 104 subtests. An authenticated token-session request to /dashboard confirms DNS changes precede evidence, collection controls follow evidence, and CIS changes precede report detail. This confirms deployed markup, not rendered visual quality. Browser visual review and the full-project completion gates remain open.
