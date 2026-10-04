@@ -7,6 +7,22 @@ import unittest
 
 class DashboardTopicTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_vendor_groups_preserve_observations_and_avoid_object_key_collisions(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function groupExternalDependencies('):source.index('  function renderWebsiteSnapshot(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+const resources=[{host:'a.test',category:'Analytics'},{host:'b.test',category:'Fonts and CDN'},{host:'c.test',category:'Analytics'},{host:'literal.test',category:'__proto__'},{host:'unknown.test'}];
+const original=JSON.stringify(resources), groups=groupExternalDependencies(resources);
+assert.deepEqual(groups.map(g=>g.category),['Analytics','Fonts and CDN','__proto__','Unclassified']);
+assert.deepEqual(groups[0].resources.map(r=>r.host),['a.test','c.test']);
+assert.equal(JSON.stringify(resources),original);assert.deepEqual(groupExternalDependencies(null),[]);
+"""
+        result = subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('statusTone: insecure ? "is-absent" : "is-neutral"', source)
+        self.assertIn('Categories are hostname observations, not vendor security assessments.', source)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_overview_prioritizes_review_and_keeps_unknown_unassessed(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function workspaceAssessmentSummary('):source.index('  async function loadWorkspacePosture(')]

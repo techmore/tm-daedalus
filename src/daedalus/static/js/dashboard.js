@@ -2876,6 +2876,16 @@
     }
   }
 
+  function groupExternalDependencies(resources) {
+    var groups = new Map();
+    (Array.isArray(resources) ? resources : []).forEach(function (resource) {
+      var category = resource.category || "Unclassified";
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(resource);
+    });
+    return Array.from(groups, function (entry) { return {category: entry[0], resources: entry[1]}; });
+  }
+
   function renderWebsiteSnapshot(snapshot) {
     var summary = document.getElementById("web-summary-grid");
     var headers = document.getElementById("web-header-grid");
@@ -2987,25 +2997,27 @@
           ? "No third-party resource links were found in the captured portion of the root page."
           : "No third-party resource links were found in the returned root page.");
       } else {
-        var dependencyRows = snapshot.external_resources.map(function (resource) {
-          var host = resource.host || "Unknown host";
-          if (resource.port) host += ":" + resource.port;
-          var insecure = resource.scheme === "http";
-          return {
-            type: resource.vendor || "Unclassified external host",
-            name: host,
-            value: (resource.category || "Other") + " · " + (resource.resource_types || []).join(", ") + " · " + (resource.reference_count || 1) + " reference(s)",
-            present: true,
-            statusTone: insecure ? "is-absent" : "is-present",
-            statusText: insecure ? "HTTP reference" : "HTTPS reference"
-          };
+        groupExternalDependencies(snapshot.external_resources).forEach(function (group) {
+          var dependencyRows = group.resources.map(function (resource) {
+            var host = resource.host || "Unknown host";
+            if (resource.port) host += ":" + resource.port;
+            var insecure = resource.scheme === "http";
+            return {
+              type: resource.vendor || "Unclassified external host",
+              name: host,
+              value: (resource.category || "Other") + " · " + (resource.resource_types || []).join(", ") + " · " + (resource.reference_count || 1) + " reference(s)",
+              present: true,
+              statusTone: insecure ? "is-absent" : "is-neutral",
+              statusText: insecure ? "HTTP reference" : "HTTPS reference"
+            };
+          });
+          vendors.append(makeAuditTable(
+            group.category + " · " + group.resources.length + " linked origin(s)",
+            "Categories are hostname observations, not vendor security assessments. HTTPS references remain unassessed.",
+            dependencyRows,
+            "linked"
+          ));
         });
-        vendors.append(makeAuditTable(
-          "Third-party hosts in the root page",
-          "Classifications are based on recognized host names. Unrecognized hosts are listed without a vendor claim.",
-          dependencyRows,
-          "linked"
-        ));
         if (snapshot.external_resources_truncated) {
           var truncationNote = document.createElement("p");
           truncationNote.className = "audit-inline-warning";

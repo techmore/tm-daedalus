@@ -466,3 +466,8 @@ A private ad hoc client built from production source 4506665 ran on macOS 27.0.1
 ### 2026-10-04 — Production CIS PDF 36 visual review
 
 The actual production PDF 36 download matches SHA256 e03ba71765c546eba1f95e5be88387a7f8677c5f6db0c911973cc94efbb75cbd (31,819 bytes). All 12 pages were rendered and visually inspected, including assessment summary, the 154 saved check results, repeated table headings, footers, and 56 historical status changes. No clipping or overlapping text was observed. This PDF preserves endpoint report 3; it is not the later report 4. The original job and download were not edited or regenerated. Production receipt /data/codex-cis-summary-revised-validation-20261004.json now records the actual production visual review separately from the previous local frozen-snapshot review.
+
+
+### 2026-10-04 — Legacy vendor source review and topic grouping
+
+Reviewed ../dev/CSP-BFS/scripts/domain_analyzer.py and analyze_domains.sh. Their vendor feature categorized HTML references; it did not establish provider security or scan external vendors. Daedalus now groups saved linked-origin evidence by category, retaining each host, resource types, and reference count. HTTPS labels are neutral rather than green security-like badges. Categories remain hostname observations; missing metadata and partial inventory remain explicit. Grouping fixtures preserve input data and literal category text, including prototype-like names. Deeper vendor assessment remains open.
