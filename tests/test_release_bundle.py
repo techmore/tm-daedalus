@@ -82,7 +82,7 @@ class ReleaseBundleTests(unittest.TestCase):
             for name in ("PUBLIC-PROJECT-REPORT.md", "README.md", "pyproject.toml", "uv.lock", "requirements-production.txt", ".env.production.example"):
                 (root / name).write_text("fixture", encoding="utf-8")
             (root / "scripts").mkdir()
-            for name in ("__init__.py", "backup_data.py", "backup_incus.sh", "check_production_env.py", "check_public_deployment.py", "deploy_incus.py", "deploy_incus_remote.sh", "package_release.py", "restore_data.py"):
+            for name in ("__init__.py", "backup_data.py", "backup_incus.sh", "check_production_env.py", "check_public_deployment.py", "deploy_incus.py", "deploy_incus_remote.sh", "package_release.py", "restore_data.py", "install_nikto_runtime.py"):
                 (root / "scripts" / name).write_text("fixture", encoding="utf-8")
             source = root / "src" / "daedalus"
             source.mkdir(parents=True)

@@ -96,6 +96,7 @@ from daedalus.domain_verification import (
     normalize_domain,
 )
 from daedalus.active_website_checks import run_active_website_check
+from daedalus.nikto_checks import run_nikto_check
 from daedalus.external_checks import (
     ExternalCheckFailure,
     compare_snapshots,
@@ -703,7 +704,7 @@ def capture_external_report_snapshot(
     user: User,
 ) -> dict[str, Any]:
     checks: dict[str, Any] = {}
-    for check_type in ("dns", "web", "web-active"):
+    for check_type in ("dns", "web", "web-active", "web-nikto"):
         latest = db.scalar(
             select(ExternalCheckRun)
             .where(
@@ -1206,7 +1207,7 @@ def generate_report_job(report_job_id: int) -> None:
 
 
 def check_type_label(check_type: str) -> str:
-    return {"dns": "DNS and email", "web": "Website", "web-active": "Website exposure"}.get(check_type, "Security")
+    return {"dns": "DNS and email", "web": "Website", "web-active": "Website exposure", "web-nikto": "Nikto website audit"}.get(check_type, "Security")
 
 
 def external_check_field_label(field_path: str) -> str:
@@ -1242,6 +1243,8 @@ def external_check_field_label(field_path: str) -> str:
 
 def external_check_change_group(check_type: str, field_path: str) -> str:
     """Use compact category names in inbox notices; the history retains each detail."""
+    if check_type in {"web-active", "web-nikto"}:
+        return "website findings"
     if check_type == "web":
         if field_path.startswith("page_content."):
             return "page content"
@@ -1283,6 +1286,8 @@ def external_check_warning_reasons(check_type: str, snapshot: dict[str, Any]) ->
             observation = snapshot.get(key)
             if isinstance(observation, dict) and observation.get("analysis_partial") is True:
                 reasons.append(f"{label.title()} analysis was partial")
+    if check_type == "web-nikto" and snapshot.get("coverage_complete") is not True:
+        reasons.append("Nikto does not confirm that every test was exhausted; missing findings remain unknown")
     return reasons
 
 
@@ -1309,7 +1314,7 @@ def _execute_external_check(
             raise HTTPException(status_code=403, detail="Workspace admin role required")
         if user_id is None and trigger_source != "schedule":
             raise HTTPException(status_code=403, detail="Scheduled checks require an internal actor")
-        if check_type == "web-active":
+        if check_type in {"web-active", "web-nikto"}:
             if user_id is None or not workspace_controls_available(db, organization):
                 raise HTTPException(status_code=403, detail="Active website checks require domain verification or an active override")
             if db.scalar(select(ExternalCheckRun.id).where(
@@ -1343,7 +1348,7 @@ def _execute_external_check(
         )
         db.add(run)
         db.flush()
-        if check_type == "web-active":
+        if check_type in {"web-active", "web-nikto"}:
             audit(db, organization_id, user_id, "external_check.queued", {
                 "run_id": run.id, "check_type": check_type, "domain": organization.domain,
                 "source": trigger_source,
@@ -1355,7 +1360,7 @@ def _execute_external_check(
         started_clock = time.perf_counter()
 
     try:
-        if check_type == "web-active":
+        if check_type in {"web-active", "web-nikto"}:
             with SessionLocal() as db:
                 current_organization = db.get(Organization, organization_id)
                 approved_admin = db.scalar(select(Membership.id).where(
@@ -1365,10 +1370,12 @@ def _execute_external_check(
                 ))
                 if current_organization is None or approved_admin is None or not workspace_controls_available(db, current_organization):
                     raise PermissionError("Active website authorization expired before collection")
-            snapshot = run_active_website_check(domain)
+            snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
             snapshot = run_dns_check(domain) if check_type == "dns" else run_website_check(domain)
-        failure = ("Active website collection could not validate a public target." if snapshot.get("error_code") else None) if check_type == "web-active" else None
+        failure = ("Active website collection could not validate a public target." if snapshot.get("error_code") else None) if check_type in {"web-active", "web-nikto"} else None
+        if check_type == "web-nikto" and snapshot.get("error_code"):
+            failure = "Nikto runtime is unavailable on this server." if snapshot["error_code"] == "nikto_runtime_unavailable" else "Nikto collection failed; check the recorded coverage state."
     except ExternalCheckFailure as exc:
         snapshot = exc.snapshot
         failure = str(exc)
@@ -1388,7 +1395,7 @@ def _execute_external_check(
         run.error_summary = failure[:500] if failure else None
         run.status = "failed" if failure else (
             "completed_with_warnings"
-            if (check_type == "dns" and snapshot.get("resolver_errors")) or (check_type == "web-active" and snapshot.get("coverage_complete") is not True)
+            if (check_type == "dns" and snapshot.get("resolver_errors")) or (check_type in {"web-active", "web-nikto"} and snapshot.get("coverage_complete") is not True)
             else "completed"
         )
         changes: list[tuple[str, Any, Any]] = []
@@ -1404,7 +1411,7 @@ def _execute_external_check(
                 .order_by(ExternalCheckRun.id.desc())
             )
             if prior and prior.snapshot:
-                if check_type == "web-active":
+                if check_type in {"web-active", "web-nikto"}:
                     previous_snapshot = prior.snapshot
                     if (previous_snapshot.get("preset_version") == snapshot.get("preset_version")
                             and snapshot.get("preset_version")
@@ -1418,6 +1425,11 @@ def _execute_external_check(
                             if key not in before or key not in after
                             or before[key].get("http_status") != after[key].get("http_status")
                         ]
+                    elif check_type == "web-nikto" and previous_snapshot.get("preset_version") == snapshot.get("preset_version") and snapshot.get("preset_version"):
+                        before = {(finding["signature_id"], finding["path"]): finding for finding in previous_snapshot.get("findings", [])}
+                        after = {(finding["signature_id"], finding["path"]): finding for finding in snapshot.get("findings", [])}
+                        changes = [(f"findings.{key[0]}:{key[1]}", None, after[key]) for key in sorted(after.keys() - before.keys())]
+                        snapshot["comparison_scope"] = "new_observations_only"
                 else:
                     changes = compare_snapshots(prior.snapshot, snapshot)
             for field_path, previous_value, current_value in changes:
@@ -2840,7 +2852,7 @@ def external_check_history(
     changes_before: int | None = None,
     db: Session = Depends(get_db),
 ):
-    if check_type not in {"dns", "web", "web-active"}:
+    if check_type not in {"dns", "web", "web-active", "web-nikto"}:
         raise HTTPException(status_code=404, detail="Unknown external check")
     _, organization, _ = get_org_context(request, db)
     runs_page_size = max(1, min(runs_limit, 100))
@@ -4577,10 +4589,10 @@ async def start_external_check(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    if check_type not in {"dns", "web", "web-active"}:
+    if check_type not in {"dns", "web", "web-active", "web-nikto"}:
         raise HTTPException(status_code=404, detail="Unknown external check")
     user, organization, _ = get_org_context(request, db, admin=True)
-    if check_type == "web-active" and not workspace_controls_available(db, organization):
+    if check_type in {"web-active", "web-nikto"} and not workspace_controls_available(db, organization):
         raise HTTPException(status_code=403, detail="Active website checks require domain verification or an active override")
     result = await run_in_threadpool(
         execute_external_check, organization.id, user.id, check_type

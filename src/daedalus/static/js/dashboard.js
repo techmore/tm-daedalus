@@ -42,6 +42,7 @@
   var notifiedCheckRuns = Object.create(null);
   var externalCheckHistory = Object.create(null);
   var activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
+  var niktoHistory = { runs: [], cursor: null, hasMore: false, busy: false, sequence: 0 };
   var openCommandHistories = new Set();
   var openScanHistories = new Set();
   var openRunDetails = new Set();
@@ -167,7 +168,7 @@
     if (name === "meraki") loadMeraki();
     if (name === "cis") { loadCIS(); loadReports(); }
     if (name === "dns" || name === "web") loadExternalCheck(name);
-    if (name === "web") loadActiveExposure();
+    if (name === "web") { loadActiveExposure(); loadNikto(); }
     if (name === "reports") loadReports();
     if (name === "notifications") loadNotifications();
   }
@@ -2958,6 +2959,59 @@
   });
 
   var activeExposureButton = document.querySelector("[data-run-active-exposure]");
+  async function loadNikto(older) {
+    var host = document.getElementById("web-nikto-runs");
+    if (!host || !orgId || (older && !niktoHistory.hasMore)) return;
+    var sequence = ++niktoHistory.sequence;
+    try {
+      var response = await fetch("/api/external-checks/web-nikto" + (older ? "?runs_before=" + encodeURIComponent(niktoHistory.cursor) : ""), { credentials: "same-origin" });
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "Could not load Nikto history");
+      if (sequence !== niktoHistory.sequence) return;
+      niktoHistory.runs = older ? niktoHistory.runs.concat(body.runs || []) : (body.runs || []);
+      niktoHistory.cursor = body.runs_next_before;
+      niktoHistory.hasMore = body.runs_has_more;
+      host.replaceChildren();
+      niktoHistory.runs.forEach(function (run) {
+        var card = document.createElement("article"); card.className = "external-schedule-card";
+        var title = document.createElement("h4"); title.textContent = "Run #" + run.id + " · " + String(run.status).replace(/_/g, " ") + " · " + dateLabel(run.completed_at || run.started_at);
+        var note = document.createElement("p"); note.className = "muted";
+        note.textContent = run.error_summary || "Coverage remains unconfirmed. Comparisons record new observations; absent findings do not prove resolution.";
+        card.append(title, note);
+        var findings = (run.snapshot || {}).findings || [];
+        var details = document.createElement("details");
+        var summary = document.createElement("summary"); summary.textContent = findings.length + " retained observation(s) · " + (run.change_count || 0) + " new compared observation(s)";
+        details.append(summary);
+        details.addEventListener("toggle", function () {
+          if (!details.open || details.dataset.loaded) return;
+          details.dataset.loaded = "true";
+          findings.forEach(function (finding) {
+            var entry = document.createElement("p"); entry.textContent = "Nikto test " + finding.test_id + " · " + finding.method + " " + finding.path + (finding.description ? " · " + finding.description : "");
+            details.append(entry);
+          });
+        });
+        card.append(details); host.append(card);
+      });
+      text(document.getElementById("web-nikto-status"), niktoHistory.runs.length ? "Latest: " + String(niktoHistory.runs[0].status).replace(/_/g, " ") : "No Nikto run yet");
+      document.getElementById("older-nikto").classList.toggle("hidden", !niktoHistory.hasMore);
+      var button = document.getElementById("run-nikto");
+      if (button) button.disabled = !controlsEnabled || niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "running"; });
+    } catch (error) { text(document.getElementById("web-nikto-feedback"), error.message); }
+  }
+  var niktoButton = document.getElementById("run-nikto");
+  if (niktoButton) niktoButton.addEventListener("click", async function () {
+    niktoHistory.busy = true; niktoButton.disabled = true;
+    text(document.getElementById("web-nikto-feedback"), "Nikto is running. History updates while the audit is active; allow up to ten minutes.");
+    window.setTimeout(function () { loadNikto(); }, 500);
+    try {
+      var result = await postJson("/api/external-checks/web-nikto/run");
+      text(document.getElementById("web-nikto-feedback"), "Run #" + result.id + " saved: " + String(result.status).replace(/_/g, " "));
+      await loadAuditLog();
+    } catch (error) { text(document.getElementById("web-nikto-feedback"), error.message); }
+    finally { niktoHistory.busy = false; await loadNikto(); }
+  });
+  var olderNikto = document.getElementById("older-nikto");
+  if (olderNikto) olderNikto.addEventListener("click", function () { loadNikto(true); });
   if (activeExposureButton) activeExposureButton.addEventListener("click", async function () {
     var original = activeExposureButton.textContent;
     activeExposureButton.disabled = true; text(activeExposureButton, "Checking fixed paths…");
@@ -3638,8 +3692,8 @@
   if (orgId) {
     refresh();
     // Heartbeat status expires on the server even when the live stream is quiet.
-    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") loadActiveExposure(); } }, 15000);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") loadActiveExposure(); } });
+    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(); loadNikto(); } } }, 15000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(); loadNikto(); } } });
   }
   loadWorkspaces();
   loadMemberships();

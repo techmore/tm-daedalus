@@ -73,4 +73,29 @@ See the [Daedalus project overview](site/daedalus.html) for the feature map, arc
 
 ## License and contributions
 
+## Nikto website audits
+
+The Website panel offers a manual Nikto audit to workspace admins with a verified
+domain or active 14-day override. It uses HTTPS port 443, pins public addresses,
+blocks proxy connections to other hosts/ports, and excludes denial-of-service
+tests. Runs retain actor/time, findings, history, new-observation notices and
+themed PDF evidence. Nikto does not confirm test exhaustion in its JSON output;
+missing findings are not treated as resolved issues. Website Nmap is not run.
+
+Install the optional external runtime once on an Ubuntu application host:
+
+```sh
+sudo apt-get install perl libnet-ssleay-perl libxml-writer-perl
+sudo python3 scripts/install_nikto_runtime.py --destination /opt/daedalus/nikto
+```
+
+The installer pins source commit `312645d873478a77986627ab1fc8cffe595e85d4`
+and verifies the download digest. It retains Nikto's license files and refuses
+to replace an existing runtime. `DAEDALUS_NIKTO_EXECUTABLE` can point to another
+reviewed absolute program path. Engine updates require an operator review;
+audits disable interactive prompts, startup update checks and telemetry.
+See the [official Nikto options](https://github.com/sullo/nikto/blob/main/documentation/nikto.1).
+
+## License and contributions
+
 This repository does not yet define a license or contribution policy. Contact Cyber Security Pilot before reusing or redistributing the software.

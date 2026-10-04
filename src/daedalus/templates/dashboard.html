@@ -128,7 +128,7 @@
         </div>
         {% if membership.role == 'admin' and organization.verification_status != 'verified' %}
         <section class="verification-card" aria-labelledby="verify-domain-title">
-          <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; bounded fixed-path exposure checks require a verified domain or an active admin override. Nikto requires a separately supported transport.</p></div>
+            <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; Nikto and bounded exposure checks require a verified domain or an active admin override.</p></div>
           <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button">Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button">Check DNS now</button></div>
           <p class="verification-feedback" id="verification-feedback" aria-live="polite"></p>
           <div class="dns-challenge hidden" id="dns-challenge">
@@ -374,6 +374,14 @@
             <div class="section-heading check-subheading"><div><p class="eyebrow">EXPOSURE DIFFERENCES</p><h4>Finding history</h4></div></div>
             <div class="check-change-list" id="web-active-changes" aria-live="polite"><div class="empty-events">No exposure changes have been recorded.</div></div>
             <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-active="changes">Load older finding changes</button>
+          </section>
+          <section class="external-schedule-card" aria-labelledby="web-nikto-title">
+            <div class="section-heading check-subheading"><div><p class="eyebrow">AUTHORIZED WEBSITE AUDIT</p><h3 id="web-nikto-title">Nikto</h3></div></div>
+            <p class="check-scope-note">Audits this workspace's HTTPS website using Nikto's standard tests, excluding denial-of-service tests. Requests stay on the registered domain and pinned public addresses. Runs may take ten minutes. Missing findings do not confirm that an issue is resolved.</p>
+            <div class="check-toolbar"><span class="check-status" id="web-nikto-status">No Nikto run yet</span>{% if membership.role == 'admin' %}<button class="button button-secondary" id="run-nikto" type="button" {% if not workspace_controls_enabled %}disabled{% endif %}>Run Nikto audit</button>{% endif %}</div>
+            <p class="muted" id="web-nikto-feedback" aria-live="polite"></p>
+            <div class="check-run-list" id="web-nikto-runs" aria-live="polite"></div>
+            <button class="button button-secondary button-small hidden" id="older-nikto" type="button">Load older Nikto runs</button>
           </section>
           {% endif %}
           <div class="section-heading check-subheading"><div><p class="eyebrow">PERSISTED RUNS</p><h3>Check history</h3></div></div>

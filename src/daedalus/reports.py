@@ -663,6 +663,25 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
     _append_website(story, checks.get("web") or {}, styles)
     if "web-active" in checks:
         _append_active_website(story, checks.get("web-active") or {}, styles)
+    nikto = checks.get("web-nikto") or {}
+    if nikto.get("run") or nikto.get("latest_attempt"):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Nikto website audit", styles["section"]))
+        run = nikto.get("run") or nikto.get("latest_attempt") or {}
+        snapshot = run.get("snapshot") or {}
+        story.append(_paragraph(f"Run #{run.get('id')} · {run.get('status')} · {_time_text(run.get('completed_at'))}", styles["small"]))
+        story.append(_paragraph("Standard HTTPS tests excluding denial-of-service tests. Test exhaustion is not confirmed; missing findings do not prove resolution.", styles["body"]))
+        if run.get("error_summary"):
+            story.append(_paragraph(run["error_summary"], styles["body"]))
+        findings = snapshot.get("findings") or []
+        for finding in findings[:100]:
+            story.append(_paragraph(f"Nikto test {finding.get('test_id')} · {finding.get('method')} {finding.get('path')}", styles["body"]))
+            if finding.get("description"):
+                story.append(_paragraph(finding["description"], styles["small"]))
+        if len(findings) > 100:
+            story.append(_paragraph("Only the first 100 observations are included; the dashboard retains the complete saved set.", styles["small"]))
+        if not findings and snapshot:
+            story.append(_paragraph("No observations were retained in this run. Coverage remains unconfirmed.", styles["body"]))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
