@@ -7,7 +7,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -54,6 +54,35 @@ extension MacOSChecks {
              "os_safari_show_status_bar_enabled",
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
+
+        case "os_unlock_active_user_session_disable":
+            func rules(_ right: String) -> [String]? {
+                let evidence = command("/usr/bin/security", ["-q", "authorizationdb", "read", right])
+                guard usable(evidence), evidence.output.utf8.count <= 65536,
+                      evidence.output.components(separatedBy: "<key>rule</key>").count == 2,
+                      let object = try? PropertyListSerialization.propertyList(from: Data(evidence.output.utf8), options: [], format: nil),
+                      let dictionary = object as? [String: Any],
+                      let values = dictionary["rule"] as? [String], values.count == 1,
+                      let value = values.first, !value.isEmpty, value.utf8.count <= 128 else { return nil }
+                return values
+            }
+            guard let initial = rules("system.login.screensaver")?.first else {
+                return result("manual", "The screensaver authorization rule could not be read unambiguously.")
+            }
+            let selected: String
+            if initial == "psso-screensaver" || initial == "psso-screensaver-mscp" {
+                guard let nested = rules(initial)?.first else {
+                    return result("manual", "The supported PSSO authorization rule could not be read unambiguously.")
+                }
+                selected = nested
+            } else { selected = initial }
+            if selected == "authenticate-session-owner" {
+                return result("pass", "The captured authorization rule requires the session owner. This is policy evidence, not a live unlock test or complete smartcard/PSSO applicability assessment.")
+            }
+            if selected == "authenticate-session-owner-or-admin" {
+                return result("fail", "The captured authorization rule permits the session owner or an administrator. No authorization settings were changed.")
+            }
+            return result("manual", "The captured authorization mechanism is unsupported; its policy was not inferred and its name is omitted.")
 
         case "os_password_hint_remove":
             let evidence = command("/usr/bin/dscl", [".", "-list", "/Users", "hint"])

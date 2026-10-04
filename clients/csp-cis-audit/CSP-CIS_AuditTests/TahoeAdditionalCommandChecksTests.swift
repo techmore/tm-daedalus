@@ -33,6 +33,32 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 27, command: { _, _ in .init(output: "root") }, readPreference: { _, _ in nil }).status == "manual")
     }
 
+    @Test func sessionUnlockRequiresExplicitSupportedAuthorizationEvidence() {
+        let rule = "os_unlock_active_user_session_disable"
+        func plist(_ values: [String]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: ["rule": values], format: .xml, options: 0), encoding: .utf8)!
+        }
+        #expect(run(rule, .init(output: plist(["authenticate-session-owner"]))) == "pass")
+        #expect(run(rule, .init(output: plist(["authenticate-session-owner-or-admin"]))) == "fail")
+        for value in [plist([]), plist(["authenticate-session-owner", "authenticate-session-owner-or-admin"]), plist(["unknown-private-mechanism"]), "", "malformed", String(repeating: "x", count: 65537)] {
+            #expect(run(rule, .init(output: value)) == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(output: plist(["authenticate-session-owner"]), exitCode: 1), .init(output: plist(["authenticate-session-owner"]), error: "denied"), .init(output: plist(["authenticate-session-owner"]), unavailable: "timeout")] {
+            #expect(run(rule, evidence) == "manual")
+        }
+        var calls = 0
+        let status = evaluate(rule) { executable, arguments in
+            calls += 1
+            #expect(executable == "/usr/bin/security")
+            #expect(arguments == ["-q", "authorizationdb", "read", calls == 1 ? "system.login.screensaver" : "psso-screensaver"])
+            return .init(output: plist([calls == 1 ? "psso-screensaver" : "authenticate-session-owner"]))
+        }
+        #expect(status == "pass")
+        #expect(calls == 2)
+        let duplicate = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>rule</key><array><string>authenticate-session-owner-or-admin</string></array><key>rule</key><array><string>authenticate-session-owner</string></array></dict></plist>"
+        #expect(run(rule, .init(output: duplicate)) == "manual")
+    }
+
     @Test func auditingRequiresServiceFileAndExplicitKernelCondition() {
         let rule = "audit_auditd_enabled"
         func check(_ condition: MacOSChecks.CommandEvidence) -> String {
@@ -170,6 +196,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_unlock_active_user_session_disable": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.login.screensaver"]),
             "os_password_hint_remove": ("/usr/bin/dscl", [".", "-list", "/Users", "hint"]),
             "os_internal_apfs_volumes_encrypted": ("/usr/sbin/diskutil", ["list", "-plist", "internal"]),
             "audit_auditd_enabled": ("/bin/launchctl", ["print", "system/com.apple.auditd"]),
