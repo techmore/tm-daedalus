@@ -6,6 +6,14 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_endpoint_topic_groups_results_and_changes_before_setup(self):
+        template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
+        section = template.split('<section class="cis-workspace">', 1)[1].split("{% elif key in ['dns', 'web'] %}", 1)[0]
+        self.assertLess(section.index('id="cis-report-list"'), section.index('id="cis-change-list"'))
+        self.assertLess(section.index('id="cis-change-list"'), section.index('id="cis-device-list"'))
+        self.assertLess(section.index('id="cis-device-list"'), section.index('<summary>How endpoint check-ins work'))
+        self.assertLess(section.index('id="cis-device-list"'), section.index('<summary>Profiles &amp; device setup'))
+
     def test_external_topics_lead_with_assessment_and_changes(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         section = template.split('data-external-check="{{ key }}">', 1)[1].split("{% elif key == 'reports' %}", 1)[0]

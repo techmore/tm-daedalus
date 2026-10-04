@@ -256,15 +256,18 @@
         <section class="cis-workspace">
           <div class="cis-hero-card">
             <div><p class="eyebrow">ENDPOINT COMPLIANCE</p><h3>Endpoint posture</h3><p class="muted">Check which devices are reporting and review their latest baseline results. Scores describe reported checks; they are not a CIS attestation.</p></div>
-            <div class="cis-hero-metrics" id="cis-summary-metrics" aria-live="polite"><div class="cis-mini-metric"><strong>—</strong><span>Enrolled devices</span></div><div class="cis-mini-metric"><strong>—</strong><span>Published profiles</span></div><div class="cis-mini-metric"><strong>—</strong><span>Reports received</span></div></div>
+            <div class="cis-hero-metrics" id="cis-summary-metrics" aria-live="polite"><div class="cis-mini-metric"><strong>—</strong><span>Failed checks</span></div><div class="cis-mini-metric"><strong>—</strong><span>Need manual review</span></div><div class="cis-mini-metric"><strong>—</strong><span>Collection errors</span></div></div>
           </div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">ENDPOINT REPORTS</p><h3>Baseline results</h3></div></div>
           <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
-          <div class="section-heading check-subheading"><div><p class="eyebrow">DEVICE AVAILABILITY</p><h3>Endpoint check-ins</h3></div></div>
-          <p class="check-scope-note">The menu-bar client runs at launch, on demand, and every 24 hours while open. Report recency uses a 36-hour window. Updated clients check in separately every five minutes while open; after 15 minutes without a client check-in, presence is overdue. Older clients have unknown presence.</p>
-          <div class="cis-device-list" id="cis-device-list" aria-live="polite"><div class="empty-events">No endpoint has checked in yet.</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">CHANGES BETWEEN REPORTS</p><h3>Check status history</h3></div></div>
           <div class="cis-change-list" id="cis-change-list" aria-live="polite"><div class="empty-events">Changes appear after an endpoint sends a later report.</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">DEVICE AVAILABILITY</p><h3>Endpoint check-ins</h3></div></div>
+
+          <div class="cis-device-list" id="cis-device-list" aria-live="polite"><div class="empty-events">No endpoint has checked in yet.</div></div>
+          <details class="topic-secondary"><summary>How endpoint check-ins work</summary>
+          <p class="check-scope-note">The menu-bar client runs at launch, on demand, and every 24 hours while open. Report recency uses a 36-hour window. Updated clients check in separately every five minutes while open; after 15 minutes without a client check-in, presence is overdue. Older clients have unknown presence.</p>
+          </details>
           <details class="topic-secondary"><summary>Profiles &amp; device setup</summary>
           <p class="cis-alignment-note"><strong>macOS 26 Tahoe profiles:</strong> Level 1 and Level 2 are based on the pinned NIST mSCP Tahoe Revision 3 baselines for <a href="https://www.cisecurity.org/benchmark/apple_os" target="_blank" rel="noopener noreferrer">CIS macOS 26.0 Benchmark v1.1.0</a>. The CSP client runs only its bundled read-only mappings; unsupported checks stay manual. FileVault results that pass the boot-volume check are recorded as manual until connected drives and volumes are checked. Preference results describe the reporting user’s effective settings, while system checks describe the device; they do not prove enforcement for every user. The displayed percentage is a pass rate across all checks, not a CIS attestation. Source attribution and license are included with each profile.</p>
           <div class="cis-key-card">

@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 4, 2026 — topic layout and production Mac scanner evidence
+
+Production source **b474133a6df3d9644d4881b96405bc952d26ef08** puts DNS and website assessment and change history ahead of detailed records; scope explanations are expandable. Incus deployment passed internal and public health checks, with a verified off-host backup. The authenticated served dashboard passed structural ordering checks; browser pixel review remains unverified.
+
+Actual Mac scanner command **18** completed against **127.0.0.1**. Saved run **e9f020f1-d603-4616-a36c-f49c7aa8bc2c** is terminal completed with **18 events and three result events**. Its temporary loopback-only scope was restored to the original empty scope after terminal confirmation. Report **32** reached PDF ready, 100 percent; all three rendered pages were reviewed. This proves the local command/upload/saved-run/PDF path, not approved VLAN coverage or confirmed vulnerabilities. Private receipt: /data/codex-mac-loopback-validation-20261004.json.
+
+Full CIS client CI **37184923850** and Python CI **37184923848** completed successfully. The earlier topic-layout full backend run passed **461 tests and 96 subtests**. Endpoint page grouping is being revised next. Real Tahoe execution, trusted client distribution, exact production VLAN scope, browser review and the remaining full-project requirements are still open.
+
+
 ## October 4, 2026 — pinned Tahoe retention and real presence timeout
 
 Client source **dce0cb0289863c0110beec7f72a490448c912239** adds a dedicated `audit_retention_configure` path. The pinned CIS Level 1/2 policy is literal **30d**, independently of the legacy CSP seven-day check. A canonical age-only 30d field passes; an explicit shorter pure-age policy fails. Noncanonical equivalent/longer durations, combined age/size expressions, duplicates, malformed, unsupported and inaccessible fields stay manual. The details explain that policy evidence does not establish retained records or central storage. The fixed audit_control reader is bounded, no-follow and read-only; raw policy text is not uploaded. The macOS major-version gate remains in front of this check.
