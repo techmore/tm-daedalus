@@ -1,7 +1,9 @@
 import Foundation
+import CoreFoundation
 
 struct ChromeChecks {
-    static func run(check: CISCheck, readPreferences: () -> [String: Any]? = { getChromePreferences() }) -> CheckResult {
+    static func run(check: CISCheck, readPreferences: () -> [String: Any]? = { getChromePreferences() },
+                    readManagedPolicy: (String) -> (Any?, Bool) = ChromeChecks.readManagedPolicy) -> CheckResult {
         let preferences = readPreferences()
         switch check.description {
         // Privacy and Security
@@ -72,17 +74,33 @@ struct ChromeChecks {
             
         // Password Settings
         case let desc where desc.contains("Enable saving passwords to the password manager"):
-            return checkPasswordSavingDisabled(check: check, preferences: preferences)
+            return managedDisabledPolicy(check: check, key: "PasswordManagerEnabled", readPolicy: readManagedPolicy)
         case let desc where desc.contains("Enable Autofill for addresses"):
-            return checkAutofillAddressesDisabled(check: check, preferences: preferences)
+            return managedDisabledPolicy(check: check, key: "AutofillAddressEnabled", readPolicy: readManagedPolicy)
         case let desc where desc.contains("Enable Autofill for credit cards"):
-            return checkAutofillCreditCardsDisabled(check: check, preferences: preferences)
+            return managedDisabledPolicy(check: check, key: "AutofillCreditCardEnabled", readPolicy: readManagedPolicy)
         case let desc where desc.contains("Enable Autofill for payment methods"):
             return checkAutofillPaymentMethodsDisabled(check: check, preferences: preferences)
             
         default:
             return CheckResult(check: check, status: "manual", details: "Not yet implemented")
         }
+    }
+
+    static func readManagedPolicy(_ key: String) -> (Any?, Bool) {
+        let domain = "com.google.Chrome" as CFString
+        return (CFPreferencesCopyAppValue(key as CFString, domain),
+                CFPreferencesAppValueIsForced(key as CFString, domain))
+    }
+
+    private static func managedDisabledPolicy(check: CISCheck, key: String,
+        readPolicy: (String) -> (Any?, Bool)) -> CheckResult {
+        let (raw, forced) = readPolicy(key)
+        guard forced, let value = raw as? NSNumber,
+              CFGetTypeID(value) == CFBooleanGetTypeID() else {
+            return CheckResult(check: check, status: "manual", details: key + " was not captured as an explicit forced Boolean in the current user's com.google.Chrome preference domain. Missing, recommended or wrongly typed values do not establish mandatory policy. Review chrome://policy for browser acceptance and precedence.")
+        }
+        return CheckResult(check: check, status: value.boolValue ? "fail" : "pass", details: "CSP criterion: " + key + " must be disabled. The current user's macOS preference domain reports a forced Boolean " + (value.boolValue ? "enabled." : "disabled.") + " This is captured platform policy evidence, not a live Chrome acceptance test or proof for every browser profile. No policy was changed.")
     }
 
     // MARK: - Helper Methods
@@ -467,47 +485,11 @@ struct ChromeChecks {
 
     // MARK: - Password Settings
     
-    private static func checkPasswordSavingDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let passwordManager = prefs["password_manager"] as? [String: Any],
-              let savingEnabled = passwordManager["saving_enabled"] as? Bool else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !savingEnabled {
-            return CheckResult(check: check, status: "pass", details: "Saving passwords to the password manager is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Saving passwords to the password manager is enabled.")
-        }
-    }
+
     
-    private static func checkAutofillAddressesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let autofill = prefs["autofill"] as? [String: Any],
-              let addressEnabled = autofill["address_enabled"] as? Bool else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !addressEnabled {
-            return CheckResult(check: check, status: "pass", details: "Autofill for addresses is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Autofill for addresses is enabled.")
-        }
-    }
+
     
-    private static func checkAutofillCreditCardsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
-        guard let prefs = preferences,
-              let autofill = prefs["autofill"] as? [String: Any],
-              let creditCardEnabled = autofill["credit_card_enabled"] as? Bool else {
-            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
-        }
-        
-        if !creditCardEnabled {
-            return CheckResult(check: check, status: "pass", details: "Autofill for credit cards is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Autofill for credit cards is enabled.")
-        }
-    }
+
     
     private static func checkAutofillPaymentMethodsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,

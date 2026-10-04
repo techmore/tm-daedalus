@@ -13,6 +13,25 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func chromeManagedPoliciesRequireForcedTypedBooleans() {
+        let mappings = [("Enable saving passwords to the password manager", "PasswordManagerEnabled"), ("Enable Autofill for addresses", "AutofillAddressEnabled"), ("Enable Autofill for credit cards", "AutofillCreditCardEnabled")]
+        for (description, key) in mappings {
+            let check = CISCheck(id: "policy", category: "chrome", description: description)
+            func evaluate(_ value: Any?, _ forced: Bool) -> String {
+                ChromeChecks.run(check: check, readPreferences: { nil }, readManagedPolicy: { requested in
+                    #expect(requested == key)
+                    return (value, forced)
+                }).status
+            }
+            #expect(evaluate(false, true) == "pass")
+            #expect(evaluate(true, true) == "fail")
+            #expect(evaluate(false, false) == "manual")
+            #expect(evaluate(nil, true) == "manual")
+            #expect(evaluate(NSNumber(value: 0), true) == "manual")
+            #expect(evaluate("false", true) == "manual")
+        }
+    }
+
     @Test func safariPopupPreferenceDoesNotEstablishScriptExecution() {
         let check = CISCheck(id: "script", category: "safari", description: "Enable JavaScript for untrusted sites")
         for value in [false, true] {
