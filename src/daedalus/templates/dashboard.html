@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-070">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261004-071">
 </head>
 <body class="app-page">
   <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
@@ -206,7 +206,7 @@
         <div class="page-intro"><div><p class="eyebrow">{{ eyebrow }}</p><h2>{{ title }}</h2><p class="muted">{{ description }}</p></div></div>
         {% if key == 'meraki' %}
         <section class="meraki-workspace">
-          <section class="topic-priority"><p class="eyebrow">CURRENT NETWORK ASSESSMENT</p><h3>Inventory &amp; coverage</h3><div id="meraki-current-summary" aria-live="polite">Loading saved assessment…</div></section>
+          <section class="topic-priority"><p class="eyebrow">CURRENT NETWORK ASSESSMENT</p><h3>Network posture &amp; coverage</h3><div id="meraki-current-summary" aria-live="polite">Loading saved assessment…</div></section>
           <div class="section-heading check-subheading"><div><p class="eyebrow">WORKSPACE REPORTS</p><h3>Network findings & reports</h3></div></div>
           <p class="meraki-feedback" id="meraki-report-library-status" aria-live="polite">Reports are scoped to this workspace.</p>
           <p class="check-scope-note">Reports are immutable read-only snapshots of device availability and selected appliance security settings at collection time. Unsupported API endpoints are recorded as coverage gaps.</p>
@@ -250,11 +250,11 @@
             <div><p class="eyebrow">ENDPOINT COMPLIANCE</p><h3>Endpoint posture</h3><p class="muted">Check which devices are reporting and review their latest baseline results. Scores describe reported checks; they are not a CIS attestation.</p></div>
             <div class="cis-hero-metrics" id="cis-summary-metrics" aria-live="polite"><div class="cis-mini-metric"><strong>—</strong><span>Enrolled devices</span></div><div class="cis-mini-metric"><strong>—</strong><span>Published profiles</span></div><div class="cis-mini-metric"><strong>—</strong><span>Reports received</span></div></div>
           </div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">ENDPOINT REPORTS</p><h3>Baseline results</h3></div></div>
+          <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">DEVICE AVAILABILITY</p><h3>Endpoint check-ins</h3></div></div>
           <p class="check-scope-note">The menu-bar client runs at launch, on demand, and every 24 hours while open. A device is marked offline after 36 hours without a report.</p>
           <div class="cis-device-list" id="cis-device-list" aria-live="polite"><div class="empty-events">No endpoint has checked in yet.</div></div>
-          <div class="section-heading check-subheading"><div><p class="eyebrow">ENDPOINT REPORTS</p><h3>Baseline results</h3></div></div>
-          <div class="cis-report-list" id="cis-report-list" aria-live="polite"><div class="empty-events">Waiting for the first endpoint report.</div></div>
           <div class="section-heading check-subheading"><div><p class="eyebrow">CHANGES BETWEEN REPORTS</p><h3>Check status history</h3></div></div>
           <div class="cis-change-list" id="cis-change-list" aria-live="polite"><div class="empty-events">Changes appear after an endpoint sends a later report.</div></div>
           <details class="topic-secondary"><summary>Profiles &amp; device setup</summary>
@@ -457,6 +457,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-070" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261004-071" defer></script>
 </body>
 </html>

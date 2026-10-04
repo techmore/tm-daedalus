@@ -1988,24 +1988,35 @@
     });
   }
 
+  function cisPriorityMetrics(latest, enrolledDeviceCount) {
+    var summary = latest && latest.summary ? latest.summary : {};
+    function count(key) {
+      var value = summary[key];
+      return Number.isInteger(value) && value >= 0 ? String(value) : "Unknown";
+    }
+    return [
+      [latest ? count("fail") : "—", "Failed checks"],
+      [latest ? count("manual") : "—", "Need manual review"],
+      [latest ? count("error") : "—", "Collection errors"],
+      [latest && typeof summary.score === "number" && Number.isFinite(summary.score) ? summary.score.toFixed(1) + "%" : "—", "Latest report pass rate"],
+      [String(enrolledDeviceCount), "Enrolled devices"]
+    ];
+  }
+
   function renderCISReports(reports, enrolledDeviceCount) {
     var list = document.getElementById("cis-report-list");
     var metrics = document.getElementById("cis-summary-metrics");
     if (metrics) {
       var latest = reports[0];
       metrics.replaceChildren();
-      [
-        [String(enrolledDeviceCount), "Enrolled devices"],
-        [latest ? Number(latest.summary.score).toFixed(1) + "%" : "—", "Latest report pass rate"],
-        [String(reports.length), "Recent reports"]
-      ].forEach(function (metric, index) {
+      cisPriorityMetrics(latest, enrolledDeviceCount).forEach(function (metric, index) {
         var card = document.createElement("div");
         card.className = "cis-mini-metric";
         var value = document.createElement("strong");
         value.textContent = metric[0];
         var label = document.createElement("span");
         label.textContent = metric[1];
-        if (index === 2 && latest) card.title = "Latest score: " + latest.summary.score + "%";
+        if (latest) card.title = "Latest report collected " + dateLabel(latest.collected_at);
         card.append(value, label);
         metrics.append(card);
       });

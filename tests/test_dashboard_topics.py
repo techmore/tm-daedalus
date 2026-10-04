@@ -6,6 +6,20 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_endpoint_priority_metrics_keep_unknown_counts(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function cisPriorityMetrics('):source.index('  function renderCISReports(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+const metrics=cisPriorityMetrics({summary:{fail:82,manual:19,error:17,score:23.38}},1);
+assert.deepEqual(metrics.slice(0,3),[['82','Failed checks'],['19','Need manual review'],['17','Collection errors']]);
+assert.equal(cisPriorityMetrics({summary:{score:'100'}},1)[0][0],'Unknown');
+assert.equal(cisPriorityMetrics({summary:{score:'100'}},1)[3][0],'—');
+assert.equal(cisPriorityMetrics(null,0)[0][0],'—');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_external_topics_put_results_before_review_and_controls(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()

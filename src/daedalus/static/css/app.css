@@ -810,3 +810,6 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 @media (max-width: 640px) { .posture-grid { grid-template-columns: 1fr; } }
 
 .topic-group-heading { margin: 20px 0 0; padding-bottom: 10px; border-bottom: 1px solid var(--card-line); color: var(--brown-900); font-size: 16px; }
+
+.cis-hero-metrics { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.cis-hero-metrics .cis-mini-metric { min-width: 0; }
