@@ -26,7 +26,11 @@ Release 045 includes durable workspace inbox notices when an administrator grant
 
 ## CIS macOS endpoint reporting
 
-A read-only production database check found the CSP workspace has both macOS 26 Tahoe profile revisions (`1.1.0-r2`) published, with **zero CIS devices and zero CIS reports**. The `bfs.org` workspace currently has no CIS profiles, devices, or reports. Profile publication is live; endpoint distribution/check-in is not yet validated. Production disables the unsigned demo client download endpoint, and a signed/notarized distributable client has not been provisioned. macOS 26 execution and connected-volume FileVault coverage remain open.
+A read-only production database check found the CSP workspace has both macOS 26 Tahoe profile revisions (`1.1.0-r2`) published, with **zero CIS devices and zero CIS reports**. The `bfs.org` workspace currently has no CIS profiles, devices, or reports. Production disables the unsigned demo client download endpoint, and a signed/notarized distributable client has not been provisioned.
+
+On October 3, an isolated loopback Daedalus instance accepted a live report from the CSP menu-bar client running on macOS 27. The client fetched the published `csp-macos-browser-baseline` v1.0.0 profile, ran all 154 checks, uploaded the report, and received an acknowledgment. Daedalus stored one online endpoint and marked the report as profile-verified. The first attempt exposed a timestamp-format mismatch: the client emitted a filename-style timestamp that the API correctly rejected with HTTP 422. The adjacent `CSP-CIS_Audit` working copy now formats report timestamps as ISO 8601; its suite passes 58 tests, and the corrected client completed the round trip. The test database, temporary upload key, user-home config, logs, and report files were removed afterward.
+
+This is a cross-version CSP starter-profile workflow check, not a macOS 26 Tahoe audit or a compliance conclusion. The source fix remains in the adjacent CIS working copy with other uncommitted changes and no configured Git remote; it has not been integrated into the Daedalus downloadable bundle. A real macOS 26 run, Developer ID signing/notarization, and connected-volume FileVault evidence remain open.
 
 ## Cisco Meraki
 
