@@ -33,3 +33,33 @@ assert.doesNotMatch(nodes.audit.textContent,/0 observation/);
 '''
         result=subprocess.run(['node','-e',script],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_audit_review_keeps_previous_completed_evidence_and_groups_metadata(self):
+        source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
+        renderer=source[source.index('  function niktoObservationGroup('):source.index('  async function loadNikto(')]
+        script='''const assert=require('node:assert/strict');
+class Node { constructor(tag){this.tag=tag;this.children=[];this.textContent='';} replaceChildren(){this.children=[];} append(...items){this.children.push(...items);} }
+const host=new Node('div'); const document={getElementById:()=>host,createElement:tag=>new Node(tag)};
+function appendEmpty(node,message){node.textContent=message;}
+function dateLabel(value){return value;}
+function flatten(node){return node.textContent+' '+node.children.map(flatten).join(' ');}
+'''+renderer+'''
+const completed={id:43,status:'completed_with_warnings',completed_at:'saved-time',snapshot:{findings:[
+{test_id:'013587',method:'GET',path:'/',description:'Missing header'},
+{test_id:'000287',method:'GET',path:'/',description:'Wildcard CORS'},
+{test_id:'999100',method:'GET',path:'/',description:'Cache metadata'}]}};
+const frozen=JSON.stringify(completed);
+renderNiktoReview([{id:46,status:'running'},completed]);
+assert.match(flatten(host),/run #43/);
+assert.match(flatten(host),/Policy review/);
+assert.match(flatten(host),/Needs application context/);
+assert.match(flatten(host),/not vulnerability severity ratings/);
+assert.equal(host.children.find(n=>n.tag==='details').children[0].textContent,'Infrastructure information · 1');
+assert.equal(JSON.stringify(completed),frozen);
+assert.equal(niktoObservationGroup({test_id:'unknown'}),'Needs application context');
+renderNiktoReview([{id:46,status:'failed'}]);
+assert.match(flatten(host),/No completed deeper audit/);
+'''
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)

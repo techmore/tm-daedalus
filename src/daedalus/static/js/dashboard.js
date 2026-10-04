@@ -3030,6 +3030,46 @@
   });
 
   var activeExposureButton = document.querySelector("[data-run-active-exposure]");
+  function niktoObservationGroup(finding) {
+    var id = String(finding.test_id || "");
+    if (id === "013587") return "Policy review";
+    if (id === "999100" || id === "999962") return "Infrastructure information";
+    return "Needs application context";
+  }
+
+  function renderNiktoReview(runs) {
+    var host = document.getElementById("web-audit-review");
+    if (!host) return;
+    host.replaceChildren();
+    var completed = runs.find(function (run) { return run.status === "completed" || run.status === "completed_with_warnings"; });
+    if (!completed) { appendEmpty(host, "No completed deeper audit is available yet."); return; }
+    var caption = document.createElement("p"); caption.className = "muted";
+    caption.textContent = "Latest completed audit · " + dateLabel(completed.completed_at || completed.started_at)
+      + " · run #" + completed.id + ". Groups help review observations; they are not vulnerability severity ratings.";
+    host.append(caption);
+    var findings = (completed.snapshot || {}).findings || [];
+    if (!findings.length) { appendEmpty(host, "No observations retained in this completed audit. Incomplete coverage cannot establish that the site is free of vulnerabilities."); return; }
+    ["Policy review", "Needs application context", "Infrastructure information"].forEach(function (group) {
+      var items = findings.filter(function (finding) { return niktoObservationGroup(finding) === group; });
+      if (!items.length) return;
+      var section = document.createElement(group === "Infrastructure information" ? "details" : "section");
+      section.className = "topic-observation-group";
+      var heading = document.createElement(group === "Infrastructure information" ? "summary" : "h4");
+      heading.textContent = group + " · " + items.length;
+      section.append(heading);
+      items.slice(0, 8).forEach(function (finding) {
+        var row = document.createElement("p");
+        row.textContent = (finding.description || "Observation requires review") + " · " + finding.method + " " + finding.path;
+        section.append(row);
+      });
+      if (items.length > 8) { var more = document.createElement("p"); more.textContent = (items.length - 8) + " more observations are retained in audit history below."; section.append(more); }
+      if (group === "Needs application context") {
+        var note = document.createElement("small"); note.textContent = "These detector observations need supporting application evidence before they can be treated as vulnerabilities."; section.append(note);
+      }
+      host.append(section);
+    });
+  }
+
   async function loadNikto(older) {
     var host = document.getElementById("web-nikto-runs");
     if (!host || !orgId || (older && !niktoHistory.hasMore)) return;
@@ -3041,6 +3081,7 @@
       if (sequence !== niktoHistory.sequence) return;
       niktoHistory.runs = older ? niktoHistory.runs.concat(body.runs || []) : (body.runs || []);
       renderWebsiteAuditOutcome("web-nikto-outcome", "Deeper website audit", niktoHistory.runs[0]);
+      renderNiktoReview(niktoHistory.runs);
       niktoHistory.cursor = body.runs_next_before;
       niktoHistory.hasMore = body.runs_has_more;
       host.replaceChildren();

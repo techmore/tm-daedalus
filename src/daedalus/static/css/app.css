@@ -791,3 +791,9 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 }
 .topic-audit-outcomes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--card-line); }
 .topic-audit-outcomes p { line-height: 1.6; font-size: 13px; }
+
+.topic-observation-group { margin-top: 18px; border-top: 1px solid var(--card-line); padding-top: 14px; }
+.topic-observation-group h4, .topic-observation-group summary { margin: 0 0 10px; font-weight: 600; color: var(--brown-900); }
+.topic-observation-group summary { cursor: pointer; }
+.topic-observation-group p { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.topic-observation-group small { display: block; color: var(--muted); line-height: 1.5; }
