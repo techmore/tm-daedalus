@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from daedalus.db import Base
 from daedalus import server
 from daedalus.models import (
-    Membership, Organization, User, WorkspaceNotification, WorkspaceNotificationRead, ExternalCheckRun,
+    Membership, Organization, User, WorkspaceNotification, WorkspaceNotificationRead, ExternalCheckRun, ReportJob,
 )
 try:
     from . import test_cis_pdf_flow as fixtures
@@ -56,6 +56,80 @@ class WorkspaceNotificationTests(unittest.TestCase):
             self.assertEqual(notices[0].organization_id, org_id)
             self.assertEqual(notices[0].reason, "check_failed")
             self.assertIn("interrupted", notices[0].title)
+
+    def create_report_job(self, status='queued'):
+        org_id, user_id = self.workspace()
+        with self.session_factory() as db:
+            now = server.utcnow()
+            job = ReportJob(organization_id=org_id, created_by_user_id=user_id, report_type='external_posture',
+                domain='cybersecuritypilot.org', status=status, file_name='fixture.pdf', report_snapshot={'fixture':'saved'}, created_at=now, updated_at=now)
+            db.add(job); db.commit()
+            return job.id
+
+    def test_pdf_failure_creates_one_notice_without_raw_error_or_repeated_render(self):
+        from unittest.mock import patch
+        job_id = self.create_report_job()
+        def assert_committed(callback, organization_id, message):
+            self.assertEqual(message, {'type':'workspace_notification_created', 'report_id':job_id})
+            with self.session_factory() as db:
+                self.assertEqual(db.get(ReportJob, job_id).status, 'failed')
+                self.assertIsNotNone(db.scalar(select(WorkspaceNotification).where(WorkspaceNotification.source_id == job_id, WorkspaceNotification.source_type == 'report_job_failure')))
+        with patch.object(server.from_thread, 'run', side_effect=assert_committed) as broadcast, patch.object(server, 'build_external_posture_pdf', side_effect=RuntimeError('private renderer detail')) as render:
+            server.generate_report_job(job_id)
+            server.generate_report_job(job_id)
+            render.assert_called_once()
+            broadcast.assert_called_once()
+        notices = self.client.get('/api/notifications').json()['notifications']
+        self.assertEqual(len(notices), 1)
+        self.assertEqual(notices[0]['source_id'], job_id)
+        self.assertEqual(notices[0]['tab'], 'reports')
+        self.assertEqual(notices[0]['reason'], 'report_failed')
+        self.assertNotIn('private renderer detail', notices[0]['summary'])
+        with self.session_factory() as db:
+            job = db.get(ReportJob, job_id)
+            self.assertEqual(job.status, 'failed')
+            self.assertEqual(job.report_snapshot, {'fixture':'saved'})
+            self.assertIn('RuntimeError', job.error_summary)
+
+    def test_interrupted_pdf_jobs_notify_once_and_completed_jobs_remain_unchanged(self):
+        pending = self.create_report_job()
+        running = self.create_report_job('running')
+        completed = self.create_report_job('completed')
+        self.assertEqual(server.recover_interrupted_report_jobs(), 2)
+        self.assertEqual(server.recover_interrupted_report_jobs(), 0)
+        notices = self.client.get('/api/notifications').json()['notifications']
+        self.assertEqual({row['source_id'] for row in notices}, {pending, running})
+        with self.session_factory() as db:
+            self.assertEqual(db.get(ReportJob, completed).status, 'completed')
+            self.assertEqual(db.get(ReportJob, completed).report_snapshot, {'fixture':'saved'})
+        from unittest.mock import patch
+        with patch.object(server, 'build_external_posture_pdf') as render:
+            server.generate_report_job(completed)
+            render.assert_not_called()
+
+    def test_concurrent_report_workers_render_one_queued_job(self):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from unittest.mock import patch
+        from sqlalchemy.orm import Session
+        job_id = self.create_report_job()
+        barrier = threading.Barrier(2)
+        original_execute = Session.execute
+        def synchronized_claim(db, statement, *args, **kwargs):
+            if getattr(statement, 'is_update', False) and statement.table.name == ReportJob.__tablename__:
+                barrier.wait(timeout=5)
+            return original_execute(db, statement, *args, **kwargs)
+        with patch.object(Session, 'execute', synchronized_claim), patch.object(server, 'build_external_posture_pdf', return_value=b'fixture-rendered-bytes') as render:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = [pool.submit(server.generate_report_job, job_id) for _ in range(2)]
+                for future in futures:
+                    future.result(timeout=15)
+            render.assert_called_once()
+        with self.session_factory() as db:
+            job = db.get(ReportJob, job_id)
+            self.assertEqual(job.status, 'completed')
+            self.assertEqual(job.progress, 100)
+            self.assertEqual(job.size_bytes, len(b'fixture-rendered-bytes'))
 
     def test_existing_database_gets_notification_tables_through_metadata_upgrade(self):
         engine = create_engine("sqlite://")

@@ -370,18 +370,7 @@ async def lifespan(_app: FastAPI):
             )
         )
     seed_demo_workspace()
-    with SessionLocal() as db:
-        interrupted_jobs = db.scalars(
-            select(ReportJob).where(ReportJob.status.in_(("queued", "running")))
-        ).all()
-        for job in interrupted_jobs:
-            job.status = "failed"
-            job.stage = "Interrupted by server restart"
-            job.error_summary = "The report job did not finish before the server restarted."
-            job.completed_at = utcnow()
-            job.updated_at = utcnow()
-        if interrupted_jobs:
-            db.commit()
+    recover_interrupted_report_jobs()
     recover_interrupted_external_checks()
     recover_interrupted_external_check_schedules()
     scheduler_task = asyncio.create_task(external_check_scheduler())
@@ -1100,11 +1089,53 @@ def record_scanner_comparison_notification(
         return False
 
 
+def record_report_failure_notification(db: Session, job: ReportJob) -> bool:
+    if db.scalar(select(WorkspaceNotification.id).where(
+        WorkspaceNotification.organization_id == job.organization_id,
+        WorkspaceNotification.source_type == "report_job_failure",
+        WorkspaceNotification.source_id == job.id,
+    )) is not None:
+        return False
+    try:
+        with db.begin_nested():
+            db.add(WorkspaceNotification(
+                organization_id=job.organization_id, source_type="report_job_failure", source_id=job.id,
+                title=f"Report generation failed · {job.domain}"[:200],
+                summary=f"Report #{job.id} did not finish. Open Reports to review its saved error and request a new PDF. Previously completed reports remain available.",
+                reason="report_failed", detected_at=job.completed_at or utcnow(),
+            ))
+            db.flush()
+        return True
+    except IntegrityError:
+        return False
+
+
+def recover_interrupted_report_jobs() -> int:
+    with SessionLocal() as db:
+        jobs = db.scalars(select(ReportJob).where(ReportJob.status.in_(("queued", "running")))).all()
+        for job in jobs:
+            job.status = "failed"
+            job.stage = "Interrupted by server restart"
+            job.error_summary = "The report job did not finish before the server restarted."
+            job.completed_at = utcnow()
+            job.updated_at = job.completed_at
+            audit(db, job.organization_id, job.created_by_user_id, "report.failed",
+                {"report_id": job.id, "report_type": job.report_type, "reason": "server_restart"})
+            record_report_failure_notification(db, job)
+        db.commit()
+        return len(jobs)
+
+
 def generate_report_job(report_job_id: int) -> None:
     """Render one queued report into persistent storage and record its progress."""
     with SessionLocal() as db:
         job = db.get(ReportJob, report_job_id)
         if job is None:
+            return
+        claimed = db.execute(update(ReportJob).where(ReportJob.id == report_job_id, ReportJob.status == "queued")
+            .values(status="running").execution_options(synchronize_session=False))
+        if claimed.rowcount != 1:
+            db.rollback()
             return
         job.status = "running"
         job.progress = 5 if job.report_type == "meraki_security" else 12
@@ -1281,7 +1312,14 @@ def generate_report_job(report_job_id: int) -> None:
                     "report.failed",
                     {"report_id": job.id, "report_type": job.report_type, "error": job.error_summary},
                 )
+                record_report_failure_notification(db, job)
                 db.commit()
+        try:
+            from_thread.run(live_hub.publish, organization_id, {
+                "type": "workspace_notification_created", "report_id": report_job_id,
+            })
+        except RuntimeError:
+            logger.debug("Report failure saved outside a live server worker; broadcast skipped")
 
 
 def check_type_label(check_type: str) -> str:
@@ -3231,7 +3269,8 @@ def list_workspace_notifications(
                 "detected_at": iso_utc(notification.detected_at),
                 "read_at": iso_utc(receipt.read_at) if receipt else None,
                 "tab": (
-                    "meraki" if notification.source_type == "meraki_report"
+                    "reports" if notification.source_type == "report_job_failure"
+                    else "meraki" if notification.source_type == "meraki_report"
                     else "cis" if notification.source_type == "cis_report"
                     else "scanners" if notification.source_type == "scanner_comparison"
                     else "members" if notification.source_type in {

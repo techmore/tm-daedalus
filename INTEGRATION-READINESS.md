@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 4, 2026 — report worker claims and failure delivery
+
+Report generation now conditionally claims only queued jobs. Duplicate worker invocations cannot render the same job, and invoking a completed or failed job does not rewrite its artifact or saved snapshot. Requesting another PDF creates a new job through the existing workflow.
+
+Renderer failures create one persistent workspace notice linked to Reports, without exposing raw exception details. The failed state and notice are committed before the live event refreshes Reports and the inbox. Restart recovery marks unfinished queued/running jobs failed, audits the interruption and creates one notice per job; repeated recovery is a no-op. Completed jobs are preserved. No additional failure toast was introduced.
+
+The full local suite passed **499 tests and 98 subtests**. Fixtures validate two concurrent workers rendering once, duplicate invocation, sanitized failure notice, publication after commit, restart recovery and preservation of completed jobs. The concurrent-render fixture uses inert bytes to validate worker ownership; it is not PDF layout evidence. No renderer failure was induced in production.
+
+
 ## October 4, 2026 — durable collector failure notices
 
 Collector failures now create a workspace inbox notice alongside their saved run and audit event. The notice explicitly says that the failed run provides no fresh assessment and points users to the saved error and earlier evidence. Raw exception details are excluded. Consecutive failures with the same sanitized recorded error category suppress repeat inbox notices; a different category or failure after a successful run notifies again. Every attempt remains in history and the audit log.

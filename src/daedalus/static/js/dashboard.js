@@ -1267,6 +1267,7 @@
         }
         if (message.type === "workspace_notification_created") {
           loadNotifications();
+          if (message.report_id != null) loadReports();
           if (role === "admin") loadAuditLog();
         }
         if (message.type === "scanner_comparison_detected" && message.meaningful_change_count > 0 && !notifiedScannerComparisons.has(message.comparison_id)) {
