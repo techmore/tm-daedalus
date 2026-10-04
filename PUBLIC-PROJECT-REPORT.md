@@ -575,3 +575,9 @@ All 107 native unit tests passed on macOS 27.0.1, including explicit enabled/dis
 ## October 4, 2026 — guest collector runtime and unchanged-run validation
 
 A fresh client built from 00c0972 uploaded actual macOS 27.0.1 report 16 to SER8. Check macos_15 changed fail to manual; read-only production inspection confirmed exactly one change and one changes inbox notice (28), dated 2026-10-04 13:02:37.675725 UTC. Repeat report 17 retained identical 154-check totals (12 pass, 11 fail, 131 manual, zero errors). Direct production database inspection verified zero comparison entries and zero notifications for report 17. Both temporary configurations and owned processes were removed. No account settings changed. Private receipts: validation/cis-guest-evidence-release-20261004/live-receipt.json and validation/cis-guest-unchanged-20261004/live-receipt.json. These runs prove scoped storage and repeat-notification behavior on macOS 27, not macOS 26 conformance or the remaining project requirements. Earlier pending statements are historical.
+
+## October 4, 2026 — remove obsolete coordinator collectors
+
+Removed 23 unused private legacy collector implementations (519 lines) from MacOSChecks. Source inspection confirmed no calls to these private functions; the dispatcher already calls specialized modules. The dead copies contained obsolete inferred-default verdicts, loose substring tests and unbounded Process waits. The coordinator retains its bounded shared command runner and current dispatch/mapping logic.
+
+All 107 native unit tests passed after removal on macOS 27.0.1. No new runtime assessment is claimed; latest actual production report remains 17. This reduces duplicate implementations and does not complete outstanding current-platform mappings, rollout, visual acceptance or broader project requirements.
