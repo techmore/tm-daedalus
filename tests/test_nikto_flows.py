@@ -1,9 +1,12 @@
 import unittest
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from unittest.mock import patch
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import Organization, Membership, ExternalCheckRun
+from daedalus.models import Organization, Membership, ExternalCheckRun, ProbationOverride
 import test_active_website_flows as fixtures
 
 
@@ -90,6 +93,53 @@ class NiktoFlowsTests(unittest.TestCase):
         collector.assert_not_called()
         with self.session_factory() as db:
             self.assertEqual(len(db.scalars(select(ExternalCheckRun)).all()),25)
+
+    def test_concurrent_submissions_create_only_one_queued_audit(self):
+        org_id,user_id=self.context()
+        barrier=threading.Barrier(2)
+        def submit():
+            barrier.wait(timeout=5)
+            try:
+                result=server._execute_external_check(org_id,user_id,'web-nikto','manual',True)
+                return result['status']
+            except server.HTTPException as exc:
+                return exc.status_code
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(submit) for _ in range(2)]
+            outcomes=[future.result(timeout=10) for future in futures]
+        self.assertCountEqual(outcomes,['queued',409])
+        with self.session_factory() as db:
+            self.assertEqual(len(db.scalars(select(ExternalCheckRun)).all()),1)
+
+    def test_concurrent_workers_collect_a_saved_run_only_once(self):
+        self.assertEqual(self.client.post('/api/external-checks/web-nikto/run').status_code,202)
+        barrier=threading.Barrier(2)
+        def collect():
+            barrier.wait(timeout=5)
+            return server.process_next_website_audit()
+        with patch.object(server,'run_nikto_check',return_value=self.snapshot()) as collector:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures=[pool.submit(collect) for _ in range(2)]
+                outcomes=[future.result(timeout=10) for future in futures]
+        self.assertEqual(sum(result is not None for result in outcomes),1)
+        collector.assert_called_once()
+
+    def test_queued_override_is_rechecked_after_expiration(self):
+        org_id,user_id=self.context()
+        with self.session_factory() as db:
+            db.get(Organization,org_id).verification_status='pending'
+            override=ProbationOverride(organization_id=org_id,granted_by_user_id=user_id,
+                reason='fixture authorization',starts_at=server.utcnow()-timedelta(seconds=1),
+                expires_at=server.utcnow()+timedelta(days=14),created_at=server.utcnow())
+            db.add(override);db.commit();override_id=override.id
+        self.assertEqual(self.client.post('/api/external-checks/web-nikto/run').status_code,202)
+        with self.session_factory() as db:
+            db.get(ProbationOverride,override_id).expires_at=server.utcnow()-timedelta(seconds=1)
+            db.commit()
+        with patch.object(server,'run_nikto_check') as collector:
+            completed=server.process_next_website_audit()
+        collector.assert_not_called()
+        self.assertEqual(completed[1]['status'],'failed')
 
     def test_queued_pdf_does_not_describe_collection_as_started(self):
         from daedalus import reports
