@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
+from .dns_settings import parse_audit_nameservers
+
 
 load_dotenv()
 
@@ -17,6 +19,8 @@ def env_bool(name: str, default: bool = False) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+
+AUDIT_DNS_NAMESERVERS = parse_audit_nameservers(os.environ.get("DAEDALUS_AUDIT_DNS_NAMESERVERS", ""))
 
 APP_ENV = os.environ.get("DAEDALUS_ENV", "development").strip().lower()
 DEMO_MODE = env_bool("DAEDALUS_DEMO_MODE", APP_ENV != "production")

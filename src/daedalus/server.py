@@ -38,6 +38,7 @@ from anyio import from_thread
 from daedalus import __version__
 from daedalus.config import (
     APP_ENV,
+    AUDIT_DNS_NAMESERVERS,
     ALLOWED_HOSTS,
     BASE_URL,
     DEMO_MODE,
@@ -1419,7 +1420,7 @@ def _execute_external_check(
                     raise PermissionError("Active website authorization expired before collection")
             snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
-            snapshot = run_dns_check(domain) if check_type == "dns" else run_website_check(domain)
+            snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS) if check_type == "dns" else run_website_check(domain)
         failure = ("Active website collection could not validate a public target." if snapshot.get("error_code") else None) if check_type in {"web-active", "web-nikto"} else None
         if check_type == "web-nikto" and snapshot.get("error_code"):
             failure = "Nikto runtime is unavailable on this server." if snapshot["error_code"] == "nikto_runtime_unavailable" else "Nikto collection failed; check the recorded coverage state."

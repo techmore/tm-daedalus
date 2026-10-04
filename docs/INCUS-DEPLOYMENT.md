@@ -53,3 +53,7 @@ stored locally in the ignored `backups/incus-production/` directory with
 restrictive permissions. See `scripts/restore_data.py` for verification and
 staging-restore instructions. Do not restore directly over the live volume as
 part of an application release.
+
+### DNS audit resolver provenance
+
+Set `DAEDALUS_AUDIT_DNS_NAMESERVERS` to up to three comma-separated IPv4/IPv6 resolver addresses to use an explicit upstream for DNS/email audits. Empty uses the system resolver. Restart the application after changing the environment. Snapshots retain resolver mode and addresses; resolver metadata changes do not create domain configuration alerts. Query availability changes remain evidence and may generate notices. No silent fallback is performed. Website target validation and ownership verification keep their existing resolvers. Resolver AD flags do not prove locally validated DNSSEC.

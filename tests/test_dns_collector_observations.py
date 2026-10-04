@@ -11,6 +11,7 @@ import dns.resolver
 import dns.rrset
 
 from daedalus.external_checks import compare_snapshots, run_dns_check
+from daedalus.dns_settings import parse_audit_nameservers
 
 
 class FixtureResolver:
@@ -41,6 +42,30 @@ class FixtureResolver:
 
 
 class DNSCollectorObservationTests(unittest.TestCase):
+    def test_nameserver_configuration_is_bounded_and_literal(self):
+        self.assertEqual(parse_audit_nameservers('1.1.1.1, 2606:4700:4700::1111 1.1.1.1'), ('1.1.1.1', '2606:4700:4700::1111'))
+        self.assertEqual(parse_audit_nameservers(''), ())
+        for invalid in ('https://dns.example', 'resolver.example', '0.0.0.0', '224.0.0.1', 'fe80::1%en0', '1.1.1.1 2.2.2.2 3.3.3.3 4.4.4.4'):
+            with self.subTest(value=invalid), self.assertRaises(ValueError):
+                parse_audit_nameservers(invalid)
+
+    def test_explicit_resolver_is_saved_without_fallback(self):
+        resolver = FixtureResolver(failures={('example.test', 'DS'): dns.resolver.NoNameservers()})
+        with patch('daedalus.external_checks.dns.resolver.Resolver', return_value=resolver) as factory:
+            result = run_dns_check('example.test', nameservers=('1.1.1.1',))
+        factory.assert_called_once_with(configure=True)
+        self.assertEqual(resolver.nameservers, ['1.1.1.1'])
+        self.assertEqual(result['resolver_context'], {'mode': 'explicit', 'nameservers': ['1.1.1.1']})
+        self.assertIn('DS', result['resolver_errors'])
+        self.assertIsNone(result['dnssec_observations']['delegation_ds_present'])
+
+    def test_resolver_metadata_is_not_a_domain_change(self):
+        old = {'records': {'A': ['203.0.113.7']}, 'resolver_context': {'mode': 'system', 'nameservers': ['127.0.0.53']}}
+        new = {'records': {'A': ['203.0.113.7']}, 'resolver_context': {'mode': 'explicit', 'nameservers': ['1.1.1.1']}}
+        self.assertEqual(compare_snapshots(old, new), [])
+        new['records']['A'] = ['203.0.113.8']
+        self.assertEqual(compare_snapshots(old, new), [('records.A', ['203.0.113.7'], ['203.0.113.8'])])
+
     def collect(self, resolver):
         with patch("daedalus.external_checks.dns.resolver.Resolver", return_value=resolver) as factory:
             result = run_dns_check("example.test")

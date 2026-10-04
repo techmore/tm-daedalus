@@ -15,6 +15,7 @@ import dns.flags
 import dns.resolver
 
 from .email_policy import analyze_email_auth
+from .dns_settings import parse_audit_nameservers
 
 
 DKIM_SELECTORS = ("google", "selector1", "selector2", "default", "s1", "s2")
@@ -237,8 +238,20 @@ def _resolver_error_label(exc: dns.exception.DNSException) -> str:
     return type(exc).__name__
 
 
-def run_dns_check(domain: str) -> dict[str, Any]:
+def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = ()) -> dict[str, Any]:
+    explicit = parse_audit_nameservers(" ".join(nameservers))
     resolver = dns.resolver.Resolver(configure=True)
+    if explicit:
+        resolver.nameservers = list(explicit)
+    observed_nameservers = []
+    for value in getattr(resolver, "nameservers", ()):
+        if isinstance(value, str):
+            try:
+                observed_nameservers.extend(parse_audit_nameservers(value))
+            except ValueError:
+                continue
+    resolver_context = {"mode": "explicit" if explicit else "system", "nameservers": observed_nameservers[:3]}
+
     resolver.search = []
     resolver.timeout = 2.0
     resolver.lifetime = 5.0
@@ -314,6 +327,7 @@ def run_dns_check(domain: str) -> dict[str, Any]:
         "domain": domain, "records": records, "resolver_errors": errors,
         "email_authentication_assessment": email_authentication_assessment,
         "query_observations": observations,
+        "resolver_context": resolver_context,
         "dnssec_observations": {
             "assessment": assessment,
             "delegation_ds_present": ds_present,
@@ -686,6 +700,8 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     page_incomplete = any(incomplete_page(snapshot) for snapshot in (previous, current))
     changes = []
     for path in sorted(paths | error_paths):
+        if path == "resolver_context" or path.startswith("resolver_context."):
+            continue
         # Recursive resolver TTL is remaining cache lifetime, not an authoritative
         # configuration change. Retain it as report evidence without alert churn.
         if path.startswith("query_observations.") and path.endswith(".observed_ttl_seconds"):

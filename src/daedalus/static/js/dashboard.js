@@ -2688,6 +2688,13 @@
       var lookupHeading = document.createElement("summary");
       lookupHeading.textContent = "DNS lookup evidence and remaining TTL";
       lookupDetails.append(lookupHeading);
+      var resolverContext = snapshot.resolver_context;
+      if (resolverContext && Array.isArray(resolverContext.nameservers)) {
+        var resolverNote = document.createElement("p");
+        resolverNote.className = "muted";
+        resolverNote.textContent = "Audit resolver: " + (resolverContext.mode === "explicit" ? "operator configured" : "system configured") + " · " + (resolverContext.nameservers.join(", ") || "address not captured");
+        lookupDetails.append(resolverNote);
+      }
       var lookupRows = Object.keys(snapshot.query_observations).sort().map(function (key) {
         var observation = snapshot.query_observations[key];
         var ttl = typeof observation.observed_ttl_seconds === "number" ? observation.observed_ttl_seconds + " seconds" : "Unknown";
