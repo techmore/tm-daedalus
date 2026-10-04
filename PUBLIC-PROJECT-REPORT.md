@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## October 4, 2026 — Legacy automatic-login evidence correction
+
+Client source **21cedc28792fc28cd56783598bc493d6151e576c** corrects the automatic-login checker exposed by actual production report 1. Previously it merged defaults stderr into stdout, treated a missing-key error as an enabled account, and treated process launch failure as a pass. It now uses the bounded no-follow regular-plist reader at the fixed system login-window path. Missing, inaccessible, malformed, unsupported and empty account evidence remains manual. An explicit nonempty account setting fails without uploading the account name. Both legacy implementations now use one checker; saved report 1 remains immutable.
+
+Local Xcode build-for-testing completed successfully. All **439 backend tests and 90 subtests** passed. Full client CI **37180619319** is queued at this checkpoint; no full client-suite pass or rebuilt deployment is claimed for this correction. Production remains on release 066. Release 066 Python CI **37180444425** and managed Linux scanner CI **37180444368** passed; release 065 client CI **37180175288** passed. Further legacy checker semantics, repeat endpoint comparison, real macOS 26 execution, trusted distribution and the remaining project scope remain open.
+
 ## October 4, 2026 — Release 066: actual production CIS endpoint report
 
 Production application commit **1341e8e9033ed33174d8ddfd2546210a59852b85** is active and healthy. Archive: 58 files, SHA-256 **c4857a02bb2f94a838a828a7b841e150499723ae4e755d015ea3adb3c787fe82**; verified off-host backup: daedalus-data-20261004T053756Z.tar.gz. The 438-test/90-subtest suite passed for the wording fix before adding its new regression test; that regression test then passed separately. Current release CI remains unconfirmed.
