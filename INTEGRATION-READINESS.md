@@ -1,5 +1,13 @@
 # Integration readiness
 
+## October 4, 2026 — Release 073: unchanged warning notices are quiet
+
+Production application commit **b3f54e94374abae74391b67bd11797f674862b9d** is active and healthy. The 59-file archive SHA-256 is **90e5c3550b149083aab4ed241cc80a12ac1cd9ab217d850045c6bf3639dddc16**; verified off-host backup: daedalus-data-20261004T062754Z.tar.gz. All **452 tests and 96 subtests** passed locally. Release 072 Python and managed Linux CI passed; current release CI remains unconfirmed.
+
+External-check notices now suppress repeated unchanged coverage warnings against the latest terminal run of the same workspace/check type. Every run and its original errors remain saved. Failed DNS query identity is compared separately from transient exception text; changed query sets, material differences, and warnings returning after recovery or a failed run still notify. Existing notices are retained. Audit details record repeated-warning notice suppression. Added the previously absent warning reason for incomplete bounded website exposure coverage. Fixtures cover DNS and partial-page repetition, new failures, recovery/failure recurrence, retained run history and incomplete exposure reasons.
+
+Actual authenticated production DNS run **50** completed_with_warnings, using explicit resolver 1.1.1.1. It saved zero differences, retained the three unknown www lookups, appeared as the latest history run, and produced **zero new notices**. Read-only production database inspection confirmed the suppression marker in its completion audit. Readiness remained healthy. Private receipt: /data/codex-warning-notice-validation-20261004.json. This proves the unchanged-warning workflow, not resolution of www DNS or complete project readiness. Visual review, real Tahoe validation, trusted persistent CIS distribution, approved production VLAN coverage and the previously recorded full-project gaps remain open. The goal remains active.
+
 ## October 4, 2026 — Release 072: DNS audit resolver provenance and repeat evidence
 
 Production application commit **94dd267a4adcd019e88cf56a977b7ad06fb0093b** is active and healthy. The 59-file archive SHA-256 is **8651afce71d705b15e7063b04a7796534c357ac788deb2bd4f3fcec01cb97a43**; verified off-host backup: daedalus-data-20261004T062105Z.tar.gz. All **448 tests and 96 subtests** passed. Current Python CI passed; managed Linux CI was still running at the checkpoint.
