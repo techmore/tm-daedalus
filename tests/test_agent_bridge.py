@@ -371,6 +371,27 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
             check=True, timeout=20, capture_output=True, text=True,
         )
 
+    def test_linux_remote_restart_refuses_pending_upgrade(self):
+        bridge, _, config_dir = self.make_linux_managed_bridge()
+        (config_dir / '.daedalus-scanner-upgrade.json').write_text('{}')
+        with patch('daedalus.agent.sys.platform', 'linux'), patch('daedalus.agent.subprocess.run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'pending local upgrade'):
+                bridge._restart_managed_nmapui()
+        run.assert_not_called()
+
+    def test_linux_remote_restart_refuses_concurrent_lifecycle(self):
+        import fcntl
+        bridge, _, config_dir = self.make_linux_managed_bridge()
+        lock = os.open(config_dir / '.daedalus-scanner-services.lock', os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch('daedalus.agent.sys.platform', 'linux'), patch('daedalus.agent.subprocess.run') as run:
+                with self.assertRaisesRegex(RuntimeError, 'lifecycle action is running'):
+                    bridge._restart_managed_nmapui()
+            run.assert_not_called()
+        finally:
+            os.close(lock)
+
     def test_linux_nmapui_restart_refuses_missing_or_tampered_managed_install(self):
         bridge, _unit_dir, _config_dir = self.make_linux_managed_bridge()
         with patch("daedalus.agent.sys.platform", "linux"):

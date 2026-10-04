@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import ctypes
+from contextlib import contextmanager
 import getpass
 import hashlib
 import json
@@ -105,6 +106,8 @@ NMAPUI_SYSTEMD_UNIT = "daedalus-nmapui.service"
 NMAPUI_SYSTEMD_BRIDGE_UNIT = "daedalus-scanner-bridge.service"
 NMAPUI_SYSTEMD_ENV_FILE = "daedalus-nmapui.env"
 NMAPUI_SYSTEMD_OWNERSHIP_FILE = ".daedalus-scanner-services.json"
+NMAPUI_SYSTEMD_LOCK_FILE = ".daedalus-scanner-services.lock"
+NMAPUI_SYSTEMD_UPGRADE_FILE = ".daedalus-scanner-upgrade.json"
 FORWARDED_EVENTS = {
     "app_update_available",
     "job_status",
@@ -618,12 +621,41 @@ class NmapUIBridge:
             return {"schema_version": 1, "observed_at": observed_at, "status": "no_updates", "platform": "Darwin", "update_count": 0, "updates": []}
         return {"schema_version": 1, "observed_at": observed_at, "status": "unknown", "platform": "Darwin"}
 
+    @contextmanager
+    def _managed_restart_lock(self):
+        if sys.platform != "linux":
+            yield
+            return
+        import fcntl
+        self._verify_managed_linux_nmapui_install()
+        config_dir = Path(str(self.config["nmapui_systemd_config_dir"]))
+        if config_dir.stat().st_uid != os.getuid():
+            raise RuntimeError("Managed Linux service verification failed; refusing to restart NmapUI.")
+        lock = os.open(config_dir / NMAPUI_SYSTEMD_LOCK_FILE, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            info = os.fstat(lock)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+                raise RuntimeError("Managed Linux service verification failed; refusing to restart NmapUI.")
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RuntimeError("A scanner lifecycle action is running; retry restart after it finishes.") from exc
+            pending = config_dir / NMAPUI_SYSTEMD_UPGRADE_FILE
+            if pending.exists() or pending.is_symlink():
+                raise RuntimeError("Resolve the pending local upgrade before restarting NmapUI.")
+            self._verify_managed_linux_nmapui_install()
+            yield
+        finally:
+            os.close(lock)
+
     def _restart_managed_nmapui(self) -> None:
         label = str(self.config.get("nmapui_service_label") or "")
         if not self._nmapui_restart_supported():
             raise RuntimeError("This scanner is not configured for managed NmapUI restarts.")
-        if sys.platform == "linux":
-            self._verify_managed_linux_nmapui_install()
+        with self._managed_restart_lock():
+            self._restart_managed_nmapui_locked(label)
+
+    def _restart_managed_nmapui_locked(self, label: str) -> None:
         if self.sio.connected:
             self.sio.disconnect()
         self.nmapui_connected.clear()
