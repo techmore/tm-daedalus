@@ -157,7 +157,7 @@ def run_nikto_check(domain: str, executable: Path | None = None) -> dict:
         worker = threading.Thread(target=proxy.serve_forever, daemon=True)
         worker.start()
         output = Path(temporary) / "report.json"
-        command = ["/usr/bin/perl", str(executable), "-host", "https://" + domain, "-port", "443", "-vhost", domain, "-useproxy", "http://127.0.0.1:" + str(proxy.server_address[1]), "-Tuning", "x6", "-maxtime", str(SCAN_SECONDS) + "s", "-timeout", "5", "-Pause", "0.2", "-ask", "no", "-nocheck", "-nointeractive", "-Format", "json", "-output", str(output)]
+        command = ["/usr/bin/perl", str(executable), "-host", "https://" + domain, "-vhost", domain, "-useproxy", "http://127.0.0.1:" + str(proxy.server_address[1]), "-Tuning", "x6", "-maxtime", str(SCAN_SECONDS) + "s", "-timeout", "5", "-Pause", "0.2", "-ask", "no", "-nocheck", "-nointeractive", "-Format", "json", "-output", str(output)]
         environment = {key: os.environ[key] for key in ("PATH", "LANG") if key in os.environ}
         environment.update(HOME=temporary, TMPDIR=temporary)
         timed_out = False

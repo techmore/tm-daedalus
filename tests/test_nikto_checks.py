@@ -44,6 +44,22 @@ class NiktoCollectionTests(unittest.TestCase):
         result=parse_report(self.report(vulnerabilities=rows), 'example.org')
         self.assertEqual([r['test_id'] for r in result['findings']], ['1','2'])
 
+    def test_https_uri_does_not_include_conflicting_port_argument(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temporary:
+            executable=Path(temporary)/'nikto.pl'; executable.write_text('fixture')
+            def engine(command, **options):
+                self.assertEqual(command[command.index('-host')+1], 'https://example.org')
+                self.assertNotIn('-port',command)
+                self.assertIn('-useproxy',command)
+                self.assertEqual(command[command.index('-Tuning')+1],'x6')
+                Path(command[command.index('-output')+1]).write_bytes(self.report(vulnerabilities=[]))
+                return SimpleNamespace(returncode=0)
+            with patch('daedalus.nikto_checks._public_addresses',return_value=['8.8.8.8']), patch('daedalus.nikto_checks.subprocess.run',side_effect=engine):
+                result=run_nikto_check('example.org',executable)
+            self.assertNotIn('error_code',result)
+            self.assertFalse(result['coverage_complete'])
+
     def test_unavailable_runtime_does_not_resolve_or_start_process(self):
         with patch('daedalus.nikto_checks._public_addresses') as resolve, patch('daedalus.nikto_checks.subprocess.run') as run:
             result=run_nikto_check('example.org',Path('/missing-nikto-fixture'))
