@@ -103,7 +103,7 @@ class WorkspaceNotificationTests(unittest.TestCase):
         finally:
             other.close()
 
-    def test_baseline_and_failed_runs_do_not_create_notices_but_change_does(self):
+    def test_baseline_is_quiet_while_changes_and_failed_runs_create_notices(self):
         baseline = {"domain": "cybersecuritypilot.org", "records": {"A": ["192.0.2.1"]}, "resolver_errors": {}}
         self.run_dns(baseline)
         with self.session_factory() as db:
@@ -124,7 +124,46 @@ class WorkspaceNotificationTests(unittest.TestCase):
             failed = server.execute_external_check(org_id, user_id, "dns")
         self.assertEqual(failed["status"], "failed")
         with self.session_factory() as db:
-            self.assertEqual(len(db.scalars(select(WorkspaceNotification)).all()), 1)
+            notices = db.scalars(select(WorkspaceNotification).order_by(WorkspaceNotification.id)).all()
+            self.assertEqual(len(notices), 2)
+            self.assertEqual(notices[-1].reason, "check_failed")
+            self.assertEqual(notices[-1].source_id, failed["id"])
+            self.assertIn("no fresh assessment", notices[-1].summary)
+
+    def test_repeat_failure_is_quiet_until_recovery_or_failure_category_changes(self):
+        from unittest.mock import patch
+        org_id, user_id = self.workspace()
+        with patch.object(server, "run_dns_check", side_effect=RuntimeError("private collector detail")):
+            first = server.execute_external_check(org_id, user_id, "dns", "manual")
+            repeated = server.execute_external_check(org_id, user_id, "dns", "manual")
+        self.assertFalse(first['notice_suppressed'])
+        self.assertTrue(repeated['notice_suppressed'])
+        notices = self.client.get('/api/notifications').json()['notifications']
+        self.assertEqual(len(notices), 1)
+        self.assertNotIn('private collector detail', notices[0]['summary'])
+        with patch.object(server, "run_dns_check", side_effect=TimeoutError("private collector detail")):
+            changed = server.execute_external_check(org_id, user_id, "dns", "manual")
+        self.assertFalse(changed['notice_suppressed'])
+        self.run_dns({'records': {}, 'resolver_errors': {}})
+        with patch.object(server, "run_dns_check", side_effect=TimeoutError("private collector detail")):
+            returned = server.execute_external_check(org_id, user_id, "dns", "manual")
+        self.assertFalse(returned['notice_suppressed'])
+        self.assertEqual(len(self.client.get('/api/notifications').json()['notifications']), 3)
+        with self.session_factory() as db:
+            self.assertEqual(len(db.scalars(select(ExternalCheckRun)).all()), 5)
+
+    def test_external_check_publication_carries_scheduled_suppression(self):
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        org_id, _ = self.workspace()
+        result = {'id':12, 'check_type':'dns', 'domain':'cybersecuritypilot.org', 'status':'failed',
+                  'change_count':0, 'source':'schedule', 'notice_suppressed':True, 'completed_at':'saved-time'}
+        with patch.object(server.live_hub, 'publish', new_callable=AsyncMock) as publish:
+            asyncio.run(server.publish_external_check_result(org_id, result))
+        message = publish.await_args.args[1]
+        self.assertEqual(publish.await_args.args[0], org_id)
+        self.assertEqual(message['source'], 'schedule')
+        self.assertTrue(message['notice_suppressed'])
 
     def test_warning_only_notice_keeps_unknown_checks_distinct_from_confirmed_changes(self):
         warning = {

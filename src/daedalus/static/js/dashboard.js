@@ -3465,6 +3465,7 @@
   });
 
   function notifyExternalCheck(message) {
+    if (message && message.source === "schedule" && message.notice_suppressed) return;
     if (!message || message.run_id == null || notifiedCheckRuns[message.run_id]) return;
     notifiedCheckRuns[message.run_id] = true;
     var toast = document.getElementById("check-toast");

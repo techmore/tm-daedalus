@@ -167,6 +167,23 @@ assert.ok(host.children.every(x=>x.value==='Unknown'));
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_repeated_scheduled_notices_are_quiet_while_manual_feedback_remains(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function notifyExternalCheck('):source.index('  function notifyScannerUpdate(')]
+        script = """const assert=require('node:assert/strict');let shown=0;
+const notifiedCheckRuns={};const toast={classList:{remove(){shown++;}},hideTimer:null};
+const document={getElementById:()=>toast};const window={clearTimeout(){},setTimeout(){return 1;}};
+function text(node,value){node.textContent=value;}
+"""+helper+"""
+notifyExternalCheck({run_id:1,status:'failed',check_type:'dns',source:'schedule',notice_suppressed:true});assert.equal(shown,0);
+notifyExternalCheck({run_id:1,status:'failed',check_type:'dns',source:'manual',notice_suppressed:true});assert.equal(shown,1);assert.match(toast.textContent,/failed/);
+notifyExternalCheck({run_id:2,status:'completed_with_warnings',check_type:'dns',source:'schedule',notice_suppressed:true});assert.equal(shown,1);
+notifyExternalCheck({run_id:3,status:'failed',check_type:'dns',source:'schedule',notice_suppressed:false});assert.equal(shown,2);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_external_evidence_groups_keep_key_metrics_visible(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         evidence = template[template.index('<section class="topic-evidence"'):template.index('<summary>Exposure findings')]

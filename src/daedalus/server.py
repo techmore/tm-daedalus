@@ -1571,6 +1571,8 @@ def _execute_external_check(
             and external_check_warning_signature(check_type, latest_terminal.snapshot or {})
                 == external_check_warning_signature(check_type, snapshot)
         )
+        repeated_failure = bool(failure and latest_terminal and latest_terminal.status == "failed"
+            and latest_terminal.error_summary == run.error_summary)
         action = "external_check.failed" if failure else "external_check.completed"
         details: dict[str, Any] = {
             "run_id": run.id,
@@ -1581,6 +1583,7 @@ def _execute_external_check(
             "change_count": len(changes),
             "source": trigger_source,
             "repeated_warning_notice_suppressed": repeated_warning and not bool(changes),
+            "repeated_failure_notice_suppressed": repeated_failure,
         }
         if failure:
             details["error"] = run.error_summary
@@ -1601,7 +1604,7 @@ def _execute_external_check(
                     "source": trigger_source,
                 },
             )
-        if run.status in {"completed", "completed_with_warnings"} and (changes or (warning_reasons and not repeated_warning)):
+        if (failure and not repeated_failure) or (run.status in {"completed", "completed_with_warnings"} and (changes or (warning_reasons and not repeated_warning))):
             # The source run and comparison are already saved in this transaction.
             # A unique source key makes request/scheduler retries idempotent.
             existing_notice = db.scalar(select(WorkspaceNotification.id).where(
@@ -1610,8 +1613,8 @@ def _execute_external_check(
                 WorkspaceNotification.source_id == run.id,
             ))
             if existing_notice is None:
-                reason = "changes_and_warnings" if changes and warning_reasons else "changes" if changes else "warnings"
-                parts = []
+                reason = "check_failed" if failure else "changes_and_warnings" if changes and warning_reasons else "changes" if changes else "warnings"
+                parts = ["Collection failed. This run provides no fresh assessment. Review its saved error; previous evidence remains in history"] if failure else []
                 if changes:
                     groups = list(dict.fromkeys(
                         external_check_change_group(check_type, field_path)
@@ -1632,7 +1635,7 @@ def _execute_external_check(
                             organization_id=organization_id,
                             source_type="external_check_run",
                             source_id=run.id,
-                            title=f"{check_type_label(check_type)} check · {domain}",
+                            title=f"{check_type_label(check_type)} check{' failed' if failure else ''} · {domain}",
                             summary=". ".join(parts)[:1000],
                             reason=reason,
                             detected_at=completed_at,
@@ -1647,6 +1650,7 @@ def _execute_external_check(
         actor = db.get(User, user_id) if user_id is not None else None
         result = serialize_external_run(run, actor)
         result["changed_fields"] = [change[0] for change in changes]
+        result["notice_suppressed"] = repeated_failure or (repeated_warning and not bool(changes))
         return result
 
 
@@ -1904,6 +1908,7 @@ async def publish_external_check_result(
             "fields": result.get("changed_fields", []),
             "actor": result.get("actor") or "Scheduled check",
             "source": result.get("source", "manual"),
+            "notice_suppressed": result.get("notice_suppressed", False),
             "completed_at": result["completed_at"],
         },
     )

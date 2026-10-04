@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — durable collector failure notices
+
+Collector failures now create a workspace inbox notice alongside their saved run and audit event. The notice explicitly says that the failed run provides no fresh assessment and points users to the saved error and earlier evidence. Raw exception details are excluded. Consecutive failures with the same sanitized recorded error category suppress repeat inbox notices; a different category or failure after a successful run notifies again. Every attempt remains in history and the audit log.
+
+The suppression flag is carried in the workspace WebSocket event. Repeated scheduled failures or warnings do not create another transient toast; explicit manual checks still give feedback. Existing first-baseline success behavior remains quiet. Fixtures cover failure persistence, category changes, recovery/recurrence, publication and manual/scheduled UI behavior. The full local suite passed **496 tests and 98 subtests**. These are isolated failure fixtures; no production failure was induced to validate the feature.
+
+
 ## October 4, 2026 — endpoint assessment age and workspace coverage
 
 The CIS status API now reports each endpoint’s latest collection time, report ID and assessment age separately from report receipt and client heartbeat. Collections within 36 hours are current, older collections are stale, absent reports are missing, and future collection timestamps require review. Latest evidence is selected by collection time with report ID as the tie-breaker, so a late upload of old data does not replace a newer assessment. Existing heartbeat and receipt fields remain compatible.
