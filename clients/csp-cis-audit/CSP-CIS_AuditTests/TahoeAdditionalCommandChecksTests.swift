@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 import Testing
+import CryptoKit
 @testable import CSP_CIS_Audit
 
 struct TahoeAdditionalCommandChecksTests {
@@ -11,6 +12,41 @@ struct TahoeAdditionalCommandChecksTests {
     private func evaluate(_ rule: String, command: (String, [String]) -> MacOSChecks.CommandEvidence) -> String {
         let check = CISCheck(id: rule, category: "macos", description: "Untrusted fixture text", ruleID: rule)
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["DAEDALUS_REAL_TAHOE_ASSESSMENT"] == "1" || ProcessInfo.processInfo.environment["TEST_RUNNER_DAEDALUS_REAL_TAHOE_ASSESSMENT"] == "1"))
+    func realTahoePlatformAssessment() throws {
+        let environment = ProcessInfo.processInfo.environment
+        let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        try #require(major == 26, "Real platform assessment requires macOS 26")
+        let profilePath = try #require(environment["DAEDALUS_TAHOE_PROFILE_PATH"] ?? environment["TEST_RUNNER_DAEDALUS_TAHOE_PROFILE_PATH"])
+        let receiptPath = try #require(environment["DAEDALUS_TAHOE_RECEIPT_PATH"] ?? environment["TEST_RUNNER_DAEDALUS_TAHOE_RECEIPT_PATH"])
+        let data = try Data(contentsOf: URL(fileURLWithPath: profilePath))
+        let profile = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let checks = try #require(profile["checks"] as? [[String: Any]])
+        try #require(checks.count == 119)
+        var observations = [[String: String]]()
+        var counts = ["pass": 0, "fail": 0, "manual": 0, "error": 0]
+        for item in checks {
+            let id = try #require(item["id"] as? String)
+            let rule = try #require(item["rule_id"] as? String)
+            let description = try #require(item["description"] as? String)
+            // Uses actual platform reads and bundled commands, with no injected fixtures.
+            let result = MacOSChecks.run(check: CISCheck(id: id, category: "macos", description: description, ruleID: rule))
+            try #require(counts[result.status] != nil)
+            counts[result.status, default: 0] += 1
+            observations.append(["check_id": id, "status": result.status])
+        }
+        let receipt: [String: Any] = ["schema": 1, "real_platform_reads": true,
+            "os_version": ProcessInfo.processInfo.operatingSystemVersionString,
+            "profile_slug": profile["slug"] ?? "", "profile_version": profile["version"] ?? "",
+            "profile_file_sha256": SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
+            "counts": counts, "checks": observations, "production_upload": false,
+            "managed_endpoint_acceptance": false]
+        try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
+            .write(to: URL(fileURLWithPath: receiptPath), options: .atomic)
+        #expect(observations.count == 119)
+        #expect(counts["error"] == 0)
     }
 
     @Test func configuredTimeoutsRemainFiniteAndBounded() {

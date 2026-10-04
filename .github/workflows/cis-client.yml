@@ -48,6 +48,33 @@ jobs:
           include-hidden-files: true
           retention-days: 14
 
+      - name: Assess real macOS 26 platform profile
+        timeout-minutes: 10
+        env:
+          TEST_RUNNER_DAEDALUS_REAL_TAHOE_ASSESSMENT: '1'
+          TEST_RUNNER_DAEDALUS_TAHOE_PROFILE_PATH: ${{ github.workspace }}/src/daedalus/profiles/cis-macos-26-tahoe-level-2.json
+          TEST_RUNNER_DAEDALUS_TAHOE_RECEIPT_PATH: ${{ runner.temp }}/cis-tahoe-platform-receipt.json
+        run: |
+          xcodebuild -quiet test \
+            -project clients/csp-cis-audit/CSP-CIS_Audit.xcodeproj \
+            -scheme CSP-CIS_Audit -destination 'platform=macOS' \
+            -only-testing:CSP-CIS_AuditTests/TahoeAdditionalCommandChecksTests/realTahoePlatformAssessment \
+            -resultBundlePath "$RUNNER_TEMP/cis-tahoe-platform.xcresult" \
+            CODE_SIGNING_ALLOWED=NO
+          test -s "$RUNNER_TEMP/cis-tahoe-platform-receipt.json"
+
+      - name: Retain real platform assessment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cis-tahoe-platform-evidence
+          path: |
+            ${{ runner.temp }}/cis-tahoe-platform-receipt.json
+            ${{ runner.temp }}/cis-tahoe-platform.xcresult
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
+
       - name: Check notarized release script syntax
         run: |
           bash -n clients/csp-cis-audit/scripts/build-notarized-client.sh
