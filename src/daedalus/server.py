@@ -1334,9 +1334,21 @@ def external_check_warning_reasons(check_type: str, snapshot: dict[str, Any]) ->
             observation = snapshot.get(key)
             if isinstance(observation, dict) and observation.get("analysis_partial") is True:
                 reasons.append(f"{label.title()} analysis was partial")
+    if check_type == "web-active" and snapshot.get("coverage_complete") is not True:
+        reasons.append("Website exposure coverage was incomplete; missing findings remain unknown")
     if check_type == "web-nikto" and snapshot.get("coverage_complete") is not True:
         reasons.append("Nikto does not confirm that every test was exhausted; missing findings remain unknown")
     return reasons
+
+
+def external_check_warning_signature(check_type: str, snapshot: dict[str, Any]) -> str:
+    """Stable coverage evidence; transient resolver error text is not a new warning."""
+    errors = snapshot.get("resolver_errors")
+    return json.dumps({
+        "reasons": external_check_warning_reasons(check_type, snapshot),
+        "failed_dns_queries": sorted(errors) if check_type == "dns" and isinstance(errors, dict) else [],
+        "preset_version": snapshot.get("preset_version") if check_type in {"web-active", "web-nikto"} else None,
+    }, sort_keys=True)
 
 
 def _execute_external_check(
@@ -1496,6 +1508,18 @@ def _execute_external_check(
         warning_reasons = external_check_warning_reasons(check_type, snapshot) if run.status in {
             "completed", "completed_with_warnings"
         } else []
+        latest_terminal = db.scalar(select(ExternalCheckRun).where(
+            ExternalCheckRun.organization_id == organization_id,
+            ExternalCheckRun.check_type == check_type,
+            ExternalCheckRun.id < run.id,
+            ExternalCheckRun.status.in_(("completed", "completed_with_warnings", "failed")),
+        ).order_by(ExternalCheckRun.id.desc()).limit(1))
+        repeated_warning = bool(
+            warning_reasons and latest_terminal
+            and latest_terminal.status in {"completed", "completed_with_warnings"}
+            and external_check_warning_signature(check_type, latest_terminal.snapshot or {})
+                == external_check_warning_signature(check_type, snapshot)
+        )
         action = "external_check.failed" if failure else "external_check.completed"
         details: dict[str, Any] = {
             "run_id": run.id,
@@ -1505,6 +1529,7 @@ def _execute_external_check(
             "duration_ms": duration_ms,
             "change_count": len(changes),
             "source": trigger_source,
+            "repeated_warning_notice_suppressed": repeated_warning and not bool(changes),
         }
         if failure:
             details["error"] = run.error_summary
@@ -1525,7 +1550,7 @@ def _execute_external_check(
                     "source": trigger_source,
                 },
             )
-        if run.status in {"completed", "completed_with_warnings"} and (changes or warning_reasons):
+        if run.status in {"completed", "completed_with_warnings"} and (changes or (warning_reasons and not repeated_warning)):
             # The source run and comparison are already saved in this transaction.
             # A unique source key makes request/scheduler retries idempotent.
             existing_notice = db.scalar(select(WorkspaceNotification.id).where(

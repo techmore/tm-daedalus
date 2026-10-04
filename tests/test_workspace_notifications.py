@@ -122,6 +122,50 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertIn("No confirmed changes", notice["summary"])
         self.assertTrue(notice["detected_at"])
 
+    def test_repeated_warnings_keep_history_without_repeated_notices(self):
+        warning = {"domain": "cybersecuritypilot.org", "records": {"A": ["192.0.2.1"]}, "resolver_errors": {"www A": "SERVFAIL"}}
+        first = self.run_dns(warning)
+        repeated = self.run_dns({**warning, "resolver_errors": {"www A": "LifetimeTimeout"}})
+        self.assertEqual(repeated["change_count"], 0)
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        self.assertEqual([n["source_id"] for n in notices], [first["id"]])
+        history = self.client.get("/api/external-checks/dns").json()["runs"]
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["id"], repeated["id"])
+        changed = self.run_dns({**warning, "records": {"A": ["192.0.2.2"]}})
+        self.assertGreater(changed["change_count"], 0)
+        self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 2)
+
+    def test_partial_page_repeat_is_quiet_and_exposure_gap_has_reason(self):
+        snapshot = {"http_status": 206, "page_content": {"partial": True, "comparison_eligible": False}}
+        first = self.run_web(snapshot)
+        repeat = self.run_web(snapshot)
+        self.assertEqual(repeat["change_count"], 0)
+        self.assertEqual([n["source_id"] for n in self.client.get("/api/notifications").json()["notifications"]], [first["id"]])
+        self.assertIn("incomplete", server.external_check_warning_reasons("web-active", {"coverage_complete": False})[0])
+        self.assertEqual(server.external_check_warning_reasons("web-active", {"coverage_complete": True}), [])
+
+    def test_warning_recurrence_after_recovery_or_failure_notifies(self):
+        from unittest.mock import patch
+        warning = {"records": {"A": ["192.0.2.1"]}, "resolver_errors": {"www A": "SERVFAIL"}}
+        self.run_dns(warning)
+        self.run_dns({"records": warning["records"], "resolver_errors": {}})
+        returned = self.run_dns(warning)
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        self.assertEqual(notices[0]["source_id"], returned["id"])
+        org_id, user_id = self.workspace()
+        with patch.object(server, "run_dns_check", side_effect=RuntimeError("offline")):
+            server.execute_external_check(org_id, user_id, "dns")
+        after_failure = self.run_dns(warning)
+        self.assertEqual(self.client.get("/api/notifications").json()["notifications"][0]["source_id"], after_failure["id"])
+
+    def test_warning_identity_uses_query_names_not_only_count(self):
+        first = self.run_dns({"records": {}, "resolver_errors": {"DS": "SERVFAIL"}})
+        changed = self.run_dns({"records": {}, "resolver_errors": {"DNSKEY": "SERVFAIL"}})
+        self.assertNotEqual(first["id"], changed["id"])
+        self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 2)
+        self.assertNotEqual(server.external_check_warning_signature("dns", {"resolver_errors": {"DS": "SERVFAIL"}}), server.external_check_warning_signature("dns", {"resolver_errors": {"DNSKEY": "SERVFAIL"}}))
+
     def test_website_change_notices_and_history_use_human_readable_labels(self):
         baseline = {
             "domain": "cybersecuritypilot.org", "http_status": 200,
