@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 4, 2026 — Grouped legacy audit-policy corrections
+
+Client source **7792fb3900e14189b86650cec728c8a44781354d** replaces seven sudo/grep flag checkers and the retention checker with a shared bounded no-follow read of the fixed audit_control file. Exact field/class parsing replaces substring matches on merged stdout/stderr. Missing, unreadable, duplicate, unknown or prefixed selections remain manual; explicit unmatched class criteria fail. Administrative, authentication, login, network and process selections use the macOS audit_class definitions. Results describe the CSP class-selection criterion and do not claim complete event coverage or kernel activation. Retention recognizes the documented case-sensitive age units (s, h, d, y) and the existing seven-day CSP criterion; unsupported and combined age/size policies require manual review. No file contents are uploaded or configuration changed.
+
+Final source compiled with Xcode build-for-testing. Local client unit execution passed **63 tests**, zero failures/skips, confirmed through xcresulttool summary (validation/cis-policy-tests-20261004.json). This includes login, service-state and flag/retention fixtures. Full current client CI **37181000414** is pending; prior client run **37180718823** was cancelled by the workflow when superseded. Current backend CI **37181000395** is running; previous source backend CI 37180718842 passed. Production and the saved initial report retain their historical state. Updated live endpoint validation and full UI/package CI remain open alongside Tahoe, trusted distribution and the rest of the project scope.
+
 ## October 4, 2026 — Legacy auditing false-pass correction
 
 Client source **ec0d61011c44a6487c47935947859424827c4a31** replaces the legacy audit-service substring test. That test merged stdout/stderr and could pass on an error containing com.apple.auditd. Legacy and Tahoe checks now share the explicit system-service, regular audit_control metadata and kernel-condition implementation. Known absent service fails; permission/unsupported/ambiguous evidence stays manual; explicit enabled evidence passes. The original legacy check ID is retained. Regression fixtures cover error text mentioning auditd, permission denial and enabled evidence. Saved production report 1 remains unchanged.
