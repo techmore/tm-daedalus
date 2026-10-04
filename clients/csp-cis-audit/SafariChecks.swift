@@ -80,8 +80,7 @@ struct SafariChecks {
     private static func checkOpenSafeFilesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let openSafeFiles = plist["AutoOpenSafeDownloads"] as? Bool else {
-            // If not found, default is false (disabled) in newer macOS versions
-            return CheckResult(check: check, status: "pass", details: "'Open safe files after downloading' appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         if openSafeFiles == false {
             return CheckResult(check: check, status: "pass", details: "'Open safe files after downloading' is disabled.")
@@ -97,9 +96,11 @@ struct SafariChecks {
         }
         
         // Check for AutoFill settings
-        let autoFillAddressesEnabled = plist["AutoFillFromAddressBook"] as? Bool ?? true
-        let autoFillCreditCardsEnabled = plist["AutoFillCreditCardData"] as? Bool ?? true
-        let autoFillPasswordsEnabled = plist["AutoFillPasswords"] as? Bool ?? true
+        guard let autoFillAddressesEnabled = plist["AutoFillFromAddressBook"] as? Bool,
+              let autoFillCreditCardsEnabled = plist["AutoFillCreditCardData"] as? Bool,
+              let autoFillPasswordsEnabled = plist["AutoFillPasswords"] as? Bool else {
+            return CheckResult.unavailablePreference(check: check, detail: "Complete Safari AutoFill preference evidence was not captured.")
+        }
         
         if !autoFillAddressesEnabled && !autoFillCreditCardsEnabled && !autoFillPasswordsEnabled {
             return CheckResult(check: check, status: "pass", details: "All AutoFill features are disabled in Safari.")
@@ -118,7 +119,9 @@ struct SafariChecks {
             return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
-        let autoFillFormsEnabled = plist["AutoFillMiscellaneousForms"] as? Bool ?? true
+        guard let autoFillFormsEnabled = plist["AutoFillMiscellaneousForms"] as? Bool else {
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari AutoFill preference evidence was not captured.")
+        }
         
         if !autoFillFormsEnabled {
             return CheckResult(check: check, status: "pass", details: "AutoFill web forms is disabled in Safari.")
@@ -133,7 +136,9 @@ struct SafariChecks {
             return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
-        let autoFillCreditCardsEnabled = plist["AutoFillCreditCardData"] as? Bool ?? true
+        guard let autoFillCreditCardsEnabled = plist["AutoFillCreditCardData"] as? Bool else {
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari AutoFill preference evidence was not captured.")
+        }
         
         if !autoFillCreditCardsEnabled {
             return CheckResult(check: check, status: "pass", details: "AutoFill credit cards is disabled in Safari.")
@@ -148,7 +153,9 @@ struct SafariChecks {
             return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
-        let autoFillAddressesEnabled = plist["AutoFillFromAddressBook"] as? Bool ?? true
+        guard let autoFillAddressesEnabled = plist["AutoFillFromAddressBook"] as? Bool else {
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari AutoFill preference evidence was not captured.")
+        }
         
         if !autoFillAddressesEnabled {
             return CheckResult(check: check, status: "pass", details: "AutoFill contact information is disabled in Safari.")
@@ -163,7 +170,9 @@ struct SafariChecks {
             return CheckResult.unavailablePreference(check: check, detail: "Could not read Safari preferences.")
         }
         
-        let autoFillPasswordsEnabled = plist["AutoFillPasswords"] as? Bool ?? true
+        guard let autoFillPasswordsEnabled = plist["AutoFillPasswords"] as? Bool else {
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari AutoFill preference evidence was not captured.")
+        }
         
         if !autoFillPasswordsEnabled {
             return CheckResult(check: check, status: "pass", details: "AutoFill usernames and passwords is disabled in Safari.")
@@ -205,8 +214,7 @@ struct SafariChecks {
     private static func checkFraudulentWebsiteWarningEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let warnAboutFraudulentWebsites = plist["WarnAboutFraudulentWebsites"] as? Bool else {
-            // Default is enabled in modern macOS
-            return CheckResult(check: check, status: "pass", details: "Warn when visiting a fraudulent website appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if warnAboutFraudulentWebsites {
@@ -222,8 +230,7 @@ struct SafariChecks {
     private static func checkPreventCrossSiteTracking(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let preventCrossSiteTracking = plist["WebKitPreferences.storageBlockingPolicy"] as? Int else {
-            // Default is enabled (policy 1) in modern macOS
-            return CheckResult(check: check, status: "pass", details: "Prevent cross-site tracking appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if preventCrossSiteTracking >= 1 {
@@ -237,8 +244,7 @@ struct SafariChecks {
     private static func checkBlockAllCookies(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let blockAllCookies = plist["BlockAllCookies"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Block all cookies appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if blockAllCookies {
@@ -252,8 +258,7 @@ struct SafariChecks {
     private static func checkWebsiteTracking(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let trackingPolicy = plist["WebKitPreferences.trackingPreventionEnabled"] as? Bool else {
-            // Default is enabled in modern macOS
-            return CheckResult(check: check, status: "pass", details: "Website tracking prevention appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if trackingPolicy {
@@ -267,8 +272,7 @@ struct SafariChecks {
     private static func checkAskWebsitesNotToTrack(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let sendDoNotTrack = plist["SendDoNotTrackHTTPHeader"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Ask websites not to track me appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if sendDoNotTrack {
@@ -282,8 +286,7 @@ struct SafariChecks {
     private static func checkPrivacyPreservingAdMeasurement(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let adMeasurementEnabled = plist["WebKitPreferences.privateClickMeasurementEnabled"] as? Bool else {
-            // Default is enabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Privacy preserving ad measurement appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if !adMeasurementEnabled {
@@ -299,8 +302,7 @@ struct SafariChecks {
     private static func checkExtensionsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let extensionsEnabled = plist["ExtensionsEnabled"] as? Bool else {
-            // Default is enabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Extensions appear to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if !extensionsEnabled {
@@ -314,8 +316,7 @@ struct SafariChecks {
     private static func checkJavaScriptDisabledForUntrustedSites(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let javascriptFromUntrustedSites = plist["WebKitPreferences.javaScriptCanOpenWindowsAutomatically"] as? Bool else {
-            // Default is enabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "JavaScript for untrusted sites appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if !javascriptFromUntrustedSites {
@@ -329,8 +330,7 @@ struct SafariChecks {
     private static func checkInternetPluginsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let pluginsEnabled = plist["WebKitPluginsEnabled"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "pass", details: "Internet plug-ins appear to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if !pluginsEnabled {
@@ -344,8 +344,7 @@ struct SafariChecks {
     private static func checkJavaDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let javaEnabled = plist["WebKitJavaEnabled"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "pass", details: "Java appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if !javaEnabled {
@@ -361,8 +360,7 @@ struct SafariChecks {
     private static func checkShowFullWebsiteAddress(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let showFullURL = plist["ShowFullURLInSmartSearchField"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Show full website address appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if showFullURL {
@@ -376,8 +374,7 @@ struct SafariChecks {
     private static func checkShowDevelopMenu(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let showDevelopMenu = plist["IncludeDevelopMenu"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Show Develop menu in menu bar appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if showDevelopMenu {
@@ -391,8 +388,7 @@ struct SafariChecks {
     private static func checkShowStatusBar(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let showStatusBar = plist["ShowStatusBar"] as? Bool else {
-            // Default is disabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Show status bar appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if showStatusBar {
@@ -406,8 +402,7 @@ struct SafariChecks {
     private static func checkSmartSearchFieldSuggestionsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let suggestionsEnabled = plist["UniversalSearchEnabled"] as? Bool else {
-            // Default is enabled in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Smart Search Field suggestions appear to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         if !suggestionsEnabled {
@@ -421,8 +416,7 @@ struct SafariChecks {
     private static func checkDefaultSearchEngine(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let plist = preferences,
               let searchEngine = plist["SearchProviderIdentifier"] as? String else {
-            // Default is Google in modern macOS
-            return CheckResult(check: check, status: "fail", details: "Default search engine appears to be set to Google.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Safari preference evidence was not captured.")
         }
         
         let privacyFocusedEngines = ["com.duckduckgo", "com.startpage", "com.qwant"]

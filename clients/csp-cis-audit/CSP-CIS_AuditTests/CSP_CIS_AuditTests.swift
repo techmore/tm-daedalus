@@ -31,6 +31,100 @@ struct CSP_CIS_AuditTests {
         #expect(SafariChecks.run(check: safari, readPreferences: { ["WebKitJavaScriptEnabled": true] }).status == "fail")
     }
 
+    @Test func allBrowserDispatchPathsKeepAbsentPreferencesUnassessed() {
+        let chromeDescriptions = [
+            "Ensure Safe Browsing settings are enabled",
+            "Ensure Safe Browsing Protection Level",
+            "Ensure Allow Google Cast to connect to Cast devices",
+            "Ensure Allow queries to a Google time service",
+            "Ensure Allow the audio sandbox to run",
+            "Ensure Ask where to save each file before downloading",
+            "Ensure Continue running background apps when Chrome is closed",
+            "Ensure Control SafeSites adult content filtering",
+            "Ensure Disable Certificate Transparency enforcement",
+            "Ensure Disable saving browser history",
+            "Ensure DNS interception checks enabled",
+            "Ensure Enable component updates in Google Chrome",
+            "Ensure Enable third party software injection blocking",
+            "Ensure Import autofill form data from default browser",
+            "Ensure Import of homepage from default browser",
+            "Ensure Import search engines from default browser",
+            "Ensure Enable security warnings for command-line flags",
+            "Ensure Enable reporting of usage and crash-related data",
+            "Ensure Enable Safe Browsing for trusted sources",
+            "Ensure Enable search suggestions",
+            "Ensure Set disk cache size",
+            "Ensure Block third-party cookies",
+            "Ensure Clear cookies and site data when you quit Chrome",
+            "Ensure Default cookies setting",
+            "Ensure Enable Do Not Track",
+            "Ensure Configure extension installation blocklist",
+            "Ensure Configure allowed Chrome Web Store extensions",
+            "Ensure Control which extensions can access file URLs",
+            "Ensure Control which extensions can inject scripts",
+            "Ensure Enable saving passwords to the password manager",
+            "Ensure Enable Autofill for addresses",
+            "Ensure Enable Autofill for credit cards",
+            "Ensure Enable Autofill for payment methods"
+        ]
+        for description in chromeDescriptions {
+            let check = CISCheck(id: "fixture", category: "chrome", description: description)
+            let unavailable: [[String: Any]?] = [nil, [:], ["irrelevant": "unknown"]]
+            for preferences in unavailable {
+                #expect(ChromeChecks.run(check: check, readPreferences: { preferences }).status == "manual")
+            }
+        }
+        let safariDescriptions = [
+            "Ensure Open safe files after downloading",
+            "Ensure AutoFill is disabled",
+            "Ensure AutoFill web forms is disabled",
+            "Ensure AutoFill credit cards is disabled",
+            "Ensure AutoFill contact information is disabled",
+            "Ensure AutoFill usernames and passwords is disabled",
+            "Ensure Block pop-up windows is enabled",
+            "Ensure JavaScript is disabled",
+            "Ensure Warn when visiting a fraudulent website",
+            "Ensure Prevent cross-site tracking",
+            "Ensure Block all cookies",
+            "Ensure Website tracking",
+            "Ensure Ask websites not to track me",
+            "Ensure Privacy preserving ad measurement",
+            "Ensure Allow Extensions",
+            "Ensure Enable JavaScript untrusted sites",
+            "Ensure Internet plug-ins",
+            "Ensure Java",
+            "Ensure Show full website address",
+            "Ensure Show Develop menu in menu bar",
+            "Ensure Show status bar",
+            "Ensure Smart Search Field search suggestions",
+            "Ensure Default search engine"
+        ]
+        for description in safariDescriptions {
+            let check = CISCheck(id: "fixture", category: "safari", description: description)
+            let unavailable: [[String: Any]?] = [nil, [:], ["irrelevant": "unknown"]]
+            for preferences in unavailable {
+                #expect(SafariChecks.run(check: check, readPreferences: { preferences }).status == "manual")
+            }
+        }
+    }
+
+    @Test func safariAutoFillNeedsCompleteTypedEvidence() {
+        let check = CISCheck(id: "fixture", category: "safari", description: "Ensure AutoFill is disabled")
+        let incomplete: [[String: Any]] = [[:], ["AutoFillFromAddressBook": false], ["AutoFillFromAddressBook": false, "AutoFillCreditCardData": false, "AutoFillPasswords": "unknown"]]
+        for preferences in incomplete {
+            #expect(SafariChecks.run(check: check, readPreferences: { preferences }).status == "manual")
+        }
+        let disabled: [String: Any] = ["AutoFillFromAddressBook": false, "AutoFillCreditCardData": false, "AutoFillPasswords": false]
+        #expect(SafariChecks.run(check: check, readPreferences: { disabled }).status == "pass")
+        var enabled = disabled
+        enabled["AutoFillPasswords"] = true
+        #expect(SafariChecks.run(check: check, readPreferences: { enabled }).status == "fail")
+        let creditCards = CISCheck(id: "fixture", category: "safari", description: "Ensure AutoFill credit cards is disabled")
+        #expect(SafariChecks.run(check: creditCards, readPreferences: { ["AutoFillCreditCardData": "unknown"] }).status == "manual")
+        #expect(SafariChecks.run(check: creditCards, readPreferences: { ["AutoFillCreditCardData": false] }).status == "pass")
+        #expect(SafariChecks.run(check: creditCards, readPreferences: { ["AutoFillCreditCardData": true] }).status == "fail")
+    }
+
     @Test func legacyAuditPolicyRequiresExactReadableFields() {
         let check = CISCheck(id: "fixture", category: "macos", description: "Fixture")
         func flags(_ text: String?) -> String {

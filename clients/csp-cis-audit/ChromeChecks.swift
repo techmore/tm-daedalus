@@ -199,8 +199,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let certificateTransparency = prefs["certificate_transparency"] as? [String: Any],
               let disabledForLegacyCas = certificateTransparency["disabled_for_legacy_cas"] as? Bool else {
-            // Default is disabled, which is good
-            return CheckResult(check: check, status: "pass", details: "Certificate Transparency enforcement for Legacy CAs is not disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !disabledForLegacyCas {
@@ -213,8 +212,7 @@ struct ChromeChecks {
     private static func checkSavingBrowserHistory(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let savingBrowserHistoryDisabled = prefs["savingBrowserHistoryDisabled"] as? Bool else {
-            // Default is enabled (not disabled), which is good
-            return CheckResult(check: check, status: "pass", details: "Saving browser history is enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !savingBrowserHistoryDisabled {
@@ -228,8 +226,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let dnsInterceptionChecksEnabled = browser["dns_interception_checks_enabled"] as? Bool else {
-            // Default is enabled, which is good
-            return CheckResult(check: check, status: "pass", details: "DNS interception checks are enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if dnsInterceptionChecksEnabled {
@@ -288,8 +285,7 @@ struct ChromeChecks {
     private static func checkImportAutofillDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let importAutofillFormData = prefs["import_autofill_form_data"] as? Bool else {
-            // If not set, default is enabled which fails the check
-            return CheckResult(check: check, status: "fail", details: "Import autofill form data from default browser is enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !importAutofillFormData {
@@ -302,8 +298,7 @@ struct ChromeChecks {
     private static func checkImportHomepageDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let importHomepage = prefs["import_homepage"] as? Bool else {
-            // If not set, default is enabled which fails the check
-            return CheckResult(check: check, status: "fail", details: "Import of homepage from default browser is enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !importHomepage {
@@ -316,8 +311,7 @@ struct ChromeChecks {
     private static func checkImportSearchEnginesDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let importSearchEngine = prefs["import_search_engine"] as? Bool else {
-            // If not set, default is enabled which fails the check
-            return CheckResult(check: check, status: "fail", details: "Import search engines from default browser is enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !importSearchEngine {
@@ -331,8 +325,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let browser = prefs["browser"] as? [String: Any],
               let securityWarnings = browser["enable_security_warnings_for_command_line_flags"] as? Bool else {
-            // If not set, default is enabled which passes the check
-            return CheckResult(check: check, status: "pass", details: "Security warnings for command-line flags are enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if securityWarnings {
@@ -346,8 +339,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let reporting = prefs["reporting"] as? [String: Any],
               let enabled = reporting["enabled"] as? Bool else {
-            // If not set, default is enabled which fails the check
-            return CheckResult(check: check, status: "fail", details: "Reporting of usage and crash-related data is enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !enabled {
@@ -361,8 +353,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let safebrowsing = prefs["safebrowsing"] as? [String: Any],
               let trustedSourcesEnabled = safebrowsing["trusted_sources_enabled"] as? Bool else {
-            // Default is disabled, which is good
-            return CheckResult(check: check, status: "pass", details: "Safe Browsing for trusted sources appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !trustedSourcesEnabled {
@@ -375,8 +366,7 @@ struct ChromeChecks {
     private static func checkSearchSuggestionsDisabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let searchSuggestEnabled = prefs["search_suggest_enabled"] as? Bool else {
-            // Default is enabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Search suggestions appear to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !searchSuggestEnabled {
@@ -390,8 +380,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let net = prefs["net"] as? [String: Any],
               let diskCacheSize = net["disk_cache_size"] as? Int else {
-            // Default is not set, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Disk cache size is not configured.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         // Recommended size is 100MB or less
@@ -407,8 +396,7 @@ struct ChromeChecks {
     private static func checkBlockThirdPartyCookies(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let blockThirdPartyCookies = prefs["block_third_party_cookies"] as? Bool else {
-            // Default is disabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Block third-party cookies appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if blockThirdPartyCookies {
@@ -421,8 +409,7 @@ struct ChromeChecks {
     private static func checkClearCookiesOnQuit(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let clearOnExit = prefs["clear_on_exit"] as? Bool else {
-            // Default is disabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Clear cookies and site data when quitting Chrome appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if clearOnExit {
@@ -436,8 +423,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let cookieControls = prefs["cookie_controls"] as? [String: Any],
               let mode = cookieControls["mode"] as? Int else {
-            // Default is keep until session end (2), which passes the check
-            return CheckResult(check: check, status: "pass", details: "Default cookies setting appears to be set to keep local data until browser is closed.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         // Mode 2 is "keep local data until you quit your browser"
@@ -451,8 +437,7 @@ struct ChromeChecks {
     private static func checkDoNotTrackEnabled(check: CISCheck, preferences: [String: Any]?) -> CheckResult {
         guard let prefs = preferences,
               let doNotTrack = prefs["enable_do_not_track"] as? Bool else {
-            // Default is disabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Do Not Track appears to be disabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if doNotTrack {
@@ -468,8 +453,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let blocklist = extensions["blocklist"] as? [String] else {
-            // Default is no blocklist, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Extension installation blocklist is not configured.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !blocklist.isEmpty {
@@ -483,8 +467,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let allowlist = extensions["allowed_types"] as? [String] else {
-            // Default is no allowlist, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Allowed Chrome Web Store extensions list is not configured.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !allowlist.isEmpty {
@@ -498,8 +481,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let fileAccess = extensions["file_access"] as? [String: Bool] else {
-            // Default is no restrictions, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Extension file URL access control is not configured.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !fileAccess.isEmpty {
@@ -513,8 +495,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let extensions = prefs["extensions"] as? [String: Any],
               let scriptInjection = extensions["script_injection"] as? [String: Bool] else {
-            // Default is no restrictions, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Extension script injection control is not configured.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !scriptInjection.isEmpty {
@@ -530,8 +511,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let passwordManager = prefs["password_manager"] as? [String: Any],
               let savingEnabled = passwordManager["saving_enabled"] as? Bool else {
-            // Default is enabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Saving passwords to the password manager appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !savingEnabled {
@@ -545,8 +525,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let autofill = prefs["autofill"] as? [String: Any],
               let addressEnabled = autofill["address_enabled"] as? Bool else {
-            // Default is enabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Autofill for addresses appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !addressEnabled {
@@ -560,8 +539,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let autofill = prefs["autofill"] as? [String: Any],
               let creditCardEnabled = autofill["credit_card_enabled"] as? Bool else {
-            // Default is enabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Autofill for credit cards appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !creditCardEnabled {
@@ -575,8 +553,7 @@ struct ChromeChecks {
         guard let prefs = preferences,
               let autofill = prefs["autofill"] as? [String: Any],
               let paymentMethodEnabled = autofill["payment_method_enabled"] as? Bool else {
-            // Default is enabled, which fails the check
-            return CheckResult(check: check, status: "fail", details: "Autofill for payment methods appears to be enabled.")
+            return CheckResult.unavailablePreference(check: check, detail: "Required Chrome preference evidence was not captured.")
         }
         
         if !paymentMethodEnabled {
