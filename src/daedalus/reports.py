@@ -326,6 +326,20 @@ def _append_active_website(story: list[Any], check: dict[str, Any], styles: dict
     _append_changes(story, check.get("changes") or [], styles)
 
 
+def _dependency_origin_evidence(snapshot: dict[str, Any], resource: dict[str, Any]) -> str:
+    block = snapshot.get("dependency_origin_observations")
+    if not isinstance(block, dict) or block.get("schema_version") != 1 or not isinstance(block.get("origins"), list):
+        return "Origin attributes not recorded"
+    matches = [origin for origin in block["origins"] if isinstance(origin, dict) and all(origin.get(key) == resource.get(key) for key in ("host", "scheme", "port"))]
+    keys = ("http_reference_count", "script_reference_count", "stylesheet_reference_count", "integrity_declared_reference_count", "integrity_missing_reference_count")
+    if len(matches) != 1 or not all(type(matches[0].get(key)) is int and 0 <= matches[0][key] <= 9007199254740991 for key in keys):
+        return "Origin attributes unavailable"
+    origin = matches[0]
+    return (f"{origin['http_reference_count']} HTTP; {origin['script_reference_count']} script(s); "
+            f"{origin['stylesheet_reference_count']} stylesheet(s); integrity: "
+            f"{origin['integrity_declared_reference_count']} declared, {origin['integrity_missing_reference_count']} not declared")
+
+
 def _append_website(story: list[Any], check: dict[str, Any], styles: dict[str, ParagraphStyle]) -> None:
     story.append(Paragraph("Website health and linked vendors", styles["section"]))
     _append_latest_attempt(story, check, styles)
@@ -414,7 +428,7 @@ def _append_website(story: list[Any], check: dict[str, Any], styles: dict[str, P
             resource_rows.append([
                 _paragraph(resource.get("vendor") or "Unclassified", styles["cell"]),
                 _paragraph(host, styles["cell"]),
-                _paragraph(resource.get("resource_types") or [], styles["cell"]),
+                _paragraph(_text(resource.get("resource_types") or []) + "\n" + _dependency_origin_evidence(snapshot, resource), styles["cell"]),
                 _paragraph((resource.get("scheme") or "unknown").upper(), styles["cell"]),
             ])
         story.append(_table(resource_rows, [1.45 * inch, 1.8 * inch, 2.35 * inch, 0.9 * inch]))

@@ -73,7 +73,26 @@ class ExternalResourceInventoryTests(unittest.TestCase):
         values=[str(call.args[0]) for call in paragraphs.call_args_list]
         self.assertTrue(pdf.startswith(b'%PDF-'))
         self.assertIn('Script/style integrity not declared',values)
+        self.assertTrue(any('1 script(s)' in value and '0 declared, 1 not declared' in value for value in values))
         self.assertTrue(any('Integrity declarations are not validated' in value for value in values))
+
+    def test_origin_pdf_evidence_requires_unique_exact_origin_and_typed_counts(self):
+        import copy
+        from daedalus.reports import _dependency_origin_evidence
+        observed = _external_resource_inventory('<script src="https://cdn.example.net/a.js"></script>', 'https://example.com/', 'example.com')
+        resource = observed['external_resources'][0]
+        self.assertIn('1 script(s)', _dependency_origin_evidence(observed, resource))
+        self.assertIn('0 declared, 1 not declared', _dependency_origin_evidence(observed, resource))
+        self.assertEqual(_dependency_origin_evidence({}, resource), 'Origin attributes not recorded')
+        wrong = dict(resource, port=8443)
+        self.assertEqual(_dependency_origin_evidence(observed, wrong), 'Origin attributes unavailable')
+        block = observed['dependency_origin_observations']
+        origin = copy.deepcopy(block['origins'][0])
+        block['origins'].append(origin)
+        self.assertEqual(_dependency_origin_evidence(observed, resource), 'Origin attributes unavailable')
+        for count in (-1, True, '1', 1.5):
+            block['origins'] = [dict(origin, script_reference_count=count)]
+            self.assertEqual(_dependency_origin_evidence(observed, resource), 'Origin attributes unavailable')
 
     def test_lists_external_resources_without_storing_full_urls(self):
         html = """

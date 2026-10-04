@@ -141,6 +141,17 @@ const resources=[{host:'a.test',category:'Analytics'},{host:'b.test',category:'F
 const original=JSON.stringify(resources), groups=groupExternalDependencies(resources);
 assert.deepEqual(groups.map(g=>g.category),['Analytics','Fonts and CDN','__proto__','Unclassified']);
 assert.deepEqual(groups[0].resources.map(r=>r.host),['a.test','c.test']);
+const resource={host:'cdn.test',scheme:'https',port:443};
+const origin={...resource,http_reference_count:0,script_reference_count:2,stylesheet_reference_count:1,integrity_declared_reference_count:1,integrity_missing_reference_count:2};
+const snapshot={dependency_origin_observations:{schema_version:1,origins:[origin]}};
+assert.equal(dependencyOriginEvidence(snapshot,resource),'0 HTTP · 2 script(s) · 1 stylesheet(s) · integrity: 1 declared, 2 not declared');
+assert.equal(dependencyOriginEvidence({},resource),'Origin attributes not recorded');
+assert.equal(dependencyOriginEvidence(snapshot,{...resource,port:8443}),'Origin attributes unavailable');
+snapshot.dependency_origin_observations.origins.push({...origin});
+assert.equal(dependencyOriginEvidence(snapshot,resource),'Origin attributes unavailable');
+snapshot.dependency_origin_observations.origins=[{...origin,script_reference_count:-1}];
+assert.equal(dependencyOriginEvidence(snapshot,resource),'Origin attributes unavailable');
+
 assert.equal(JSON.stringify(resources),original);assert.deepEqual(groupExternalDependencies(null),[]);
 """
         result = subprocess.run(['node','-e',script],capture_output=True,text=True)

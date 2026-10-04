@@ -3067,6 +3067,18 @@
     return Array.from(groups, function (entry) { return {category: entry[0], resources: entry[1]}; });
   }
 
+  function dependencyOriginEvidence(snapshot, resource) {
+    var block = snapshot.dependency_origin_observations;
+    if (!block || block.schema_version !== 1 || !Array.isArray(block.origins)) return "Origin attributes not recorded";
+    var matches = block.origins.filter(function (origin) {
+      return origin && origin.host === resource.host && origin.scheme === resource.scheme && origin.port === resource.port;
+    });
+    var keys = ["http_reference_count", "script_reference_count", "stylesheet_reference_count", "integrity_declared_reference_count", "integrity_missing_reference_count"];
+    if (matches.length !== 1 || !keys.every(function (key) { return Number.isSafeInteger(matches[0][key]) && matches[0][key] >= 0; })) return "Origin attributes unavailable";
+    var origin = matches[0];
+    return origin.http_reference_count + " HTTP · " + origin.script_reference_count + " script(s) · " + origin.stylesheet_reference_count + " stylesheet(s) · integrity: " + origin.integrity_declared_reference_count + " declared, " + origin.integrity_missing_reference_count + " not declared";
+  }
+
   function renderWebsiteSnapshot(snapshot) {
     var summary = document.getElementById("web-summary-grid");
     var headers = document.getElementById("web-header-grid");
@@ -3184,7 +3196,7 @@
             return {
               type: resource.vendor || "Unclassified external host",
               name: host,
-              value: (resource.category || "Other") + " · " + (resource.resource_types || []).join(", ") + " · " + (resource.reference_count || 1) + " reference(s)",
+              value: (resource.category || "Other") + " · " + (resource.resource_types || []).join(", ") + " · " + (resource.reference_count || 1) + " reference(s) · " + dependencyOriginEvidence(snapshot, resource),
               present: true,
               statusTone: insecure ? "is-absent" : "is-neutral",
               statusText: insecure ? "HTTP reference" : "HTTPS reference"
