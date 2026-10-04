@@ -24,46 +24,23 @@ struct MacOSPasswordChecks {
     }
     
     // Check if password complexity is configured
-    static func checkPasswordComplexity(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/pwpolicy"
-        process.arguments = ["getaccountpolicies"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check password complexity: \(error)")
+    static func checkPasswordComplexity(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "Complete explicit legacy complexity fields were unavailable. Modern account-policy predicates and directory enforcement require separate review.")
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        let complexityPatterns = [
-            "requiresAlpha", "requiresNumeric", "requiresSymbol", "requiresMixedCase",
-            "policyAttributePassword matches '.*[a-zA-Z].*'",
-            "policyAttributePassword matches '.*[0-9].*'",
-            "policyAttributePassword matches '.*[^a-zA-Z0-9].*'"
-        ]
-        
-        var foundPatterns: [String] = []
-        for pattern in complexityPatterns {
-            if output.contains(pattern) {
-                foundPatterns.append(pattern)
-            }
+        guard let values = legacyGlobalPolicy(command: command) else { return unknown() }
+        let keys = ["requiresAlpha", "requiresNumeric", "requiresSymbol", "requiresMixedCase"]
+        var enabled = 0
+        for key in keys {
+            guard let value = values[key], value == "0" || value == "1" else { return unknown() }
+            if value == "1" { enabled += 1 }
         }
-        
-        if foundPatterns.count >= 3 {
-            return CheckResult(check: check, status: "pass", details: "Password complexity is properly configured with \(foundPatterns.count) requirements.")
-        } else if !foundPatterns.isEmpty {
-            return CheckResult(check: check, status: "fail", details: "Password complexity is configured but does not meet minimum requirements.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Password complexity is NOT configured.")
-        }
+        return CheckResult(check: check, status: enabled >= 3 ? "pass" : "fail",
+            details: "Captured legacy complexity fields: \(enabled) of 4 enabled; existing legacy criterion is at least 3 distinct fields. This does not evaluate modern account-policy predicates, password acceptance or directory enforcement.")
     }
-    
+
     // Check if password history is configured
     static func checkPasswordHistory(check: CISCheck,
         command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
@@ -82,27 +59,34 @@ struct MacOSPasswordChecks {
         return CheckResult(check: check, status: evidence.status, details: evidence.details)
     }
     
-    // Check if password minimum age is configured
-    static func checkPasswordMinAge(check: CISCheck,
-        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
-    ) -> CheckResult {
+    private static func legacyGlobalPolicy(
+        command: (String, [String]) -> MacOSChecks.CommandEvidence
+    ) -> [String: String]? {
         let evidence = command("/usr/bin/pwpolicy", ["-getglobalpolicy"])
-        func unknown() -> CheckResult {
-            CheckResult(check: check, status: "manual", details: "A supported explicit legacy minimum password age was not available. Modern account-policy enforcement and directory accounts require separate review.")
-        }
         guard evidence.unavailable == nil, evidence.exitCode == 0,
               evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              evidence.output.utf8.count <= 65_536 else { return unknown() }
+              evidence.output.utf8.count <= 65_536 else { return nil }
         let tokens = evidence.output.split(whereSeparator: { $0.isWhitespace })
-        guard !tokens.isEmpty, tokens.count <= 1_000 else { return unknown() }
+        guard !tokens.isEmpty, tokens.count <= 1_000 else { return nil }
         var values: [String: String] = [:]
         for token in tokens {
             let parts = token.split(separator: "=", omittingEmptySubsequences: false)
             guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty,
                   parts[0].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }),
-                  values[String(parts[0])] == nil else { return unknown() }
+                  values[String(parts[0])] == nil else { return nil }
             values[String(parts[0])] = String(parts[1])
         }
+        return values
+    }
+
+    // Check if password minimum age is configured
+    static func checkPasswordMinAge(check: CISCheck,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand
+    ) -> CheckResult {
+        func unknown() -> CheckResult {
+            CheckResult(check: check, status: "manual", details: "A supported explicit legacy minimum password age was not available. Modern account-policy enforcement and directory accounts require separate review.")
+        }
+        guard let values = legacyGlobalPolicy(command: command) else { return unknown() }
         guard let raw = values["minMinutesUntilChangePassword"],
               let minutes = Int(raw), minutes >= 0, minutes <= 5_256_000,
               String(minutes) == raw else { return unknown() }

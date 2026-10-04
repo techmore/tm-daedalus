@@ -13,6 +13,27 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyComplexityCountsDistinctEnabledFieldsOnly() {
+        let check = CISCheck(id: "complexity", category: "macos", description: "Complexity")
+        func evaluate(_ evidence: MacOSChecks.CommandEvidence) -> String {
+            MacOSPasswordChecks.checkPasswordComplexity(check: check) { path, arguments in
+                #expect(path == "/usr/bin/pwpolicy")
+                #expect(arguments == ["-getglobalpolicy"])
+                return evidence
+            }.status
+        }
+        let three = "requiresAlpha=1 requiresNumeric=1 requiresSymbol=1 requiresMixedCase=0"
+        #expect(evaluate(.init(output: three)) == "pass")
+        #expect(evaluate(.init(output: "requiresAlpha=0 requiresNumeric=0 requiresSymbol=0 requiresMixedCase=0")) == "fail")
+        #expect(evaluate(.init(output: "requiresAlpha=1 requiresNumeric=1 requiresSymbol=0 requiresMixedCase=0")) == "fail")
+        for output in ["", "requiresAlpha requiresNumeric requiresSymbol", "requiresAlpha=1 requiresNumeric=1 requiresSymbol=1", three + " requiresAlpha=0", three + " OR TRUE", three.replacingOccurrences(of: "requiresSymbol=1", with: "requiresSymbol=true"), three.replacingOccurrences(of: "requiresSymbol=1", with: "requiresSymbol=01")] {
+            #expect(evaluate(.init(output: output)) == "manual")
+        }
+        for evidence in [MacOSChecks.CommandEvidence(output: three, exitCode: 1), .init(output: three, error: "denied"), .init(output: three, unavailable: "timeout")] {
+            #expect(evaluate(evidence) == "manual")
+        }
+    }
+
     @Test func legacyPermissionCollectorsCompareEveryModeAndRejectIncompleteEnumeration() {
         let check = CISCheck(id: "legacy-permissions", category: "macos", description: "Permissions")
         for kind in 0..<5 {
