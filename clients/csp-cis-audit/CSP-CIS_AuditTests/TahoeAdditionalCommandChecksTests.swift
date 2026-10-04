@@ -13,6 +13,15 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func duplicatePermissionCollectorsUseReadOnlyReview() {
+        let check = CISCheck(id: "permission", category: "macos", description: "Permission")
+        for collect in [MacOSAppSecurityChecks.checkCameraAccess, MacOSAppSecurityChecks.checkMicrophoneAccess, MacOSAppSecurityChecks.checkFullDiskAccess] {
+            let result = collect(check)
+            #expect(result.status == "manual")
+            #expect(result.details.contains("approved"))
+        }
+    }
+
     @Test func legacyDownloadPreferencesDoNotGuessMissingDefaults() {
         let check = CISCheck(id: "download", category: "macos", description: "Download")
         let collectors: [(CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult] = [

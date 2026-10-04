@@ -151,122 +151,16 @@ struct MacOSAppSecurityChecks {
         }
     }
     
-    // MARK: - Hardware and Peripheral Security
-    
-    // Check if Camera access is limited to approved apps
+    // Permission audits must not reset grants or infer approval from app counts.
     static func checkCameraAccess(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/tccutil"
-        process.arguments = ["reset", "Camera"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Camera access: \(error)")
-        }
-        process.waitUntilExit()
-        
-        // Check the TCC database
-        let dbProcess = Process()
-        dbProcess.launchPath = "/usr/bin/sqlite3"
-        dbProcess.arguments = ["/Library/Application Support/com.apple.TCC/TCC.db", "SELECT count(*) FROM access WHERE service='kTCCServiceCamera' AND allowed=1"]
-        let dbPipe = Pipe()
-        dbProcess.standardOutput = dbPipe
-        dbProcess.standardError = dbPipe
-        do {
-            try dbProcess.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Camera access database: \(error)")
-        }
-        dbProcess.waitUntilExit()
-        
-        let dbData = dbPipe.fileHandleForReading.readDataToEndOfFile()
-        let dbOutput = String(data: dbData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if let count = Int(dbOutput), count <= 5 {
-            return CheckResult(check: check, status: "pass", details: "Camera access is limited to \(count) approved apps.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Camera access is granted to too many apps (\(dbOutput)).")
-        }
+        MacOSHardwareChecks.checkCameraAccess(check: check)
     }
-    
-    // Check if Microphone access is limited to approved apps
+
     static func checkMicrophoneAccess(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/tccutil"
-        process.arguments = ["reset", "Microphone"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Microphone access: \(error)")
-        }
-        process.waitUntilExit()
-        
-        // Check the TCC database
-        let dbProcess = Process()
-        dbProcess.launchPath = "/usr/bin/sqlite3"
-        dbProcess.arguments = ["/Library/Application Support/com.apple.TCC/TCC.db", "SELECT count(*) FROM access WHERE service='kTCCServiceMicrophone' AND allowed=1"]
-        let dbPipe = Pipe()
-        dbProcess.standardOutput = dbPipe
-        dbProcess.standardError = dbPipe
-        do {
-            try dbProcess.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Microphone access database: \(error)")
-        }
-        dbProcess.waitUntilExit()
-        
-        let dbData = dbPipe.fileHandleForReading.readDataToEndOfFile()
-        let dbOutput = String(data: dbData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if let count = Int(dbOutput), count <= 5 {
-            return CheckResult(check: check, status: "pass", details: "Microphone access is limited to \(count) approved apps.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Microphone access is granted to too many apps (\(dbOutput)).")
-        }
+        MacOSHardwareChecks.checkMicrophoneAccess(check: check)
     }
-    
-    // Check if Full Disk Access is limited to approved apps
+
     static func checkFullDiskAccess(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/tccutil"
-        process.arguments = ["reset", "SystemPolicyAllFiles"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Full Disk Access: \(error)")
-        }
-        process.waitUntilExit()
-        
-        // Check the TCC database
-        let dbProcess = Process()
-        dbProcess.launchPath = "/usr/bin/sqlite3"
-        dbProcess.arguments = ["/Library/Application Support/com.apple.TCC/TCC.db", "SELECT count(*) FROM access WHERE service='kTCCServiceSystemPolicyAllFiles' AND allowed=1"]
-        let dbPipe = Pipe()
-        dbProcess.standardOutput = dbPipe
-        dbProcess.standardError = dbPipe
-        do {
-            try dbProcess.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Full Disk Access database: \(error)")
-        }
-        dbProcess.waitUntilExit()
-        
-        let dbData = dbPipe.fileHandleForReading.readDataToEndOfFile()
-        let dbOutput = String(data: dbData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if let count = Int(dbOutput), count <= 3 {
-            return CheckResult(check: check, status: "pass", details: "Full Disk Access is limited to \(count) approved apps.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Full Disk Access is granted to too many apps (\(dbOutput)).")
-        }
+        MacOSHardwareChecks.checkFullDiskAccess(check: check)
     }
 }
