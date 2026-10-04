@@ -5,152 +5,42 @@ struct MacOSSystemChecks {
     
     // MARK: - System Integrity and Security
     
-    // Check if System Integrity Protection is enabled
-    static func checkSIPEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/csrutil"
-        process.arguments = ["status"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check System Integrity Protection status: \(error)")
+    private static func exactStatus(check: CISCheck, path: String, arguments: [String], enabled: String, disabled: String, scope: String,
+        command: (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult {
+        let evidence = command(path, arguments)
+        let value = evidence.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard evidence.unavailable == nil, evidence.exitCode == 0,
+              evidence.error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              evidence.output.utf8.count <= 16_384, value == enabled || value == disabled else {
+            return CheckResult(check: check, status: "manual", details: "A complete recognized status response was not collected. Failed, unavailable, mixed or unsupported output does not establish protection. " + scope)
         }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("System Integrity Protection status: enabled") {
-            return CheckResult(check: check, status: "pass", details: "System Integrity Protection is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "System Integrity Protection is NOT enabled.")
-        }
+        return CheckResult(check: check, status: value == enabled ? "pass" : "fail", details: value + " " + scope)
     }
-    
-    // Check if Apple Mobile File Integrity is enabled
+
+    static func checkSIPEnabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        exactStatus(check: check, path: "/usr/bin/csrutil", arguments: ["status"], enabled: "System Integrity Protection status: enabled.", disabled: "System Integrity Protection status: disabled.", scope: "This records the reported SIP status; custom configurations need review.", command: command)
+    }
+
     static func checkAMFIEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/nvram"
-        process.arguments = ["-p"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check AMFI status: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        
-        // If amfi_get_out_of_my_way=1 is set, AMFI is disabled
-        if output.contains("amfi_get_out_of_my_way") {
-            return CheckResult(check: check, status: "fail", details: "Apple Mobile File Integrity is NOT enabled.")
-        } else {
-            return CheckResult(check: check, status: "pass", details: "Apple Mobile File Integrity is enabled.")
-        }
+        CheckResult(check: check, status: "manual", details: "Review effective Apple Mobile File Integrity enforcement. The absence of a matching NVRAM argument does not establish runtime enforcement, and a matching argument name alone does not establish its value. A supported effective-state collector was not available; NVRAM contents were not collected.")
     }
-    
-    // Check if Sealed System Volume is enabled
-    static func checkSSVEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/csrutil"
-        process.arguments = ["authenticated-root", "status"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Sealed System Volume status: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("enabled") {
-            return CheckResult(check: check, status: "pass", details: "Sealed System Volume is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Sealed System Volume is NOT enabled.")
-        }
+
+    static func checkSSVEnabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        exactStatus(check: check, path: "/usr/bin/csrutil", arguments: ["authenticated-root", "status"], enabled: "Authenticated Root status: enabled.", disabled: "Authenticated Root status: disabled.", scope: "This records authenticated-root policy, not a complete system-volume seal or connected-volume assessment.", command: command)
     }
-    
-    // Check if Gatekeeper is enabled
-    static func checkGatekeeperEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/sbin/spctl"
-        process.arguments = ["--status"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Gatekeeper status: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("assessments enabled") {
-            return CheckResult(check: check, status: "pass", details: "Gatekeeper is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Gatekeeper is NOT enabled.")
-        }
+
+    static func checkGatekeeperEnabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        exactStatus(check: check, path: "/usr/sbin/spctl", arguments: ["--status"], enabled: "assessments enabled", disabled: "assessments disabled", scope: "This records assessment status, not application acceptance or all policy exceptions.", command: command)
     }
-    
-    // Check if FileVault is enabled
-    static func checkFileVaultEnabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/fdesetup"
-        process.arguments = ["status"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check FileVault status: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if output.contains("FileVault is On") {
-            return CheckResult(check: check, status: "pass", details: "FileVault is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "FileVault is NOT enabled.")
-        }
+
+    static func checkFileVaultEnabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        exactStatus(check: check, path: "/usr/bin/fdesetup", arguments: ["status"], enabled: "FileVault is On.", disabled: "FileVault is Off.", scope: "This records the reported startup-volume FileVault status; other volumes, key escrow and managed enforcement were not assessed. Conversion in progress requires review.", command: command)
     }
-    
-    // Check if Secure Keyboard Entry in Terminal.app is enabled
-    static func checkSecureKeyboardEntry(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.Terminal", "SecureKeyboardEntry"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            return CheckResult(check: check, status: "error", details: "Failed to check Secure Keyboard Entry: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if output == "1" {
-            return CheckResult(check: check, status: "pass", details: "Secure Keyboard Entry in Terminal.app is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Secure Keyboard Entry in Terminal.app is NOT enabled.")
-        }
+
+    static func checkSecureKeyboardEntry(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.Terminal", key: "SecureKeyboardEntry", expected: true, command: command)
     }
-    
+
     // MARK: - Security Auditing
     
     // Check if security auditing is enabled

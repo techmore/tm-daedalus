@@ -13,6 +13,36 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacySystemStatusRequiresExactSuccessfulEvidence() {
+        let check = CISCheck(id: "system", category: "macos", description: "Protection")
+        let collectors: [(String, [String], String, String, (CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult)] = [
+            ("/usr/bin/csrutil", ["status"], "System Integrity Protection status: enabled.", "System Integrity Protection status: disabled.", { MacOSSystemChecks.checkSIPEnabled(check: $0, command: $1) }),
+            ("/usr/bin/csrutil", ["authenticated-root", "status"], "Authenticated Root status: enabled.", "Authenticated Root status: disabled.", { MacOSSystemChecks.checkSSVEnabled(check: $0, command: $1) }),
+            ("/usr/sbin/spctl", ["--status"], "assessments enabled", "assessments disabled", { MacOSSystemChecks.checkGatekeeperEnabled(check: $0, command: $1) }),
+            ("/usr/bin/fdesetup", ["status"], "FileVault is On.", "FileVault is Off.", { MacOSSystemChecks.checkFileVaultEnabled(check: $0, command: $1) })]
+        for (path, arguments, enabled, disabled, collect) in collectors {
+            func status(_ evidence: MacOSChecks.CommandEvidence) -> String {
+                collect(check) { actualPath, actualArguments in
+                    #expect(actualPath == path); #expect(actualArguments == arguments)
+                    return evidence
+                }.status
+            }
+            #expect(status(.init(output: enabled + "\n")) == "pass")
+            #expect(status(.init(output: disabled)) == "fail")
+            for evidence in [MacOSChecks.CommandEvidence(), .init(output: "not " + enabled), .init(output: enabled + "\n" + disabled), .init(output: enabled, exitCode: 1), .init(output: enabled, error: "failed"), .init(output: enabled, unavailable: "timeout")] {
+                #expect(status(evidence) == "manual")
+            }
+        }
+    }
+
+    @Test func legacyAmfiCannotInferRuntimeEnforcementFromMissingArgument() {
+        let check = CISCheck(id: "amfi", category: "macos", description: "AMFI")
+        let result = MacOSSystemChecks.checkAMFIEnabled(check: check)
+        #expect(result.status == "manual")
+        #expect(result.details.contains("NVRAM contents were not collected"))
+        #expect(MacOSSystemChecks.checkSecureKeyboardEntry(check: check, command: { _, _ in .init(output: "0", exitCode: 1) }).status == "manual")
+    }
+
     @Test func safariPrivacyDoesNotSubstituteUnrelatedPreferences() {
         let check = CISCheck(id: "privacy", category: "macos", description: "Privacy")
         for result in [MacOSPrivacyChecks.checkSpotlightSuggestionsDisabled(check: check),
