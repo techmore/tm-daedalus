@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — production website queue completion and cancellation
+
+Actual queued audit **51** completed with warnings at **07:47:52.706903 UTC**, after **601,780 ms** of collection. Six observations were retained. The single newly recorded comparison is an uncommon x-origin-cache header observed at /trace.axd; it is infrastructure metadata, not proof of exposed ASP.NET trace data. Coverage remains unconfirmed, test exhaustion is not established, and missing observations do not prove resolution. One persistent changes_and_warnings notice was verified against its saved run. Private receipt: /data/codex-nikto-queue-validation-20261004.json.
+
+Source **41470b1bce7061ece24d2fc6848fb861ad4bce7b** is deployed with separate timestamps and queued cancellation. Internal/public health checks and off-host backup verification passed. Actual queued audit **52** was cancelled before collection, repeat cancellation remained cancelled, exactly one cancellation audit entry was saved, and collection_started_at remains null after worker polling. Legacy audit 51 retained null new timestamps. Private receipt: /data/codex-nikto-cancellation-validation-20261004.json. Backend CI 37186886685 passed; the preceding timestamp CI failure was the legacy snapshot expectation corrected in this source. The local full suite passed **478 tests and 96 subtests**. Browser pixel review and other full-project gaps remain open.
+
+
 ## October 4, 2026 — queued website audit cancellation
 
 Workspace admins can cancel a queued Nikto audit through a scoped API and a history-row action. A conditional queued-to-cancelled update races safely with worker claiming; already-started collection returns HTTP 409. Cancelled attempts keep their original requester, timestamps and history, while the cancelling actor is recorded in external_check.cancelled. Repeated cancellation is idempotent and does not duplicate the audit entry. Current admin membership is required, including when domain authorization is no longer available. No new confirmation popup is used.
