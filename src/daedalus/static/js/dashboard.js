@@ -3077,7 +3077,7 @@
     var node = document.getElementById(id);
     if (!node) return;
     if (!run) { text(node, label + ": no assessment saved yet."); return; }
-    if (run.status === "failed" || run.status === "running") {
+    if (run.status === "failed" || run.status === "running" || run.status === "queued") {
       text(node, label + ": latest attempt " + run.status + ". Review the audit details below."); return;
     }
     var snapshot = run.snapshot || {};
@@ -3280,13 +3280,13 @@
       text(document.getElementById("web-nikto-status"), niktoHistory.runs.length ? "Latest: " + String(niktoHistory.runs[0].status).replace(/_/g, " ") : "No Nikto run yet");
       document.getElementById("older-nikto").classList.toggle("hidden", !niktoHistory.hasMore);
       var button = document.getElementById("run-nikto");
-      if (button) button.disabled = !controlsEnabled || niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "running"; });
+      if (button) button.disabled = !controlsEnabled || niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "queued" || run.status === "running"; });
     } catch (error) { text(document.getElementById("web-nikto-feedback"), error.message); }
   }
   var niktoButton = document.getElementById("run-nikto");
   if (niktoButton) niktoButton.addEventListener("click", async function () {
     niktoHistory.busy = true; niktoButton.disabled = true;
-    text(document.getElementById("web-nikto-feedback"), "Nikto is running. History updates while the audit is active; allow up to ten minutes.");
+    text(document.getElementById("web-nikto-feedback"), "Submitting website audit. The saved queue continues after you leave this page; collection may take ten minutes.");
     window.setTimeout(function () { loadNikto(); }, 500);
     try {
       var result = await postJson("/api/external-checks/web-nikto/run");

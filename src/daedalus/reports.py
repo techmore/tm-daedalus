@@ -456,6 +456,7 @@ def _overview_run(check: dict[str, Any]) -> tuple[str, str]:
         "failed": "Failed",
         "running": "In progress",
         "queued": "Queued",
+        "queued": "Queued",
     }.get(status, status.replace("_", " ").title())
     details = f"Run #{run.get('id', 'unknown')} · {status_label}"
     if run.get("completed_at"):
@@ -670,9 +671,11 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
         run = nikto.get("run") or nikto.get("latest_attempt") or {}
         snapshot = run.get("snapshot") or {}
         run_time = run.get("completed_at") or run.get("started_at")
-        time_label = "Completed" if run.get("completed_at") else "Started"
+        time_label = "Completed" if run.get("completed_at") else ("Queued" if run.get("status") == "queued" else "Started")
         status_label = str(run.get("status") or "unknown").replace("_", " ")
         story.append(_paragraph(f"Run #{run.get('id')} · {status_label} · {time_label} {_time_text(run_time)}", styles["small"]))
+        if run.get("status") == "queued":
+            story.append(_paragraph("This audit was queued when the report snapshot was captured. Collection has not started and no assessment is available in this snapshot.", styles["body"]))
         if run.get("status") == "running":
             story.append(_paragraph("This audit was still running when the report snapshot was captured. Findings are not available in this snapshot; generate a new report after it finishes.", styles["body"]))
         story.append(_paragraph("Standard HTTPS tests excluding denial-of-service tests. Test exhaustion is not confirmed; missing findings do not prove resolution.", styles["body"]))

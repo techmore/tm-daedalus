@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 4, 2026 — persisted website audit queue
+
+Nikto submissions now save a queued ExternalCheckRun and return HTTP 202 before collection. A dedicated server worker atomically claims saved jobs in order, rechecks the requester’s current approved admin role, domain identity and ownership/override authorization, then stores the result and publishes its update. Enqueue uses SQLite write serialization, rejects duplicate queued/running workspace audits, and bounds the global pending queue to 25. Queued rows survive startup recovery; running rows interrupted by process loss become failed with a persistent workspace notice. Interrupted active scans are not automatically repeated.
+
+The website UI disables another submission while queued or running. Snapshot PDFs label queued work explicitly and do not claim collection has started. Fixtures prove prompt response without collector invocation, duplicate rejection, preservation of queued rows through recovery, single claim, and refusal after admin-role removal. The preceding full suite passed 467 tests and 96 subtests; queued-PDF wording received an additional focused check. Production queue execution is pending validation.
+
+
 ## October 4, 2026 — production report library validation
 
 Production source **1bb372ec563e4ee235c3bb7bd400508db5321023** (dashboard asset 076) groups domain health, internal network, and Meraki/endpoint PDFs before report creation controls. Authenticated production HTML and JavaScript checks confirmed the new library and ordering. Latest completed PDFs downloaded successfully for all four topics: scanner **32** (5,970 bytes), Meraki **31** (10,510), endpoint **30** (24,923), external posture **28** (17,419). Private receipt: /data/codex-report-library-validation-20261004.json. This verifies served structure and downloads; browser visual review remains open.

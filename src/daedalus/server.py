@@ -382,9 +382,15 @@ async def lifespan(_app: FastAPI):
     recover_interrupted_external_checks()
     recover_interrupted_external_check_schedules()
     scheduler_task = asyncio.create_task(external_check_scheduler())
+    website_task = asyncio.create_task(website_audit_worker())
     try:
         yield
     finally:
+        website_task.cancel()
+        try:
+            await website_task
+        except asyncio.CancelledError:
+            pass
         scheduler_task.cancel()
         try:
             await scheduler_task
@@ -1373,68 +1379,85 @@ def _execute_external_check(
     user_id: int | None,
     check_type: str,
     trigger_source: str,
+    enqueue_only: bool = False,
+    reserved_run_id: int | None = None,
 ) -> dict[str, Any]:
     """Persist a check run and its stable result before returning to the request."""
-    with SessionLocal() as db:
-        membership = None
-        if user_id is not None:
-            membership = db.scalar(
-                select(Membership).where(
-                    Membership.organization_id == organization_id,
-                    Membership.user_id == user_id,
-                    Membership.role == "admin",
-                    Membership.status == "approved",
-                )
-            )
-        organization = db.get(Organization, organization_id)
-        if organization is None or (user_id is not None and membership is None):
-            raise HTTPException(status_code=403, detail="Workspace admin role required")
-        if user_id is None and trigger_source != "schedule":
-            raise HTTPException(status_code=403, detail="Scheduled checks require an internal actor")
-        if check_type in {"web-active", "web-nikto"}:
-            if user_id is None or not workspace_controls_available(db, organization):
-                raise HTTPException(status_code=403, detail="Active website checks require domain verification or an active override")
-            if db.scalar(select(ExternalCheckRun.id).where(
-                ExternalCheckRun.organization_id == organization_id,
-                ExternalCheckRun.check_type == check_type,
-                ExternalCheckRun.status == "running",
-            ).limit(1)) is not None:
-                raise HTTPException(status_code=409, detail="An active website check is already running for this workspace.")
-        if trigger_source == "schedule" and organization.verification_status != "verified":
-            raise HTTPException(status_code=403, detail="Scheduled checks require a verified domain")
-        if trigger_source == "schedule":
-            schedule = db.scalar(
-                select(ExternalCheckSchedule).where(
-                    ExternalCheckSchedule.organization_id == organization_id,
-                    ExternalCheckSchedule.check_type == check_type,
-                    ExternalCheckSchedule.enabled.is_(True),
-                )
-            )
-            if schedule is None:
-                raise HTTPException(status_code=409, detail="The recurring check schedule was disabled.")
-        run = ExternalCheckRun(
-            organization_id=organization.id,
-            check_type=check_type,
-            domain=organization.domain,
-            status="running",
-            trigger_source=trigger_source,
-            triggered_by_user_id=user_id,
-            started_at=utcnow(),
-            snapshot=None,
-            change_count=0,
-        )
-        db.add(run)
-        db.flush()
-        if check_type in {"web-active", "web-nikto"}:
-            audit(db, organization_id, user_id, "external_check.queued", {
-                "run_id": run.id, "check_type": check_type, "domain": organization.domain,
-                "source": trigger_source,
-            })
-        db.commit()
-        db.refresh(run)
-        run_id = run.id
-        domain = organization.domain
+    if reserved_run_id is not None:
+        with SessionLocal() as db:
+            run = db.get(ExternalCheckRun, reserved_run_id)
+            if run is None or run.status != "running" or run.check_type != check_type or run.organization_id != organization_id or run.triggered_by_user_id != user_id:
+                raise HTTPException(status_code=409, detail="Queued audit claim is no longer valid")
+            run_id, domain = run.id, run.domain
         started_clock = time.perf_counter()
+    else:
+        with SessionLocal() as db:
+            if enqueue_only:
+                db.execute(text("BEGIN IMMEDIATE"))
+                pending = db.scalar(select(func.count(ExternalCheckRun.id)).where(ExternalCheckRun.check_type == "web-nikto", ExternalCheckRun.status.in_(("queued", "running"))))
+                if pending >= 25:
+                    raise HTTPException(status_code=429, detail="Website audit queue is full. Try again later.")
+            membership = None
+            if user_id is not None:
+                membership = db.scalar(
+                    select(Membership).where(
+                        Membership.organization_id == organization_id,
+                        Membership.user_id == user_id,
+                        Membership.role == "admin",
+                        Membership.status == "approved",
+                    )
+                )
+            organization = db.get(Organization, organization_id)
+            if organization is None or (user_id is not None and membership is None):
+                raise HTTPException(status_code=403, detail="Workspace admin role required")
+            if user_id is None and trigger_source != "schedule":
+                raise HTTPException(status_code=403, detail="Scheduled checks require an internal actor")
+            if check_type in {"web-active", "web-nikto"}:
+                if user_id is None or not workspace_controls_available(db, organization):
+                    raise HTTPException(status_code=403, detail="Active website checks require domain verification or an active override")
+                if db.scalar(select(ExternalCheckRun.id).where(
+                    ExternalCheckRun.organization_id == organization_id,
+                    ExternalCheckRun.check_type == check_type,
+                    ExternalCheckRun.status.in_(("queued", "running")),
+                ).limit(1)) is not None:
+                    raise HTTPException(status_code=409, detail="An active website check is already running for this workspace.")
+            if trigger_source == "schedule" and organization.verification_status != "verified":
+                raise HTTPException(status_code=403, detail="Scheduled checks require a verified domain")
+            if trigger_source == "schedule":
+                schedule = db.scalar(
+                    select(ExternalCheckSchedule).where(
+                        ExternalCheckSchedule.organization_id == organization_id,
+                        ExternalCheckSchedule.check_type == check_type,
+                        ExternalCheckSchedule.enabled.is_(True),
+                    )
+                )
+                if schedule is None:
+                    raise HTTPException(status_code=409, detail="The recurring check schedule was disabled.")
+            run = ExternalCheckRun(
+                organization_id=organization.id,
+                check_type=check_type,
+                domain=organization.domain,
+                status="queued" if enqueue_only else "running",
+                trigger_source=trigger_source,
+                triggered_by_user_id=user_id,
+                started_at=utcnow(),
+                snapshot=None,
+                change_count=0,
+            )
+            db.add(run)
+            db.flush()
+            if check_type in {"web-active", "web-nikto"}:
+                audit(db, organization_id, user_id, "external_check.queued", {
+                    "run_id": run.id, "check_type": check_type, "domain": organization.domain,
+                    "source": trigger_source,
+                })
+            db.commit()
+            db.refresh(run)
+            run_id = run.id
+            domain = organization.domain
+            started_clock = time.perf_counter()
+            if enqueue_only:
+                return serialize_external_run(run, db.get(User, user_id))
 
     try:
         if check_type in {"web-active", "web-nikto"}:
@@ -1445,7 +1468,7 @@ def _execute_external_check(
                     Membership.user_id == user_id, Membership.role == "admin",
                     Membership.status == "approved",
                 ))
-                if current_organization is None or approved_admin is None or not workspace_controls_available(db, current_organization):
+                if current_organization is None or current_organization.domain != domain or approved_admin is None or not workspace_controls_available(db, current_organization):
                     raise PermissionError("Active website authorization expired before collection")
             snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
@@ -1637,6 +1660,38 @@ def execute_external_check(
     finally:
         with _external_check_lock:
             _active_external_checks.discard(key)
+
+
+def process_next_website_audit() -> tuple[int, dict[str, Any]] | None:
+    with SessionLocal() as db:
+        run = db.scalar(select(ExternalCheckRun).where(
+            ExternalCheckRun.check_type == "web-nikto", ExternalCheckRun.status == "queued",
+        ).order_by(ExternalCheckRun.id).limit(1))
+        if run is None:
+            return None
+        claimed = db.execute(update(ExternalCheckRun).where(
+            ExternalCheckRun.id == run.id, ExternalCheckRun.status == "queued",
+        ).values(status="running"))
+        if claimed.rowcount != 1:
+            db.rollback()
+            return None
+        org_id, user_id, run_id = run.organization_id, run.triggered_by_user_id, run.id
+        db.commit()
+    result = _execute_external_check(org_id, user_id, "web-nikto", "manual", reserved_run_id=run_id)
+    return org_id, result
+
+
+async def website_audit_worker() -> None:
+    while True:
+        try:
+            completed = await run_in_threadpool(process_next_website_audit)
+            if completed is not None:
+                await publish_external_check_result(*completed)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Website audit worker failed")
+        await asyncio.sleep(2)
 
 
 def claim_due_external_check_schedules(limit: int = 25) -> list[dict[str, Any]]:
@@ -4791,6 +4846,9 @@ async def start_external_check(
     user, organization, _ = get_org_context(request, db, admin=True)
     if check_type in {"web-active", "web-nikto"} and not workspace_controls_available(db, organization):
         raise HTTPException(status_code=403, detail="Active website checks require domain verification or an active override")
+    if check_type == "web-nikto":
+        result = await run_in_threadpool(_execute_external_check, organization.id, user.id, check_type, "manual", True)
+        return JSONResponse(result, status_code=202)
     result = await run_in_threadpool(
         execute_external_check, organization.id, user.id, check_type
     )

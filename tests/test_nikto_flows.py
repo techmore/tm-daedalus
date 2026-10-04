@@ -1,4 +1,5 @@
 import unittest
+import json
 from unittest.mock import patch
 from sqlalchemy import select
 from daedalus import server
@@ -17,7 +18,46 @@ class NiktoFlowsTests(unittest.TestCase):
     def run_check(self, snapshot=None):
         with patch.object(server,'run_nikto_check',return_value=snapshot or self.snapshot()) as collector:
             response=self.client.post('/api/external-checks/web-nikto/run')
+            if response.status_code == 202:
+                completed = server.process_next_website_audit()
+                response.status_code = 200
+                response._content = json.dumps(completed[1]).encode()
         return response,collector
+
+    def test_queue_returns_before_collection_and_prevents_duplicate_requests(self):
+        with patch.object(server, 'run_nikto_check', return_value=self.snapshot()) as collector:
+            response = self.client.post('/api/external-checks/web-nikto/run')
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(response.json()['status'], 'queued')
+            collector.assert_not_called()
+            self.assertEqual(self.client.post('/api/external-checks/web-nikto/run').status_code, 409)
+            self.assertEqual(server.recover_interrupted_external_checks(), 0)
+            completed = server.process_next_website_audit()
+            self.assertEqual(completed[1]['id'], response.json()['id'])
+            self.assertEqual(completed[1]['status'], 'completed_with_warnings')
+            collector.assert_called_once()
+            self.assertIsNone(server.process_next_website_audit())
+
+    def test_queue_rechecks_admin_authorization_before_collection(self):
+        response = self.client.post('/api/external-checks/web-nikto/run')
+        self.assertEqual(response.status_code, 202)
+        org_id,user_id=self.context()
+        with self.session_factory() as db:
+            db.scalar(select(Membership).where(Membership.organization_id==org_id,Membership.user_id==user_id)).role='user'
+            db.commit()
+        with patch.object(server, 'run_nikto_check') as collector:
+            completed = server.process_next_website_audit()
+        collector.assert_not_called()
+        self.assertEqual(completed[1]['status'], 'failed')
+
+    def test_queued_pdf_does_not_describe_collection_as_started(self):
+        from daedalus import reports
+        with patch.object(reports, '_paragraph', wraps=reports._paragraph) as paragraphs:
+            pdf = reports.build_external_posture_pdf({'domain':'cybersecuritypilot.org','checks':{'web-nikto':{'latest_attempt':{'id':1,'status':'queued','started_at':'2026-10-04T04:11:44Z'}}}})
+        values = [str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertTrue(pdf.startswith(b'%PDF-'))
+        self.assertTrue(any('Queued Oct 4' in value for value in values))
+        self.assertTrue(any('Collection has not started' in value for value in values))
 
     def test_verified_run_is_saved_with_actor_and_unknown_coverage(self):
         response,collector=self.run_check()
