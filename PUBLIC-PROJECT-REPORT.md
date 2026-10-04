@@ -65,3 +65,9 @@ Release 055 puts local and portal-issued Linux restarts under the shared lifecyc
 The backup manifest hashes the exact bounded bytes consumed by the tar writer through one no-follow regular-file descriptor. Regression checks cover replacement paths, file growth, truncation, symlinks and FIFOs. Source and Python 3.11/3.12 CI passed 401 tests and 79 subtests.
 
 After deployment, a new production backup was copied off-host and restored into a temporary private directory. SQLite integrity passed and all 27 manifest files matched their sizes and hashes, including 26 PDFs. This snapshot had zero scanner artifacts; artifact restoration remains covered by fixtures. The temporary restore was removed. Replacing live data and independent backup replication remain open.
+
+## Running portal recovery rehearsal
+
+[Managed Linux CI run 37173669066](https://github.com/techmore/tm-daedalus/actions/runs/37173669066) backed up its running isolated portal, made a visible post-backup state change, stopped the owned portal, activated the restored data directory and started a new process. The earlier state was restored; saved scan events and PDF bytes were unchanged, readiness recovered, and the scanner authenticated a fresh heartbeat. Cleanup completed. The scan used only an ephemeral loopback listener. No scanner artifact download existed in this run, so artifact recovery remains covered by fixtures. Production data was not replaced; production remains on Release 056. The current source suite and Python CI run 37173669119 passed 401 tests and 79 subtests.
+
+Legacy source review also found an optional Nikto execution path in the original website audit script. The current five-path exposure check does not replace that broader audit; integrating its reporting and authorization flow remains product work.
