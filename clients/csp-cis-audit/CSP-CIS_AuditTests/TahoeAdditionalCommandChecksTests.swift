@@ -13,6 +13,36 @@ struct TahoeAdditionalCommandChecksTests {
         return MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: command, readPreference: { _, _ in nil }).status
     }
 
+    @Test func legacyPrivacyRequiresExplicitReadEvidence() {
+        let check = CISCheck(id: "privacy", category: "macos", description: "Privacy")
+        let collectors: [(String, String, (CISCheck, (String, [String]) -> MacOSChecks.CommandEvidence) -> CheckResult)] = [
+            ("/var/db/locationd/Library/Preferences/ByHost/com.apple.locationd", "LocationServicesEnabled", { check, command in MacOSUpdateChecks.checkLocationServicesDisabled(check: check, command: command) }),
+            ("/Library/Application Support/CrashReporter/DiagnosticMessagesHistory.plist", "AutoSubmit", { check, command in MacOSUpdateChecks.checkDiagnosticDataDisabled(check: check, command: command) }),
+            ("com.apple.AdLib", "allowApplePersonalizedAdvertising", { check, command in MacOSUpdateChecks.checkLimitAdTracking(check: check, command: command) }),
+            ("com.apple.assistant.support", "Assistant Enabled", { check, command in MacOSUpdateChecks.checkSiriDisabled(check: check, command: command) }),
+            ("com.apple.HIToolbox", "AppleDictationAutoEnable", { check, command in MacOSUpdateChecks.checkDictationDisabled(check: check, command: command) }),
+            ("com.apple.spotlight", "WebSearchEnabled", { check, command in MacOSUpdateChecks.checkSpotlightSuggestionsDisabled(check: check, command: command) }),
+        ]
+        for (domain, key, collect) in collectors {
+            func result(_ evidence: MacOSChecks.CommandEvidence) -> CheckResult {
+                collect(check) { path, arguments in
+                    #expect(path == "/usr/bin/defaults")
+                    #expect(arguments == ["read", domain, key])
+                    return evidence
+                }
+            }
+            #expect(result(.init(output: "0\n")).status == "pass")
+            #expect(result(.init(output: "1")).status == "fail")
+            #expect(result(.init(output: "0")).details.contains("local preference evidence"))
+            for output in ["", "false", "true", "-1", "2", "0\n1", "does not exist"] {
+                #expect(result(.init(output: output)).status == "manual")
+            }
+            for evidence in [MacOSChecks.CommandEvidence(output: "0", exitCode: 1), .init(output: "0", error: "denied"), .init(output: "0", unavailable: "timeout")] {
+                #expect(result(evidence).status == "manual")
+            }
+        }
+    }
+
     @Test func legacyUpdateQueryRequiresCompletedRecognizedEvidence() {
         let check = CISCheck(id: "updates", category: "macos", description: "Updates")
         func status(_ evidence: MacOSChecks.CommandEvidence) -> String {

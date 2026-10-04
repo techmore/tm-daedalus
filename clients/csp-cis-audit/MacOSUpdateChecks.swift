@@ -84,158 +84,32 @@ struct MacOSUpdateChecks {
     // MARK: - Privacy Settings
     
     // Check if Location Services is disabled
-    static func checkLocationServicesDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/var/db/locationd/Library/Preferences/ByHost/com.apple.locationd", "LocationServicesEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means Location Services is not configured
-            return CheckResult(check: check, status: "error", details: "Failed to check Location Services: \(error)")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" {
-            return CheckResult(check: check, status: "pass", details: "Location Services is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Location Services is ENABLED.")
-        }
+    static func checkLocationServicesDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/var/db/locationd/Library/Preferences/ByHost/com.apple.locationd", key: "LocationServicesEnabled", expected: false, command: command)
     }
     
     // Check if Sending diagnostic and usage data to Apple is disabled
-    static func checkDiagnosticDataDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory.plist", "AutoSubmit"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "pass", details: "Sending diagnostic data appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Sending diagnostic and usage data to Apple is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Sending diagnostic and usage data to Apple is ENABLED.")
-        }
+    static func checkDiagnosticDataDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory.plist", key: "AutoSubmit", expected: false, command: command)
     }
     
     // Check if Limit Ad Tracking is enabled
-    static func checkLimitAdTracking(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "/Users/\(NSUserName())/Library/Preferences/com.apple.AdLib", "allowApplePersonalizedAdvertising"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "pass", details: "Limit Ad Tracking appears to be enabled (default).")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" {
-            return CheckResult(check: check, status: "pass", details: "Limit Ad Tracking is enabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Limit Ad Tracking is NOT enabled.")
-        }
+    static func checkLimitAdTracking(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.AdLib", key: "allowApplePersonalizedAdvertising", expected: false, command: command)
     }
     
     // Check if Siri is disabled
-    static func checkSiriDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.assistant.support", "Assistant Enabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means Siri is not enabled
-            return CheckResult(check: check, status: "pass", details: "Siri appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Siri is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Siri is ENABLED.")
-        }
+    static func checkSiriDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.assistant.support", key: "Assistant Enabled", expected: false, command: command)
     }
     
     // Check if Dictation is disabled
-    static func checkDictationDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.HIToolbox", "AppleDictationAutoEnable"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means Dictation is not enabled
-            return CheckResult(check: check, status: "pass", details: "Dictation appears to be disabled.")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" || output.isEmpty {
-            return CheckResult(check: check, status: "pass", details: "Dictation is disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Dictation is ENABLED.")
-        }
+    static func checkDictationDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.HIToolbox", key: "AppleDictationAutoEnable", expected: false, command: command)
     }
     
     // Check if Spotlight Suggestions are disabled
-    static func checkSpotlightSuggestionsDisabled(check: CISCheck) -> CheckResult {
-        let process = Process()
-        process.launchPath = "/usr/bin/defaults"
-        process.arguments = ["read", "com.apple.spotlight", "WebSearchEnabled"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-        } catch {
-            // If the command fails, it likely means the setting doesn't exist
-            return CheckResult(check: check, status: "fail", details: "Spotlight Suggestions appears to be enabled (default).")
-        }
-        process.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        if output == "0" {
-            return CheckResult(check: check, status: "pass", details: "Spotlight Suggestions are disabled.")
-        } else {
-            return CheckResult(check: check, status: "fail", details: "Spotlight Suggestions are ENABLED.")
-        }
+    static func checkSpotlightSuggestionsDisabled(check: CISCheck, command: (String, [String]) -> MacOSChecks.CommandEvidence = MacOSChecks.readCommand) -> CheckResult {
+        MacOSChecks.legacyBooleanPreference(check: check, domain: "com.apple.spotlight", key: "WebSearchEnabled", expected: false, command: command)
     }
 }
