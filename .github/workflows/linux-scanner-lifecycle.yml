@@ -1,0 +1,56 @@
+name: Test Linux scanner lifecycle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/daedalus/agent_bundle/systemd_service.py'
+      - 'src/daedalus/agent_bundle/manage-service-linux.sh'
+      - 'scripts/validate_linux_lifecycle.py'
+      - '.github/workflows/linux-scanner-lifecycle.yml'
+  pull_request:
+    paths:
+      - 'src/daedalus/agent_bundle/systemd_service.py'
+      - 'src/daedalus/agent_bundle/manage-service-linux.sh'
+      - 'scripts/validate_linux_lifecycle.py'
+      - '.github/workflows/linux-scanner-lifecycle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lifecycle:
+    name: Real systemd uninstall and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check shell helper syntax
+        run: sh -n src/daedalus/agent_bundle/manage-service-linux.sh
+      - name: Verify lifecycle with a disposable user and inert processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home --shell /bin/bash daedalusqa
+          qa_uid=$(id -u daedalusqa)
+          cleanup() {
+            sudo systemctl stop "user@${qa_uid}.service" || true
+            sudo loginctl disable-linger daedalusqa || true
+            sudo userdel --remove daedalusqa || true
+          }
+          trap cleanup EXIT
+          sudo loginctl enable-linger daedalusqa
+          sudo systemctl start "user@${qa_uid}.service"
+          sudo install -m 644 scripts/validate_linux_lifecycle.py /home/daedalusqa/validate_linux_lifecycle.py
+          sudo install -m 644 src/daedalus/agent_bundle/systemd_service.py /home/daedalusqa/systemd_service.py
+          sudo runuser -u daedalusqa -- env \
+            XDG_RUNTIME_DIR="/run/user/${qa_uid}" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${qa_uid}/bus" \
+            python3 /home/daedalusqa/validate_linux_lifecycle.py \
+              --helper /home/daedalusqa/systemd_service.py

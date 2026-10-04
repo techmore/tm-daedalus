@@ -423,6 +423,209 @@ class LinuxSystemdUnitFixtures(unittest.TestCase):
             agent_config=str(self.config_dir / 'managed-agent.json'), port=9000,
         )
 
+    def lifecycle_executor(self):
+        states = {name: {'LoadState': 'loaded', 'ActiveState': 'active', 'UnitFileState': 'enabled', 'MainPID': '123', 'FragmentPath': str(self.unit_dir / name), 'DropInPaths': ''}
+                  for name in (systemd_service.NMAPUI_UNIT, systemd_service.BRIDGE_UNIT)}
+        calls = []
+
+        def execute(argv, **kwargs):
+            calls.append(argv)
+            self.assertEqual(argv[:2], [systemd_service.SYSTEMCTL, '--user'])
+            self.assertEqual(kwargs['timeout'], 30)
+            action = argv[2]
+            if action == 'daemon-reload':
+                for name, state in states.items():
+                    state['LoadState'] = 'loaded' if (self.unit_dir / name).exists() else 'not-found'
+                    if state['LoadState'] == 'not-found':
+                        state['UnitFileState'] = ''
+                        state['FragmentPath'] = ''
+            elif action == 'disable':
+                states[argv[-1]].update(ActiveState='inactive', UnitFileState='disabled', MainPID='0')
+            elif action == 'enable':
+                states[argv[-1]].update(LoadState='loaded', ActiveState='active', UnitFileState='enabled', MainPID='123', FragmentPath=str(self.unit_dir / argv[-1]))
+            output = '\n'.join(f'{key}={value}' for key, value in states[argv[-1]].items()) if action == 'show' else ''
+            return subprocess.CompletedProcess(argv, 0, output, '')
+
+        return execute, calls, states
+
+    def install_lifecycle_fixture(self):
+        with patch.dict(os.environ, {'NMAPUI_USERNAME': 'synthetic-user', 'NMAPUI_PASSWORD': 'synthetic-secret'}):
+            systemd_service.install(self.args)
+        enrollment = self.config_dir / 'managed-agent.json'
+        enrollment.write_bytes(b'private enrollment fixture')
+        enrollment.chmod(0o600)
+        spool = self.root / 'data with spaces/daedalus/scanner-bridge/spool/event.json'
+        spool.parent.mkdir(parents=True)
+        spool.write_bytes(b'saved scanner evidence')
+        unrelated = self.unit_dir / 'unrelated.service'
+        unrelated.write_bytes(b'unrelated unit')
+        return {path: path.read_bytes() for path in (enrollment, spool, unrelated, self.config_dir / systemd_service.ENV_FILE, self.config_dir / systemd_service.STATE_FILE)}
+
+    def test_uninstall_restore_preserves_enrollment_evidence_and_exact_private_units(self):
+        retained = self.install_lifecycle_fixture()
+        units = {name: (self.unit_dir / name).read_bytes() for name in (systemd_service.NMAPUI_UNIT, systemd_service.BRIDGE_UNIT)}
+        execute, calls, states = self.lifecycle_executor()
+        removed = systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+        self.assertTrue(removed['data_preserved'])
+        self.assertFalse(any((self.unit_dir / name).exists() for name in units))
+        self.assertEqual([argv[-1] for argv in calls if argv[2] == 'disable'], [systemd_service.BRIDGE_UNIT, systemd_service.NMAPUI_UNIT])
+        backup = self.config_dir / systemd_service.RESUME_FILE
+        self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn('synthetic-secret', backup.read_text())
+        self.assertNotIn('private enrollment', backup.read_text())
+        restored = systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=execute)
+        self.assertEqual([argv[-1] for argv in calls if argv[2] == 'enable'], [systemd_service.NMAPUI_UNIT, systemd_service.BRIDGE_UNIT])
+        self.assertTrue(all(row['active_state'] == 'active' for row in restored['services']))
+        for name, contents in units.items():
+            path = self.unit_dir / name
+            self.assertEqual(path.read_bytes(), contents)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        for path, contents in retained.items():
+            self.assertEqual(path.read_bytes(), contents)
+        self.assertTrue(systemd_service.verify(self.unit_dir, self.config_dir)['verified'])
+
+    def test_failed_disable_retains_descriptors_and_retry_completes(self):
+        retained = self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+
+        def fail_second_disable(argv, **kwargs):
+            if argv[2] == 'disable' and argv[-1] == systemd_service.NMAPUI_UNIT:
+                return subprocess.CompletedProcess(argv, 1, '', 'synthetic-secret')
+            return execute(argv, **kwargs)
+
+        with self.assertRaisesRegex(ValueError, 'action failed') as raised:
+            systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=fail_second_disable)
+        self.assertNotIn('synthetic-secret', str(raised.exception))
+        self.assertTrue(all((self.unit_dir / name).exists() for name in states))
+        self.assertTrue((self.config_dir / systemd_service.RESUME_FILE).exists())
+        systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+        for path, contents in retained.items():
+            self.assertEqual(path.read_bytes(), contents)
+
+    def test_unconfirmed_stop_or_disable_does_not_remove_units(self):
+        self.install_lifecycle_fixture()
+        for field, value in [('ActiveState', 'deactivating'), ('MainPID', '123'), ('UnitFileState', 'enabled')]:
+            with self.subTest(field=field):
+                execute, calls, states = self.lifecycle_executor()
+
+                def unconfirmed(argv, **kwargs):
+                    result = execute(argv, **kwargs)
+                    if argv[2] == 'disable':
+                        states[argv[-1]][field] = value
+                    return result
+
+                with self.assertRaisesRegex(ValueError, 'stop/disable is unconfirmed'):
+                    systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=unconfirmed)
+                self.assertTrue(all((self.unit_dir / name).exists() for name in states))
+
+    def test_interrupted_descriptor_removal_can_resume_without_new_enrollment(self):
+        retained = self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        original_unlink = Path.unlink
+        nmapui = self.unit_dir / systemd_service.NMAPUI_UNIT
+
+        def interrupt(path, *args, **kwargs):
+            if path == nmapui:
+                raise OSError('fixture disk error')
+            return original_unlink(path, *args, **kwargs)
+
+        with patch.object(Path, 'unlink', interrupt):
+            with self.assertRaisesRegex(OSError, 'fixture disk error'):
+                systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+        self.assertFalse((self.unit_dir / systemd_service.BRIDGE_UNIT).exists())
+        self.assertTrue(nmapui.exists())
+        systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+        systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=execute)
+        for path, contents in retained.items():
+            self.assertEqual(path.read_bytes(), contents)
+
+    def test_tampering_during_manager_action_prevents_descriptor_removal(self):
+        self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        unit = self.unit_dir / systemd_service.NMAPUI_UNIT
+
+        def mutate(argv, **kwargs):
+            result = execute(argv, **kwargs)
+            if argv[2] == 'disable':
+                unit.write_text(unit.read_text() + '# changed after preflight\n')
+            return result
+
+        with self.assertRaisesRegex(ValueError, 'changed during this action'):
+            systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=mutate)
+        self.assertTrue(all((self.unit_dir / name).exists() for name in states))
+
+    def test_uninstall_refuses_loaded_replacement_unit_or_dropins(self):
+        self.install_lifecycle_fixture()
+        for field, value in [('FragmentPath', '/run/user/1000/systemd/transient/foreign.service'), ('DropInPaths', '/tmp/unexpected.conf')]:
+            with self.subTest(field=field):
+                execute, calls, states = self.lifecycle_executor()
+                states[systemd_service.BRIDGE_UNIT][field] = value
+                with self.assertRaisesRegex(ValueError, 'unexpected unit or override'):
+                    systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+                self.assertFalse(any(argv[2] == 'disable' for argv in calls))
+                self.assertTrue(all((self.unit_dir / name).exists() for name in states))
+
+    def test_restore_refuses_replacement_symlinks_environment_and_recovery_corruption(self):
+        self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+        backup = self.config_dir / systemd_service.RESUME_FILE
+        original = backup.read_bytes()
+        env = self.config_dir / systemd_service.ENV_FILE
+        environment = env.read_bytes()
+        unit = self.unit_dir / systemd_service.BRIDGE_UNIT
+        for mutation in ['symlink', 'replacement', 'environment', 'backup', 'permissions', 'owner']:
+            with self.subTest(mutation=mutation):
+                backup.write_bytes(original); backup.chmod(0o600)
+                env.write_bytes(environment)
+                if unit.exists() or unit.is_symlink():
+                    unit.unlink()
+                calls.clear()
+                if mutation == 'symlink':
+                    unit.symlink_to(self.root / 'unrelated')
+                elif mutation == 'replacement':
+                    unit.write_text('unrelated replacement'); unit.chmod(0o600)
+                elif mutation == 'environment':
+                    env.write_bytes(b'changed secret')
+                elif mutation == 'backup':
+                    body = json.loads(original); body['units'][systemd_service.BRIDGE_UNIT] += '# changed\n'
+                    backup.write_text(json.dumps(body))
+                elif mutation == 'permissions':
+                    backup.chmod(0o644)
+                with patch.object(systemd_service.os, 'getuid', return_value=os.getuid() + 1) if mutation == 'owner' else patch.dict(os.environ, {}):
+                    with self.assertRaises(ValueError):
+                        systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=execute)
+                self.assertEqual(calls, [])
+
+    def test_failed_restore_keeps_recovery_and_can_retry(self):
+        retained = self.install_lifecycle_fixture()
+        execute, calls, states = self.lifecycle_executor()
+        systemd_service.manage('uninstall', self.unit_dir, self.config_dir, executor=execute)
+
+        def fail_bridge(argv, **kwargs):
+            if argv[2] == 'enable' and argv[-1] == systemd_service.BRIDGE_UNIT:
+                raise subprocess.TimeoutExpired(argv, 30)
+            return execute(argv, **kwargs)
+
+        with self.assertRaisesRegex(ValueError, 'timed out'):
+            systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=fail_bridge)
+        self.assertTrue(all((self.unit_dir / name).exists() for name in states))
+        self.assertTrue((self.config_dir / systemd_service.RESUME_FILE).exists())
+        systemd_service.manage('restore', self.unit_dir, self.config_dir, executor=execute)
+        for path, contents in retained.items():
+            self.assertEqual(path.read_bytes(), contents)
+
+    def test_invalid_ownership_json_is_a_controlled_refusal(self):
+        self.install_lifecycle_fixture()
+        state_file = self.config_dir / systemd_service.STATE_FILE
+        state = state_file.read_bytes()
+        for body in [[], {'format': 1, 'unit_dir': str(self.unit_dir), 'files': []}, {'format': 1, 'unit_dir': str(self.unit_dir), 'files': {name: 9 for name in (systemd_service.NMAPUI_UNIT, systemd_service.BRIDGE_UNIT, systemd_service.ENV_FILE)}}]:
+            with self.subTest(body=body):
+                state_file.write_text(json.dumps(body))
+                with self.assertRaises(ValueError):
+                    systemd_service.verify(self.unit_dir, self.config_dir)
+        state_file.write_bytes(state)
+
     def test_units_are_fixed_private_and_keep_credentials_out_of_unit_text(self):
         secret = 'pass\\word"$value'
         with patch.dict(os.environ, {'NMAPUI_USERNAME': 'scanner-user', 'NMAPUI_PASSWORD': secret}):

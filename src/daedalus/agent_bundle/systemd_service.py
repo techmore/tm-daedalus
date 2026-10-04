@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import sys
 
 
@@ -16,6 +17,8 @@ NMAPUI_UNIT = "daedalus-nmapui.service"
 BRIDGE_UNIT = "daedalus-scanner-bridge.service"
 ENV_FILE = "daedalus-nmapui.env"
 STATE_FILE = ".daedalus-scanner-services.json"
+RESUME_FILE = ".daedalus-scanner-services-resume.json"
+SYSTEMCTL = "/usr/bin/systemctl"
 
 
 class ServiceError(ValueError):
@@ -205,36 +208,167 @@ def install(args: argparse.Namespace) -> dict[str, object]:
     return {"installed": True, "unit_names": [NMAPUI_UNIT, BRIDGE_UNIT], "state_file": str(state_path)}
 
 
-def verify(unit_dir: Path, config_dir: Path) -> dict[str, object]:
+def _private_bytes(path: Path) -> bytes:
+    """Read only a bounded, private, regular file belonging to this account."""
+    if path.is_symlink():
+        raise ServiceError(f"Managed service file is missing or unsafe: {path}.")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(descriptor, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+            raise ServiceError(f"Managed service file must be regular and owned by this user: {path}.")
+        if stat.S_IMODE(info.st_mode) != 0o600:
+            raise ServiceError(f"Managed service file must have mode 0600: {path}.")
+        contents = stream.read(131073)
+        if len(contents) > 131072:
+            raise ServiceError("Managed service file exceeds the size limit.")
+        return contents
+
+
+def _ownership(unit_dir: Path, config_dir: Path) -> dict:
+    _absolute(str(unit_dir), "systemd user unit directory")
+    _absolute(str(config_dir), "Daedalus config directory")
     if unit_dir.is_symlink() or config_dir.is_symlink():
         raise ServiceError("Managed service directories cannot be symbolic links.")
     if not unit_dir.is_dir() or not config_dir.is_dir():
         raise ServiceError("Managed service directories are missing.")
     if stat.S_IMODE(unit_dir.stat().st_mode) != 0o700 or stat.S_IMODE(config_dir.stat().st_mode) != 0o700:
         raise ServiceError("Managed service directories must have mode 0700.")
+    if unit_dir.stat().st_uid != os.getuid() or config_dir.stat().st_uid != os.getuid():
+        raise ServiceError("Managed service directories must belong to this user.")
     state_path = config_dir / STATE_FILE
     if state_path.is_symlink() or not state_path.is_file():
         raise ServiceError("Daedalus Linux service ownership record is missing or unsafe.")
     try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        state = json.loads(_private_bytes(state_path))
+    except (OSError, json.JSONDecodeError, UnicodeError) as exc:
         raise ServiceError("Daedalus Linux service ownership record is invalid.") from exc
-    if state.get("format") != 1 or state.get("unit_dir") != str(unit_dir):
+    if not isinstance(state, dict) or state.get("format") != 1 or state.get("unit_dir") != str(unit_dir):
         raise ServiceError("Daedalus Linux service ownership record does not match these paths.")
     expected = {ENV_FILE, NMAPUI_UNIT, BRIDGE_UNIT}
-    if set(state.get("files", {})) != expected:
+    if not isinstance(state.get("files"), dict) or set(state["files"]) != expected:
         raise ServiceError("Daedalus Linux service ownership record has an unexpected file set.")
+    for digest in state["files"].values():
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise ServiceError("Daedalus Linux service ownership record has an invalid fingerprint.")
+    return state
+
+
+def verify(unit_dir: Path, config_dir: Path) -> dict[str, object]:
+    state = _ownership(unit_dir, config_dir)
+    expected = {ENV_FILE, NMAPUI_UNIT, BRIDGE_UNIT}
     for name in expected:
         path = (config_dir / name) if name == ENV_FILE else (unit_dir / name)
         if path.is_symlink() or not path.is_file():
             raise ServiceError(f"Managed service file is missing or unsafe: {path}.")
-        if stat.S_IMODE(path.stat().st_mode) != 0o600:
-            raise ServiceError(f"Managed service file must have mode 0600: {path}.")
-        if _digest(path) != state["files"][name]:
+        if hashlib.sha256(_private_bytes(path)).hexdigest() != state["files"][name]:
             raise ServiceError(f"Managed service file changed after installation: {path}.")
-    if stat.S_IMODE(state_path.stat().st_mode) != 0o600:
-        raise ServiceError("Daedalus Linux service ownership record must have mode 0600.")
     return {"verified": True, "unit_names": [NMAPUI_UNIT, BRIDGE_UNIT]}
+
+
+def _resume(unit_dir: Path, config_dir: Path) -> dict:
+    """Validate exact retained descriptors against the original ownership record."""
+    state = _ownership(unit_dir, config_dir)
+    try:
+        resume = json.loads(_private_bytes(config_dir / RESUME_FILE))
+    except (OSError, ValueError) as exc:
+        raise ServiceError("Managed service recovery record is missing or invalid.") from exc
+    if (
+        not isinstance(resume, dict) or resume.get("format") != 1
+        or resume.get("unit_dir") != str(unit_dir)
+        or resume.get("ownership_sha256") != hashlib.sha256(_private_bytes(config_dir / STATE_FILE)).hexdigest()
+        or not isinstance(resume.get("units"), dict)
+        or set(resume["units"]) != {NMAPUI_UNIT, BRIDGE_UNIT}
+    ):
+        raise ServiceError("Managed service recovery record does not match this installation.")
+    if hashlib.sha256(_private_bytes(config_dir / ENV_FILE)).hexdigest() != state["files"][ENV_FILE]:
+        raise ServiceError("Managed service environment changed after installation.")
+    for name, contents in resume["units"].items():
+        if not isinstance(contents, str) or hashlib.sha256(contents.encode()).hexdigest() != state["files"][name]:
+            raise ServiceError("Managed service recovery descriptor does not match its fingerprint.")
+        path = unit_dir / name
+        if path.exists() or path.is_symlink():
+            if hashlib.sha256(_private_bytes(path)).hexdigest() != state["files"][name]:
+                raise ServiceError("Managed service file changed during this action.")
+    return resume
+
+
+def manage(action: str, unit_dir: Path, config_dir: Path, *, executor=None) -> dict:
+    """Remove/resume only fixed owned services, preserving enrollment and evidence."""
+    if action not in {"uninstall", "restore"}:
+        raise ServiceError("Unsupported Linux service lifecycle action.")
+    executor = executor or subprocess.run
+    resume_path = config_dir / RESUME_FILE
+    if action == "uninstall" and not (resume_path.exists() or resume_path.is_symlink()):
+        verify(unit_dir, config_dir)
+        resume = {
+            "format": 1, "unit_dir": str(unit_dir),
+            "ownership_sha256": hashlib.sha256(_private_bytes(config_dir / STATE_FILE)).hexdigest(),
+            "units": {name: _private_bytes(unit_dir / name).decode("utf-8") for name in (NMAPUI_UNIT, BRIDGE_UNIT)},
+        }
+        _write_exclusive(resume_path, (json.dumps(resume, sort_keys=True, indent=2) + "\n").encode())
+    resume = _resume(unit_dir, config_dir)
+
+    def run(*arguments: str):
+        _resume(unit_dir, config_dir)  # Recheck before every manager operation.
+        try:
+            response = executor([SYSTEMCTL, "--user", *arguments], capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            raise ServiceError("Service action timed out; recovery descriptors and data were retained.") from exc
+        if response.returncode != 0:
+            # Never include manager output, which can contain local paths or credentials.
+            raise ServiceError("Service action failed; recovery descriptors and data were retained.")
+        return response
+
+    def observe(name: str) -> dict[str, str]:
+        response = run("show", "--property=LoadState", "--property=ActiveState", "--property=UnitFileState", "--property=MainPID", "--property=FragmentPath", "--property=DropInPaths", "--", name)
+        values = {}
+        for line in response.stdout.splitlines():
+            key, separator, value = line.partition("=")
+            if not separator or key in values:
+                raise ServiceError("Systemd service state is ambiguous; recovery descriptors were retained.")
+            values[key] = value
+        if (
+            set(values) != {"LoadState", "ActiveState", "UnitFileState", "MainPID", "FragmentPath", "DropInPaths"}
+            or values["LoadState"] not in {"loaded", "not-found"}
+            or not values["MainPID"].isascii() or not values["MainPID"].isdigit()
+        ):
+            raise ServiceError("Systemd service state is unavailable; recovery descriptors were retained.")
+        if values["DropInPaths"] or (values["LoadState"] == "loaded" and values["FragmentPath"] != str(unit_dir / name)):
+            raise ServiceError("Systemd loaded an unexpected unit or override; recovery descriptors were retained.")
+        return values
+
+    run("show-environment")
+    if action == "restore":
+        for name, contents in resume["units"].items():
+            _resume(unit_dir, config_dir)
+            if not (unit_dir / name).exists():
+                _write_exclusive(unit_dir / name, contents.encode())
+    run("daemon-reload")
+    observations = []
+    names = (BRIDGE_UNIT, NMAPUI_UNIT) if action == "uninstall" else (NMAPUI_UNIT, BRIDGE_UNIT)
+    for name in names:
+        if action == "uninstall":
+            state = observe(name)
+            if state["LoadState"] == "loaded":
+                run("disable", "--now", name)
+            elif (unit_dir / name).exists():
+                raise ServiceError("Systemd did not load the verified unit; its descriptor was retained.")
+            state = observe(name)
+            if state["ActiveState"] not in {"inactive", "failed"} or state["MainPID"] != "0" or state["UnitFileState"] not in {"disabled", ""}:
+                raise ServiceError("Service stop/disable is unconfirmed; its descriptor was retained.")
+        else:
+            run("enable", "--now", name)
+            state = observe(name)
+            if state["ActiveState"] != "active" or state["MainPID"] == "0" or state["UnitFileState"] != "enabled":
+                raise ServiceError("Restored service startup is unconfirmed; descriptors and data were retained.")
+        observations.append({"unit": name, "active_state": state["ActiveState"], "enabled_state": state["UnitFileState"]})
+    if action == "uninstall":
+        for name in names:
+            _resume(unit_dir, config_dir)
+            (unit_dir / name).unlink(missing_ok=True)
+        run("daemon-reload")
+    return {"action": action, "services": observations, "data_preserved": True, "recovery_file": str(resume_path)}
 
 
 def _absolute_arg(parser: argparse.ArgumentParser, value: str) -> Path:
@@ -254,12 +388,18 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("verify")
     check.add_argument("--unit-dir", required=True, type=Path)
     check.add_argument("--config-dir", required=True, type=Path)
+    for action in ("uninstall", "restore"):
+        lifecycle = commands.add_parser(action)
+        lifecycle.add_argument("--unit-dir", required=True, type=Path)
+        lifecycle.add_argument("--config-dir", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "install":
             result = install(args)
-        else:
+        elif args.command == "verify":
             result = verify(args.unit_dir, args.config_dir)
+        else:
+            result = manage(args.command, args.unit_dir, args.config_dir)
     except (ServiceError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

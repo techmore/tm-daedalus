@@ -66,7 +66,7 @@ for path in "$HOME/.local" "$XDG_DATA_HOME" "$APP_SUPPORT" "$NMAPUI_DATA_ROOT" "
   reject_symlink "$path"
 done
 for path in "$CONFIG_PATH" "$ENV_FILE" "$STATE_FILE" "$NMAPUI_UNIT" "$BRIDGE_UNIT"; do
-  [ ! -e "$path" ] && [ ! -L "$path" ] || fail "A managed scanner installation already exists at $path. Use manage-service-linux.sh status or restart."
+  [ ! -e "$path" ] && [ ! -L "$path" ] || fail "A managed scanner installation already exists at $path. Use manage-service-linux.sh status, restart, or restore."
 done
 
 if "$PYTHON_BIN" - "$NMAPUI_PORT" <<'PY'

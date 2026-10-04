@@ -74,7 +74,11 @@ installer. These actions manage macOS user LaunchAgents.
 ## Managed install on Linux
 
 Use a Linux host with systemd, an active systemd user manager, Python 3.11 or
-newer, Nmap, and `unzip`. From the extracted kit, run:
+newer, Nmap, and `unzip`. The units use `PrivateTmp`, which needs unprivileged
+user namespaces in a user service ([systemd's namespace requirements](https://raw.githubusercontent.com/systemd/systemd/v255/man/system-or-user-ns.xml)).
+Our Incus lifecycle validation required `security.nesting=true` on the
+disposable scanner instance. The installer does not change host policy.
+From the extracted kit, run:
 
 ```sh
 sh install-service-linux.sh "https://your-daedalus-host" "scanner-name"
@@ -94,6 +98,8 @@ Use the managed service helper for a status check or restart:
 ```sh
 sh manage-service-linux.sh status
 sh manage-service-linux.sh restart
+sh manage-service-linux.sh uninstall
+sh manage-service-linux.sh restore
 ```
 
 It verifies that the unit and private environment files still match their
@@ -104,9 +110,22 @@ that account with `loginctl enable-linger <user>` if unattended startup is
 required. Daedalus does not change that host-wide login policy. After restart,
 check NmapUI readiness and the scanner's next portal heartbeat.
 
-The managed Linux workflow does not yet include an in-place upgrade or
-uninstaller. Keep the private enrollment config and scanner data when
-upgrading or removing its services.
+`uninstall` stops and disables the bridge first, then NmapUI. It confirms
+systemd reports both inactive and disabled before removing their verified unit files.
+Enrollment credentials, scanner evidence, queues, logs, runtime releases, and
+the private environment file are retained. A private recovery record holds
+the exact original unit descriptors. `restore` reinstates those descriptors,
+enables both services, and checks that both processes are active. Check NmapUI
+readiness and the next portal heartbeat afterward; a running process alone
+does not prove the scanner is ready. These are local operator actions and do
+not revoke the scanner's portal enrollment. Stop any scan you need to finish
+before uninstalling.
+
+If stop, disable, or startup cannot be confirmed, the helper reports an error
+and retains its recovery files. Retrying uses the same installation and
+credentials. Changed, symlinked, incorrectly owned, or public service files
+are refused. Only the two fixed Daedalus units are operated. The managed Linux
+workflow still needs an in-place upgrade path.
 
 ## Foreground install on Linux
 

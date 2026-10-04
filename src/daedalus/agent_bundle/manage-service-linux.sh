@@ -8,8 +8,8 @@ fail() {
 }
 
 case "$(uname -s)" in Linux) ;; *) fail "Managed systemd user service commands require Linux." ;; esac
-[ "$#" -eq 1 ] || fail "Usage: sh manage-service-linux.sh status|restart"
-case "$1" in status|restart) ACTION=$1 ;; *) fail "Supported actions are status and restart." ;; esac
+[ "$#" -eq 1 ] || fail "Usage: sh manage-service-linux.sh status|restart|uninstall|restore"
+case "$1" in status|restart|uninstall|restore) ACTION=$1 ;; *) fail "Supported actions are status, restart, uninstall and restore." ;; esac
 PYTHON_BIN=${PYTHON_BIN:-python3}
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "Python 3 is required."
 command -v systemctl >/dev/null 2>&1 || fail "systemctl is required."
@@ -19,6 +19,9 @@ XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-"$HOME/.config"}
 UNIT_DIR="$XDG_CONFIG_HOME/systemd/user"
 CONFIG_DIR="$XDG_CONFIG_HOME/daedalus"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ "$ACTION" = uninstall ] || [ "$ACTION" = restore ]; then
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/systemd_service.py" "$ACTION" --unit-dir "$UNIT_DIR" --config-dir "$CONFIG_DIR"
+fi
 "$PYTHON_BIN" "$SCRIPT_DIR/systemd_service.py" verify --unit-dir "$UNIT_DIR" --config-dir "$CONFIG_DIR" >/dev/null \
   || fail "Managed service files are missing or changed; refusing to operate them."
 

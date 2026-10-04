@@ -31,6 +31,19 @@ Open `http://127.0.0.1:8000`. Google sign-in and external integrations need thei
 
 The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/INCUS-DEPLOYMENT.md) for the verified backup, staged release, health-check, and automatic rollback workflow.
 
+## Managed Linux scanner lifecycle
+
+The scanner kit includes `manage-service-linux.sh status|restart|uninstall|restore`.
+Uninstall verifies ownership, stops and disables the two Daedalus user services,
+and preserves enrollment, local evidence, and a private descriptor backup.
+Restore reinstates the same installation and checks that both services are active.
+See the [scanner kit instructions](src/daedalus/agent_bundle/README.md) for prerequisites and limits.
+
+The opt-in `scripts/validate_linux_lifecycle.py` exercises removal and recovery with
+real systemd user services and inert processes on a disposable Linux account.
+It validates lifecycle behavior without issuing network scans or connecting to
+a customer workspace. The Linux lifecycle workflow runs this check in CI.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:
