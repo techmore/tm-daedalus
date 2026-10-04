@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## October 4, 2026 — CIS security-auditing implementation checkpoint
+
+Source commit **8e8c0de2086a7920d704e98492460467e0b2110b** adds the bundled read-only **audit_auditd_enabled** Tahoe check. It checks the exact system audit service, regular audit_control file metadata and kernel audit condition with fixed executables/arguments. An explicit disabled service or kernel condition fails; inaccessible, unsupported or ambiguous evidence remains manual. No audit settings are modified and raw service/kernel output is not uploaded. The rule follows the pinned NIST mSCP Tahoe revision already used by the profiles.
+
+Implementation coverage is now **77/100 Level 1** and **82/119 Level 2** checks (84 distinct implemented rule IDs); **23 Level 1** and **37 Level 2** remain manual. Published profile versions and saved reports are unchanged. Backend validation passed **436 tests and 90 subtests**. The current local Xcode test process and CIS client CI **37179625771** were still running at this checkpoint; no client-test success or new distributable package is claimed. Real macOS 26 execution and trusted signing/notarization remain open. Production remains on application commit d8692c8 with the independently validated managed scanner fix.
+
 ## October 4, 2026 — Release 064: real Mac management and upgrade validation
 
 Production application commit **d8692c8cf7ed86bd6d33a139e914af6de36a6365** is active and healthy. The 58-file release archive SHA-256 is **ddf8752107a18e0e30b9edd5ec7b738ce49092cd7b12ef7ac2e80114a576a502**; verified off-host backup: daedalus-data-20261004T051203Z.tar.gz. **436 tests and 90 subtests** passed; Python CI 37179189498 and managed Linux CI 37179189477 passed.
