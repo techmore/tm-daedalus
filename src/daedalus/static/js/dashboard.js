@@ -292,6 +292,15 @@
     });
   });
 
+  function handleSkipToContent(event) {
+    var main = document.getElementById("main-content");
+    if (!main) return;
+    event.preventDefault();
+    main.focus();
+  }
+  var skipLink = document.querySelector(".skip-link");
+  if (skipLink) skipLink.addEventListener("click", handleSkipToContent);
+
   window.addEventListener("popstate", function () {
     activateTab(tabFromLocation(), false);
   });

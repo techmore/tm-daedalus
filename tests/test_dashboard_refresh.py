@@ -6,6 +6,16 @@ from pathlib import Path
 
 class DashboardRefreshTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
+    def test_skip_content_focus_preserves_topic_fragment(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        start = source.index('  function handleSkipToContent(')
+        end = source.index('  var skipLink', start)
+        script = "const assert = require('node:assert/strict'); let focused=false, prevented=false; const document={getElementById:()=>({focus:()=>{focused=true;}})};" + source[start:end] + "handleSkipToContent({preventDefault:()=>{prevented=true;}});assert.equal(focused,true);assert.equal(prevented,true);"
+        result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('location', source[start:end])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_live_feed_reconnect_backoff_is_bounded_without_reloading_dashboard(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         start = source.index('  function liveReconnectDelay(')
