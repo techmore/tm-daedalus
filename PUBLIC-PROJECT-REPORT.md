@@ -986,3 +986,17 @@ Added a packaged password-encrypted secret-file export/restore utility. It uses 
 ## Recovery-secret utility installed on SER8 — October 5, 2026
 
 Source c3277ba3726f2f15b4131aad93bfe67d9ad1d79a deployed with verified off-host backup and internal/public readiness. The release archive includes the recovery utility (61 files). Its installed --help command succeeded and an in-memory synthetic encrypt/decrypt round trip passed using the production Python dependencies. No production secret file was read or exported by this check. Independent storage/password selection, actual production-key recovery and full failover acceptance remain pending. Backend CI for c3277ba is still active.
+
+
+## Current source validation and standardized scan PDF correction — October 5, 2026
+
+Source **c315d7bd6d85e926923730d38ded0340394039ed** exposes each endpoint's own latest assessment summary and displays its pass rate, assessed coverage, failed/manual/error counts. Two-device fixtures verify summaries remain separate; JavaScript fixtures reject malformed counts and scores. Full local validation passed **627 tests and 129 subtests**, with two dependency deprecation warnings. Backend CI **37388354961** passed. Linux scanner CI **37388355476** remains active as of this entry; its bridge-interruption validation step completed successfully, while lifecycle and repeated comparison are still running. These changes have not been deployed.
+
+The production scan PDF replacement was introduced without the user's approval. The user requires preservation of the standardized existing PDF, with enhancements only. The corrective renderer retains historical NmapUI XSL bytes and original report structure, but final baseline identification and visual fidelity remain unresolved. An approved reference PDF or its path has been requested; the presence of a saved historical export is not proof of human approval of that version.
+
+All-page comparison of the saved seven-page export and the local Mac reconstruction found identical normalized extracted text. The isolated SER8 reconstruction also has seven pages but differs in six extraction spans (three spaces and three clipped-edge characters); extraction comparison alone cannot establish visual fidelity. The all-page contact sheet was inspected and shows retained section order with typography and spacing differences. No arbitrary spacing shim or template redesign has been applied. Private diagnostic receipt: validation/pdf-all-pages-text-comparison-20261005.json. Production remains on source **2f8c81705b0edef1fa943b36eeb532208e1f2fcb** and still uses the replacement scan PDF renderer. Full project completion remains open.
+
+
+## Scanner PDF styling asset integrity — October 5, 2026
+
+The corrective renderer now checks SHA-256 digests for its embedded Tailwind CSS and both bundled report fonts, in addition to the historical stylesheet. A changed asset stops generation rather than silently changing typography or styling while leaving the XSL hash unchanged. Three fixtures independently alter CSS, Inter and Instrument Serif; all **46 scanner/template tests passed**. Asset bytes, historical report body and layout remain unchanged. This protects the current candidate's rendering assets; it does not establish that the unresolved historical version is the user's approved baseline, nor does it complete visual acceptance. Production activation remains pending.

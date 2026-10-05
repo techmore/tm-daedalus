@@ -164,6 +164,18 @@ def test_replaced_standardized_template_is_rejected_before_generation(monkeypatc
         standardized_scanner_html(XML)
 
 
+@pytest.mark.parametrize("asset", ["tailwind.css", "fonts/inter-latin-opsz-normal.woff2", "fonts/instrument-serif-latin-400-normal.woff2"])
+def test_replaced_styling_asset_is_rejected_without_changing_template(asset, monkeypatch, tmp_path):
+    import shutil
+    from daedalus import scanner_report_template as module
+    shutil.copytree(ASSETS, tmp_path / "assets")
+    replacement = tmp_path / "assets" / asset
+    replacement.write_bytes(replacement.read_bytes() + b"\n")
+    monkeypatch.setattr(module, "ASSETS", tmp_path / "assets")
+    with pytest.raises(ValueError, match="styling asset differs from the pinned rendering baseline"):
+        standardized_scanner_html(XML)
+
+
 @pytest.mark.parametrize("provenance", [{"stylesheet_sha256": "different-template"}, {}, "invalid"])
 def test_queued_report_template_mismatch_cannot_render_a_replacement(provenance, monkeypatch):
     from daedalus import scanner_report_template as module

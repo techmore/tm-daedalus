@@ -15,6 +15,18 @@ from lxml import etree
 ASSETS = Path(__file__).with_name("scanner_report_assets")
 MAX_XML_BYTES = 16 * 1024 * 1024
 APPROVED_TEMPLATE_SHA256 = "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537"
+REPORT_ASSET_SHA256 = {
+    "tailwind.css": "c9f25a1f752e7d51faca479a190657929812107a465e8b24d7866115c838f73d",
+    "fonts/inter-latin-opsz-normal.woff2": "2c295d99e26dcf357d4d01bcf270fd6924b600c9a13dd8c363ef114f4c6976fa",
+    "fonts/instrument-serif-latin-400-normal.woff2": "5eb09b5ac0e28b67c2f041c8ba6d244604ca0c0980d65912ab2d47fed84ddc31",
+}
+
+
+def _report_asset_bytes(name: str) -> bytes:
+    data = (ASSETS / name).read_bytes()
+    if hashlib.sha256(data).hexdigest() != REPORT_ASSET_SHA256[name]:
+        raise ValueError("Scanner PDF styling asset differs from the pinned rendering baseline; report generation stopped.")
+    return data
 
 
 def original_xml_documents(events: list[dict]) -> list[bytes]:
@@ -118,7 +130,7 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         ("Inter", "inter-latin-opsz-normal.woff2", "100 900"),
         ("Instrument Serif", "instrument-serif-latin-400-normal.woff2", "400"),
     ]:
-        encoded = base64.b64encode((ASSETS / "fonts" / filename).read_bytes()).decode("ascii")
+        encoded = base64.b64encode(_report_asset_bytes("fonts/" + filename)).decode("ascii")
         font_css += f"@font-face{{font-family:'{family}';font-style:normal;font-weight:{weight};src:url(data:font/woff2;base64,{encoded}) format('woff2');}}"
     # Preserve the historical stylesheet byte-for-byte. Replace only its
     # external loading mechanisms in the generated head, keeping its body
@@ -127,7 +139,7 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
     head = page.find("head")
     for element in head.xpath("./script|./link"):
         head.remove(element)
-    css = (ASSETS / "tailwind.css").read_text()
+    css = _report_asset_bytes("tailwind.css").decode("utf-8")
     shades = ["#f5f6f3", "#e9ebe0", "#d8dbc7", "#bcc2a9", "#979f83", "#777f65",
               "#636b54", "#525845", "#414637", "#32382a", "#25291f"]
     current = ["96% .015", "91% .020", "85% .028", "75% .040", "62% .055", "50% .065",
