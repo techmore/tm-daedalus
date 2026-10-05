@@ -153,8 +153,9 @@
         {% if membership.role == 'admin' and workspace_controls_enabled %}
         <div id="enrollment-card" class="enrollment-card hidden">
           <div class="enrollment-heading"><div><p class="eyebrow">ONE-TIME ENROLLMENT</p><h3>Set up a scanner node</h3></div><button id="close-enrollment" class="icon-button" aria-label="Close">×</button></div>
-          <p class="muted">Download and extract the scanner kit in Downloads, then run the copied enrollment command in Terminal. On macOS, the managed installer prepares NmapUI and the bridge as user LaunchAgents so they start at login and restart after a process exit. On Linux, start NmapUI with <code>install-nmapui.sh</code> and run the bridge installer after it is ready. The code expires in 15 minutes and can enroll one scanner.</p>
+          <p class="muted">Download and extract the scanner kit in Downloads, then run the copied enrollment command in Terminal. On macOS, the managed installer prepares NmapUI and the bridge as user LaunchAgents so they start at login and restart after a process exit. On Linux with systemd, the managed installer prepares NmapUI and the bridge as user services. Choose the operating system of the scanner machine. The code expires in 15 minutes and can enroll one scanner.</p>
           <div class="scanner-scope-form">
+            <label>Scanner operating system<select id="enrollment-platform"><option value="macos">macOS · managed services</option><option value="linux">Linux · systemd user services</option><option value="foreground">Foreground bridge · NmapUI already running</option></select></label>
             <label>Scanner name<input id="enrollment-scanner-name" maxlength="120" placeholder="CSP office · VLAN 20" required></label>
             <label>Authorized network CIDRs<textarea id="enrollment-network-scopes" rows="2" placeholder="10.20.20.0/24, 10.20.21.0/24" required></textarea></label>
             <small>Only targets inside these private networks can be sent to this scanner. Separate VLANs can use separate named scanners.</small>
@@ -518,6 +519,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261004-101" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261005-102" defer></script>
 </body>
 </html>

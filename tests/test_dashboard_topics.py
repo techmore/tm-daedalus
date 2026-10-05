@@ -6,6 +6,22 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_scanner_platform_choice_selects_target_installer(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function scannerInstaller('):source.index('  var enrollmentPlatform =')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.equal(scannerInstaller('linux'),'install-service-linux.sh');
+assert.equal(scannerInstaller('macos'),'install-service-macos.sh');
+assert.equal(scannerInstaller('foreground'),'install.sh');
+assert.throws(()=>scannerInstaller('windows'),/Choose the scanner/);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('scannerInstaller(enrollmentPlatform.value)', source)
+        self.assertIn('scannerInstaller(selectedPlatform)', source)
+
+
     def test_website_audit_evidence_is_visible_and_separate_from_summary(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         priority = template[template.index('id="{{ key }}-priority-title"'):template.index('id="{{ key }}-changes-title"')]

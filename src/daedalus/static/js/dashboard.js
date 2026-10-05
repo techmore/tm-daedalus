@@ -1214,6 +1214,23 @@
       document.getElementById("enrollment-scanner-name").focus();
     });
   }
+  function scannerInstaller(platform) {
+    if (platform === "macos") return "install-service-macos.sh";
+    if (platform === "linux") return "install-service-linux.sh";
+    if (platform === "foreground") return "install.sh";
+    throw new Error("Choose the scanner operating system.");
+  }
+
+  var enrollmentPlatform = document.getElementById("enrollment-platform");
+  if (enrollmentPlatform) {
+    enrollmentPlatform.value = /Linux/i.test(navigator.platform || navigator.userAgent) ? "linux" : "macos";
+    enrollmentPlatform.addEventListener("change", function () {
+      var command = document.getElementById("enrollment-command");
+      var installer = scannerInstaller(enrollmentPlatform.value);
+      if (command.dataset.scannerName) text(command, "cd \"$HOME/Downloads/daedalus-scanner-kit\" && sh " + installer + " " + shellQuote(location.origin) + " " + shellQuote(command.dataset.scannerName));
+    });
+  }
+
   var issueScannerEnrollment = document.getElementById("issue-scanner-enrollment");
   if (issueScannerEnrollment) {
     issueScannerEnrollment.addEventListener("click", async function () {
@@ -1238,15 +1255,12 @@
         });
         var body = await response.json();
         if (!response.ok) throw new Error(body.detail || "Unable to issue an enrollment code");
-        var clientPlatform = navigator.platform || navigator.userAgent;
-        var installerName = /Mac/i.test(clientPlatform)
-          ? "install-service-macos.sh"
-          : /Linux/i.test(clientPlatform)
-            ? "install-service-linux.sh"
-            : "install.sh";
+        var selectedPlatform = document.getElementById("enrollment-platform").value;
+        var installerName = scannerInstaller(selectedPlatform);
         var command = "cd \"$HOME/Downloads/daedalus-scanner-kit\" && sh " + installerName + " " +
           shellQuote(location.origin) + " " + shellQuote(scannerName);
         text(codeOutput, body.code + "  (expires in 15 minutes)");
+        commandOutput.dataset.scannerName = scannerName;
         text(commandOutput, command);
       } catch (error) {
         text(codeOutput, error.message);
