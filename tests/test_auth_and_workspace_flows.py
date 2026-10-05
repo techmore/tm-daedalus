@@ -79,6 +79,30 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         ):
             return self.client.get("/auth/google/callback", follow_redirects=False)
 
+    def test_recovery_inspection_can_disable_background_collectors(self):
+        with (
+            patch.object(server, 'engine', self.engine),
+            patch.object(server, 'BACKGROUND_WORKERS_ENABLED', False),
+            patch.object(server, 'external_check_scheduler', new_callable=AsyncMock) as scheduler,
+            patch.object(server, 'website_audit_worker', new_callable=AsyncMock) as worker,
+            TestClient(server.app) as client,
+        ):
+            self.assertEqual(client.get('/healthz').status_code, 200)
+            scheduler.assert_not_called()
+            worker.assert_not_called()
+
+    def test_default_startup_launches_both_background_collectors(self):
+        with (
+            patch.object(server, 'engine', self.engine),
+            patch.object(server, 'BACKGROUND_WORKERS_ENABLED', True),
+            patch.object(server, 'external_check_scheduler', new_callable=AsyncMock) as scheduler,
+            patch.object(server, 'website_audit_worker', new_callable=AsyncMock) as worker,
+            TestClient(server.app) as client,
+        ):
+            self.assertEqual(client.get('/healthz').status_code, 200)
+            scheduler.assert_called_once()
+            worker.assert_called_once()
+
     def test_google_login_uses_registered_oauth_callback_uri(self):
         with (
             patch.object(server, "GOOGLE_CLIENT_ID", "test-client-id"),

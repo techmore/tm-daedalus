@@ -23,6 +23,7 @@ def env_bool(name: str, default: bool = False) -> bool:
 AUDIT_DNS_NAMESERVERS = parse_audit_nameservers(os.environ.get("DAEDALUS_AUDIT_DNS_NAMESERVERS", ""))
 
 APP_ENV = os.environ.get("DAEDALUS_ENV", "development").strip().lower()
+BACKGROUND_WORKERS_ENABLED = env_bool("DAEDALUS_BACKGROUND_WORKERS_ENABLED", True)
 DEMO_MODE = env_bool("DAEDALUS_DEMO_MODE", APP_ENV != "production")
 SESSION_SECRET = os.environ.get(
     "DAEDALUS_SESSION_SECRET",

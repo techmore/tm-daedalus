@@ -767,3 +767,7 @@ The shipped archive verifier and restore path now reject databases with broken d
 ## Recovery verifier deployed on SER8 — October 5, 2026
 
 Source 1a7d2260dc78f492907b19750947c03f74f727e5 deployed with verified off-host backup and internal/public readiness. The deployment backup daedalus-data-20261005T114250Z.tar.gz passed the local strengthened verifier before deployment. The newly installed release's restore_data.py also verified that actual backup inside the production container. No production data was restored or overwritten. Independent key recovery and runtime failover remain outstanding.
+
+## Recovery inspection worker configuration — October 5, 2026
+
+Added DAEDALUS_BACKGROUND_WORKERS_ENABLED with default true. Setting false prevents the scheduler and website-audit worker from starting in an isolated recovery copy; initialization and interrupted-job reconciliation remain active. This is not a read-only mode and does not restrict manual authorized API actions. Startup fixtures verify both workers omitted when disabled and both launched when enabled. Targeted auth/workspace validation passed 19 tests and 13 subtests; full backend validation passed 570 tests and 126 subtests. Production remains on 1a7d226 with workers enabled. Real restored runtime and failover acceptance remain pending.

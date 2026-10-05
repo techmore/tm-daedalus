@@ -43,6 +43,7 @@ from daedalus.config import (
     AUDIT_DNS_NAMESERVERS,
     ALLOWED_HOSTS,
     BASE_URL,
+    BACKGROUND_WORKERS_ENABLED,
     DEMO_MODE,
     DATA_DIR,
     GOOGLE_CLIENT_ID,
@@ -376,21 +377,21 @@ async def lifespan(_app: FastAPI):
     recover_interrupted_report_jobs()
     recover_interrupted_external_checks()
     recover_interrupted_external_check_schedules()
-    scheduler_task = asyncio.create_task(external_check_scheduler())
-    website_task = asyncio.create_task(website_audit_worker())
+    tasks = []
+    if BACKGROUND_WORKERS_ENABLED:
+        tasks = [asyncio.create_task(external_check_scheduler()), asyncio.create_task(website_audit_worker())]
+    else:
+        logger.warning("Scheduled checks and website audit worker disabled by configuration")
     try:
         yield
     finally:
-        website_task.cancel()
-        try:
-            await website_task
-        except asyncio.CancelledError:
-            pass
-        scheduler_task.cancel()
-        try:
-            await scheduler_task
-        except asyncio.CancelledError:
-            pass
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(title="Daedalus", version=__version__, lifespan=lifespan)

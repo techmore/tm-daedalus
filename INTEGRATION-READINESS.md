@@ -622,3 +622,7 @@ Added Tahoe attempt-limit and timeout checks for explicit typed policyAttributeM
 ### 2026-10-04: exact-origin evidence deployed and verified
 
 fa0d275 deployed successfully to SER8 Incus with verified off-host backup and readiness. Backend suite: 561 tests and 122 subtests passed. Production web runs 57/58: complete, four origins, zero differences and zero persistent notices. PDF 38: frozen origin evidence matches storage, all seven pages rendered and visually reviewed. This closes the origin metadata presentation/deployment gate; whole-project acceptance remains open as recorded in PUBLIC-PROJECT-REPORT.md.
+
+### Isolated recovery inspection configuration
+
+Set DAEDALUS_BACKGROUND_WORKERS_ENABLED=false only on an isolated recovery copy to prevent automatic scheduled DNS/website checks and queued website-audit collection. The default is true. This is not a read-only or authentication mode: normal migrations and interrupted-job reconciliation still run, and API actions retain their existing permissions. Bind the inspection server to loopback, use separate data/report directories, and do not direct scanner clients at it. No production setting has been disabled. Startup fixtures verify both disabled and enabled worker paths; real restored-runtime validation remains pending.
