@@ -27,9 +27,13 @@ concurrency:
 
 jobs:
   managed:
-    name: Install, scan, upgrade, restart, and portal recovery
+    name: Managed scanner — ${{ matrix.scenario }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [lifecycle, repeat-comparison, interrupted-bridge]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,8 +43,17 @@ jobs:
           sudo apt-get install -y -qq python3-venv nmap unzip dbus-user-session build-essential python3-dev
       - name: Validate with a disposable user and an isolated portal
         shell: bash
+        env:
+          SCANNER_VALIDATION_SCENARIO: ${{ matrix.scenario }}
         run: |
           set -euo pipefail
+          scenario_args=()
+          case "$SCANNER_VALIDATION_SCENARIO" in
+            lifecycle) scenario_args+=(--managed-linux) ;;
+            repeat-comparison) scenario_args+=(--repeat-scan) ;;
+            interrupted-bridge) scenario_args+=(--interrupt-bridge) ;;
+            *) exit 1 ;;
+          esac
           sudo useradd --create-home --shell /bin/bash daedalusqa
           qa_uid=$(id -u daedalusqa)
           cleanup() {
@@ -75,14 +88,15 @@ jobs:
             DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${qa_uid}/bus" \
             /home/daedalusqa/project/.venv/bin/python \
               /home/daedalusqa/project/scripts/validate_scanner_local.py \
-              --managed-linux --run-loopback \
+              --run-loopback \
+              "${scenario_args[@]}" \
               --nmapui-python /home/daedalusqa/project/.venv/bin/python \
               --receipt /home/daedalusqa/managed-scanner.json
       - name: Retain isolated scanner evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: managed-linux-scanner-evidence
+          name: managed-linux-scanner-evidence-${{ matrix.scenario }}
           path: |
             ${{ runner.temp }}/managed-scanner.json
             ${{ runner.temp }}/managed-scanner.pdf
