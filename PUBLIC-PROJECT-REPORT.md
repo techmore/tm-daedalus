@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Restored runtime with production secrets — 2026-10-05
+
+Started the current portal against the fresh restored data using the locally recovered production environment. Production configuration validation and readiness passed. The existing private local user key authenticated all 39 completed report downloads; each matched its restored file byte-for-byte and returned no-store headers. The rehearsal required no live-host credential retrieval, bound only to loopback, and disabled background collectors. The temporary server was stopped; post-run database integrity and foreign-key checks passed. Private receipt: `validation/recovered-secrets-runtime-receipt-20261005.json`. Public DNS/TLS failover, restored Google login and separate secret custody remain unverified.
+
 ## Production secret recovery on the Mac — 2026-10-05
 
 Saved an encrypted recovery envelope of the actual production environment and a generated recovery password outside the repository, in an owner-only Mac application-support directory. Both files are mode 0600. After capture, local-only unsealing reproduced the environment exactly and its recovered encryption key decrypted the restored Meraki credential. Session and Google OAuth settings are present, but OAuth login and runtime failover were not exercised. Private receipt: `validation/secret-recovery-20261005.json`.

@@ -73,6 +73,25 @@ restrictive permissions. See `scripts/restore_data.py` for verification and
 staging-restore instructions. Do not restore directly over the live volume as
 part of an application release.
 
+### Production secrets and isolated rehearsal
+
+Data archives do not contain `/etc/daedalus/production.env`. Recovery needs its
+original encryption key to decrypt saved Meraki credentials, plus the session
+secret and OAuth configuration. Use `scripts/recovery_secrets.py` to seal and
+restore a private environment file; never commit an environment or recovery
+password. Keep a separately held recovery password for protection beyond loss
+of the application host.
+
+The October 5 recovery copy is under the user's Mac application-support
+directory, `Daedalus/Recovery/20261005T224647Z`, outside this repository. Its
+envelope and password are private files on the same Mac; separate custody has
+not been established. A rehearsal unsealed locally, started the restored portal
+with production configuration validation, disabled all background collectors,
+bound only to loopback, and authenticated 39 exact PDF downloads using the
+existing local user key. The temporary process was stopped after validation.
+This does not verify public DNS/TLS failover or Google OAuth login on a restored
+host. Rehearse against a separate restored data directory before any live switch.
+
 ### DNS audit resolver provenance
 
 Set `DAEDALUS_AUDIT_DNS_NAMESERVERS` to up to three comma-separated IPv4/IPv6 resolver addresses to use an explicit upstream for DNS/email audits. Empty uses the system resolver. For the current Incus host, restart the instance after changing the environment (`incus restart --timeout 120 daedalus-prod`) and verify `/readyz`. A direct systemd restart on this host can fail to stop the prior process because of container control-group permissions; checking the next snapshot's resolver provenance confirms that the new environment took effect. Snapshots retain resolver mode and addresses; resolver metadata changes do not create domain configuration alerts. Query availability changes remain evidence and may generate notices. No silent fallback is performed. Website target validation and ownership verification keep their existing resolvers. Resolver AD flags do not prove locally validated DNSSEC.
