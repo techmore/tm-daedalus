@@ -247,6 +247,8 @@ class CISReportPDFFlowTests(unittest.TestCase):
                 prefix + "install-service-linux.sh",
                 prefix + "manage-service-linux.sh",
                 prefix + "macos_service.py",
+                prefix + "ScannerStatus.swift",
+                prefix + "install-status-macos.sh",
                 prefix + "systemd_service.py",
                 prefix + "upgrade_service.py",
                 prefix + "linux_upgrade.py",

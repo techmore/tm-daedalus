@@ -156,6 +156,8 @@ def build_agent_bundle() -> bytes:
         "install-service-linux.sh": bundle_dir / "install-service-linux.sh",
         "manage-service-linux.sh": bundle_dir / "manage-service-linux.sh",
         "macos_service.py": bundle_dir / "macos_service.py",
+        "ScannerStatus.swift": bundle_dir / "ScannerStatus.swift",
+        "install-status-macos.sh": bundle_dir / "install-status-macos.sh",
         "systemd_service.py": bundle_dir / "systemd_service.py",
         "upgrade_service.py": bundle_dir / "upgrade_service.py",
         "linux_upgrade.py": bundle_dir / "linux_upgrade.py",
@@ -6315,6 +6317,30 @@ def scoped_scanner(request: Request, db: Session, agent_id: int) -> Agent:
     if agent is None or agent.organization_id != organization.id:
         raise HTTPException(status_code=404, detail="Scanner not found in this workspace")
     return agent
+
+
+@app.get("/api/agents/{agent_id}/client-status")
+def scanner_client_status(agent_id: int, authorization: str | None = Header(default=None),
+                          db: Session = Depends(get_db)):
+    """Read-only status for this enrolled device's local indicator."""
+    agent = require_agent(db, agent_id, authorization)
+    scope = (ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
+             ScanEvent.source_job_id.is_not(None))
+    job_ids = db.scalars(select(ScanEvent.source_job_id).where(*scope)
+                        .group_by(ScanEvent.source_job_id).order_by(func.max(ScanEvent.id).desc()).limit(5)).all()
+    def local_run(job_id):
+        summary = scanner_run_summary(db, agent, job_id)
+        event = db.scalar(select(ScanEvent).where(*scope, ScanEvent.source_job_id == job_id,
+                          ScanEvent.event_name == "job_status").order_by(ScanEvent.id.desc()).limit(1))
+        details = event.payload.get("details") if event and isinstance(event.payload, dict) else None
+        target = details.get("target") if isinstance(details, dict) else None
+        summary["reported_target"] = target[:255] if isinstance(target, str) else None
+        return summary
+    return JSONResponse({"name": agent.name, "status": agent_status(agent),
+                         "bridge_online": agent_bridge_online(agent),
+                         "last_seen_at": iso_utc(agent.last_seen_at) if agent.last_seen_at else None,
+                         "recent_runs": [local_run(job_id) for job_id in job_ids]},
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/agents/{agent_id}/assessment")

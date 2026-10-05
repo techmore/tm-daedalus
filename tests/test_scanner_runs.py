@@ -36,6 +36,18 @@ class ScannerRunTests(unittest.TestCase):
     def send(self, envelope):
         return self.client.post(f"/api/agents/{self.agent}/events", headers=self.headers, json=envelope)
 
+    def test_device_status_uses_only_its_enrollment_and_never_returns_token(self):
+        self.setup_scanner()
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        path = f"/api/agents/{self.agent}/client-status"
+        response = self.client.get(path, headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertEqual(response.json()["recent_runs"][0]["source_job_id"], self.job_id)
+        self.assertNotIn("test-scanner-token", response.text)
+        self.assertNotEqual(self.client.get(path).status_code, 200)
+        self.assertNotEqual(self.client.get(f"/api/agents/{self.agent + 999}/client-status", headers=self.headers).status_code, 200)
+
     def test_latest_assessment_keeps_observations_separate_from_completion(self):
         self.setup_scanner()
         path = f"/api/agents/{self.agent}/assessment"

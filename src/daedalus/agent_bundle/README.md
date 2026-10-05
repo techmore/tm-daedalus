@@ -284,3 +284,13 @@ Modern bundled NmapUI emits command-linked accepted/terminal receipts and replay
 ### Known targets and discovery
 
 NmapUI's **Scan known targets without host discovery** option is off by default. Enable it in local scanner settings when a known host blocks discovery probes. It adds Nmap's `-Pn` to discovery and subsequent scans; target profiles can inherit the global choice or explicitly override it. This may scan unresponsive addresses. Existing comprehensive report scans already use `-Pn`. **Scan-only mode** independently skips MAC/vendor enrichment. When exclusions are configured, ARP enrichment is skipped so it cannot probe excluded addresses; Nmap retains its exclusions. Completion history reports the number of discovered or explicitly selected hosts, including zero.
+
+## Mac menu bar status
+
+After managed enrollment, run `sh install-status-macos.sh` to install the native
+Daedalus Scanner Status companion. It starts at login, reads the existing private
+enrollment config, and shows local NmapUI availability, active jobs, portal bridge
+status, and the five latest saved runs. Open the local UI for detailed live scan
+results or the portal for saved history. Quitting the indicator leaves scanning
+services running. Building this local companion requires Apple's Swift command
+line tools; it is locally ad-hoc signed, not a notarized distribution package.
