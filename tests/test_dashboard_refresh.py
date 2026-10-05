@@ -388,6 +388,15 @@ assert.equal(entry.childNodes[1].childNodes[0].tag, 'li');
 assert.equal(entry.childNodes[2].tag, 'details');
 assert.equal(entry.childNodes[2].childNodes[0].textContent, 'Raw update catalog receipt');
 assert.equal(historyBody.childNodes[0], entry);
+entry.childNodes=[];
+decoded.truncated=true; decoded.update_count=5; decoded.observed_at='invalid';
+render();
+assert.equal(entry.childNodes[0].textContent, 'Updates are available');
+assert.equal(entry.childNodes[2].textContent, 'Catalog reported 5 updates. Some update details were omitted from this receipt.');
+assert.equal(entry.childNodes[3].tag, 'details');
+entry.childNodes=[]; decoded.update_count='5';
+render();
+assert.equal(entry.childNodes[2].textContent, 'Some update details were omitted from this receipt.');
 '''
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

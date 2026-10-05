@@ -1017,3 +1017,8 @@ The subsequent local source **618f45e**, including CSS/font runtime integrity an
 ## Scanner OS update result serialization — October 5, 2026
 
 Review found that the bridge sliced serialized macOS update evidence at 1,000 characters, which could leave invalid JSON for a long catalog. It now removes whole update detail entries until valid serialized evidence fits the command limit, retains the original update count/status/time and sets truncated=true. It does not mutate the collected evidence. An end-to-end command fixture uses long quote/backslash-containing values and verifies parseable bounded output, retained count, explicit omissions and original-list preservation. All **28 bridge tests and five subtests passed**. The command remains a read-only macOS catalog check; no update was installed or production client replaced.
+
+
+## Scanner update history omission notice — October 5, 2026
+
+The existing command-history layout now explains when update details were omitted, with a validated integer catalog total where available. Invalid timestamps are omitted instead of displaying Invalid Date. Text-node fixtures verify escaped update titles, the omission notice, raw evidence access, malformed totals and timestamps. The dashboard refresh/bridge suites passed **46 tests and five subtests**; JavaScript syntax passed. Dashboard script version is now 108 so clients request the revised asset after deployment. This is fixture validation, not rendered browser acceptance or production activation.

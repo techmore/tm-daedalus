@@ -645,7 +645,7 @@
                 } else if (command.action === "check_os_updates" && decoded && decoded.schema_version === 1) {
                   var updateSummary = document.createElement("p");
                   var outcome = { updates_available: "Updates are available", no_updates: "No updates are available", unavailable: "Apple's update catalog is unavailable", timed_out: "The catalog check timed out", error: "The catalog check failed", unsupported: "This platform is not supported", unknown: "The catalog response could not be interpreted" };
-                  updateSummary.textContent = (outcome[decoded.status] || "Update check result") + (decoded.observed_at ? " · Checked " + new Date(decoded.observed_at).toLocaleString() : "");
+                  updateSummary.textContent = (outcome[decoded.status] || "Update check result") + (decoded.observed_at && Number.isFinite(Date.parse(decoded.observed_at)) ? " · Checked " + new Date(decoded.observed_at).toLocaleString() : "");
                   entry.append(updateSummary);
                   if (Array.isArray(decoded.updates)) {
                     var updateList = document.createElement("ul");
@@ -657,6 +657,11 @@
                       updateList.append(item);
                     });
                     if (updateList.childNodes.length) entry.append(updateList);
+                  }
+                  if (decoded.truncated === true) {
+                    var omittedUpdates = document.createElement("p");
+                    omittedUpdates.textContent = (Number.isInteger(decoded.update_count) && decoded.update_count >= 0 ? "Catalog reported " + decoded.update_count + " updates. " : "") + "Some update details were omitted from this receipt.";
+                    entry.append(omittedUpdates);
                   }
                   evidence.textContent = JSON.stringify(decoded, null, 2);
                   var rawDetails = document.createElement("details");
