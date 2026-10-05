@@ -771,3 +771,9 @@ Source 1a7d2260dc78f492907b19750947c03f74f727e5 deployed with verified off-host 
 ## Recovery inspection worker configuration — October 5, 2026
 
 Added DAEDALUS_BACKGROUND_WORKERS_ENABLED with default true. Setting false prevents the scheduler and website-audit worker from starting in an isolated recovery copy; initialization and interrupted-job reconciliation remain active. This is not a read-only mode and does not restrict manual authorized API actions. Startup fixtures verify both workers omitted when disabled and both launched when enabled. Targeted auth/workspace validation passed 19 tests and 13 subtests; full backend validation passed 570 tests and 126 subtests. Production remains on 1a7d226 with workers enabled. Real restored runtime and failover acceptance remain pending.
+
+## Restored application runtime rehearsal — October 5, 2026
+
+Started current 0f1c13c code against the privately restored production backup on a temporary loopback-only Uvicorn server, with demo seeding and automatic collectors disabled. Normal application startup ran and readiness confirmed database/report storage healthy. The saved operator membership and token authenticated all **38 completed PDF downloads**; bytes matched the restored canonical report files exactly and responses were no-store. The operator token was obtained from the current live host into process memory, never written into the harness or receipt. The temporary server was terminated; post-startup SQLite integrity and foreign-key checks passed.
+
+Receipt: validation/restored-runtime-receipt-20261005.json. This proves local restored-runtime startup and authenticated stored-report access. OAuth was disabled and a fresh ephemeral encryption key was used, so OAuth continuity, independent production encryption-key recovery, internet routing, scanner reconnection to a replacement production host, and actual production failover remain unverified. SER8 production was not replaced or stopped.
