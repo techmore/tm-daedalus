@@ -4,6 +4,7 @@ import pytest
 
 from daedalus.scanner_report_template import ASSETS, standardized_scanner_html
 from daedalus.scanner_report_template import original_xml_documents
+from daedalus.scanner_report_template import standardized_scanner_run_html
 import hashlib
 
 
@@ -81,3 +82,16 @@ def test_missing_coverage_does_not_render_as_zero_observations():
         standardized_scanner_html(b"<nmaprun/>")
     with pytest.raises(ValueError, match="inconsistent"):
         standardized_scanner_html(XML.replace(b'up="1" down="0" total="1"', b'up="1" down="0" total="0"'))
+
+
+def test_completely_missing_host_xml_upload_cannot_silently_omit_host():
+    events = xml_events() + [{"event_name": "deep_scan_results", "payload": [
+        {"ip": "127.0.0.1"}, {"ip": "127.0.0.2"},
+    ]}]
+    with pytest.raises(ValueError, match="missing scanned hosts"):
+        standardized_scanner_run_html(events)
+
+
+def test_matching_detail_and_xml_host_evidence_renders():
+    events = xml_events() + [{"event_name": "deep_scan_results", "payload": [{"ip": "127.0.0.1"}]}]
+    assert "Example service" in standardized_scanner_run_html(events)

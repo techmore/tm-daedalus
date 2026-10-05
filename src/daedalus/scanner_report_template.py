@@ -123,6 +123,27 @@ def standardized_scanner_run_html(events: list[dict]) -> str:
     for xml in documents:
         standardized_scanner_html(xml)
         roots.append(etree.fromstring(xml, etree.XMLParser(resolve_entities=False, no_network=True)))
+    observed_addresses = {
+        address.get("addr") for root in roots for address in root.findall("host/address")
+        if address.get("addrtype") in {"ipv4", "ipv6"}
+    }
+    # A completely missing host upload has no chunk group to mark incomplete.
+    # Check the independently saved detailed result records as well.
+    required_addresses = set()
+    for event in events:
+        if event.get("event_name") != "deep_scan_results":
+            continue
+        payload = event.get("payload")
+        hosts = payload.get("hosts") if isinstance(payload, dict) else payload
+        if not isinstance(hosts, list) or any(not isinstance(host, dict) for host in hosts):
+            raise ValueError("Invalid detailed scan evidence prevents a complete XML report.")
+        for host in hosts:
+            address = host.get("ip") or host.get("address")
+            if not isinstance(address, str) or not address:
+                raise ValueError("Detailed scan evidence is missing a host address.")
+            required_addresses.add(address)
+    if required_addresses - observed_addresses:
+        raise ValueError("Original Nmap XML is missing scanned hosts; no partial report was created.")
     if len(roots) == 1:
         return standardized_scanner_html(documents[0])
     if len({root.get("version") for root in roots}) > 1:
