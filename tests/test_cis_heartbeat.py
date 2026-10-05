@@ -104,6 +104,17 @@ class CISHeartbeatTests(unittest.TestCase):
         self.assertEqual(status['assessment_counts']['missing'], 250)
         self.assertEqual(sum(status['assessment_counts'].values()), 251)
 
+    def test_missing_summary_keeps_device_status_available(self):
+        self.enroll()
+        with self.session_factory() as db:
+            db.scalar(select(CISReport)).summary = None
+            db.commit()
+        response = self.client.get('/api/cis/status')
+        self.assertEqual(response.status_code, 200)
+        device = response.json()['devices'][0]
+        self.assertTrue(device['latest_report_id'])
+        self.assertTrue(all(value is None for value in device['latest_assessment_summary'].values()))
+
     def test_each_device_exposes_its_own_latest_assessment(self):
         self.enroll()
         second_summary = {'total': 4, 'pass': 1, 'fail': 1, 'manual': 2, 'error': 0, 'score': 25.0}

@@ -3470,7 +3470,7 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
             "presence_source": "report_receipt",
             "latest_report_id": latest_reports[device.id].id if device.id in latest_reports else None,
             "latest_assessment_summary": {
-                key: latest_reports[device.id].summary.get(key)
+                key: (latest_reports[device.id].summary or {}).get(key)
                 for key in ("total", "pass", "fail", "manual", "error", "score")
             } if device.id in latest_reports else None,
             "last_collected_at": iso_utc(latest_reports[device.id].collected_at) if device.id in latest_reports else None,
