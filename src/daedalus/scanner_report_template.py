@@ -91,7 +91,7 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         raise ValueError("Original Nmap XML has invalid host coverage counts.") from exc
     if min(up, down, total) < 0 or up + down != total:
         raise ValueError("Original Nmap XML has inconsistent host coverage counts.")
-    stylesheet = etree.parse(str(ASSETS / "nmap-pdf-olive-legacy.xsl"), parser=parser)
+    stylesheet = etree.parse(str(ASSETS / "nmap-pdf-olive-approved.xsl"), parser=parser)
     if target_label is not None:
         # Supply the combined scope through the existing target field without
         # changing the standardized stylesheet's layout or its command evidence.
@@ -115,19 +115,28 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
     ]:
         encoded = base64.b64encode((ASSETS / "fonts" / filename).read_bytes()).decode("ascii")
         font_css += f"@font-face{{font-family:'{family}';font-style:normal;font-weight:{weight};src:url(data:font/woff2;base64,{encoded}) format('woff2');}}"
-    replacements = {
-        "__NMAPUI_TAILWIND_CSS__": '<style id="nmapui-tailwind-css">'
-        + font_css + (ASSETS / "tailwind.css").read_text() + "</style>",
-        # PDF rendering has JavaScript disabled; retain the stylesheet's runtime
-        # placeholder without allowing script or external resource execution.
-        "__NMAPUI_REPORT_RUNTIME__": "",
-        "__NMAPUI_REPORT_CSP__": "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
-    }
-    for marker, value in replacements.items():
-        if html.count(marker) != 1:
-            raise ValueError(f"Approved report template has an invalid {marker} placeholder.")
-        html = html.replace(marker, value, 1)
-    return html
+    # Preserve the historical stylesheet byte-for-byte. Replace only its
+    # external loading mechanisms in the generated head, keeping its body
+    # layout, inline styles and report sections intact.
+    page = etree.HTML(html)
+    head = page.find("head")
+    for element in head.xpath("./script|./link"):
+        head.remove(element)
+    css = (ASSETS / "tailwind.css").read_text()
+    shades = ["#f5f6f3", "#e9ebe0", "#d8dbc7", "#bcc2a9", "#979f83", "#777f65",
+              "#636b54", "#525845", "#414637", "#32382a", "#25291f"]
+    current = ["96% .015", "91% .020", "85% .028", "75% .040", "62% .055", "50% .065",
+               "42% .055", "35% .045", "28% .035", "22% .025", "16% .015"]
+    for values, color in zip(current, shades):
+        css = css.replace(f"oklch({values} 110)", color)
+        css = css.replace(f"oklch({values.replace(' .', ' 0.')} 110)", color)
+    style = etree.Element("style", id="nmapui-tailwind-css")
+    style.text = font_css + css
+    head.insert(0, style)
+    csp = etree.Element("meta", {"http-equiv": "Content-Security-Policy", "content":
+        "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"})
+    head.insert(0, csp)
+    return etree.tostring(page, method="html", encoding="unicode")
 
 
 def standardized_scanner_run_html(events: list[dict]) -> str:

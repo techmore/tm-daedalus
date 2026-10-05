@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Historical PDF baseline pinned — 2026-10-05
+
+The corrective renderer now selects an unchanged copy of the exact `86e404fc` stylesheet underlying the saved seven-page PDF, instead of the later expanded stylesheet. Local CSS/font loading is substituted only in the generated head; the historical report body is preserved and its original olive utility palette is restored. A regression test compares the complete historical and generated body DOMs exactly, alongside a pinned stylesheet digest and real browser animation-capture coverage. Seventeen template tests passed; the preceding scanner/template integration suite passed 35 checks. All seven reproduction pages were reviewed as a comparison sheet; typography/table spacing still differ, so full visual parity and production activation remain open. No historical report or production release changed.
+
 ## Scanner PDF animation capture correction — 2026-10-05
 
 Historical-template reproduction exposed a capture race: a PDF taken during the existing entrance animation clipped the first-page card. Finishing document animations before print capture restores the card's final position without changing its source layout. The renderer now explicitly finishes those animations after fonts load. A real Chromium regression test supplies a 100-second animation, verifies its finished state and final transform immediately before PDF capture, then verifies PDF output. The saved historical example and stable reproduction both have seven Letter pages, but typography/table spacing and complete page-by-page parity remain unverified. Historical source assets and production deployment are unchanged; no visual acceptance is claimed.

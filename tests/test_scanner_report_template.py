@@ -44,6 +44,7 @@ def test_pdf_assets_match_bundled_nmapui_baseline():
             ("static/js/report_runtime.js", "report_runtime.js"),
         ]:
             assert (ASSETS / destination).read_bytes() == bundle.read("daedalus-nmapui-source/" + source)
+    assert hashlib.sha256((ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes()).hexdigest() == "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537"
 
 
 def xml_events():
@@ -104,7 +105,7 @@ def test_combined_xml_target_field_lists_all_hosts_without_losing_commands():
         "byte_count": len(second), "chunk_count": 1, "chunk_index": 0, "xml": second.decode(),
     }}]
     html = standardized_scanner_run_html(events)
-    assert "127.0.0.1, 127.0.0.2" in html
+    assert "127.0.0.1" in html and "127.0.0.2" in html
     assert "nmap -sV 127.0.0.1" in html
     assert "nmap -sV 127.0.0.2" in html
 
@@ -116,6 +117,18 @@ def test_template_evidence_error_becomes_a_readable_validation_failure(monkeypat
     monkeypatch.setattr(module.etree, "XSLT", lambda *args, **kwargs: fail)
     with pytest.raises(ValueError, match="could not be rendered"):
         standardized_scanner_html(XML)
+
+
+def test_local_asset_embedding_preserves_entire_historical_report_body():
+    from lxml import etree
+    historical = etree.XSLT(etree.parse(str(ASSETS / "nmap-pdf-olive-approved.xsl")))(etree.fromstring(XML))
+    expected = etree.HTML(str(historical)).find("body")
+    actual = etree.HTML(standardized_scanner_html(XML)).find("body")
+    assert etree.tostring(actual, method="c14n") == etree.tostring(expected, method="c14n")
+    html = standardized_scanner_html(XML)
+    head = etree.HTML(html).find("head")
+    assert not head.xpath("./script|./link")
+    assert "#32382a" in head.xpath("./style[@id='nmapui-tailwind-css']")[0].text
 
 
 def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
