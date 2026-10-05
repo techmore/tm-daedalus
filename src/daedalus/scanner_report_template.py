@@ -5,6 +5,8 @@ import hashlib
 import re
 import copy
 import base64
+import os
+import sys
 
 from lxml import etree
 
@@ -212,6 +214,9 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     """Render the approved stylesheet with the same browser print settings as NmapUI."""
     import tempfile
     from playwright.sync_api import sync_playwright
+
+    if sys.platform == "linux" and Path("/opt/daedalus/browser-runtime").is_dir():
+        os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/daedalus/browser-runtime")
 
     scanner = report_snapshot.get("scanner") or {}
     events = scanner.get("events")

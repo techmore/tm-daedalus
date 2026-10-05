@@ -36,10 +36,11 @@ case "$phase" in
     printf '%s\n' "$app/src" > "$site_packages/daedalus-release.pth"
     chown -R daedalus:daedalus "$candidate"
     # Install the pinned browser used by the approved NmapUI PDF stylesheet.
-    # Shared OS libraries are installed before activation; browser downloads
-    # stay under the service account's normal Playwright cache.
+    # ProtectHome=true hides home caches from the production service. Keep the
+    # pinned browser under /opt, readable after ProtectSystem becomes strict.
     "$candidate/.venv/bin/python" -m playwright install-deps chromium
-    runuser -u daedalus -- "$candidate/.venv/bin/python" -m playwright install chromium --only-shell
+    install -d -o daedalus -g daedalus -m 0755 /opt/daedalus/browser-runtime
+    runuser -u daedalus -- env PLAYWRIGHT_BROWSERS_PATH=/opt/daedalus/browser-runtime "$candidate/.venv/bin/python" -m playwright install chromium --only-shell
     DAEDALUS_ENV=development \
       DAEDALUS_DATA_DIR=/tmp/daedalus-deploy-smoke \
       DAEDALUS_REPORTS_DIR=/tmp/daedalus-deploy-smoke/reports \

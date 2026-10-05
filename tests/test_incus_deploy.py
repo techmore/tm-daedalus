@@ -129,6 +129,11 @@ class IncusDeployTests(unittest.TestCase):
         self.assertEqual(host_cleanup[0], "rm")
         self.assertNotIn("/tmp/daedalus-deploy-remote.sh", host_cleanup)
 
+    def test_pdf_browser_install_avoids_protected_home_cache(self):
+        script = (ROOT / "scripts/deploy_incus_remote.sh").read_text()
+        self.assertIn("PLAYWRIGHT_BROWSERS_PATH=/opt/daedalus/browser-runtime", script)
+        self.assertIn("install -d -o daedalus -g daedalus -m 0755 /opt/daedalus/browser-runtime", script)
+
     def test_remote_helper_has_valid_bash_syntax(self):
         result = subprocess.run(
             ["bash", "-n", str(ROOT / "scripts/deploy_incus_remote.sh")],
