@@ -741,3 +741,9 @@ The managed Linux workflow now copies its sanitized validation receipt and gener
 GitHub run **37265827272** at source **0966da9** completed successfully. Its sanitized log receipt records one loopback host/port, a succeeded scan command, local upgrade completion, portal recovery completion, unchanged recovered scan and PDF, a scanner heartbeat after recovery, and cleanup. The installer recovery fixture suite passed 46 tests and 14 subtests. These observations prove the isolated lifecycle exercised by the harness, not production subnet deployment or persistence soak.
 
 Evidence-retention source ea1de08 is pushed; new backend run 37302933069 and managed Linux run 37302933165 are active. SSH access has resumed. Deployment to SER8 completed with verified off-host backup and internal/public readiness checks. Fresh public readiness confirms database and report storage healthy. Artifact retention validation and signed-in scanner setup acceptance remain pending.
+
+## Retained Linux artifacts and deployed enrollment assets — October 5, 2026
+
+Managed Linux run **37302933165** at ea1de08 succeeded and retained the non-expired managed-linux-scanner-evidence artifact. Downloaded receipt records a succeeded real loopback scan (one host, one port), upgrade completion, portal recovery, unchanged recovered run/PDF, post-recovery heartbeat and cleanup. Retained PDF bytes and SHA-256 match the receipt. Local evidence: validation/linux-evidence-37302933165/. This closes artifact-retention validation, not production network rollout.
+
+Authenticated HTTPS requests against SER8 verified the new platform selector, Linux option, managed-service instructions, versioned JavaScript, and both initial/change command-selection paths. No new enrollment token was issued. Private receipt: /data/codex-scanner-platform-validation-20261005.json. This is response/asset verification; rendered browser acceptance remains pending.
