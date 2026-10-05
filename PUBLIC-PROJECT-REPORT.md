@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Live topic refresh and profile selection — 2026-10-05
+
+The existing agent-owned browser session verified production website navigation and reload retained `/dashboard#web` and `Website health`, then loaded its stored HTTPS summary. Endpoint navigation/reload likewise retained `/dashboard#cis` and `Endpoint compliance` and loaded current assessment coverage. The live client-profile selector contains the CSP starter baseline and both macOS 26 Level 1/Level 2 profiles. Private endpoint receipt: `validation/cis-browser-refresh-20261005.json`. This verifies navigation, data loading and available options; it does not prove physical macOS 26 client deployment or visual design acceptance. Browser screenshot capture still timed out after restoring a desktop viewport.
+
+Latest application commit `9a9408a` passed [backend CI](https://github.com/techmore/tm-daedalus/actions/runs/37356217297), with 610 tests and 129 subtests on each of Python 3.11/3.12, and [managed Linux integration CI](https://github.com/techmore/tm-daedalus/actions/runs/37356216969). Production activation remains pending the standardized scanner PDF baseline.
+
 ## Signed-in DNS history wording — 2026-10-05
 
 The existing agent-owned ego-browser session exposed live production scanner availability and the DNS assessment/history. The DNS lookup recovery row showed `No value returned` for the absence of a resolver error, obscuring the actual recovery. Change history now labels normalized resolver states `Lookup unavailable` and `Lookup available`, while empty record collections and uncaptured evidence retain distinct wording. Forty-nine dashboard/refresh tests and two subtests passed, including executable JavaScript checks. Screenshot capture timed out; this semantic inspection does not establish visual layout acceptance. The copy correction is not yet deployed and changes no PDF template.
