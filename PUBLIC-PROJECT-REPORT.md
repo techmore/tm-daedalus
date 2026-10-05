@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Installed local CIS client acceptance — 2026-10-05
+
+The current Release app was built, its bundle signature integrity verified, and installed under the current user's Applications directory on macOS 27.0.1. A private mode-0600 config uses the existing operator per-user key for CSP, preserving the shared CIS upload key and stable device identity. The installed menu-bar client launched and uploaded production report 22: 154 results, 11 pass, 10 fail, 133 manual and zero collection errors; pass rate 7.14%, with 21 assessed checks (13.64% coverage). The profile checksum verified. These are reported baseline results, not CIS attestation.
+
+The app remains running with its existing retry/heartbeat/24-hour audit timers. Login registration was not changed, and persistence across login/reboot and recurring heartbeat acceptance remain unverified. The local artifact contains no workspace config and passes ZIP/bundle integrity checks, but carries only an ad hoc signature; trusted/notarized distribution and macOS 26 deployment remain open. Native UI inspection timed out, so no menu screenshot acceptance is claimed. Private receipt: `validation/cis-installed-client-live-20261005.json`.
+
 ## Historical table typography preserved — 2026-10-05
 
 Current Chromium's default table font produced larger overview text than the saved export. Explicit inheritance of the surrounding report font restores the saved overview header sizes and horizontal text positions; explicit service-table utility sizing remains intact. This compatibility rule changes neither historical body markup nor report sections. A real browser regression checks inherited overview typography and the explicit 14px service table. Eighteen template tests passed. A small vertical form-control/spacing difference and full final page review remain open before production activation.
