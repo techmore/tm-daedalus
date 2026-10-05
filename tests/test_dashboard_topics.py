@@ -7,6 +7,24 @@ import unittest
 
 class DashboardTopicTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_mail_route_summary_distinguishes_unknown_and_null_mx(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function mailRouteMetric('):source.index('  function renderTopicPriorities(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.equal(mailRouteMetric({},{}).value,'Unknown');
+assert.equal(mailRouteMetric({MX:null},{}).value,'Unknown');
+assert.equal(mailRouteMetric({MX:['0 .']},{MX:'Timeout'}).value,'Lookup failed');
+assert.equal(mailRouteMetric({MX:[]},{}).value,'0');
+assert.match(mailRouteMetric({MX:[]},{}).detail,/fallback was not evaluated/);
+assert.equal(mailRouteMetric({MX:['0 .']},{}).value,'No mail');
+assert.equal(mailRouteMetric({MX:['0 .','10 mx.example.']},{}).value,'Review');
+assert.equal(mailRouteMetric({MX:['10 mx.example.']},{}).value,'1');
+assert.match(mailRouteMetric({MX:['10 mx.example.']},{}).detail,/delivery was not tested/);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_dns_lookup_recovery_copy_distinguishes_availability_from_empty_records(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function displayCheckValue('):source.index('  function appendEmpty(')]
@@ -445,6 +463,7 @@ notifyExternalCheck({run_id:3,status:'failed',check_type:'dns',source:'schedule'
     def test_dns_renderer_keeps_record_drawers_with_their_topic(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function renderDnsSnapshot('):source.index('  var vendorReviewContext =')]
+        helper = source[source.index('  function mailRouteMetric('):source.index('  function renderTopicPriorities(')] + helper
         script = """const assert=require('node:assert/strict');
 class Node {constructor(tag='div'){this.tag=tag;this.children=[];this.attributes={};}append(...n){this.children.push(...n);}replaceChildren(){this.children=[];}setAttribute(k,v){this.attributes[k]=v;}}
 const grid=new Node();const document={getElementById:()=>grid,createElement:tag=>new Node(tag)};

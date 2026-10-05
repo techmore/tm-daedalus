@@ -2834,6 +2834,19 @@
     return {state: state, value: state === "expired" ? "Expired" : days + " days", detail: "Saved certificate expires " + new Date(expiry).toISOString(), days: days, expiry: expiry};
   }
 
+  function mailRouteMetric(records, errors) {
+    if (errors.MX) return {value: "Lookup failed", detail: errors.MX, state: "neutral"};
+    if (!Array.isArray(records.MX)) return {value: "Unknown", detail: "MX evidence not captured", state: "neutral"};
+    var nullRecords = records.MX.filter(function (record) { return typeof record === "string" && /^\s*0\s+\.\s*$/.test(record); });
+    if (nullRecords.length) {
+      return records.MX.length === 1
+        ? {value: "No mail", detail: "Null MX explicitly declares no incoming mail service", state: "neutral"}
+        : {value: "Review", detail: "Null MX appears alongside other MX records", state: "attention"};
+    }
+    if (!records.MX.length) return {value: "0", detail: "No MX published; address-record fallback was not evaluated", state: "neutral"};
+    return {value: String(records.MX.length), detail: "MX records published; delivery was not tested", state: "neutral"};
+  }
+
   function renderTopicPriorities(type, snapshot) {
     var container = document.getElementById(type + "-priorities");
     if (!container) return;
@@ -2940,10 +2953,10 @@
     var selectorMetricDetail = !selectorNames.length
       ? "No selector data in this snapshot"
       : (failedSelectors.length ? failedSelectors.length + " selector lookup(s) failed" : "of the selectors checked");
-    var mxCount = Array.isArray(records.MX) ? records.MX.length : 0;
+    var mailRoutes = mailRouteMetric(records, errors);
     var emailMetrics = emailAuthenticationMetrics(snapshot.email_authentication_assessment);
     summary.append(
-      makeAuditMetric("Mail routes", errors.MX ? "Lookup failed" : String(mxCount), errors.MX || (mxCount === 1 ? "MX record published" : "MX records published"), mxCount && !errors.MX ? "good" : "attention"),
+      makeAuditMetric("Mail routes", mailRoutes.value, mailRoutes.detail, mailRoutes.state),
       makeAuditMetric(emailMetrics[0].label, emailMetrics[0].value, emailMetrics[0].detail, emailMetrics[0].state),
       makeAuditMetric(emailMetrics[1].label, emailMetrics[1].value, emailMetrics[1].detail, emailMetrics[1].state),
       makeAuditMetric("DKIM selectors", selectorMetricValue, selectorMetricDetail, publishedSelectors ? "good" : "attention")

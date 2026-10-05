@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Mail route summary interpretation — 2026-10-05
+
+The dashboard no longer renders uncaptured MX evidence as zero routes or a null MX as a positive mail route. It distinguishes lookup failure, unknown evidence, confirmed empty MX with unevaluated address fallback, a single null MX declaring no incoming mail, and a null MX conflicting with other records. Ordinary published MX records do not imply tested delivery. Interpretation follows [RFC 7505](https://www.rfc-editor.org/rfc/rfc7505). The dashboard suites passed 51 tests and two subtests; syntax and diff checks passed. This correction is not yet deployed. Before this UI addition, the full suite with the new startup guard passed 622 tests and 129 subtests.
+
 ## Scanner startup validation guard — 2026-10-05
 
 The isolated harness now checks its owned portal/NmapUI process before accepting readiness and stops immediately if that process has exited. This avoids waiting on HTTP timeouts or accepting an unrelated listener after the owned process stops. Two regression fixtures cover an exited process and a live successful process; all eight local harness tests passed. The corrected Linux scenario run 37385943889 remains active; this guard is committed separately and will be pushed after that run finishes to avoid cancelling its evidence collection.
