@@ -781,3 +781,7 @@ Receipt: validation/restored-runtime-receipt-20261005.json. This proves local re
 ## Recovery configuration deployed — October 5, 2026
 
 Source **20b7513c8f7e2d521310a6f0640dc65bdf71461f** deployed to SER8 with verified off-host backup and internal/public readiness. Reading the installed configuration with the actual production environment confirmed automatic collectors remain enabled. The earlier recovered-copy runtime rehearsal verified disabled collectors and all 38 authenticated report downloads. Backend CI for implementation 0f1c13c passed; its managed Linux lifecycle CI remains active. Production failover, independent key recovery and the broader acceptance matrix remain open.
+
+## Restored production workspace isolation — October 5, 2026
+
+Using the privately restored actual production users/memberships and the saved CSP operator token, the loopback app rejected selecting the independent workspace with HTTP 403 and rejected reading that workspace's override history with HTTP 404. All 38 authorized report downloads still matched restored bytes. No production memberships or scopes were modified, and the temporary server was stopped. Receipt: validation/restored-isolation-receipt-20261005.json. This validates two access-denial paths with real stored membership data, not full human OAuth onboarding, approval, admin succession or exhaustive endpoint isolation. Approved scanner CIDRs/target machines and an independent recovery-secret destination have been requested to unblock the corresponding release gates.
