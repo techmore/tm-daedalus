@@ -2244,6 +2244,21 @@
     ];
   }
 
+  function groupEarlierCISHistory(list, label, wasOpen) {
+    var earlier = Array.from(list.children).slice(10);
+    if (!earlier.length) return;
+    var group = document.createElement("details");
+    group.className = "cis-history-group";
+    group.open = Boolean(wasOpen);
+    var summary = document.createElement("summary");
+    summary.textContent = earlier.length + " earlier " + label;
+    var entries = document.createElement("div");
+    entries.className = "cis-history-entries";
+    earlier.forEach(function (entry) { entries.append(entry); });
+    group.append(summary, entries);
+    list.append(group);
+  }
+
   function renderCISReports(reports, enrolledDeviceCount) {
     var list = document.getElementById("cis-report-list");
     var metrics = document.getElementById("cis-summary-metrics");
@@ -2264,6 +2279,7 @@
       });
     }
     if (!list) return;
+    var earlierOpen = Boolean(list.querySelector(".cis-history-group[open]"));
     list.replaceChildren();
     if (!reports.length) {
       appendEmpty(list, "Waiting for the first endpoint report. Download a client configuration and run the CSP CIS client.");
@@ -2335,11 +2351,13 @@
       });
       list.append(card);
     });
+    groupEarlierCISHistory(list, "reports", earlierOpen);
   }
 
   function renderCISChanges(changes) {
     var list = document.getElementById("cis-change-list");
     if (!list) return;
+    var earlierOpen = Boolean(list.querySelector(".cis-history-group[open]"));
     list.replaceChildren();
     if (!changes.length) {
       appendEmpty(list, "No check status changes have been detected yet.");
@@ -2360,6 +2378,7 @@
       row.append(main, state);
       list.append(row);
     });
+    groupEarlierCISHistory(list, "changes", earlierOpen);
   }
 
   async function loadCIS() {

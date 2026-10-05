@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Endpoint history density — 2026-10-05
+
+The signed-in production endpoint page contained 100 change rows (6,841 CSS pixels) and 23 collapsed report summaries (3,096 CSS pixels). The corrective UI keeps the newest ten entries in each list visible and places earlier entries in native expandable history groups. Every entry remains accessible in its original order, and an open earlier-history group stays open across data refresh. Regression checks cover empty, ten-entry, eleven-entry and hundred-entry histories and retained expansion; 50 dashboard tests and two subtests passed, along with JavaScript syntax/diff checks. Screenshot capture still times out in the existing agent-owned browser, so no visual acceptance is claimed. This UI change is not yet deployed.
+
 ## DNS collector preserves malformed SPF evidence — 2026-10-05
 
 The collector previously discarded leading-whitespace SPF-looking TXT values before passing its explicit SPF list to the policy interpreter, causing a misleading `Not published` assessment. Candidate selection now retains the original value; the existing interpreter correctly reports it malformed with no policy verdict. Collector, email-policy and DNS-comparison suites passed 28 tests and 11 subtests. This correction is not yet deployed.

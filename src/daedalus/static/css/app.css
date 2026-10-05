@@ -529,6 +529,10 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .cis-section-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 13px 17px; }
 .cis-profile-install-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .cis-profile-list, .cis-device-list, .cis-report-list, .cis-change-list { display: grid; gap: 9px; }
+.cis-history-group { min-width: 0; border: 1px solid rgba(219, 214, 176, .58); border-radius: 11px; }
+.cis-history-group > summary { padding: 14px 16px; cursor: pointer; color: var(--olive-900); font-size: 12px; font-weight: 600; }
+.cis-history-group > summary:focus-visible { outline: 2px solid var(--olive-600); outline-offset: 2px; }
+.cis-history-entries { display: grid; gap: 9px; padding: 0 12px 12px; }
 .cis-profile-card, .cis-report-card, .cis-change-row { min-width: 0; padding: 14px 16px; border: 1px solid rgba(219, 214, 176, .58); border-radius: 11px; background: rgba(254, 253, 248, .84); }
 .cis-profile-card, .cis-change-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .cis-device-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 12px 15px; border: 1px solid rgba(219, 214, 176, .58); border-radius: 10px; background: rgba(254, 253, 248, .84); }

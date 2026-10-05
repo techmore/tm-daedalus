@@ -337,6 +337,31 @@ assert.equal(cisPriorityMetrics(null,0)[0][0],'—');
         self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_endpoint_history_groups_keep_every_entry_in_order(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function groupEarlierCISHistory('):source.index('  function renderCISReports(')]
+        script = """const assert=require('node:assert/strict');
+class Node {
+ constructor(tag){this.tag=tag;this.children=[];this.parent=null;}
+ append(...items){for(const item of items){if(item.parent){item.parent.children.splice(item.parent.children.indexOf(item),1);}item.parent=this;this.children.push(item);}}
+}
+const document={createElement:tag=>new Node(tag)};
+""" + helper + """
+for(const size of [0,10,11,100]) {
+ const list=new Node('div');const original=Array.from({length:size},(_,id)=>{const n=new Node('article');n.id=id;return n;});list.append(...original);
+ groupEarlierCISHistory(list,'changes',false);
+ if(size<=10){assert.deepEqual(list.children,original);continue;}
+ assert.equal(list.children.length,11);const group=list.children[10];assert.equal(group.tag,'details');assert.equal(group.open,false);
+ assert.equal(group.children[0].textContent,(size-10)+' earlier changes');
+ assert.deepEqual([...list.children.slice(0,10),...group.children[1].children],original);
+}
+const reopened=new Node('div');reopened.append(...Array.from({length:23},()=>new Node('details')));
+groupEarlierCISHistory(reopened,'reports',true);assert.equal(reopened.children[10].open,true);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_endpoint_evidence_groups_prioritize_failures_and_keep_unknown_unassessed(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function renderCISResultGroups('):source.index('  function renderCISProfiles(')]
