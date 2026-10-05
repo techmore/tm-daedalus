@@ -155,6 +155,30 @@ class DNSCollectorObservationTests(unittest.TestCase):
         changes = compare_snapshots(first, second)
         self.assertEqual([path for path, _, _ in changes], ["records.SOA"])
 
+    def test_dnssec_timeout_and_recovery_only_report_lookup_availability(self):
+        first = self.collect(FixtureResolver({
+            ("example.test", "DS"): (["12345 8 2 " + "AB" * 32], 300, True),
+        }))
+        failed = self.collect(FixtureResolver(failures={
+            ("example.test", "DS"): dns.resolver.LifetimeTimeout(timeout=5, errors=[]),
+        }))
+        self.assertEqual(compare_snapshots(first, failed),
+                         [("resolver_errors.DS", None, "unavailable")])
+        self.assertEqual(compare_snapshots(failed, first),
+                         [("resolver_errors.DS", "unavailable", None)])
+
+    def test_dnssec_failure_does_not_hide_independent_dnskey_removal(self):
+        first = self.collect(FixtureResolver({
+            ("example.test", "DNSKEY"): (["257 3 8 AQIDBA=="], 300, False),
+        }))
+        second = self.collect(FixtureResolver(failures={
+            ("example.test", "DS"): dns.resolver.LifetimeTimeout(timeout=5, errors=[]),
+        }))
+        paths = {path for path, _, _ in compare_snapshots(first, second)}
+        self.assertIn("records.DNSKEY", paths)
+        self.assertIn("dnssec_observations.zone_dnskey_present", paths)
+        self.assertNotIn("dnssec_observations.assessment", paths)
+
 
 if __name__ == "__main__":
     unittest.main()

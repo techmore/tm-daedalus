@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## DNS comparison semantics review — 2026-10-05
+
+Unavailable DNS queries previously suppressed record-change conclusions but still compared absent response metadata and derived DNSSEC presence/assessment fields. A DS timeout could therefore appear as changed DNSSEC protection. Comparison now suppresses metadata and derived conclusions for the unavailable query while retaining the normalized lookup outage/recovery alert and the complete original snapshots. Independently observed DNSKEY changes remain visible when only DS lookup fails. Regression checks exercise collector-produced snapshots in both directions and independent DNSKEY removal. The DNS comparison/collector and passive website/resource suites passed 38 tests and nine subtests. This correction is not yet deployed; PDF baseline acceptance remains outstanding.
+
 ## CI acceptance of scanner XML pipeline — 2026-10-05
 
 Application commit `a903db1` passed [backend CI](https://github.com/techmore/tm-daedalus/actions/runs/37355084523) on Python 3.11 and 3.12: each ran 605 tests and 129 subtests successfully. The pinned production requirements export also matched. The [managed Linux integration run](https://github.com/techmore/tm-daedalus/actions/runs/37355084526) passed; its downloaded receipt confirms fresh installation, an actual bounded Nmap scan against one ephemeral loopback listener, original XML upload, 17 realtime messages, persistent run storage and authenticated PDF generation/download.

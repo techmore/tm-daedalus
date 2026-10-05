@@ -704,6 +704,14 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     def incomplete_record_paths(snapshot: dict[str, Any]) -> set[str]:
         paths: set[str] = set()
         for lookup in (snapshot.get("resolver_errors") or {}):
+            # Missing metadata from an unavailable response is not a change
+            # to records or DNSSEC protection. Availability is compared above.
+            paths.add(f"query_observations.{lookup}")
+            if lookup in {"DS", "DNSKEY"}:
+                paths.add("dnssec_observations.assessment")
+                paths.add(f"dnssec_observations.resolver_ad_by_query.{lookup}")
+                paths.add("dnssec_observations.delegation_ds_present" if lookup == "DS"
+                          else "dnssec_observations.zone_dnskey_present")
             if lookup == "TXT":
                 paths.update({
                     "records.TXT", "records.SPF",
