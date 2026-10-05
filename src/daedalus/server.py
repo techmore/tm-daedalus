@@ -6333,28 +6333,48 @@ def scanner_assessment(agent_id: int, request: Request, db: Session = Depends(ge
     if run["group_metadata_conflict"]:
         response["reason"] = "Saved run metadata conflicts."
         return response
-    event = db.scalar(select(ScanEvent).options(defer(ScanEvent.payload)).where(
+    events = db.scalars(select(ScanEvent).options(defer(ScanEvent.payload)).where(
         ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
         ScanEvent.source_job_id == job_id, ScanEvent.event_name == "deep_scan_results",
-    ).order_by(occurred.desc(), ScanEvent.id.desc()).limit(1))
-    if event is None:
+    ).order_by(occurred.asc(), ScanEvent.id.asc()).limit(201)).all()
+    if not events:
         response["reason"] = "Latest run has no saved detailed results."
         return response
-    if event.artifact_size_bytes and event.artifact_size_bytes > 8 * 1024 * 1024:
-        response["reason"] = "Latest detailed results exceed the summary size limit; review the saved artifact."
+    if len(events) > 200:
+        response["reason"] = "Detailed results exceed the summary event limit; review the saved run."
         return response
-    try:
-        snapshot = normalize_snapshot(load_scanner_event_payload(event))
-    except (TypeError, ValueError):
-        response["reason"] = "Latest detailed results cannot be interpreted; earlier results were not substituted."
-        return response
+    snapshot = {"hosts": {}, "covered_targets": []}
+    total_bytes = 0
+    for event in events:
+        if event.artifact_size_bytes and total_bytes + event.artifact_size_bytes > 8 * 1024 * 1024:
+            response["reason"] = "Latest detailed results exceed the summary size limit; review the saved artifact."
+            return response
+        try:
+            payload = load_scanner_event_payload(event)
+            total_bytes += len(json.dumps(payload).encode("utf-8"))
+            if total_bytes > 8 * 1024 * 1024:
+                response["reason"] = "Latest detailed results exceed the summary size limit; review the saved artifact."
+                return response
+            observed = normalize_snapshot(payload)
+        except (TypeError, ValueError):
+            response["reason"] = "Latest detailed results cannot be interpreted; earlier results were not substituted."
+            return response
+        # Each host result is a snapshot. A later result replaces that host's
+        # earlier ports rather than retaining ports it no longer reported.
+        snapshot["hosts"].update(observed["hosts"])
+        if observed["covered_targets"] is None:
+            snapshot["covered_targets"] = None
+        elif snapshot["covered_targets"] is not None:
+            snapshot["covered_targets"] = sorted(set(snapshot["covered_targets"]) | set(observed["covered_targets"]))
+    event = events[-1]
     ports = [port for host in snapshot["hosts"].values() for port in host["ports"].values()]
     response["observations"] = {
         "host_count": len(snapshot["hosts"]),
         "open_port_count": sum(port["state"] == "open" for port in ports),
         "unknown_port_state_count": sum(port["state"] is None for port in ports),
         "covered_targets": snapshot["covered_targets"],
-        "result_event_id": event.id, "collected_at": iso_utc(event.occurred_at or event.created_at),
+        "result_event_id": event.id, "result_event_count": len(events),
+        "collected_at": iso_utc(event.occurred_at or event.created_at),
         "coverage_complete": False,
     }
     response["state"] = "recorded" if run["status"] == "completed" else "attention"

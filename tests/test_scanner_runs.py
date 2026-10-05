@@ -56,6 +56,18 @@ class ScannerRunTests(unittest.TestCase):
         self.assertIn("earlier results were not substituted", invalid["reason"])
         self.assertEqual(self.client.get('/api/agents/999999/assessment').status_code, 404)
 
+    def test_assessment_combines_hosts_and_replaces_repeated_host_snapshots(self):
+        self.setup_scanner()
+        self.send(self.envelope("deep_scan_results", [{"ip": "10.20.0.1", "ports": [{"port": 22, "protocol": "tcp", "state": "open"}]}]))
+        self.send(self.envelope("deep_scan_results", [{"ip": "10.20.0.2", "ports": [{"port": 443, "protocol": "tcp", "state": "open"}]}]))
+        self.send(self.envelope("deep_scan_results", [{"ip": "10.20.0.1", "ports": []}]))
+        data = self.client.get(f"/api/agents/{self.agent}/assessment").json()["observations"]
+        self.assertEqual(data["host_count"], 2)
+        self.assertEqual(data["open_port_count"], 1)
+        self.assertEqual(data["result_event_count"], 3)
+        self.assertIsNone(data["covered_targets"])
+        self.assertFalse(data["coverage_complete"])
+
     def test_assessment_does_not_replace_failed_latest_scan_with_old_success(self):
         self.setup_scanner()
         path = f"/api/agents/{self.agent}/assessment"

@@ -48,5 +48,16 @@ class ThemeTests(unittest.TestCase):
         self.assertNotIn(".demo-switch { position: fixed", css)
 
 
+    def test_keyboard_bypass_focus_and_reduced_motion(self):
+        css = CSS.read_text()
+        html = DASHBOARD.read_text()
+        self.assertIn('class="skip-link" href="#main-content"', html)
+        self.assertIn('id="main-content" tabindex="-1"', html)
+        self.assertIn('id="page-title" tabindex="-1"', html)
+        self.assertIn('input:focus-visible', css)
+        self.assertIn('textarea:focus-visible', css)
+        self.assertIn('@media (prefers-reduced-motion: reduce)', css)
+
+
 if __name__ == "__main__":
     unittest.main()

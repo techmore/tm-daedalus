@@ -158,7 +158,12 @@
     document.querySelectorAll(".tab-panel").forEach(function (panel) {
       panel.classList.toggle("active", panel.id === "tab-" + name);
     });
-    text(document.getElementById("page-title"), titleMap[name] || "Workspace");
+    var pageTitle = document.getElementById("page-title");
+    text(pageTitle, titleMap[name] || "Workspace");
+    // User navigation moves focus to the topic heading; live refreshes retain focus.
+    if (updateLocation && activeTab !== name && pageTitle && typeof pageTitle.focus === "function") {
+      pageTitle.focus();
+    }
 
     if (updateLocation && window.location.hash !== "#" + name) {
       var nextUrl = window.location.pathname + window.location.search + "#" + name;

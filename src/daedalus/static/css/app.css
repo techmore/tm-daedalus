@@ -259,9 +259,9 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
   .sidebar { position: static; width: auto; min-height: auto; padding: 15px; }
   .sidebar .brand { padding-bottom: 15px; }
   .workspace-switcher, .nav-label-lower, .sidebar-spacer, .sidebar-footer { display: none; }
-  .main-nav { display: flex; overflow-x: auto; }
+  .main-nav { display: flex; flex-wrap: wrap; overflow: visible; }
   .nav-label { display: none; }
-  .nav-item { flex: 0 0 auto; white-space: nowrap; }
+  .nav-item { flex: 1 1 calc(50% - 8px); min-width: 0; white-space: normal; min-height: 44px; }
   .nav-item > span { display: none; }
   .nav-badge { display: none; }
   .main-content { margin-left: 0; padding: 0 16px 35px; }
@@ -869,3 +869,11 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 
 .website-audit-evidence { margin: 24px 0; padding: 16px 0; border-top: 1px solid var(--card-line); }
 .website-audit-evidence > .section-heading { margin-top: 0; }
+
+/* Keyboard navigation and the operating system's reduced-motion preference. */
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 1000; padding: 12px 18px; color: var(--cream-50); background: var(--olive-900); border-radius: 8px; transform: translateY(-160%); }
+.skip-link:focus { transform: translateY(0); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--olive-600); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
