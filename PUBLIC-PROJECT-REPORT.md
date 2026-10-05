@@ -2,6 +2,8 @@
 
 ## Current checkpoint — October 5, 2026
 
+Connected-subnet discovery is being added to the scanner client: macOS and Linux derive the default connection’s IPv4 CIDR from its actual netmask/prefix, report it in authenticated heartbeats, and prefill the dashboard scope editor. Detection never expands approved scan scope automatically. This Mac detected 10.20.0.0/24; its existing production scanner was explicitly authorized for that scope and command 19 started a real subnet scan. Completion and deployment evidence will follow.
+
 The authenticated portal runs in Incus on SER8 at daedalus.cybersecuritypilot.org; GitHub Pages hosts the CSP marketing site. Current deployed application source is **c3277ba**, with internal/public readiness and authenticated PDF downloads verified. Later documentation commits do not change the deployed runtime. Entries below retain dated validation history and are not the current deployment inventory.
 
 The dashboard leads with topic assessments, findings and changes, with grouped supporting evidence and secondary controls. Authenticated structure and renderer checks passed; signed-in desktop/mobile visual acceptance remains pending return of the review session.

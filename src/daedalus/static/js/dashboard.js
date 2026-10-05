@@ -442,6 +442,10 @@
     card.append(head, name, subtitle, telemetry, readiness, lastSeen, meta);
 
     var authorizedNetworks = Array.isArray(agent.authorized_networks) ? agent.authorized_networks : [];
+    var detectedNetworks = Array.isArray(agent.detected_networks) ? agent.detected_networks : [];
+    var detectedSummary = document.createElement("p");
+    detectedSummary.textContent = detectedNetworks.length ? "Detected connection: " + detectedNetworks.join(", ") : "Waiting for the client to detect its connected network.";
+    card.append(detectedSummary);
     var scopeSummary = document.createElement("p");
     scopeSummary.className = "scanner-scope-summary";
     scopeSummary.textContent = authorizedNetworks.length
@@ -470,7 +474,7 @@
       var scopeInput = document.createElement("input");
       scopeInput.value = scannerNetworkInputs.has(agent.id)
         ? scannerNetworkInputs.get(agent.id)
-        : authorizedNetworks.join(", ");
+        : (authorizedNetworks.length ? authorizedNetworks : detectedNetworks).join(", ");
       scopeInput.placeholder = "10.20.20.0/24, 10.20.21.0/24";
       scopeInput.setAttribute("aria-label", "Authorized network CIDRs for " + agent.name);
       scopeInput.addEventListener("input", function () { scannerNetworkInputs.set(agent.id, scopeInput.value); });

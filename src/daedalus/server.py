@@ -255,6 +255,7 @@ def ensure_agent_telemetry_columns(connection) -> None:
         "nmapui_restart_supported": "BOOLEAN NOT NULL DEFAULT 0",
         "command_protocol_version": "INTEGER NOT NULL DEFAULT 0",
         "authorized_networks": "JSON NOT NULL DEFAULT '[]'",
+        "detected_networks": "JSON NOT NULL DEFAULT '[]'",
     }
     for name, sql_type in additions.items():
         if name not in existing:
@@ -471,6 +472,14 @@ class AgentEventRequest(BaseModel):
 
 
 class AgentHeartbeatRequest(BaseModel):
+    detected_networks: list[str] | None = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def normalize_detected_networks(self):
+        if self.detected_networks is not None:
+            self.detected_networks = validate_scanner_network_scopes(self.detected_networks)
+        return self
+
     nmapui_connected: bool = False
     version: str | None = Field(default=None, max_length=80)
     platform: str | None = Field(default=None, max_length=80)
@@ -5437,6 +5446,7 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
                 "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
                 "command_protocol_version": agent.command_protocol_version or 0,
                 "authorized_networks": agent.authorized_networks or [],
+                "detected_networks": agent.detected_networks or [],
             }
             for agent in agents
         ],
@@ -5575,6 +5585,7 @@ def enroll_agent(payload: EnrollmentRequest, db: Session = Depends(get_db)):
         "organization": organization.name,
         "agent_token": clear_agent_token,
         "authorized_networks": agent.authorized_networks or [],
+                "detected_networks": agent.detected_networks or [],
     }
 
 
@@ -5587,6 +5598,8 @@ async def agent_heartbeat(
 ):
     agent = require_agent(db, agent_id, authorization)
     agent.last_seen_at = utcnow()
+    if payload.detected_networks is not None:
+        agent.detected_networks = payload.detected_networks
     agent.nmapui_connected = payload.nmapui_connected
     agent.nmapui_restart_supported = payload.nmapui_restart_supported
     agent.command_protocol_version = payload.command_protocol_version

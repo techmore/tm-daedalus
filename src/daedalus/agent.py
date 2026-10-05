@@ -6,6 +6,7 @@ import ctypes
 from contextlib import contextmanager
 import getpass
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -33,6 +34,57 @@ from daedalus.command_journal import CommandJournal
 
 LOG = logging.getLogger("daedalus.agent")
 COMMAND_PROTOCOL_VERSION = 3
+
+
+def discover_connected_networks() -> list[str]:
+    """Derive the active default connection's IPv4 subnet; never guess a prefix."""
+    def read(args: list[str]) -> str:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=3, check=True)
+        if len(result.stdout) > 65536:
+            raise ValueError("Network inventory exceeded its limit")
+        return result.stdout
+
+    try:
+        system = platform.system()
+        if system == "Darwin":
+            route = read(["/sbin/route", "-n", "get", "default"])
+            match = re.search(r"^\s*interface:\s*([A-Za-z0-9_.-]{1,32})\s*$", route, re.M)
+            if not match:
+                return []
+            interface = match.group(1)
+            # Tunnel connections do not identify a directly attached LAN.
+            if interface.startswith(("utun", "tun", "tap", "lo")):
+                return []
+            inventory = read(["/sbin/ifconfig", interface])
+            addresses = re.findall(r"\binet ([0-9.]+) netmask (0x[0-9a-fA-F]+|[0-9.]+)", inventory)
+            candidates = []
+            for address, mask in addresses:
+                if mask.startswith("0x"):
+                    mask = str(ipaddress.IPv4Address(int(mask, 16)))
+                candidates.append(ipaddress.IPv4Interface(f"{address}/{mask}"))
+        elif system == "Linux":
+            executable = shutil.which("ip")
+            if not executable:
+                return []
+            routes = json.loads(read([executable, "-j", "route", "show", "default"]))
+            routes = sorted(routes, key=lambda route: route.get("metric", 0))
+            interface = next((route.get("dev") for route in routes if route.get("dev")), None)
+            if not isinstance(interface, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,32}", interface):
+                return []
+            if interface.startswith(("tun", "tap", "tailscale", "wg", "lo")):
+                return []
+            inventory = json.loads(read([executable, "-j", "address", "show", "dev", interface]))
+            candidates = [ipaddress.IPv4Interface(f"{entry['local']}/{entry['prefixlen']}")
+                          for device in inventory for entry in device.get("addr_info", [])
+                          if entry.get("family") == "inet" and entry.get("scope") == "global"]
+        else:
+            return []
+        return sorted({str(address.network) for address in candidates
+                       if address.ip.is_private and not address.ip.is_loopback
+                       and not address.ip.is_link_local and not address.ip.is_unspecified
+                       and address.network.prefixlen > 0})[:32]
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+        return []
 
 
 def _total_memory_bytes(system: str) -> int | None:
@@ -417,6 +469,7 @@ class NmapUIBridge:
             "nmapui_restart_supported": self._nmapui_restart_supported(),
             "version": f"Daedalus bridge {__version__}",
             "platform": platform.system(),
+            "detected_networks": discover_connected_networks(),
             **scanner_health,
         }
         response = self._request(

@@ -82,6 +82,7 @@ class Agent(Base):
     nmapui_ready: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     nmapui_restart_supported: Mapped[bool] = mapped_column(Boolean, default=False)
     command_protocol_version: Mapped[int] = mapped_column(Integer, default=0)
+    detected_networks: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     authorized_networks: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
