@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## Production Linux scanner acceptance — 2026-10-05
+
+A dedicated Ubuntu 24.04 Incus scanner (`daedalus-scanner-linux`) now runs on SER8, separate from the portal. It enrolled in CSP as scanner 3, detects its connected subnet automatically, and has only `127.0.0.1/32` authorized for validation. The managed NmapUI and outbound bridge run as unprivileged systemd user services; NmapUI binds only to `127.0.0.1:9000`, with enrollment and local authentication files mode 0600.
+
+The clean installation exposed missing compiler/Python headers for `netifaces` and absent generated local credentials. Ubuntu prerequisites are documented, and the Linux installer now generates private credentials when neither credential is supplied. Supplied credentials are preserved. During setup repair, the managed service integrity guard refused restart after the credential file changed; existing unit bytes were verified before recording that authorized change. Production command 28 then succeeded, reporting NmapUI reconnected and ready.
+
+Production command 26 completed loopback run `2156a367-2b4f-4933-a21f-1efc3df2c86b`. Its original XML uploaded, reassembled and passed hash/host-coverage checks (SHA-256 `ee5d0aaa476b06c607e40120cf88dcae43d5d26987382ed35dafda8a6afbe86a`). A subsequent container restart started both services with linger enabled, retained scanner ID 3 and the saved run, and produced a fresh online heartbeat. No inbound scanner port or production PDF job was created. Private receipts are retained under `validation/ser8-linux-*20261005.json`. The current full backend suite passed 604 tests and 129 subtests. Additional VLAN/physical locations, fleet soak, and the other completion gates remain open; this is one real production Linux deployment.
+
 ## SER8 PDF runtime acceptance — 2026-10-05
 
 The corrective renderer was tested in a separate candidate environment inside the existing production Incus instance. The verified 72-file candidate archive had SHA-256 `c10e091fb226924c00fc62b90cf4fd3a0fbde70a257434076f56c4e5d5cb25b1`. Browser installation uses `/opt/daedalus/browser-runtime`, since the production service's `ProtectHome=true` hides home caches.
@@ -67,7 +75,7 @@ The complete project is **not yet verified complete**. A fresh read-only SER8 ce
 | Google login and per-user keys | Login configured; scoped keys and live membership/revocation enforcement; authentication fixtures | Broader real-user onboarding, sharing, domain independence and admin succession validation |
 | Domain probation and overrides | TXT verification, 30-day window, audited 14-day grants and enforcement fixtures | Real second-domain onboarding and expiry/renewal acceptance workflow |
 | DNS/email/website evidence | Real saved runs, comparisons, notifications, schedules, queue/cancellation and PDFs | Owner/provider review of DNS/mail findings; broader checker-semantic review |
-| Multiple local scanners | Real Mac loopback events/history/PDF; isolated real Linux managed-service CI | Additional locations and VLAN/subnet deployments, plus production Linux enrollment |
+| Multiple local scanners | Real Mac subnet/history; production Linux Incus enrollment, loopback/XML upload, managed restart and container restart recovery | Additional locations and VLAN/subnet deployments, plus fleet soak |
 | Remote management | Bounded scan, cancel, health/update checks and managed restart paths | Confirm the intended remote-control feature set and validate it on the deployment targets |
 | Meraki | Real authorized report with one network, zero assigned devices, unavailable controls distinguished from disabled protection | Larger authorized inventory and review of unavailable control coverage |
 | CIS profiles/check-ins/scores | Three published profiles; real macOS 27 legacy reports; 113 native unit tests; dated changes and inbox notices | Managed macOS 26 production check-in, remaining legacy check semantics, Developer ID/notarization, persistent installed-client lifecycle |
