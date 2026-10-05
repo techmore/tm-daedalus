@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Historical CSS cascade restored — 2026-10-05
+
+Text bounding-box comparison found matching font sizes/word widths but shifted heading positions. The historical CDN appended generated utility CSS after the inline template styles; local embedding had inserted it before them, changing the cascade. The renderer now preserves the historical loading order. In the reproduction, the first-page heading and version words now match the saved PDF's exact x/y coordinates, with seven Letter pages retained. A regression assertion pins this stylesheet order; 17 template tests passed. Table/form-control spacing still differs and complete visual acceptance remains outstanding. No production template or release was changed.
+
 ## Historical PDF baseline pinned — 2026-10-05
 
 The corrective renderer now selects an unchanged copy of the exact `86e404fc` stylesheet underlying the saved seven-page PDF, instead of the later expanded stylesheet. Local CSS/font loading is substituted only in the generated head; the historical report body is preserved and its original olive utility palette is restored. A regression test compares the complete historical and generated body DOMs exactly, alongside a pinned stylesheet digest and real browser animation-capture coverage. Seventeen template tests passed; the preceding scanner/template integration suite passed 35 checks. All seven reproduction pages were reviewed as a comparison sheet; typography/table spacing still differ, so full visual parity and production activation remain open. No historical report or production release changed.

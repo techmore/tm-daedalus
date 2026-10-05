@@ -132,7 +132,9 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         css = css.replace(f"oklch({values.replace(' .', ' 0.')} 110)", color)
     style = etree.Element("style", id="nmapui-tailwind-css")
     style.text = font_css + css
-    head.insert(0, style)
+    # The historical CDN appended its generated utility stylesheet after the
+    # template's inline styles. Preserve that cascade order locally.
+    head.append(style)
     csp = etree.Element("meta", {"http-equiv": "Content-Security-Policy", "content":
         "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'"})
     head.insert(0, csp)

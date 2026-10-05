@@ -129,6 +129,7 @@ def test_local_asset_embedding_preserves_entire_historical_report_body():
     head = etree.HTML(html).find("head")
     assert not head.xpath("./script|./link")
     assert "#32382a" in head.xpath("./style[@id='nmapui-tailwind-css']")[0].text
+    assert head.findall("style")[-1].get("id") == "nmapui-tailwind-css"
 
 
 def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
