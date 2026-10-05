@@ -5479,13 +5479,13 @@ def create_enrollment_token(
         },
     )
     db.commit()
-    return {
+    return JSONResponse({
         "code": clear_code,
         "expires_at": token.expires_at.isoformat() + "Z",
         "organization": organization.name,
         "scanner_name": token.scanner_name,
         "authorized_networks": token.authorized_networks or [],
-    }
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/agents/bridge/download")

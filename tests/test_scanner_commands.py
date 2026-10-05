@@ -15,6 +15,21 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
     tearDown = fixtures.CISReportPDFFlowTests.tearDown
     create_scanner = fixtures.CISReportPDFFlowTests.create_scanner
 
+    def test_enrollment_response_is_private_and_clear_code_is_not_persisted(self):
+        from daedalus.models import EnrollmentToken
+        response = self.client.post('/api/enrollment-tokens', json={'name': 'VLAN 20', 'authorized_networks': ['10.20.20.0/24']})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        code = response.json()['code']
+        with self.session_factory() as db:
+            token = db.scalar(select(EnrollmentToken).order_by(EnrollmentToken.id.desc()))
+            self.assertEqual(token.code_hash, server.token_digest(code))
+            self.assertEqual(token.scanner_name, 'VLAN 20')
+            self.assertEqual(token.authorized_networks, ['10.20.20.0/24'])
+            events = db.scalars(select(AuditLog).where(AuditLog.action == 'scanner.enrollment_token_issued')).all()
+            self.assertTrue(events)
+            self.assertTrue(all(code not in str(event.details) for event in events))
+
     def ready(self, protocol=1):
         agent_id, _ = self.create_scanner()
         self.headers = {"Authorization": "Bearer test-scanner-token"}
