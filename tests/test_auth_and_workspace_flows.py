@@ -767,6 +767,21 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         self.assertTrue(verified.json()["verified"])
         verify_txt.assert_called_once()
 
+    def test_txt_lookup_runs_outside_the_request_event_loop(self):
+        import asyncio
+        created = self.admin_client.post('/api/workspaces', json={'name': 'Threaded lookup', 'domain': 'threaded.example.org'})
+        self.assertEqual(created.status_code, 200, created.text)
+        organization_id = created.json()['organization_id']
+        def lookup(*_args):
+            with self.assertRaises(RuntimeError):
+                asyncio.get_running_loop()
+            return False
+        with patch.object(server, 'has_matching_txt', side_effect=lookup) as resolver:
+            response = self.admin_client.post(f'/api/workspaces/{organization_id}/verify-domain')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertFalse(response.json()['verified'])
+        resolver.assert_called_once()
+
     def test_domain_verification_resolver_failure_preserves_probation_and_challenge(self):
         import dns.resolver
         created = self.admin_client.post('/api/workspaces', json={'name': 'DNS outage', 'domain': 'outage.example.org'})

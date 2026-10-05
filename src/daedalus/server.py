@@ -2617,7 +2617,8 @@ async def verify_workspace_domain(
             detail="The TXT challenge expired. Create a new challenge and add its record.",
         )
     try:
-        matched = has_matching_txt(
+        matched = await run_in_threadpool(
+            has_matching_txt,
             organization.domain,
             {challenge.token_hash for challenge in challenges},
             token_digest,
