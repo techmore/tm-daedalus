@@ -7,12 +7,15 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
     var portal = "Daedalus: checking…"
     var activity = "Scan activity: checking…"
     var recent: [String] = []
+    var lastRequest = "Last scan request: checking…"
     var running = false
     var scanning = false
+    var working = false
     var localURL: URL?
     var portalURL: URL?
     var token = ""
     var agentID = 0
+    var lastPortalPoll = Date.distantPast
     var timer: Timer?
     var rows: [NSMenuItem] = []
     lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
@@ -30,7 +33,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         }
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu.delegate = self
-        for _ in 0..<10 { let row = NSMenuItem(title: "", action: nil, keyEquivalent: ""); menu.addItem(row); rows.append(row) }
+        for _ in 0..<11 { let row = NSMenuItem(title: "", action: nil, keyEquivalent: ""); menu.addItem(row); rows.append(row) }
         menu.addItem(.separator())
         addAction("Open local scanner", #selector(openLocal))
         addAction("Open Daedalus scan history", #selector(openPortal))
@@ -39,7 +42,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         addAction("Quit status indicator (scanner keeps running)", #selector(quit))
         item.menu = menu
         render()
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.refresh() }
         if let timer = timer { RunLoop.main.add(timer, forMode: .common) }
         refresh()
     }
@@ -62,7 +65,8 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
                 self.running = data != nil
                 self.engine = data != nil ? "NmapUI: running" : "NmapUI: unavailable"
                 let jobs = data?["active_jobs"] as? [[String: Any]] ?? []
-                self.scanning = !jobs.isEmpty
+                self.working = !jobs.isEmpty
+                self.scanning = jobs.contains { $0["job_type"] as? String == "scan" }
                 if let job = jobs.first {
                     let details = job["details"] as? [String: Any] ?? [:]
                     let target = details["target"] as? String ?? ""
@@ -73,10 +77,16 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             }
         } else { engine = "NmapUI: configuration unavailable"; activity = "Scan activity: unknown" }
         if let portalURL = portalURL, agentID > 0, !token.isEmpty {
+            if Date().timeIntervalSince(lastPortalPoll) < 15 { return }
+            lastPortalPoll = Date()
             get(portalURL.appendingPathComponent("api/agents/\(agentID)/client-status"), authenticated: true) { [weak self] data in
                 guard let self = self else { return }
                 if let data = data {
                     self.portal = (data["bridge_online"] as? Bool == true) ? "Daedalus bridge: connected" : "Daedalus bridge: offline"
+                    if let request = data["last_scan_request"] as? [String: Any] {
+                        let detail = request["status"] as? String == "failed" ? " · " + (request["result"] as? String ?? "") : ""
+                        self.lastRequest = "Last request: \(request["status"] as? String ?? "unknown") · \(request["target"] as? String ?? "")\(detail)"
+                    } else { self.lastRequest = "No scan requests recorded" }
                     self.recent = (data["recent_runs"] as? [[String: Any]] ?? []).prefix(5).map { run in
                         let status = run["status"] as? String ?? "unknown"
                         let time = self.dateLabel(run["last_occurred_at"] as? String)
@@ -95,18 +105,18 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short; return formatter.string(from: date)
     }
     func render() {
-        let values = ["Daedalus Scanner", engine, portal, activity, portal.contains("unreachable") ? "Recent saved runs (cached)" : "Recent saved runs"] + (recent.isEmpty ? ["No saved runs available"] : recent)
+        let values = ["Daedalus Scanner", engine, portal, activity, lastRequest, portal.contains("unreachable") ? "Recent saved runs (cached)" : "Recent saved runs"] + (recent.isEmpty ? ["No saved runs available"] : recent)
         for (index, row) in rows.enumerated() {
             row.isHidden = index >= values.count
             if index < values.count { row.title = String(values[index].filter { !$0.isNewline }.prefix(180)); row.attributedTitle = NSAttributedString(string: row.title, attributes: [.foregroundColor: NSColor.labelColor]); row.isEnabled = false }
         }
-        let observation: [String: Any] = ["engine": engine, "portal": portal, "activity": activity, "recent": recent, "observed_at": ISO8601DateFormatter().string(from: Date())]
+        let observation: [String: Any] = ["engine": engine, "portal": portal, "activity": activity, "recent": recent, "last_request": lastRequest, "observed_at": ISO8601DateFormatter().string(from: Date())]
         let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Daedalus/scanner-status-observation.json")
         if let data = try? JSONSerialization.data(withJSONObject: observation) {
             try? data.write(to: file, options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         }
-        item.button?.title = scanning ? " Scanning" : " Nmap"
+        item.button?.title = scanning ? " Scanning" : (working ? " Working" : " Nmap")
         item.button?.image = NSImage(systemSymbolName: running ? (scanning ? "waveform.path.ecg" : "checkmark.shield") : "exclamationmark.shield", accessibilityDescription: "Scanner status")
         item.button?.toolTip = "\(engine)\n\(portal)\n\(activity)"
     }

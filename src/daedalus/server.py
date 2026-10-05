@@ -6336,7 +6336,12 @@ def scanner_client_status(agent_id: int, authorization: str | None = Header(defa
         target = details.get("target") if isinstance(details, dict) else None
         summary["reported_target"] = target[:255] if isinstance(target, str) else None
         return summary
+    command = db.scalar(select(AgentCommand).where(AgentCommand.agent_id == agent.id,
+                        AgentCommand.organization_id == agent.organization_id, AgentCommand.action == "start_scan")
+                        .order_by(AgentCommand.id.desc()).limit(1))
+    last_request = {"status": command.status, "target": command.target, "result": command.result} if command else None
     return JSONResponse({"name": agent.name, "status": agent_status(agent),
+                         "last_scan_request": last_request,
                          "bridge_online": agent_bridge_online(agent),
                          "last_seen_at": iso_utc(agent.last_seen_at) if agent.last_seen_at else None,
                          "recent_runs": [local_run(job_id) for job_id in job_ids]},

@@ -16,7 +16,7 @@ python3 - "$TASK_APP" "$TASK_PLIST" <<'PY'
 import sys,plistlib,pathlib,os
 app=pathlib.Path(sys.argv[1]);plist=pathlib.Path(sys.argv[2])
 (app/'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable':'DaedalusScannerStatus','CFBundleIdentifier':'org.daedalus.scanner-status','CFBundleName':'Daedalus Scanner Status','CFBundlePackageType':'APPL','LSUIElement':True,'NSAppTransportSecurity':{'NSAllowsLocalNetworking':True}}))
-plist.write_bytes(plistlib.dumps({'Label':'org.daedalus.scanner-status','ProgramArguments':[str(app/'Contents/MacOS/DaedalusScannerStatus')],'RunAtLoad':True,'KeepAlive':True,'ProcessType':'Interactive'}));plist.chmod(0o600)
+plist.write_bytes(plistlib.dumps({'Label':'org.daedalus.scanner-status','ProgramArguments':[str(app/'Contents/MacOS/DaedalusScannerStatus')],'RunAtLoad':True,'KeepAlive':{'SuccessfulExit':False},'ProcessType':'Interactive'}));plist.chmod(0o600)
 PY
 codesign --force --sign - "$TASK_APP" >/dev/null 2>&1
 launchctl bootout "gui/$(id -u)/$TASK_LABEL" 2>/dev/null || true
