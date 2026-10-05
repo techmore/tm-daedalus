@@ -6831,6 +6831,13 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
            "group_metadata_conflict": len(job_types) != 1 or job_type not in {"scan", "report"}, "snapshot_cutoff_event_id": max(event.id for event in events),
            "snapshot_payload_bytes": payload_bytes, "snapshot_event_limit": MAX_SCANNER_RUN_PDF_EVENTS,
            "snapshot_byte_limit": MAX_SCANNER_RUN_PDF_BYTES, "truncated": False}
+    if status != "completed" or run["group_metadata_conflict"]:
+        raise HTTPException(status_code=422, detail="The approved PDF requires a completed scanner run with consistent saved run metadata.")
+    from daedalus.scanner_report_template import standardized_scanner_run_html
+    try:
+        standardized_scanner_run_html(saved_events)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     now = utcnow()
     job = ReportJob(organization_id=organization.id, created_by_user_id=user.id, report_type="scanner_results",
         domain=organization.domain, status="queued", progress=0, stage="Queued", file_name="pending.pdf",

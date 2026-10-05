@@ -107,3 +107,12 @@ def test_combined_xml_target_field_lists_all_hosts_without_losing_commands():
     assert "127.0.0.1, 127.0.0.2" in html
     assert "nmap -sV 127.0.0.1" in html
     assert "nmap -sV 127.0.0.2" in html
+
+
+def test_template_evidence_error_becomes_a_readable_validation_failure(monkeypatch):
+    from daedalus import scanner_report_template as module
+    def fail(document):
+        raise module.etree.XSLTApplyError("fixture transform failure")
+    monkeypatch.setattr(module.etree, "XSLT", lambda *args, **kwargs: fail)
+    with pytest.raises(ValueError, match="could not be rendered"):
+        standardized_scanner_html(XML)

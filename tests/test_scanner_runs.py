@@ -51,6 +51,8 @@ class ScannerRunTests(unittest.TestCase):
     def test_device_pdf_access_is_scoped_to_its_scanner_and_workspace(self):
         self.setup_scanner()
         self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        xml = b'<nmaprun><runstats><finished elapsed="1"/><hosts up="0" down="0" total="0"/></runstats></nmaprun>'
+        self.send(self.envelope("scan_xml_chunk", {"target": "192.168.1.1", "sha256": hashlib.sha256(xml).hexdigest(), "byte_count": len(xml), "chunk_count": 1, "chunk_index": 0, "xml": xml.decode()}))
         with patch.object(server, "generate_report_job"):
             report_id = self.client.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf").json()["id"]
         status = self.client.get(f"/api/agents/{self.agent}/client-status", headers=self.headers).json()
@@ -283,6 +285,8 @@ class ScannerRunTests(unittest.TestCase):
         response = self.client.post(f"/api/agents/{self.agent}/event-artifacts", headers=self.headers, content=json.dumps(artifact))
         self.assertEqual(response.status_code, 200, response.text)
         self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        xml = b'<nmaprun scanner="nmap" args="nmap -sV 192.168.1.1" version="7.98"><host><status state="up"/><address addr="192.168.1.1" addrtype="ipv4"/></host><runstats><finished elapsed="1"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>'
+        self.send(self.envelope("scan_xml_chunk", {"target": "192.168.1.1", "sha256": hashlib.sha256(xml).hexdigest(), "byte_count": len(xml), "chunk_count": 1, "chunk_index": 0, "xml": xml.decode()}))
         with patch.object(server, "generate_report_job"):
             queued = self.client.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf")
         self.assertEqual(queued.status_code, 200, queued.text)
@@ -290,12 +294,12 @@ class ScannerRunTests(unittest.TestCase):
         with self.session_factory() as db:
             job = db.get(ReportJob, queued.json()["id"])
             snapshot = job.report_snapshot["scanner"]
-            self.assertEqual(snapshot["run"]["event_count"], 4)
+            self.assertEqual(snapshot["run"]["event_count"], 5)
             self.assertEqual(snapshot["run"]["status"], "completed")
             self.assertFalse(snapshot["run"]["truncated"])
             self.assertEqual(snapshot["events"][2]["payload"], artifact["payload"])
             self.assertTrue(snapshot["events"][2]["artifact_sha256"])
-            self.assertEqual(len(snapshot["events"]), 4)
+            self.assertEqual(len(snapshot["events"]), 5)
             self.assertEqual(job.report_type, "scanner_results")
             logs = db.scalars(select(AuditLog).where(AuditLog.action == "report.requested")).all()
             self.assertEqual(logs[-1].details["source_job_id"], self.job_id)
@@ -313,15 +317,25 @@ class ScannerRunTests(unittest.TestCase):
         with self.session_factory() as db:
             self.assertEqual(db.scalars(select(ReportJob)).all(), [])
 
+    def test_completed_run_without_xml_rejects_pdf_before_queueing(self):
+        self.setup_scanner()
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        response = self.client.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf")
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("original Nmap XML", response.json()["detail"])
+        with self.session_factory() as db:
+            self.assertEqual(db.scalars(select(ReportJob)).all(), [])
+            self.assertEqual(db.scalars(select(AuditLog).where(AuditLog.action == "report.requested")).all(), [])
+
     def test_run_pdf_zero_results_scope_and_saved_artifact_corruption(self):
         self.setup_scanner()
         self.send(self.envelope("job_status", {"status": "interrupted", "job_type": "scan"}))
         endpoint = f"/api/agents/{self.agent}/runs/{self.job_id}/pdf"
         with patch.object(server, "generate_report_job"):
             zero = self.client.post(endpoint)
-        self.assertEqual(zero.status_code, 200, zero.text)
+        self.assertEqual(zero.status_code, 422, zero.text)
         with self.session_factory() as db:
-            self.assertEqual(db.get(ReportJob, zero.json()["id"]).report_snapshot["scanner"]["run"]["result_count"], 0)
+            self.assertEqual(db.scalars(select(ReportJob)).all(), [])
         artifact = self.envelope("scan_results", [{"ip": "192.168.1.1"}])
         uploaded = self.client.post(f"/api/agents/{self.agent}/event-artifacts", headers=self.headers, content=json.dumps(artifact))
         with self.session_factory() as db:

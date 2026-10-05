@@ -102,7 +102,10 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
                 replacement.tail = call.tail
                 call.getparent().replace(call, replacement)
     transform = etree.XSLT(stylesheet, access_control=etree.XSLTAccessControl.DENY_ALL)
-    html = str(transform(document))
+    try:
+        html = str(transform(document))
+    except etree.XSLTApplyError as exc:
+        raise ValueError("Original Nmap XML could not be rendered by the approved template.") from exc
     font_css = ""
     for family, filename, weight in [
         ("Inter", "inter-latin-opsz-normal.woff2", "100 900"),
