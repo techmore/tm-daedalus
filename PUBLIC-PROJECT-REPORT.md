@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## DNS collector preserves malformed SPF evidence — 2026-10-05
+
+The collector previously discarded leading-whitespace SPF-looking TXT values before passing its explicit SPF list to the policy interpreter, causing a misleading `Not published` assessment. Candidate selection now retains the original value; the existing interpreter correctly reports it malformed with no policy verdict. Collector, email-policy and DNS-comparison suites passed 28 tests and 11 subtests. This correction is not yet deployed.
+
 ## Restored runtime with production secrets — 2026-10-05
 
 Started the current portal against the fresh restored data using the locally recovered production environment. Production configuration validation and readiness passed. The existing private local user key authenticated all 39 completed report downloads; each matched its restored file byte-for-byte and returned no-store headers. The rehearsal required no live-host credential retrieval, bound only to loopback, and disabled background collectors. The temporary server was stopped; post-run database integrity and foreign-key checks passed. Private receipt: `validation/recovered-secrets-runtime-receipt-20261005.json`. Public DNS/TLS failover, restored Google login and separate secret custody remain unverified.
@@ -165,16 +169,16 @@ The complete project is **not yet verified complete**. A fresh read-only SER8 ce
 | --- | --- | --- |
 | CSP theme and topic dashboards | Assessment-first grouping deployed; authenticated assets, data, structural and renderer checks | Rendered screenshot review of density and topic hierarchy; semantic navigation, keyboard, reduced-motion and 320/390/1440-pixel width checks have passed |
 | GitHub repository and marketing Pages | Code and marketing share the repository; Pages workflow publishes site/ only | Confirm final marketing content and domain routing alongside the portal at release acceptance |
-| Incus production migration | Production release, health, staged deployment, rollback and verified off-host backups | Independent backup/key replication and runtime failover rehearsal; fresh off-host data restore and isolated runtime report access have passed |
+| Incus production migration | Production release, health, rollback; fresh off-host data and secret restore; isolated production-configured runtime with 39 exact authenticated PDF downloads | Separate recovery-secret custody and public DNS/TLS failover; restored Google login remains unverified |
 | Google login and per-user keys | Login configured; scoped keys and live membership/revocation enforcement; authentication fixtures | Broader real-user onboarding, sharing, domain independence and admin succession validation |
 | Domain probation and overrides | TXT verification, 30-day window, audited 14-day grants and enforcement fixtures | Real second-domain onboarding and expiry/renewal acceptance workflow |
 | DNS/email/website evidence | Real saved runs, comparisons, notifications, schedules, queue/cancellation and PDFs | Owner/provider review of DNS/mail findings; broader checker-semantic review |
 | Multiple local scanners | Real Mac subnet/history; production Linux Incus enrollment, loopback/XML upload, managed restart and container restart recovery | Additional locations and VLAN/subnet deployments, plus fleet soak |
 | Remote management | Bounded scan, cancel, health/update checks and managed restart paths | Confirm the intended remote-control feature set and validate it on the deployment targets |
 | Meraki | Real authorized report with one network, zero assigned devices, unavailable controls distinguished from disabled protection | Larger authorized inventory and review of unavailable control coverage |
-| CIS profiles/check-ins/scores | Three published profiles; real macOS 27 legacy reports; 113 native unit tests; dated changes and inbox notices | Managed macOS 26 production check-in, remaining legacy check semantics, Developer ID/notarization, persistent installed-client lifecycle |
+| CIS profiles/check-ins/scores | Three profiles; installed macOS 27 app uploaded report 23; scheduled heartbeat and app restart preserved identity; real macOS 26 CI assessment; dated changes/notices | Physical managed macOS 26 deployment, remaining legacy check semantics, Developer ID/notarization, login/reboot persistence |
 | Linked vendors | Categorized inventory plus dated human decisions/history; frozen reviewer/rationale in PDF 37 and per-origin metadata in PDF 38, all pages reviewed | Automated provider assessment and browser acceptance review; human decisions are not security verdicts |
-| PDF progress/history | 38 completed jobs; restored-runtime downloads verified; real download and all-page visual reviews, including production CIS PDF 36 | Continue regression checks as reports and templates evolve |
+| PDF progress/history | 39 completed files recovered/downloaded exactly; real report reviews; original NmapUI body preservation verified | Standardized scanner PDF spacing/baseline acceptance and corrective production activation; ongoing report regressions |
 
 The vendor review workflow now retains decisions and history against observed dependencies, including frozen PDF evidence. Remaining independent implementation work includes checker-semantic review and integration/operational gaps above. Active testing of third-party providers is not implied by ownership of the root domain. Scanner deployment and macOS 26 validation continue to need the previously requested environment details.
 

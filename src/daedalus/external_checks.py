@@ -343,7 +343,9 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = ()) -> dict[str
         )
 
     records["SPF"] = sorted(
-        value for value in records["TXT"] if value.casefold().startswith("v=spf1")
+        # Retain malformed SPF-looking values for the policy interpreter.
+        # Do not strip the saved evidence or turn leading whitespace valid.
+        value for value in records["TXT"] if value.lstrip().casefold().startswith("v=spf1")
     )
     records["DMARC"] = lookup(f"_dmarc.{domain}", "TXT", "DMARC")
     records["DKIM"] = {

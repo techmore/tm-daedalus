@@ -128,6 +128,15 @@ class DNSCollectorObservationTests(unittest.TestCase):
         self.assertEqual(dmarc["effective_policy"], "reject")
         self.assertTrue(dmarc["aggregate_reporting_configured"])
 
+    def test_collector_preserves_malformed_spf_candidate_for_assessment(self):
+        result = self.collect(FixtureResolver({
+            ("example.test", "TXT"): (["\" v=spf1 -all\""], 300, False),
+        }))
+        self.assertEqual(result["records"]["SPF"], [" v=spf1 -all"])
+        assessment = result["email_authentication_assessment"]["spf"]
+        self.assertEqual(assessment["status"], "invalid_record")
+        self.assertIsNone(assessment["policy"])
+
     def test_query_metadata_preserves_negative_and_error_states(self):
         response = dns.message.make_response(dns.message.make_query("example.test", "AAAA"))
         response.flags |= dns.flags.AD
