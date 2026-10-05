@@ -133,6 +133,22 @@ def _host_inventory() -> dict[str, Any]:
     return {"platform": system, "os_version": version.group(0)[:40] if version else None, "architecture": architecture, "cpu_count": cpus if type(cpus) is int and 0 < cpus <= 65536 else None, "total_memory_bytes": _total_memory_bytes(system)}
 
 
+def _os_update_result(evidence: dict[str, Any]) -> str:
+    """Keep the bounded catalog result valid within the command result limit."""
+    bounded = dict(evidence)
+    if "updates" in bounded:
+        bounded["updates"] = list(bounded["updates"])
+    encoded = json.dumps(bounded, ensure_ascii=False, separators=(",", ":"))
+    while len(encoded) > 1000 and bounded.get("updates"):
+        bounded["updates"].pop()
+        bounded["truncated"] = True
+        encoded = json.dumps(bounded, ensure_ascii=False, separators=(",", ":"))
+    # Non-list fields are fixed-size values produced by _check_os_updates.
+    if len(encoded) > 1000:
+        raise ValueError("OS update result exceeds the command result limit.")
+    return encoded
+
+
 def _diagnostics_result(evidence: dict[str, Any]) -> str:
     try:
         encoded = json.dumps(evidence, ensure_ascii=False, separators=(",", ":"))
@@ -757,7 +773,7 @@ class NmapUIBridge:
                 self._send_command_result(command_id, "failed", "Update this scanner kit before checking macOS updates.")
                 return
             evidence = self._check_os_updates()
-            self._send_command_result(command_id, "succeeded", json.dumps(evidence, ensure_ascii=False, separators=(",", ":"))[:1000])
+            self._send_command_result(command_id, "succeeded", _os_update_result(evidence))
             return
         if action == "restart_nmapui":
             try:

@@ -118,6 +118,27 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         self.assertEqual(args[:2], (31, "succeeded"))
         self.assertEqual(json.loads(args[2])["status"], "unsupported")
 
+    def test_long_update_command_result_retains_valid_json_and_total(self):
+        bridge = self.make_bridge()
+        response = Mock()
+        response.json.return_value = {"command": {"id": 32, "action": "check_os_updates"}}
+        bridge._request = Mock(return_value=response)
+        bridge._send_command_result = Mock()
+        evidence = {"schema_version": 1, "observed_at": "2026-10-05T12:00:00Z", "status": "updates_available",
+                    "platform": "Darwin", "update_count": 5, "truncated": False,
+                    "updates": [{"label": '"' * 200, "title": '\\' * 160} for _ in range(5)]}
+        with patch.object(bridge, "_check_os_updates", return_value=evidence):
+            bridge._run_one_command()
+        result = bridge._send_command_result.call_args.args[2]
+        self.assertLessEqual(len(result), 1000)
+        decoded = json.loads(result)
+        self.assertEqual(decoded["update_count"], 5)
+        self.assertTrue(decoded["truncated"])
+        self.assertLess(len(decoded["updates"]), 5)
+        self.assertEqual(len(evidence["updates"]), 5)
+        self.assertFalse(evidence["truncated"])
+        self.assertEqual(decoded["status"], "updates_available")
+
     def test_reads_only_readiness_and_app_version_from_nmapui(self):
         bridge = self.make_bridge()
         response = Mock()
