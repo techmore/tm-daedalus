@@ -5320,8 +5320,11 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
             headers = snapshot.get("security_headers") or {}
             absent = sum(not value for value in headers.values())
             certificate_label, certificate_review = _website_certificate_summary(snapshot, utcnow())
-            summary = f"HTTPS {snapshot.get('http_status') or 'unknown'} · {certificate_label} · {absent} selected header(s) absent"
-            if certificate_review or absent or not headers or not (200 <= int(snapshot.get("http_status") or 0) < 400): state = "attention"
+            observed_status = snapshot.get("http_status")
+            http_status = observed_status if type(observed_status) is int and 100 <= observed_status <= 599 else None
+            header_summary = f"{absent} selected header(s) absent" if headers else "Selected header evidence unknown"
+            summary = f"HTTPS {http_status if http_status is not None else 'unknown'} · {certificate_label} · {header_summary}"
+            if certificate_review or absent or not headers or http_status is None or not (200 <= http_status < 400): state = "attention"
         if latest and latest.status in {"queued", "running", "failed"}:
             state = "running" if latest.status in {"queued", "running"} else "unavailable"
         areas.append({"key":kind, "title":title, "state":state, "summary":summary,

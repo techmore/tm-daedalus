@@ -62,6 +62,19 @@ class WorkspacePostureTests(unittest.TestCase):
         self.assertEqual(area['state'],'unavailable')
         self.assertIn('HTTPS 500',area['summary'])
 
+    def test_malformed_http_status_and_missing_headers_remain_unknown(self):
+        org,_=self.context()
+        for status in ('not captured', '200', True, 0, 999, None, {'code':200}):
+            with self.subTest(status=status):
+                self.save(org,kind='web',snapshot={'http_status':status})
+                response=self.client.get('/api/workspace-posture')
+                self.assertEqual(response.status_code,200)
+                area=next(a for a in response.json()['areas'] if a['key']=='web')
+                self.assertEqual(area['state'],'attention')
+                self.assertIn('HTTPS unknown',area['summary'])
+                self.assertIn('Selected header evidence unknown',area['summary'])
+                self.assertNotIn('0 selected header(s) absent',area['summary'])
+
     def test_deeper_audit_has_separate_timestamp_without_raw_observations(self):
         org,_=self.context()
         self.save(org,kind='web-nikto',status='completed_with_warnings',snapshot={'findings':[{'description':'private detector text'}],'coverage_complete':False})
