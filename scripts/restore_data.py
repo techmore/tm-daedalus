@@ -69,6 +69,8 @@ def _check_database_integrity(database_path: Path) -> None:
         with sqlite3.connect(uri, uri=True) as db:
             if db.execute("PRAGMA integrity_check").fetchmany(2) != [("ok",)]:
                 raise RestoreError("The backup database failed its integrity check.")
+            if db.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise RestoreError("The backup database contains broken foreign-key relationships.")
     except sqlite3.DatabaseError as exc:
         raise RestoreError("The backup database is invalid.") from exc
 

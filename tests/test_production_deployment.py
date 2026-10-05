@@ -505,6 +505,23 @@ class ProductionRestoreTests(unittest.TestCase):
             verify_archive(archive, **kwargs)
         self.assertEqual(list(self.root.glob(".daedalus-backup-verify-*")), [])
 
+    def test_refuses_valid_sqlite_with_broken_foreign_key_relationships(self):
+        database = self.root / 'foreign-key.db'
+        with sqlite3.connect(database) as db:
+            db.execute('CREATE TABLE parents (id INTEGER PRIMARY KEY)')
+            db.execute('CREATE TABLE children (parent_id INTEGER REFERENCES parents(id))')
+            db.execute('INSERT INTO children VALUES (42)')
+            self.assertEqual(db.execute('PRAGMA integrity_check').fetchone(), ('ok',))
+        invalid = self.archive(files={'daedalus.db': database.read_bytes()})
+        self.refuse_verification(invalid)
+        self.refuse(invalid)
+        self.assertFalse((self.root / 'restored').exists())
+        with sqlite3.connect(database) as db:
+            db.execute('INSERT INTO parents VALUES (42)')
+        valid = self.archive(files={'daedalus.db': database.read_bytes()})
+        self.assertIsNone(verify_archive(valid))
+        self.assertTrue(restore_archive(valid, self.root / 'restored').is_dir())
+
     def test_verify_only_checks_manifest_digests_and_sqlite_integrity(self):
         valid = self.archive()
         self.assertIsNone(verify_archive(valid))
