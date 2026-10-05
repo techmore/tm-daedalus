@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## PDF platform font investigation — 2026-10-05
+
+Embedded-font inspection confirms that the saved Mac export uses Menlo while the isolated SER8 render uses Liberation Mono for monospaced evidence. A private reference-font experiment on SER8 embedded Menlo and retained seven pages, but did not reproduce the saved first-page spacing. Font fallback is therefore a typography difference, not a complete explanation of layout parity. No repository font asset, production renderer or customer report was changed. Private receipts: `validation/pdf-font-platform-comparison-20261005.json` and `validation/pdf-menlo-reference-20261005.json`. Final PDF visual fidelity remains open.
+
 ## Expanded scanner CI acceptance and historical SER8 rendering — 2026-10-05
 
 Run 37386836097 passed all three Linux scenarios: managed lifecycle, packaged bridge interruption and repeated scan comparison. The downloaded comparison artifact retains distinct run IDs, exact `127.0.0.1/32` coverage from successful single-IP commands, zero host/port differences and a PDF matching its receipt hash. The normal cooldown was retained. Private evidence: `validation/ci-repeat-comparison-37386836097/`. Backend CI 37386836276 passed at the same source; the full local suite passed 625 tests and 129 subtests.
