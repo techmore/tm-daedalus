@@ -27,6 +27,19 @@ def test_approved_template_renders_original_evidence():
     assert "Saved phase history" not in html
 
 
+def test_hosted_report_preserves_original_template_body_exactly():
+    from lxml import etree
+
+    # Hosting may replace external asset loaders in the head. It must not
+    # rewrite the standardized report's sections, labels, classes or evidence.
+    parser = etree.XMLParser(resolve_entities=False, no_network=True)
+    stylesheet = etree.parse(str(ASSETS / "nmap-pdf-olive-approved.xsl"), parser)
+    transform = etree.XSLT(stylesheet, access_control=etree.XSLTAccessControl.DENY_ALL)
+    original = etree.HTML(str(transform(etree.fromstring(XML, parser))))
+    hosted = etree.HTML(standardized_scanner_html(XML))
+    assert etree.tostring(hosted.find("body")) == etree.tostring(original.find("body"))
+
+
 @pytest.mark.parametrize("xml", [b"", b"<not-nmap/>", b"<broken", b'''<!DOCTYPE nmaprun [<!ENTITY x SYSTEM "file:///etc/passwd">]><nmaprun>&x;</nmaprun>''', b'''<!DOCTYPE nmaprun SYSTEM "https://example.com/dtd"><nmaprun/>'''])
 def test_invalid_or_external_evidence_is_rejected(xml):
     with pytest.raises(ValueError):
