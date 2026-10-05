@@ -463,13 +463,17 @@ class NmapUIBridge:
 
     def _heartbeat(self) -> None:
         scanner_health = self._read_nmapui_health()
+        now = time.monotonic()
+        if now >= getattr(self, "_network_inventory_due", 0):
+            self._detected_networks = discover_connected_networks()
+            self._network_inventory_due = now + 60
         payload = {
             "command_protocol_version": COMMAND_PROTOCOL_VERSION,
             "nmapui_connected": self.nmapui_connected.is_set(),
             "nmapui_restart_supported": self._nmapui_restart_supported(),
             "version": f"Daedalus bridge {__version__}",
             "platform": platform.system(),
-            "detected_networks": discover_connected_networks(),
+            "detected_networks": self._detected_networks,
             **scanner_health,
         }
         response = self._request(

@@ -30,6 +30,28 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
             self.assertTrue(events)
             self.assertTrue(all(code not in str(event.details) for event in events))
 
+    def test_detected_connection_is_stored_without_expanding_scan_scope(self):
+        from daedalus.models import Agent
+        agent_id, _ = self.create_scanner()
+        headers = {"Authorization": "Bearer test-scanner-token"}
+        path = f"/api/agents/{agent_id}/heartbeat"
+        response = self.client.post(path, headers=headers, json={"detected_networks": ["10.20.0.111/24"]})
+        self.assertEqual(response.status_code, 200, response.text)
+        with self.session_factory() as db:
+            agent = db.get(Agent, agent_id)
+            self.assertEqual(agent.detected_networks, ["10.20.0.0/24"])
+            original_scope = agent.authorized_networks
+        self.client.post(path, headers=headers, json={})
+        with self.session_factory() as db:
+            self.assertEqual(db.get(Agent, agent_id).detected_networks, ["10.20.0.0/24"])
+            self.assertEqual(db.get(Agent, agent_id).authorized_networks, original_scope)
+        self.client.post(path, headers=headers, json={"detected_networks": []})
+        with self.session_factory() as db:
+            self.assertEqual(db.get(Agent, agent_id).detected_networks, [])
+            changes = db.scalars(select(AuditLog).where(AuditLog.action == "scanner.connection_changed")).all()
+            self.assertEqual(len(changes), 2)
+            self.assertEqual(changes[0].details["detected_networks"], ["10.20.0.0/24"])
+
     def ready(self, protocol=1):
         agent_id, _ = self.create_scanner()
         self.headers = {"Authorization": "Bearer test-scanner-token"}

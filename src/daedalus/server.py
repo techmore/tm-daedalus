@@ -5444,7 +5444,8 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
                 "nmapui_version": agent.nmapui_version,
                 "nmapui_ready": agent.nmapui_ready,
                 "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
-                "command_protocol_version": agent.command_protocol_version or 0,
+            "detected_networks": agent.detected_networks or [],
+            "command_protocol_version": agent.command_protocol_version or 0,
                 "authorized_networks": agent.authorized_networks or [],
                 "detected_networks": agent.detected_networks or [],
             }
@@ -5599,6 +5600,11 @@ async def agent_heartbeat(
     agent = require_agent(db, agent_id, authorization)
     agent.last_seen_at = utcnow()
     if payload.detected_networks is not None:
+        previous_networks = agent.detected_networks or []
+        if previous_networks != payload.detected_networks:
+            audit(db, agent.organization_id, None, "scanner.connection_changed",
+                  {"agent_id": agent.id, "previous_networks": previous_networks,
+                   "detected_networks": payload.detected_networks})
         agent.detected_networks = payload.detected_networks
     agent.nmapui_connected = payload.nmapui_connected
     agent.nmapui_restart_supported = payload.nmapui_restart_supported
