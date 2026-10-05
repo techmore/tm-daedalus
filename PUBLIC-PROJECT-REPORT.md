@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Standardized report body and current validation — 2026-10-05
+
+The corrective hosted renderer preserves the original stylesheet's entire report body exactly in a regression fixture. Independently, the saved August 22 export's body matches the hosted output from its original XML after removing serializer-only whitespace; private receipt: `validation/saved-body-preservation-20261005.json`. This establishes structural preservation, not final PDF visual acceptance. First-page review still shows approximately 3.96 points of vertical spacing difference below the keyword control. No production renderer or historical report was changed.
+
+The full current local backend suite passed **618 tests and 129 subtests**. The completed backend CI run 37383854423 passed on Python 3.11/3.12, and managed Linux lifecycle run 37383854446 completed successfully. Current source adds one preservation test beyond those completed runs. Full project completion remains unproven against the existing completion matrix, including PDF activation, independent secret recovery, human onboarding, trusted endpoint distribution and visual acceptance.
+
 ## Installed CIS app restart recovery — 2026-10-05
 
 The owned installed client was terminated after its completed assessment and reopened from the same Applications bundle. Its PID changed, private config and stable device identity remained byte-for-byte intact, the endpoint count stayed unchanged, and a fresh heartbeat reconnected it. The app uploaded production report 23 under the same endpoint: 154 checks, 11 pass, 10 fail, 133 manual, zero errors and no new check-status changes. The app remains running. Private receipt: `validation/cis-installed-client-restart-20261005.json`. This verifies app restart, not user login, OS reboot, signed package deployment or macOS 26 runtime.
