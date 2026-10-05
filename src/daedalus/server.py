@@ -6340,11 +6340,45 @@ def scanner_client_status(agent_id: int, authorization: str | None = Header(defa
                         AgentCommand.organization_id == agent.organization_id, AgentCommand.action == "start_scan")
                         .order_by(AgentCommand.id.desc()).limit(1))
     last_request = {"status": command.status, "target": command.target, "result": command.result} if command else None
+    report_rows = db.execute(select(ReportJob.id, ReportJob.status, ReportJob.created_at,
+                             ReportJob.progress, ReportJob.stage).where(
+        ReportJob.organization_id == agent.organization_id,
+        ReportJob.report_type == "scanner_results",
+        ReportJob.report_snapshot["scanner"]["agent_id"].as_integer() == agent.id,
+    ).order_by(ReportJob.id.desc()).limit(5)).all()
+    hosted_reports = [{"id": row.id, "status": row.status, "progress": row.progress,
+                       "stage": row.stage, "created_at": iso_utc(row.created_at)} for row in report_rows]
     return JSONResponse({"name": agent.name, "status": agent_status(agent),
                          "last_scan_request": last_request,
                          "bridge_online": agent_bridge_online(agent),
                          "last_seen_at": iso_utc(agent.last_seen_at) if agent.last_seen_at else None,
-                         "recent_runs": [local_run(job_id) for job_id in job_ids]},
+                         "recent_runs": [local_run(job_id) for job_id in job_ids], "hosted_reports": hosted_reports},
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/agents/{agent_id}/reports/{report_id}/download")
+def scanner_client_report_download(agent_id: int, report_id: int,
+                                   authorization: str | None = Header(default=None),
+                                   db: Session = Depends(get_db)):
+    agent = require_agent(db, agent_id, authorization)
+    job = db.scalar(select(ReportJob).options(defer(ReportJob.report_snapshot)).where(
+        ReportJob.id == report_id, ReportJob.organization_id == agent.organization_id,
+        ReportJob.report_type == "scanner_results",
+        ReportJob.report_snapshot["scanner"]["agent_id"].as_integer() == agent.id))
+    if job is None:
+        raise HTTPException(status_code=404, detail="Scanner report not found")
+    if job.status != "completed" or not job.artifact_path:
+        raise HTTPException(status_code=409, detail="Scanner PDF is not ready")
+    try:
+        artifact = report_artifact(REPORTS_DIR, agent.organization_id, job.file_name)
+        if artifact.stat().st_size > 64 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Device PDF downloads support files up to 64 MiB")
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="Scanner PDF is unavailable") from exc
+    audit(db, agent.organization_id, None, "scanner.report_downloaded",
+          {"agent_id": agent.id, "report_id": job.id})
+    db.commit()
+    return FileResponse(artifact, media_type="application/pdf", filename=job.file_name,
                         headers={"Cache-Control": "no-store"})
 
 

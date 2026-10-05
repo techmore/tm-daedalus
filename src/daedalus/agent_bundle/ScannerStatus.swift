@@ -26,6 +26,9 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
     let windowHistory = NSTextField(wrappingLabelWithString: "Managed scan history is loading…")
     let windowBody = NSStackView()
     let windowHistoryPanel = NSStackView()
+    let hostedReportPanel = NSStackView()
+    let hostedReportStatus = NSTextField(wrappingLabelWithString: "")
+    var hostedReportFingerprint = ""
     let windowHistoryButton = NSButton(title: "Recent scans", target: nil, action: nil)
     let windowStatus = NSTextField(wrappingLabelWithString: "Connecting to scanner…")
     lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
@@ -115,6 +118,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
                         let detail = request["status"] as? String == "failed" ? " · " + (request["result"] as? String ?? "") : ""
                         self.lastRequest = "Last request: \(request["status"] as? String ?? "unknown") · \(request["target"] as? String ?? "")\(detail)"
                     } else { self.lastRequest = "No scan requests recorded" }
+                    self.renderHostedReports(data["hosted_reports"] as? [[String: Any]] ?? [])
                     self.recent = (data["recent_runs"] as? [[String: Any]] ?? []).prefix(5).map { run in
                         let status = run["status"] as? String ?? "unknown"
                         let time = self.dateLabel(run["last_occurred_at"] as? String)
@@ -171,6 +175,9 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             windowHistoryPanel.orientation = .vertical; windowHistoryPanel.alignment = .leading
             windowHistoryPanel.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
             windowHistoryPanel.addArrangedSubview(windowHistory)
+            hostedReportPanel.orientation = .vertical; hostedReportPanel.alignment = .leading; hostedReportPanel.spacing = 6
+            windowHistoryPanel.addArrangedSubview(hostedReportPanel)
+            windowHistoryPanel.addArrangedSubview(hostedReportStatus)
             windowHistoryPanel.isHidden = true
             windowBody.addArrangedSubview(windowHistoryPanel); windowBody.addArrangedSubview(web)
             for view in [windowStatus, controls, windowBody] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
@@ -204,12 +211,64 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         scannerPageMessage = "Scanner page could not finish loading. Choose Reload to retry."
         render()
     }
+    func renderHostedReports(_ reports: [[String: Any]]) {
+        let fingerprint = reports.map { "\($0["id"] ?? ""):\($0["status"] ?? ""):\($0["progress"] ?? "")" }.joined(separator: "|") + ":loaded"
+        guard fingerprint != hostedReportFingerprint else { return }
+        hostedReportFingerprint = fingerprint
+        for view in hostedReportPanel.arrangedSubviews { hostedReportPanel.removeArrangedSubview(view); view.removeFromSuperview() }
+        let title = NSTextField(labelWithString: "Hosted scanner PDFs"); hostedReportPanel.addArrangedSubview(title)
+        if reports.isEmpty { hostedReportPanel.addArrangedSubview(NSTextField(labelWithString: "No hosted PDFs reported for this scanner.")) }
+        for report in reports.prefix(5) {
+            guard let id = report["id"] as? Int, id > 0 else { continue }
+            let status = report["status"] as? String ?? "unknown"
+            if status == "completed" {
+                let button = NSButton(title: "Open PDF #\(id) · \(dateLabel(report["created_at"] as? String))", target: self, action: #selector(openHostedPDF(_:)))
+                button.tag = id; hostedReportPanel.addArrangedSubview(button)
+            } else {
+                let progress = (report["progress"] as? Int).map { " · \($0)%" } ?? ""
+                hostedReportPanel.addArrangedSubview(NSTextField(labelWithString: "PDF #\(id): \(status)\(progress)"))
+            }
+        }
+    }
+    @objc func openHostedPDF(_ sender: NSButton) {
+        guard let portalURL = portalURL, agentID > 0, sender.tag > 0, !token.isEmpty else { return }
+        let reportID = sender.tag
+        var request = URLRequest(url: portalURL.appendingPathComponent("api/agents/\(agentID)/reports/\(reportID)/download"))
+        request.timeoutInterval = 30; request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
+        hostedReportStatus.stringValue = "Downloading PDF #\(reportID)…"; sender.isEnabled = false
+        session.dataTask(with: request) { [weak self] data, response, _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                sender.isEnabled = true
+                guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+                      response.mimeType == "application/pdf", let data = data, data.count <= 64 * 1024 * 1024,
+                      data.starts(with: Data("%PDF-".utf8)) else {
+                    self.hostedReportStatus.stringValue = "PDF #\(reportID) could not be downloaded. Retry or open Daedalus history."; return
+                }
+                do {
+                    let directory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Daedalus/hosted-reports")
+                    let file = directory.appendingPathComponent("scanner-\(self.agentID)-report-\(reportID).pdf")
+                    for path in [directory, file] {
+                        if (try? FileManager.default.attributesOfItem(atPath: path.path)[.type] as? FileAttributeType) == .typeSymbolicLink {
+                            throw NSError(domain: "Daedalus", code: 1)
+                        }
+                    }
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                    try data.write(to: file, options: .atomic)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+                    self.hostedReportStatus.stringValue = "PDF #\(reportID) saved locally."
+                    NSWorkspace.shared.open(file)
+                } catch { self.hostedReportStatus.stringValue = "PDF #\(reportID) could not be saved locally." }
+            }
+        }.resume()
+    }
     @objc func toggleRecent() {
         windowHistoryPanel.isHidden.toggle()
         windowHistoryButton.title = windowHistoryPanel.isHidden ? "Recent scans" : "Hide recent scans"
     }
     @objc func reloadScanner() {
-        if let url = localURL { scannerWebView?.load(URLRequest(url: url)) }
+        if let url = scannerWebView?.url, sameScannerOrigin(url) { scannerWebView?.reload() }
+        else if let url = localURL { scannerWebView?.load(URLRequest(url: url)) }
     }
     @objc func openBrowser() { if let url = localURL { NSWorkspace.shared.open(url) } }
     func sameScannerOrigin(_ url: URL) -> Bool {

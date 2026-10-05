@@ -48,6 +48,47 @@ class ScannerRunTests(unittest.TestCase):
         self.assertNotEqual(self.client.get(path).status_code, 200)
         self.assertNotEqual(self.client.get(f"/api/agents/{self.agent + 999}/client-status", headers=self.headers).status_code, 200)
 
+    def test_device_pdf_access_is_scoped_to_its_scanner_and_workspace(self):
+        self.setup_scanner()
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        with patch.object(server, "generate_report_job"):
+            report_id = self.client.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf").json()["id"]
+        status = self.client.get(f"/api/agents/{self.agent}/client-status", headers=self.headers).json()
+        self.assertEqual(status["hosted_reports"][0]["id"], report_id)
+        path = f"/api/agents/{self.agent}/reports/{report_id}/download"
+        self.assertEqual(self.client.get(path, headers=self.headers).status_code, 409)
+        self.assertNotEqual(self.client.get(path).status_code, 200)
+        artifact = self.root / "device-report.pdf"
+        artifact.write_bytes(b"%PDF-1.4\nfixture")
+        with self.session_factory() as db:
+            job = db.get(ReportJob, report_id)
+            job.status = "completed"; job.artifact_path = str(artifact)
+            db.commit()
+        with patch.object(server, "report_artifact", return_value=artifact):
+            response = self.client.get(path, headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertTrue(response.content.startswith(b"%PDF-"))
+        with artifact.open("ab") as stream:
+            stream.truncate(64 * 1024 * 1024 + 1)
+        with patch.object(server, "report_artifact", return_value=artifact):
+            self.assertEqual(self.client.get(path, headers=self.headers).status_code, 413)
+        artifact.write_bytes(b"%PDF-1.4\nfixture")
+        with patch.object(server, "report_artifact", side_effect=ValueError("unavailable")):
+            self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
+        with self.session_factory() as db:
+            job = db.get(ReportJob, report_id)
+            job.report_snapshot = {"scanner": {"agent_id": self.agent + 999}}
+            db.commit()
+        self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/agents/{self.agent}/client-status", headers=self.headers).json()["hosted_reports"], [])
+        with self.session_factory() as db:
+            job = db.get(ReportJob, report_id)
+            job.report_snapshot = {"scanner": {"agent_id": self.agent}}
+            job.organization_id += 999
+            db.commit()
+        self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
+
     def test_latest_assessment_keeps_observations_separate_from_completion(self):
         self.setup_scanner()
         path = f"/api/agents/{self.agent}/assessment"
