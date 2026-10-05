@@ -666,7 +666,10 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
   .cis-change-transition { align-self: start; }
   .report-toolbar { align-items: stretch; flex-direction: column; }
   .report-toolbar .button { align-self: start; }
-  .report-job-card { grid-template-columns: 1fr; align-items: start; }
+  .report-job-card { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .report-job-actions { flex-wrap: wrap; min-width: 0; }
+  .report-job-main strong, .report-job-main small { overflow-wrap: anywhere; }
+  .report-library { min-width: 0; }
   .meraki-report-details { grid-column: 1; }
   .check-record-grid, .website-summary-grid { grid-template-columns: 1fr; }
   .audit-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

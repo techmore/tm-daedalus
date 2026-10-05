@@ -48,6 +48,11 @@ class ThemeTests(unittest.TestCase):
         self.assertNotIn(".demo-switch { position: fixed", css)
 
 
+    def test_mobile_report_actions_wrap_without_expanding_grid(self):
+        css = CSS.read_text()
+        self.assertIn(".report-job-card { grid-template-columns: minmax(0, 1fr); align-items: start; }", css)
+        self.assertIn(".report-job-actions { flex-wrap: wrap; min-width: 0; }", css)
+
     def test_keyboard_bypass_focus_and_reduced_motion(self):
         css = CSS.read_text()
         html = DASHBOARD.read_text()
