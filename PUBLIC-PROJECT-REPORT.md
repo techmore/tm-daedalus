@@ -731,3 +731,7 @@ Scanner enrollment now asks for the scanner machine's operating system. The brow
 ## Enrollment code response caching — October 5, 2026
 
 One-time scanner enrollment responses now carry Cache-Control: no-store, matching the private handling already used for per-user API keys. A fixture verifies the response header, saved token digest, retained scanner name/CIDR scope, and omission of the clear code from enrollment audit details. The 18 scanner command tests passed; full backend validation passed 566 tests and 126 subtests. Public readiness remains healthy; the existing SSH identity-check request is still waiting and no new deployment was started. Backend CI for 2c172d3 passed; its managed Linux scanner CI remains running. This change awaits deployment and real target enrollment acceptance.
+
+## Managed Linux evidence retention — October 5, 2026
+
+The managed Linux workflow now copies its sanitized validation receipt and generated loopback PDF into runner temporary storage before deleting the disposable user, then retains those two files as a 14-day artifact even when the job fails. It does not retain the enrollment configuration, database, raw logs or credentials. YAML parsing and exact artifact-path checks passed. The already-running 0966da9 job predates this change and continues unchanged; pushing the workflow update is deferred until it finishes because workflow concurrency cancels older runs. Artifact retention is implemented locally but not yet exercised in GitHub.

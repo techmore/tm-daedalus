@@ -46,6 +46,10 @@ jobs:
           cleanup() {
             if sudo test -f /home/daedalusqa/managed-scanner.json; then
               sudo cat /home/daedalusqa/managed-scanner.json
+              sudo install -m 0644 /home/daedalusqa/managed-scanner.json "$RUNNER_TEMP/managed-scanner.json"
+            fi
+            if sudo test -f /home/daedalusqa/managed-scanner.pdf; then
+              sudo install -m 0644 /home/daedalusqa/managed-scanner.pdf "$RUNNER_TEMP/managed-scanner.pdf"
             fi
             sudo systemctl stop "user@${qa_uid}.service" || true
             sudo loginctl disable-linger daedalusqa || true
@@ -72,3 +76,13 @@ jobs:
               --managed-linux --run-loopback \
               --nmapui-python /home/daedalusqa/project/.venv/bin/python \
               --receipt /home/daedalusqa/managed-scanner.json
+      - name: Retain isolated scanner evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: managed-linux-scanner-evidence
+          path: |
+            ${{ runner.temp }}/managed-scanner.json
+            ${{ runner.temp }}/managed-scanner.pdf
+          if-no-files-found: warn
+          retention-days: 14
