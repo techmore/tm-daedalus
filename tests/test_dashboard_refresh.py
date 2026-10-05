@@ -402,6 +402,22 @@ assert.equal(entry.childNodes[2].textContent, 'Some update details were omitted 
         self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
+    def test_scanner_readiness_does_not_present_old_heartbeat_as_current(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        start = source.index('    readiness.textContent = agent.enabled')
+        branch = source[start:source.index('    var lastSeen =', start)]
+        script = "const assert=require('node:assert/strict');function label(agent){const readiness={};" + branch + "return readiness.textContent;}" + """
+assert.equal(label({status:'offline',bridge_online:false,nmapui_ready:true}), 'Current NmapUI status unknown · scanner bridge offline');
+assert.equal(label({status:'online',bridge_online:true,nmapui_ready:true}), 'NmapUI ready');
+assert.equal(label({status:'online',bridge_online:true,nmapui_ready:false}), 'NmapUI not ready');
+assert.equal(label({bridge_online:true}), 'NmapUI health check pending');
+assert.equal(label({enabled:false,bridge_online:true,nmapui_ready:true}), 'Scanner access revoked · current NmapUI status unavailable');
+assert.equal(label({status:'disabled',nmapui_ready:true}), 'Scanner access revoked · current NmapUI status unavailable');
+"""
+        result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_macos_update_button_uses_dashboard_api_platform_field(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         function = source[source.index('  function supportsMacOSUpdateCheck('):source.index('  var shell =')]

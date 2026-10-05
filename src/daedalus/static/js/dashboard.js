@@ -445,9 +445,13 @@
     telemetry.textContent = telemetryParts.join(" · ") || "Scanner details awaiting heartbeat";
     var readiness = document.createElement("p");
     readiness.className = "agent-readiness";
-    readiness.textContent = agent.nmapui_ready === true
-      ? "NmapUI ready"
-      : (agent.nmapui_ready === false ? "NmapUI not ready" : "NmapUI health check pending");
+    readiness.textContent = agent.enabled === false || agent.status === "disabled"
+      ? "Scanner access revoked · current NmapUI status unavailable"
+      : agent.bridge_online !== true
+        ? "Current NmapUI status unknown · scanner bridge offline"
+        : agent.nmapui_ready === true
+          ? "NmapUI ready"
+          : (agent.nmapui_ready === false ? "NmapUI not ready" : "NmapUI health check pending");
     var lastSeen = document.createElement("p");
     lastSeen.className = "agent-last-seen";
     lastSeen.textContent = agent.last_seen_at

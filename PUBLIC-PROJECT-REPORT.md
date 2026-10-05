@@ -1022,3 +1022,14 @@ Review found that the bridge sliced serialized macOS update evidence at 1,000 ch
 ## Scanner update history omission notice — October 5, 2026
 
 The existing command-history layout now explains when update details were omitted, with a validated integer catalog total where available. Invalid timestamps are omitted instead of displaying Invalid Date. Text-node fixtures verify escaped update titles, the omission notice, raw evidence access, malformed totals and timestamps. The dashboard refresh/bridge suites passed **46 tests and five subtests**; JavaScript syntax passed. Dashboard script version is now 108 so clients request the revised asset after deployment. This is fixture validation, not rendered browser acceptance or production activation.
+
+
+## Live endpoint presence and stale scanner readiness — October 5, 2026
+
+Public production readiness reports database and report storage healthy. Authenticated read-only observation using the existing local per-user key confirmed endpoint 1 online after its 23:33:47 UTC scheduled heartbeat, with report 23 unchanged and assessment current. Mac scanner 2 and Linux scanner 3 report online bridges and NmapUI ready; historical scanner 1 is offline. Private receipts: validation/cis-current-presence-20261005.json and validation/scanner-current-presence-20261005.json. No new command, scan or enrollment was created.
+
+The offline historical scanner still retains its last ready flag. The dashboard correction now labels current NmapUI state unknown while the bridge is offline and unavailable after access revocation. Six JavaScript branches cover online-ready, online-not-ready, pending, offline and revoked states. The dashboard/route suites passed **78 tests and seven subtests**. The script is version 109; its route fixture was updated from the obsolete version 107 expectation. Rendered browser acceptance and deployment remain pending.
+
+Backend CI 37389120074 and all three Linux scenarios in run 37389120042 passed for source cda0f1b. The retained comparison artifact has qualified exact loopback coverage, zero recorded differences and a matching PDF size/hash. Later OS-result/status corrections are not included in those CI results.
+
+Full local validation of the latest OS-result and stale-readiness corrections passed **635 tests and 129 subtests**, with two dependency deprecation warnings. JavaScript syntax and diff checks passed. Full project completion and standardized scanner PDF acceptance remain open.
