@@ -392,6 +392,11 @@ class ScannerRunTests(unittest.TestCase):
                 self.assertEqual(download.status_code, 200)
                 self.assertEqual(hashlib.sha256(download.content).hexdigest(), digest)
                 self.assertEqual(download.json(), payload)
+                xml = b'<nmaprun scanner="nmap" args="nmap -sV 192.168.1.1" version="7.98"><host><status state="up"/><address addr="192.168.1.1" addrtype="ipv4"/><ports><port portid="443" protocol="tcp"><state state="open"/><service name="https"/></port></ports></host><runstats><finished elapsed="1"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>'
+                xml_upload = http.post(f"/api/agents/{self.agent}/events", headers=self.headers,
+                    json=self.envelope("scan_xml_chunk", {"target": "192.168.1.1", "sha256": hashlib.sha256(xml).hexdigest(),
+                        "byte_count": len(xml), "chunk_count": 1, "chunk_index": 0, "xml": xml.decode()}))
+                self.assertEqual(xml_upload.status_code, 200, xml_upload.text)
                 queued = http.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf")
                 self.assertEqual(queued.status_code, 200, queued.text)
                 report_id = queued.json()["id"]
@@ -416,7 +421,7 @@ class ScannerRunTests(unittest.TestCase):
                     frozen = job.report_snapshot["scanner"]
                     self.assertEqual(frozen["events"][0]["payload"], payload)
                     self.assertEqual(frozen["events"][0]["artifact_sha256"], digest)
-                    self.assertEqual(frozen["run"]["event_count"], 2)
+                    self.assertEqual(frozen["run"]["event_count"], 3)
                     self.assertEqual(job.progress, 100)
         finally:
             runtime.should_exit = True

@@ -582,18 +582,12 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(downloaded.content).hexdigest(), evidence["artifact_sha256"])
         self.assertEqual(downloaded.headers["cache-control"], "no-store")
         pdf = self.client.post(f"/api/agents/events/{event_id}/pdf")
-        self.assertEqual(pdf.status_code, 200, pdf.text)
-        job_id = pdf.json()["id"]
-        generated = self.client.get(f"/api/reports/{job_id}/download")
-        self.assertEqual(generated.status_code, 200)
-        self.assertTrue(generated.content.startswith(b"%PDF-"))
+        self.assertEqual(pdf.status_code, 422, pdf.text)
+        self.assertIn("original Nmap XML", pdf.json()["detail"])
         with self.session_factory() as db:
             stored = db.get(server.ScanEvent, event_id)
             artifact = server.scanner_artifact_path(stored)
             self.assertEqual(artifact.stat().st_mode & 0o777, 0o600)
-            job = db.get(ReportJob, job_id)
-            self.assertEqual(job.status, "completed")
-            self.assertEqual(job.report_snapshot["scanner"]["payload"], payload)
         too_large = self.client.post(endpoint, headers={**headers, "Content-Length": str(33 * 1024 * 1024)}, content=b"{}")
         self.assertEqual(too_large.status_code, 413)
         with patch.object(server, "MAX_SCANNER_ARTIFACT_BYTES", 100):

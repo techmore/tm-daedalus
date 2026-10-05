@@ -9,7 +9,7 @@ from daedalus.reports import (
     _tls_valid_at_collection,
     _tls_issuer_text,
     build_external_posture_pdf,
-    build_scanner_results_pdf,
+    _build_legacy_scanner_evidence_pdf,
     build_meraki_security_pdf,
     scanner_result_hosts,
     scanner_phase_label,
@@ -291,7 +291,7 @@ class ScannerResultsReportTests(unittest.TestCase):
             scanner_result_hosts({"hosts_up": 2})
 
     def test_builds_saved_scanner_pdf_with_escaped_and_bounded_evidence(self):
-        pdf = build_scanner_results_pdf({
+        pdf = _build_legacy_scanner_evidence_pdf({
             "domain": "example.org",
             "scanner": {"name": "Fixture scanner", "event_id": 1,
                         "event_name": "scan_results", "occurred_at": "2026-09-29T15:00:00Z",
@@ -325,7 +325,7 @@ class ScannerRunReportTests(unittest.TestCase):
         self.assertEqual(scanner_phase_label("new_saved_phase"), "new saved phase")
 
     def test_run_pdf_preserves_summary_and_result_phases(self):
-        pdf = build_scanner_results_pdf({"scanner": {
+        pdf = _build_legacy_scanner_evidence_pdf({"scanner": {
             "name": "Fixture", "source_job_id": "fixture-run",
             "run": {"status": "completed"}, "events": [
                 {"id": 1, "event_name": "job_status", "payload": {"status": "running"}},
@@ -336,7 +336,7 @@ class ScannerRunReportTests(unittest.TestCase):
         self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_run_without_results_generates_honest_history_report(self):
-        pdf = build_scanner_results_pdf({"scanner": {"run": {"status": "interrupted"}, "events": [{"id": 1, "event_name": "job_status", "payload": {"status": "interrupted"}}]}})
+        pdf = _build_legacy_scanner_evidence_pdf({"scanner": {"run": {"status": "interrupted"}, "events": [{"id": 1, "event_name": "job_status", "payload": {"status": "interrupted"}}]}})
         self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_run_report_includes_vulnerability_references_and_errors(self):
@@ -347,7 +347,7 @@ class ScannerRunReportTests(unittest.TestCase):
             {"id": 2, "event_name": "deep_scan_error", "payload": {"message": "fixture incomplete service scan"}},
         ]}}
         with patch("daedalus.reports._paragraph", wraps=reports._paragraph) as rendered:
-            pdf = build_scanner_results_pdf(snapshot)
+            pdf = _build_legacy_scanner_evidence_pdf(snapshot)
         self.assertTrue(pdf.startswith(b"%PDF"))
         text = "\n".join(str(call.args[0]) for call in rendered.call_args_list)
         self.assertIn("CVE-fixture-123", text)
@@ -366,7 +366,7 @@ class ScannerRunReportTests(unittest.TestCase):
             {"id": 3, "event_name": "cve_array", "payload": {"target": "127.0.0.1", "cve_array": []}},
         ]}}
         with patch("daedalus.reports._paragraph", wraps=reports._paragraph) as rendered:
-            pdf = build_scanner_results_pdf(snapshot)
+            pdf = _build_legacy_scanner_evidence_pdf(snapshot)
         values = [str(call.args[0]) for call in rendered.call_args_list]
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertEqual(sum(line in value for value in values), 1)

@@ -17,6 +17,7 @@ dependencies = [
   "uvicorn[standard]>=0.34",
   "reportlab>=4.4,<6",
   "lxml>=5.3,<7",
+  "playwright>=1.50,<2",
 ]
 
 [project.scripts]

@@ -35,6 +35,11 @@ case "$phase" in
     site_packages=$("$candidate/.venv/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
     printf '%s\n' "$app/src" > "$site_packages/daedalus-release.pth"
     chown -R daedalus:daedalus "$candidate"
+    # Install the pinned browser used by the approved NmapUI PDF stylesheet.
+    # Shared OS libraries are installed before activation; browser downloads
+    # stay under the service account's normal Playwright cache.
+    "$candidate/.venv/bin/python" -m playwright install-deps chromium
+    runuser -u daedalus -- "$candidate/.venv/bin/python" -m playwright install chromium --only-shell
     DAEDALUS_ENV=development \
       DAEDALUS_DATA_DIR=/tmp/daedalus-deploy-smoke \
       DAEDALUS_REPORTS_DIR=/tmp/daedalus-deploy-smoke/reports \

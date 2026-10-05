@@ -3,6 +3,8 @@
 from pathlib import Path
 import hashlib
 import re
+import copy
+import base64
 
 from lxml import etree
 
@@ -77,19 +79,126 @@ def standardized_scanner_html(xml: bytes) -> str:
         isinstance(node, etree._Entity) for node in document.iter()
     ):
         raise ValueError("Nmap XML evidence must not contain external DTDs or entities.")
+    counts = document.find("runstats/hosts")
+    finished = document.find("runstats/finished")
+    if counts is None or finished is None or finished.get("exit", "success") != "success":
+        raise ValueError("Original Nmap XML has no successful completed scan coverage evidence.")
+    try:
+        up, down, total = (int(counts.get(key, "")) for key in ("up", "down", "total"))
+    except ValueError as exc:
+        raise ValueError("Original Nmap XML has invalid host coverage counts.") from exc
+    if min(up, down, total) < 0 or up + down != total:
+        raise ValueError("Original Nmap XML has inconsistent host coverage counts.")
     stylesheet = etree.parse(str(ASSETS / "nmap-pdf-olive-legacy.xsl"), parser=parser)
     transform = etree.XSLT(stylesheet, access_control=etree.XSLTAccessControl.DENY_ALL)
     html = str(transform(document))
+    font_css = ""
+    for family, filename, weight in [
+        ("Inter", "inter-latin-opsz-normal.woff2", "100 900"),
+        ("Instrument Serif", "instrument-serif-latin-400-normal.woff2", "400"),
+    ]:
+        encoded = base64.b64encode((ASSETS / "fonts" / filename).read_bytes()).decode("ascii")
+        font_css += f"@font-face{{font-family:'{family}';font-style:normal;font-weight:{weight};src:url(data:font/woff2;base64,{encoded}) format('woff2');}}"
     replacements = {
         "__NMAPUI_TAILWIND_CSS__": '<style id="nmapui-tailwind-css">'
-        + (ASSETS / "tailwind.css").read_text() + "</style>",
+        + font_css + (ASSETS / "tailwind.css").read_text() + "</style>",
         # PDF rendering has JavaScript disabled; retain the stylesheet's runtime
         # placeholder without allowing script or external resource execution.
         "__NMAPUI_REPORT_RUNTIME__": "",
-        "__NMAPUI_REPORT_CSP__": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'",
+        "__NMAPUI_REPORT_CSP__": "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:; base-uri 'none'; form-action 'none'",
     }
     for marker, value in replacements.items():
         if html.count(marker) != 1:
             raise ValueError(f"Approved report template has an invalid {marker} placeholder.")
         html = html.replace(marker, value, 1)
     return html
+
+
+def standardized_scanner_run_html(events: list[dict]) -> str:
+    """Merge original host records while retaining their service and script XML."""
+    documents = original_xml_documents(events)
+    # Validate each document with the same parser and isolation rules before
+    # accessing any evidence in it.
+    roots = []
+    for xml in documents:
+        standardized_scanner_html(xml)
+        roots.append(etree.fromstring(xml, etree.XMLParser(resolve_entities=False, no_network=True)))
+    if len(roots) == 1:
+        return standardized_scanner_html(documents[0])
+    if len({root.get("version") for root in roots}) > 1:
+        raise ValueError("Original XML uses different Nmap versions; combined report metadata is ambiguous.")
+    merged = copy.deepcopy(roots[0])
+    for host in list(merged.findall("host")):
+        merged.remove(host)
+    totals = {key: 0 for key in ("up", "down", "total")}
+    seen = set()
+    starts, finishes, commands = [], [], []
+    for root in roots:
+        if root.get("args"):
+            commands.append(root.get("args"))
+        if root.get("start"):
+            starts.append((int(root.get("start")), root.get("startstr", "")))
+        finished = root.find("runstats/finished")
+        if finished is not None and finished.get("time"):
+            finishes.append((int(finished.get("time")), finished.get("timestr", "")))
+        counts = root.find("runstats/hosts")
+        if counts is None or any(counts.get(key) is None for key in totals):
+            raise ValueError("Original XML is missing host coverage counts.")
+        for key in totals:
+            value = int(counts.get(key))
+            if value < 0:
+                raise ValueError("Invalid original XML host count.")
+            totals[key] += value
+        for host in root.findall("host"):
+            addresses = tuple(sorted(address.get("addr", "") for address in host.findall("address") if address.get("addrtype") in {"ipv4", "ipv6"}))
+            if not addresses or addresses in seen:
+                raise ValueError("Overlapping or unidentified host XML cannot produce an unambiguous combined report.")
+            seen.add(addresses)
+            merged.insert(len(merged) - 1, copy.deepcopy(host))
+    merged.set("args", "\n".join(commands))
+    counts = merged.find("runstats/hosts")
+    for key, value in totals.items():
+        counts.set(key, str(value))
+    if starts:
+        started, text = min(starts)
+        merged.set("start", str(started))
+        merged.set("startstr", text)
+    if finishes:
+        ended, text = max(finishes)
+        finished = merged.find("runstats/finished")
+        finished.set("time", str(ended))
+        finished.set("timestr", text)
+        if starts:
+            finished.set("elapsed", str(max(0, ended - min(starts)[0])))
+    return standardized_scanner_html(etree.tostring(merged))
+
+
+def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
+    """Render the approved stylesheet with the same browser print settings as NmapUI."""
+    import tempfile
+    from playwright.sync_api import sync_playwright
+
+    scanner = report_snapshot.get("scanner") or {}
+    events = scanner.get("events")
+    if not isinstance(events, list):
+        raise ValueError("The approved scan PDF requires a saved run with original Nmap XML evidence.")
+    html = standardized_scanner_run_html(events)
+    with tempfile.TemporaryDirectory(prefix="daedalus-scanner-pdf-") as directory:
+        path = Path(directory) / "report.html"
+        path.write_text(html, encoding="utf-8")
+        with sync_playwright() as playwright:
+            # Incus already supplies the container isolation; Chromium still
+            # runs as the unprivileged Daedalus service account.
+            browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+            try:
+                context = browser.new_context(viewport={"width": 1440, "height": 2160}, java_script_enabled=False, service_workers="block")
+                context.route("**/*", lambda route: route.continue_() if route.request.url == path.as_uri() else route.abort())
+                page = context.new_page()
+                page.set_default_timeout(180000)
+                page.emulate_media(media="print")
+                page.goto(path.as_uri(), wait_until="networkidle")
+                page.evaluate("document.fonts.ready")
+                return page.pdf(format="Letter", print_background=True, prefer_css_page_size=True,
+                    margin={"top": "8mm", "right": "8mm", "bottom": "10mm", "left": "8mm"})
+            finally:
+                browser.close()

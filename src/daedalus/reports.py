@@ -1236,6 +1236,11 @@ def scanner_phase_label(event_name: str) -> str:
 
 
 def build_scanner_results_pdf(report_snapshot: dict[str, Any]) -> bytes:
+    from daedalus.scanner_report_template import render_standardized_scanner_pdf
+    return render_standardized_scanner_pdf(report_snapshot)
+
+
+def _build_legacy_scanner_evidence_pdf(report_snapshot: dict[str, Any]) -> bytes:
     """Render saved NmapUI evidence without executing or enriching a scan."""
     scan = report_snapshot.get("scanner") or {}
     run_events = scan.get("events")

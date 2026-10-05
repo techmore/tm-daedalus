@@ -68,3 +68,16 @@ def test_missing_or_corrupt_xml_never_produces_partial_evidence():
         original_xml_documents(events)
     with pytest.raises(ValueError, match="no original"):
         original_xml_documents([])
+
+
+def test_hosted_renderer_requires_original_xml_instead_of_substituting_layout():
+    from daedalus.reports import build_scanner_results_pdf
+    with pytest.raises(ValueError, match="original Nmap XML"):
+        build_scanner_results_pdf({"scanner": {"events": [{"event_name": "deep_scan_results", "payload": [{"ip": "127.0.0.1"}]}]}})
+
+
+def test_missing_coverage_does_not_render_as_zero_observations():
+    with pytest.raises(ValueError, match="coverage"):
+        standardized_scanner_html(b"<nmaprun/>")
+    with pytest.raises(ValueError, match="inconsistent"):
+        standardized_scanner_html(XML.replace(b'up="1" down="0" total="1"', b'up="1" down="0" total="0"'))

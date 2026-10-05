@@ -5839,35 +5839,9 @@ def create_scanner_results_pdf(event_id: int, request: Request, background_tasks
     event, agent = row
     if event.event_name not in {"scan_results", "quickscan_results", "deep_scan_results"}:
         raise HTTPException(status_code=422, detail="Choose a saved scan_results, quickscan_results or deep_scan_results event.")
-    saved_payload = load_scanner_event_payload(event)
-    try:
-        scanner_result_hosts(saved_payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    active_count = db.scalar(select(func.count(ReportJob.id)).where(
-        ReportJob.organization_id == organization.id, ReportJob.status.in_(("queued", "running")),
-    )) or 0
-    if active_count >= 3:
-        raise HTTPException(status_code=429, detail="Three report jobs are already running for this workspace.")
-    now = utcnow()
-    job = ReportJob(
-        organization_id=organization.id, created_by_user_id=user.id, report_type="scanner_results",
-        domain=organization.domain, status="queued", progress=0, stage="Queued", file_name="pending.pdf",
-        created_at=now, updated_at=now,
-        report_snapshot={"domain": organization.domain, "organization_name": organization.name,
-            "requested_by": user.email, "generated_at": iso_utc(now),
-            "scanner": {"name": agent.name, "agent_id": agent.id, "event_id": event.id,
-                "event_name": event.event_name, "occurred_at": iso_utc(event.occurred_at or event.created_at),
-                "artifact_sha256": event.artifact_sha256, "payload": saved_payload}},
-    )
-    db.add(job)
-    db.flush()
-    job.file_name = f"daedalus-scanner-{agent.id}-event-{event.id}-{job.id}.pdf"
-    audit(db, organization.id, user.id, "report.requested", {"report_id": job.id, "report_type": job.report_type, "event_id": event.id, "agent_id": agent.id})
-    db.commit()
-    db.refresh(job)
-    background_tasks.add_task(generate_report_job, job.id)
-    return serialize_report_job(job, user)
+    if not event.source_job_id:
+        raise HTTPException(status_code=422, detail="This historical event has no original Nmap XML run evidence. Its saved JSON remains available; the approved PDF requires a new scanner run.")
+    return create_scanner_run_pdf(agent.id, UUID(event.source_job_id), request, background_tasks, db)
 
 
 def command_timeout(action: str) -> timedelta:
