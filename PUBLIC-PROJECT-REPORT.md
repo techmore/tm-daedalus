@@ -1045,3 +1045,8 @@ Full local validation with these endpoint corrections passed **637 tests and 129
 ## Original scanner template version boundaries — October 5, 2026
 
 Read-only NmapUI history review confirms the saved seven-page source 86e404fc lacks the later wide-table print fix. Commit 3cc81c67 explicitly added table typography/padding and word wrapping to prevent page-edge CPE truncation; subsequent feef24b5 retained that fix and changed external asset loading/security controls. Their stylesheet digests differ from the saved-export baseline. Private receipt: validation/scanner-template-version-boundaries-20261005.json. This evidence explains why selecting an older saved export can discard existing enhancements; it does not identify which version the human standardized. The pending reference request remains necessary before final baseline selection. No template bytes or production release changed.
+
+
+## Website summary evidence validation — October 5, 2026
+
+Workspace summaries now accept HTTP status only as an integer in 100–599; missing, malformed, Boolean and out-of-range values remain unknown and require review instead of throwing during integer conversion. Missing or wrong-shape selected header evidence stays unknown rather than implying zero absent headers. Fixtures cover seven malformed status values and three malformed header shapes. All **fourteen workspace-summary tests and sixteen subtests passed**, with two dependency deprecation warnings. No collector run, report template, saved snapshot or production release was changed; broader checker-semantic and visual acceptance remain open.

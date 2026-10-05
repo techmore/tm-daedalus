@@ -75,6 +75,17 @@ class WorkspacePostureTests(unittest.TestCase):
                 self.assertIn('Selected header evidence unknown',area['summary'])
                 self.assertNotIn('0 selected header(s) absent',area['summary'])
 
+    def test_wrong_shape_header_evidence_does_not_break_summary(self):
+        org,_=self.context()
+        for headers in (['Content-Security-Policy'], 'not captured', True):
+            with self.subTest(headers=headers):
+                self.save(org,kind='web',snapshot={'http_status':200,'security_headers':headers})
+                response=self.client.get('/api/workspace-posture')
+                self.assertEqual(response.status_code,200)
+                area=next(a for a in response.json()['areas'] if a['key']=='web')
+                self.assertEqual(area['state'],'attention')
+                self.assertIn('Selected header evidence unknown',area['summary'])
+
     def test_deeper_audit_has_separate_timestamp_without_raw_observations(self):
         org,_=self.context()
         self.save(org,kind='web-nikto',status='completed_with_warnings',snapshot={'findings':[{'description':'private detector text'}],'coverage_complete':False})

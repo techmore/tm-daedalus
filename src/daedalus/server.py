@@ -5317,7 +5317,8 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
             summary = f"SPF: {spf} · DMARC: {dmarc} · {unknown} unknown lookup(s)"
             if unknown or saved.status == "completed_with_warnings" or any((assessment.get(policy) or {}).get("tone") != "good" for policy in ("spf", "dmarc")): state = "attention"
         elif saved:
-            headers = snapshot.get("security_headers") or {}
+            observed_headers = snapshot.get("security_headers")
+            headers = observed_headers if isinstance(observed_headers, dict) else {}
             absent = sum(not value for value in headers.values())
             certificate_label, certificate_review = _website_certificate_summary(snapshot, utcnow())
             observed_status = snapshot.get("http_status")
