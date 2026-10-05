@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Production secret recovery on the Mac — 2026-10-05
+
+Saved an encrypted recovery envelope of the actual production environment and a generated recovery password outside the repository, in an owner-only Mac application-support directory. Both files are mode 0600. After capture, local-only unsealing reproduced the environment exactly and its recovered encryption key decrypted the restored Meraki credential. Session and Google OAuth settings are present, but OAuth login and runtime failover were not exercised. Private receipt: `validation/secret-recovery-20261005.json`.
+
+The password and envelope currently reside on the same Mac. This provides an off-SER8 recovery copy, not independent custody or protection against losing both machines. Separate recovery custody and a restored runtime rehearsal remain open. No secret values were printed, committed or sent to a provider.
+
 ## Fresh off-host backup restore — 2026-10-05
 
 Created a fresh production SQLite/report archive with the installed backup helper and copied it to a private directory on the Mac. Archive `daedalus-data-20261005T224647Z.tar.gz` has SHA-256 `fcb2d4745e2595e18936b90c290a0f57b1472dcb22dcbbe92ab56024d967d287`. The shipped restore tool verified its manifest and restored it to a separate private validation directory. SQLite integrity passed, foreign-key violations were zero, and all 39 restored PDF files have valid PDF headers. Private receipt: `validation/fresh-recovery-20261005T224647Z.json`. This verifies fresh data recovery; independent production-secret recovery and runtime failover remain unverified. No active application release or report was changed.
