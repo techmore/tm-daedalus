@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Saved scanner PDF source identified — 2026-10-05
+
+The saved August 22 seven-page example's `scan_pdf.html` matches the complete HTML DOM generated from its original `scan.xml` using NmapUI commit `86e404fc`, after removing serializer-only whitespace nodes. The original stylesheet SHA-256 is `687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537`. Later August 22 commits added Network Scanned/Vulnerability Levels cards and structured CVE sections after this PDF's creation time; current HEAD produces a different DOM. The discrepancy is therefore attributable to source-template changes, rather than merely browser pagination. Private provenance receipt: `validation/saved-pdf-template-provenance-20261005.json`. The exact historical template is retained privately for reproduction. Regenerated PDF visual parity and final baseline acceptance remain unverified; no production renderer or saved report was changed.
+
 ## Live topic refresh and profile selection — 2026-10-05
 
 The existing agent-owned browser session verified production website navigation and reload retained `/dashboard#web` and `Website health`, then loaded its stored HTTPS summary. Endpoint navigation/reload likewise retained `/dashboard#cis` and `Endpoint compliance` and loaded current assessment coverage. The live client-profile selector contains the CSP starter baseline and both macOS 26 Level 1/Level 2 profiles. Private endpoint receipt: `validation/cis-browser-refresh-20261005.json`. This verifies navigation, data loading and available options; it does not prove physical macOS 26 client deployment or visual design acceptance. Browser screenshot capture still timed out after restoring a desktop viewport.
