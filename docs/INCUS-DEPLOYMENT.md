@@ -5,6 +5,25 @@ host. The application is served by `daedalus.service`; persistent application
 data is on `/data`, an Incus-mounted volume. Deployment keeps the existing
 systemd unit and stable `/opt/daedalus/app` path. It does not use Docker.
 
+## Production Linux scanner
+
+The dedicated `daedalus-scanner-linux` Ubuntu 24.04 Incus container runs the
+managed scanner separately from the portal. Its configuration enables nesting,
+two CPU cores, 2 GiB memory and `boot.autostart=true`. The unprivileged `scanner`
+account has linger enabled and runs `daedalus-nmapui.service` and
+`daedalus-scanner-bridge.service` as systemd user units. NmapUI listens only on
+container loopback port 9000; the bridge connects outward to the portal.
+
+It is enrolled as scanner 3 with only `127.0.0.1/32` authorized for validation.
+Additional subnet grants require the workspace administrator's explicit scope
+configuration. Enrollment and local authentication files are owner-only. The
+[scanner kit instructions](../src/daedalus/agent_bundle/README.md) describe
+Ubuntu prerequisites, installation, status, restart and upgrades.
+
+Actual acceptance includes scan/XML upload, portal-managed restart, container
+restart with automatic service startup, in-place upgrade and a repeated-kit
+no-op. Host reboot and additional VLAN locations remain separate open checks.
+
 ## Preview a release
 
 From a clean checkout of `main`, with SSH access to the Incus host:
