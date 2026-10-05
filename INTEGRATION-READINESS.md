@@ -626,3 +626,14 @@ fa0d275 deployed successfully to SER8 Incus with verified off-host backup and re
 ### Isolated recovery inspection configuration
 
 Set DAEDALUS_BACKGROUND_WORKERS_ENABLED=false only on an isolated recovery copy to prevent automatic scheduled DNS/website checks and queued website-audit collection. The default is true. This is not a read-only or authentication mode: normal migrations and interrupted-job reconciliation still run, and API actions retain their existing permissions. Bind the inspection server to loopback, use separate data/report directories, and do not direct scanner clients at it. No production setting has been disabled. Startup fixtures verify both disabled and enabled worker paths; real restored-runtime validation remains pending.
+
+### Password-encrypted recovery secrets
+
+`scripts/recovery_secrets.py` seals an owned mode-600 secret file into a password-encrypted envelope and restores it only to a new mode-600 file. Run in an interactive terminal; passwords are prompted privately, never passed as command arguments. Keep the envelope off SER8 and store the recovery password independently. This utility does not choose a storage destination or export production secrets automatically.
+
+```sh
+python scripts/recovery_secrets.py seal /path/to/private-production.env /path/to/recovery-secrets.json
+python scripts/recovery_secrets.py restore /path/to/recovery-secrets.json /path/to/new-private-production.env
+```
+
+Version 1 fixes Scrypt parameters (n=32768, r=8, p=1) and uses Fernet authenticated encryption with a random salt. Input secrets are capped at 1 MiB; envelopes at 2 MiB. Files must be owned private regular files; source symlinks and existing destinations are refused. The production recovery-secret location/password and an actual independent recovery rehearsal remain pending.

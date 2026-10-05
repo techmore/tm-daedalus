@@ -35,6 +35,7 @@ class ReleaseBundleTests(unittest.TestCase):
             self.assertIn("daedalus/PUBLIC-PROJECT-REPORT.md", names)
             self.assertIn("daedalus/requirements-production.txt", names)
             self.assertIn("daedalus/scripts/deploy_incus_remote.sh", names)
+            self.assertIn("daedalus/scripts/recovery_secrets.py", names)
             self.assertIn("daedalus/src/daedalus/server.py", names)
             self.assertNotIn("daedalus/src/daedalus/client_bundle/manifest.json", names)
             self.assertNotIn("daedalus/Dockerfile", names)
@@ -82,7 +83,7 @@ class ReleaseBundleTests(unittest.TestCase):
             for name in ("PUBLIC-PROJECT-REPORT.md", "README.md", "pyproject.toml", "uv.lock", "requirements-production.txt", ".env.production.example"):
                 (root / name).write_text("fixture", encoding="utf-8")
             (root / "scripts").mkdir()
-            for name in ("__init__.py", "backup_data.py", "backup_incus.sh", "check_production_env.py", "check_public_deployment.py", "deploy_incus.py", "deploy_incus_remote.sh", "package_release.py", "restore_data.py", "install_nikto_runtime.py"):
+            for name in ("__init__.py", "backup_data.py", "backup_incus.sh", "check_production_env.py", "check_public_deployment.py", "deploy_incus.py", "deploy_incus_remote.sh", "package_release.py", "restore_data.py", "recovery_secrets.py", "install_nikto_runtime.py"):
                 (root / "scripts" / name).write_text("fixture", encoding="utf-8")
             source = root / "src" / "daedalus"
             source.mkdir(parents=True)

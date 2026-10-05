@@ -42,6 +42,7 @@ SCRIPT_FILES = (
     "deploy_incus_remote.sh",
     "package_release.py",
     "restore_data.py",
+    "recovery_secrets.py",
     "install_nikto_runtime.py",
 )
 REQUIRED_ARCHIVE_PATHS = {
