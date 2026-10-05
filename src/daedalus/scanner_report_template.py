@@ -7,12 +7,14 @@ import copy
 import base64
 import os
 import sys
+import io
 
 from lxml import etree
 
 
 ASSETS = Path(__file__).with_name("scanner_report_assets")
 MAX_XML_BYTES = 16 * 1024 * 1024
+APPROVED_TEMPLATE_SHA256 = "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537"
 
 
 def original_xml_documents(events: list[dict]) -> list[bytes]:
@@ -91,7 +93,10 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         raise ValueError("Original Nmap XML has invalid host coverage counts.") from exc
     if min(up, down, total) < 0 or up + down != total:
         raise ValueError("Original Nmap XML has inconsistent host coverage counts.")
-    stylesheet = etree.parse(str(ASSETS / "nmap-pdf-olive-approved.xsl"), parser=parser)
+    template_bytes = (ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes()
+    if hashlib.sha256(template_bytes).hexdigest() != APPROVED_TEMPLATE_SHA256:
+        raise ValueError("Scanner PDF template differs from the pinned standardized baseline; report generation stopped.")
+    stylesheet = etree.parse(io.BytesIO(template_bytes), parser=parser)
     if target_label is not None:
         # Supply the combined scope through the existing target field without
         # changing the standardized stylesheet's layout or its command evidence.

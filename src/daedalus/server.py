@@ -6833,7 +6833,7 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
            "snapshot_byte_limit": MAX_SCANNER_RUN_PDF_BYTES, "truncated": False}
     if status != "completed" or run["group_metadata_conflict"]:
         raise HTTPException(status_code=422, detail="The approved PDF requires a completed scanner run with consistent saved run metadata.")
-    from daedalus.scanner_report_template import standardized_scanner_run_html
+    from daedalus.scanner_report_template import standardized_scanner_run_html, APPROVED_TEMPLATE_SHA256
     try:
         standardized_scanner_run_html(saved_events)
     except ValueError as exc:
@@ -6844,13 +6844,16 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
         created_at=now, updated_at=now,
         report_snapshot={"domain": organization.domain, "organization_name": organization.name,
             "requested_by": user.email, "generated_at": iso_utc(now),
+            "scanner_report_template": {"source_commit": "86e404fc16626c9c674d52663101600ad29de695",
+                                        "stylesheet_sha256": APPROVED_TEMPLATE_SHA256},
             "scanner": {"name": agent.name, "agent_id": agent.id, "source_job_id": str(source_job_id),
                         "run": run, "events": saved_events, "payload": []}})
     db.add(job)
     db.flush()
     job.file_name = f"daedalus-scanner-{agent.id}-run-{source_job_id}-{job.id}.pdf"
     audit(db, organization.id, user.id, "report.requested", {"report_id": job.id, "report_type": job.report_type,
-        "source_job_id": str(source_job_id), "agent_id": agent.id, "event_count": len(saved_events), "snapshot_payload_bytes": payload_bytes})
+        "source_job_id": str(source_job_id), "agent_id": agent.id, "event_count": len(saved_events), "snapshot_payload_bytes": payload_bytes,
+        "template_sha256": APPROVED_TEMPLATE_SHA256})
     db.commit()
     db.refresh(job)
     background_tasks.add_task(generate_report_job, job.id)

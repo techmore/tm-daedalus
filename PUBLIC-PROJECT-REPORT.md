@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Scheduled endpoint check-in and PDF provenance — 2026-10-05
+
+The installed local CIS app sent its next scheduled heartbeat at 22:36:51 UTC, after the initial 22:31:21 heartbeat, and remained online. Production report 22, assessment collection time and report receipt time were unchanged. This verifies a recurring installed-client check-in without falsely refreshing audit evidence. Private receipt: `validation/cis-installed-client-heartbeat-20261005.json`. Login/reboot persistence and trusted macOS 26 deployment remain open.
+
+Scanner rendering now verifies the unchanged historical stylesheet's pinned SHA-256 at runtime and refuses an altered template before generation. New run-report snapshots and request audit records retain its source commit/hash for provenance. Tests reject even a changed stylesheet byte and verify stored provenance; 38 scanner/template checks passed, and eight dedicated heartbeat tests passed independently. These corrections are not yet deployed; final PDF baseline/visual acceptance remains outstanding.
+
 ## Installed local CIS client acceptance — 2026-10-05
 
 The current Release app was built, its bundle signature integrity verified, and installed under the current user's Applications directory on macOS 27.0.1. A private mode-0600 config uses the existing operator per-user key for CSP, preserving the shared CIS upload key and stable device identity. The installed menu-bar client launched and uploaded production report 22: 154 results, 11 pass, 10 fail, 133 manual and zero collection errors; pass rate 7.14%, with 21 assessed checks (13.64% coverage). The profile checksum verified. These are reported baseline results, not CIS attestation.

@@ -132,6 +132,15 @@ def test_local_asset_embedding_preserves_entire_historical_report_body():
     assert head.findall("style")[-1].get("id") == "nmapui-tailwind-css"
 
 
+def test_replaced_standardized_template_is_rejected_before_generation(monkeypatch, tmp_path):
+    from daedalus import scanner_report_template as module
+    replacement = (ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes() + b"\n"
+    (tmp_path / "nmap-pdf-olive-approved.xsl").write_bytes(replacement)
+    monkeypatch.setattr(module, "ASSETS", tmp_path)
+    with pytest.raises(ValueError, match="differs from the pinned standardized baseline"):
+        standardized_scanner_html(XML)
+
+
 def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
     from daedalus import scanner_report_template as module
     from playwright.sync_api import Page
