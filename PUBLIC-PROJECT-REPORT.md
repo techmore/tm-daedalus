@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## CI acceptance of scanner XML pipeline — 2026-10-05
+
+Application commit `a903db1` passed [backend CI](https://github.com/techmore/tm-daedalus/actions/runs/37355084523) on Python 3.11 and 3.12: each ran 605 tests and 129 subtests successfully. The pinned production requirements export also matched. The [managed Linux integration run](https://github.com/techmore/tm-daedalus/actions/runs/37355084526) passed; its downloaded receipt confirms fresh installation, an actual bounded Nmap scan against one ephemeral loopback listener, original XML upload, 17 realtime messages, persistent run storage and authenticated PDF generation/download.
+
+The same isolated run verified managed remote restart with a changed NmapUI PID, upgrade with enrollment/settings and saved-run preservation, repeated-upgrade no-op, local restart with heartbeat recovery, and point-in-time portal restore preserving the run and exact PDF bytes. Cleanup completed. Separate JSON-artifact recovery, repeated scan comparison and bridge interruption were not exercised by this run; its receipt explicitly leaves those fields false or null. No external targets or fleet soak were tested.
+
+These are pipeline and lifecycle results, not approval of the PDF's visual format. The corrective renderer remains outside the active production application until the saved standardized baseline discrepancy is resolved. Historical PDFs are preserved. Private CI receipt: `validation/ci-linux-a903db1/managed-scanner.json`.
+
 ## Production Linux scanner upgrade acceptance — 2026-10-05
 
 Scanner 3 completed an in-place upgrade using kit SHA-256 `3a9a176fefc34b424c44f2abdb863b920ed16d3fe71bb030bd1dace7e932e487`. The verified upgrade reported preserved enrollment, credentials and data; a fresh portal check found the same scanner online with saved run `2156a367-2b4f-4933-a21f-1efc3df2c86b` intact. Repeating the same kit returned `already_current=true` and `upgraded=false`. Private logs/receipt: `validation/ser8-linux-managed-upgrade*20261005.log` and `validation/ser8-linux-post-upgrade-20261005.json`.
