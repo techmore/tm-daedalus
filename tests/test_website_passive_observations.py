@@ -175,6 +175,37 @@ class WebsitePassiveObservationTests(unittest.TestCase):
         failed = {"requested_url": "https://example.test/", "destination_addresses": []}
         self.assertFalse(any(path.startswith("page_content.") for path, _, _ in compare_snapshots(first, failed)))
 
+    def test_incomplete_cookie_samples_do_not_claim_attribute_removals(self):
+        first = self.collect(FixtureResponse(extra_headers=[
+            ("Set-Cookie", "session=private; Secure; HttpOnly; SameSite=Strict"),
+        ]))
+        oversized = self.collect(FixtureResponse(extra_headers=[
+            ("Set-Cookie", "session=" + "x" * MAX_COOKIE_HEADER_BYTES),
+        ]))
+        ambiguous = self.collect(FixtureResponse(extra_headers=[
+            ("Set-Cookie", "session=private; Secure; Secure"),
+        ]))
+        for incomplete in (oversized, ambiguous):
+            for old, new in ((first, incomplete), (incomplete, first)):
+                paths = {path for path, _, _ in compare_snapshots(old, new)}
+                self.assertTrue(paths & {"cookie_observations.analysis_partial",
+                                         "cookie_observations.unparsed_header_count"})
+                self.assertNotIn("cookie_observations.secure_attribute_count", paths)
+                self.assertNotIn("cookie_observations.http_only_attribute_count", paths)
+            incomplete["tls"]["negotiated_protocol"] = "TLSv1.2"
+            self.assertIn("tls.negotiated_protocol",
+                          {path for path, _, _ in compare_snapshots(first, incomplete)})
+
+    def test_complete_cookie_samples_still_report_attribute_changes(self):
+        first = self.collect(FixtureResponse(extra_headers=[
+            ("Set-Cookie", "session=private; Secure; HttpOnly"),
+        ]))
+        second = self.collect(FixtureResponse(extra_headers=[
+            ("Set-Cookie", "session=private; HttpOnly"),
+        ]))
+        self.assertIn(("cookie_observations.secure_attribute_count", 1, 0),
+                      compare_snapshots(first, second))
+
 
 if __name__ == "__main__":
     unittest.main()

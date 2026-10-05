@@ -742,8 +742,20 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
         )
 
     page_incomplete = any(incomplete_page(snapshot) for snapshot in (previous, current))
+    cookies_incomplete = any(
+        isinstance(snapshot.get("cookie_observations"), dict)
+        and (snapshot["cookie_observations"].get("analysis_partial") is True
+             or snapshot["cookie_observations"].get("unparsed_header_count", 0) > 0)
+        for snapshot in (previous, current)
+    )
     changes = []
     for path in sorted(paths | error_paths):
+        if cookies_incomplete and path.startswith("cookie_observations.") and path not in {
+            "cookie_observations.analysis_partial", "cookie_observations.unparsed_header_count",
+        }:
+            # A bounded or ambiguous sample cannot establish that cookie
+            # attributes disappeared. Keep completeness changes and evidence.
+            continue
         if path == "dependency_origin_observations" or path.startswith("dependency_origin_observations."):
             if page_incomplete or not all(isinstance(snapshot.get("dependency_origin_observations"), dict)
                 and snapshot["dependency_origin_observations"].get("schema_version") == 1

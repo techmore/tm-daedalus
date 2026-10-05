@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Website cookie comparison completeness — 2026-10-05
+
+Cookie headers exceeding collection limits or containing ambiguous attributes cannot establish a complete count of Secure, HttpOnly or SameSite attributes. Comparisons now retain changes in analysis completeness/unparsed-header counts while suppressing attribute-count conclusions whenever either observation is incomplete. Complete samples still report attribute changes, and independently collected TLS differences remain visible. Original bounded observations remain stored; cookie names and values remain excluded. Forty focused DNS and passive website/resource tests and nine subtests passed. This change is committed for the next release, not yet active in production; it does not change PDF templates.
+
 ## DNS comparison semantics review — 2026-10-05
 
 Unavailable DNS queries previously suppressed record-change conclusions but still compared absent response metadata and derived DNSSEC presence/assessment fields. A DS timeout could therefore appear as changed DNSSEC protection. Comparison now suppresses metadata and derived conclusions for the unavailable query while retaining the normalized lookup outage/recovery alert and the complete original snapshots. Independently observed DNSKEY changes remain visible when only DS lookup fails. Regression checks exercise collector-produced snapshots in both directions and independent DNSKEY removal. The DNS comparison/collector and passive website/resource suites passed 38 tests and nine subtests. This correction is not yet deployed; PDF baseline acceptance remains outstanding.
