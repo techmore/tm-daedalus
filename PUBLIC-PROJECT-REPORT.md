@@ -1000,3 +1000,8 @@ All-page comparison of the saved seven-page export and the local Mac reconstruct
 ## Scanner PDF styling asset integrity — October 5, 2026
 
 The corrective renderer now checks SHA-256 digests for its embedded Tailwind CSS and both bundled report fonts, in addition to the historical stylesheet. A changed asset stops generation rather than silently changing typography or styling while leaving the XSL hash unchanged. Three fixtures independently alter CSS, Inter and Instrument Serif; all **46 scanner/template tests passed**. Asset bytes, historical report body and layout remain unchanged. This protects the current candidate's rendering assets; it does not establish that the unresolved historical version is the user's approved baseline, nor does it complete visual acceptance. Production activation remains pending.
+
+
+## Frozen scanner report styling provenance — October 5, 2026
+
+New scanner report snapshots and request audit records retain the CSS/font digest map. Rendering rejects a queued snapshot with a different map before preparing HTML, while legacy snapshots without that optional field retain compatibility with the existing pinned renderer. Browser fixtures verify generation with both legacy and current provenance; mismatched and malformed maps are rejected. All **49 scanner/template tests passed**; the request/audit assertions also passed the 19-test scanner-run suite. No report body, asset bytes or production release changed.

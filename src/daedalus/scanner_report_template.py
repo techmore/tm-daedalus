@@ -249,6 +249,7 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     if provenance is not None and (
         not isinstance(provenance, dict)
         or provenance.get("stylesheet_sha256") != APPROVED_TEMPLATE_SHA256
+        or ("asset_sha256" in provenance and provenance["asset_sha256"] != REPORT_ASSET_SHA256)
     ):
         raise ValueError("The saved report template no longer matches the standardized baseline; no replacement layout was generated.")
 

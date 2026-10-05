@@ -176,7 +176,11 @@ def test_replaced_styling_asset_is_rejected_without_changing_template(asset, mon
         standardized_scanner_html(XML)
 
 
-@pytest.mark.parametrize("provenance", [{"stylesheet_sha256": "different-template"}, {}, "invalid"])
+@pytest.mark.parametrize("provenance", [
+    {"stylesheet_sha256": "different-template"}, {}, "invalid",
+    {"stylesheet_sha256": "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537", "asset_sha256": {}},
+    {"stylesheet_sha256": "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537", "asset_sha256": None},
+])
 def test_queued_report_template_mismatch_cannot_render_a_replacement(provenance, monkeypatch):
     from daedalus import scanner_report_template as module
     def unexpected(events):
@@ -187,7 +191,8 @@ def test_queued_report_template_mismatch_cannot_render_a_replacement(provenance,
                                               "scanner": {"events": []}})
 
 
-def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
+@pytest.mark.parametrize("include_asset_provenance", [False, True])
+def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch, include_asset_provenance):
     from daedalus import scanner_report_template as module
     from playwright.sync_api import Page
     monkeypatch.setattr(module, "standardized_scanner_run_html", lambda events: """<!doctype html>
@@ -202,7 +207,13 @@ def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
         observed.extend(states)
         return original_pdf(page, **kwargs)
     monkeypatch.setattr(Page, "pdf", checked_pdf)
-    pdf = module.render_standardized_scanner_pdf({"scanner": {"events": []}})
+    snapshot = {"scanner": {"events": []}}
+    if include_asset_provenance:
+        snapshot["scanner_report_template"] = {
+            "stylesheet_sha256": module.APPROVED_TEMPLATE_SHA256,
+            "asset_sha256": dict(module.REPORT_ASSET_SHA256),
+        }
+    pdf = module.render_standardized_scanner_pdf(snapshot)
     assert observed and pdf.startswith(b"%PDF-")
 
 

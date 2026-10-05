@@ -303,8 +303,11 @@ class ScannerRunTests(unittest.TestCase):
             self.assertEqual(job.report_type, "scanner_results")
             self.assertEqual(job.report_snapshot["scanner_report_template"]["stylesheet_sha256"],
                              "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537")
+            from daedalus.scanner_report_template import REPORT_ASSET_SHA256
+            self.assertEqual(job.report_snapshot["scanner_report_template"]["asset_sha256"], REPORT_ASSET_SHA256)
             logs = db.scalars(select(AuditLog).where(AuditLog.action == "report.requested")).all()
             self.assertEqual(logs[-1].details["source_job_id"], self.job_id)
+            self.assertEqual(logs[-1].details["template_asset_sha256"], REPORT_ASSET_SHA256)
 
     def test_run_pdf_limits_and_malformed_result_create_no_partial_job(self):
         self.setup_scanner()
