@@ -174,6 +174,7 @@ FORWARDED_EVENTS = {
     "arp_results",
     "arp_scan_complete",
     "deep_scan_results",
+    "scan_xml_chunk",
     "cve_array",
     "service_info",
     "deep_scan_host_complete",

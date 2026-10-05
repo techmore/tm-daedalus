@@ -16,6 +16,7 @@ dependencies = [
   "itsdangerous>=2.2",
   "uvicorn[standard]>=0.34",
   "reportlab>=4.4,<6",
+  "lxml>=5.3,<7",
 ]
 
 [project.scripts]
