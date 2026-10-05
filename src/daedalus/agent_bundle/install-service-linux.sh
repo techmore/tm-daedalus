@@ -29,6 +29,11 @@ case "$NMAPUI_PORT" in ''|*[!0-9]*) fail "NMAPUI_PORT must be a number from 1 to
 NMAPUI_URL="http://127.0.0.1:$NMAPUI_PORT"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "Python 3.11 or newer is required."
 "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' || fail "Python 3.11 or newer is required."
+if [ -z "${NMAPUI_USERNAME:-}" ] && [ -z "${NMAPUI_PASSWORD:-}" ]; then
+  NMAPUI_USERNAME=daedalus-local
+  NMAPUI_PASSWORD=$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_urlsafe(32))')
+  export NMAPUI_USERNAME NMAPUI_PASSWORD
+fi
 command -v nmap >/dev/null 2>&1 || fail "Nmap is required. Install it with your Linux distribution package manager."
 command -v unzip >/dev/null 2>&1 || fail "unzip is required to prepare the NmapUI source."
 command -v systemctl >/dev/null 2>&1 || fail "systemctl is required for managed Linux services."
