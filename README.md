@@ -31,6 +31,22 @@ Open `http://127.0.0.1:8000`. Google sign-in and external integrations need thei
 
 The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/INCUS-DEPLOYMENT.md) for the verified backup, staged release, health-check, and automatic rollback workflow.
 
+## Validate the application
+
+Run from the repository root using the same commands as backend CI:
+
+```sh
+uv sync --locked
+uv run --locked python -m playwright install chromium --only-shell
+uv run --locked python -m pytest -q
+```
+
+On Linux, install the browser's system dependencies with `python -m playwright
+install-deps chromium` from the configured virtual environment first. Use
+`python -m pytest` so tests can import the repository's deployment scripts.
+These tests include isolated report generation; passing them does not establish
+visual approval of a PDF template or validation of a production scanner fleet.
+
 ## Managed Linux scanner lifecycle
 
 The scanner kit includes `manage-service-linux.sh status|restart|uninstall|restore`.

@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Full suite and live readiness recheck — 2026-10-05
+
+After the DNSSEC and cookie comparison corrections, `uv run --locked python -m pytest -q` passed 609 tests and 129 subtests, with two dependency deprecation warnings. The standalone `pytest` launcher initially failed collection because repository scripts were outside its import path; the documented command now matches CI's module invocation. Fresh SER8 checks found the portal service active with database/report storage ready, and the application symlink still targeting release archive `ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d`. At 18:26 UTC both the Mac and Linux scanners were online with fresh check-ins; the retired demo scanner remained offline. Private receipt: `validation/live-scanner-readiness-20261005.json`. No production release or PDF template was changed by this validation.
+
 ## Website cookie comparison completeness — 2026-10-05
 
 Cookie headers exceeding collection limits or containing ambiguous attributes cannot establish a complete count of Secure, HttpOnly or SameSite attributes. Comparisons now retain changes in analysis completeness/unparsed-header counts while suppressing attribute-count conclusions whenever either observation is incomplete. Complete samples still report attribute changes, and independently collected TLS differences remain visible. Original bounded observations remain stored; cookie names and values remain excluded. Forty focused DNS and passive website/resource tests and nine subtests passed. This change is committed for the next release, not yet active in production; it does not change PDF templates.
