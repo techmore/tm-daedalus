@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Scanner PDF animation capture correction — 2026-10-05
+
+Historical-template reproduction exposed a capture race: a PDF taken during the existing entrance animation clipped the first-page card. Finishing document animations before print capture restores the card's final position without changing its source layout. The renderer now explicitly finishes those animations after fonts load. A real Chromium regression test supplies a 100-second animation, verifies its finished state and final transform immediately before PDF capture, then verifies PDF output. The saved historical example and stable reproduction both have seven Letter pages, but typography/table spacing and complete page-by-page parity remain unverified. Historical source assets and production deployment are unchanged; no visual acceptance is claimed.
+
 ## Saved scanner PDF source identified — 2026-10-05
 
 The saved August 22 seven-page example's `scan_pdf.html` matches the complete HTML DOM generated from its original `scan.xml` using NmapUI commit `86e404fc`, after removing serializer-only whitespace nodes. The original stylesheet SHA-256 is `687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537`. Later August 22 commits added Network Scanned/Vulnerability Levels cards and structured CVE sections after this PDF's creation time; current HEAD produces a different DOM. The discrepancy is therefore attributable to source-template changes, rather than merely browser pagination. Private provenance receipt: `validation/saved-pdf-template-provenance-20261005.json`. The exact historical template is retained privately for reproduction. Regenerated PDF visual parity and final baseline acceptance remain unverified; no production renderer or saved report was changed.

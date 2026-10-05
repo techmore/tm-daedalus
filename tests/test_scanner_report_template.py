@@ -116,3 +116,22 @@ def test_template_evidence_error_becomes_a_readable_validation_failure(monkeypat
     monkeypatch.setattr(module.etree, "XSLT", lambda *args, **kwargs: fail)
     with pytest.raises(ValueError, match="could not be rendered"):
         standardized_scanner_html(XML)
+
+
+def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
+    from daedalus import scanner_report_template as module
+    from playwright.sync_api import Page
+    monkeypatch.setattr(module, "standardized_scanner_run_html", lambda events: """<!doctype html>
+<style>@keyframes enter {from {transform:translateY(-150px)} to {transform:none}}
+.card {animation:enter 100s linear both}</style><div class="card">Original report card</div>""")
+    original_pdf = Page.pdf
+    observed = []
+    def checked_pdf(page, **kwargs):
+        states = page.evaluate("document.getAnimations().map(animation => animation.playState)")
+        assert states and all(state == "finished" for state in states)
+        assert page.evaluate("getComputedStyle(document.querySelector('.card')).transform") in {"none", "matrix(1, 0, 0, 1, 0, 0)"}
+        observed.extend(states)
+        return original_pdf(page, **kwargs)
+    monkeypatch.setattr(Page, "pdf", checked_pdf)
+    pdf = module.render_standardized_scanner_pdf({"scanner": {"events": []}})
+    assert observed and pdf.startswith(b"%PDF-")

@@ -238,6 +238,9 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
                 page.emulate_media(media="print")
                 page.goto(path.as_uri(), wait_until="networkidle")
                 page.evaluate("document.fonts.ready")
+                # The existing template animates cards into position. Capture
+                # their final state rather than a translated/clipped frame.
+                page.evaluate("document.getAnimations().forEach(animation => animation.finish())")
                 return page.pdf(format="Letter", print_background=True, prefer_css_page_size=True,
                     margin={"top": "8mm", "right": "8mm", "bottom": "10mm", "left": "8mm"})
             finally:
