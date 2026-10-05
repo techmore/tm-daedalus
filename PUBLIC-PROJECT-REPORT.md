@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Fresh off-host backup restore — 2026-10-05
+
+Created a fresh production SQLite/report archive with the installed backup helper and copied it to a private directory on the Mac. Archive `daedalus-data-20261005T224647Z.tar.gz` has SHA-256 `fcb2d4745e2595e18936b90c290a0f57b1472dcb22dcbbe92ab56024d967d287`. The shipped restore tool verified its manifest and restored it to a separate private validation directory. SQLite integrity passed, foreign-key violations were zero, and all 39 restored PDF files have valid PDF headers. Private receipt: `validation/fresh-recovery-20261005T224647Z.json`. This verifies fresh data recovery; independent production-secret recovery and runtime failover remain unverified. No active application release or report was changed.
+
 ## Standardized report body and current validation — 2026-10-05
 
 The corrective hosted renderer preserves the original stylesheet's entire report body exactly in a regression fixture. Independently, the saved August 22 export's body matches the hosted output from its original XML after removing serializer-only whitespace; private receipt: `validation/saved-body-preservation-20261005.json`. This establishes structural preservation, not final PDF visual acceptance. First-page review still shows approximately 3.96 points of vertical spacing difference below the keyword control. No production renderer or historical report was changed.
