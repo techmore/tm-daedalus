@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Installed CIS app restart recovery — 2026-10-05
+
+The owned installed client was terminated after its completed assessment and reopened from the same Applications bundle. Its PID changed, private config and stable device identity remained byte-for-byte intact, the endpoint count stayed unchanged, and a fresh heartbeat reconnected it. The app uploaded production report 23 under the same endpoint: 154 checks, 11 pass, 10 fail, 133 manual, zero errors and no new check-status changes. The app remains running. Private receipt: `validation/cis-installed-client-restart-20261005.json`. This verifies app restart, not user login, OS reboot, signed package deployment or macOS 26 runtime.
+
+Queued scanner report generation now rejects a frozen template hash that differs from the renderer's pinned baseline, preventing a later release from silently substituting another layout. Three mismatch fixtures stop before HTML preparation; 41 scanner/template checks passed. Runtime activation of the PDF correction remains pending baseline/visual acceptance.
+
 ## Scheduled endpoint check-in and PDF provenance — 2026-10-05
 
 The installed local CIS app sent its next scheduled heartbeat at 22:36:51 UTC, after the initial 22:31:21 heartbeat, and remained online. Production report 22, assessment collection time and report receipt time were unchanged. This verifies a recurring installed-client check-in without falsely refreshing audit evidence. Private receipt: `validation/cis-installed-client-heartbeat-20261005.json`. Login/reboot persistence and trusted macOS 26 deployment remain open.

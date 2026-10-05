@@ -141,6 +141,17 @@ def test_replaced_standardized_template_is_rejected_before_generation(monkeypatc
         standardized_scanner_html(XML)
 
 
+@pytest.mark.parametrize("provenance", [{"stylesheet_sha256": "different-template"}, {}, "invalid"])
+def test_queued_report_template_mismatch_cannot_render_a_replacement(provenance, monkeypatch):
+    from daedalus import scanner_report_template as module
+    def unexpected(events):
+        pytest.fail("Mismatched report must stop before preparing another layout")
+    monkeypatch.setattr(module, "standardized_scanner_run_html", unexpected)
+    with pytest.raises(ValueError, match="saved report template no longer matches"):
+        module.render_standardized_scanner_pdf({"scanner_report_template": provenance,
+                                              "scanner": {"events": []}})
+
+
 def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
     from daedalus import scanner_report_template as module
     from playwright.sync_api import Page

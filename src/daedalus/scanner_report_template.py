@@ -233,6 +233,13 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     import tempfile
     from playwright.sync_api import sync_playwright
 
+    provenance = report_snapshot.get("scanner_report_template")
+    if provenance is not None and (
+        not isinstance(provenance, dict)
+        or provenance.get("stylesheet_sha256") != APPROVED_TEMPLATE_SHA256
+    ):
+        raise ValueError("The saved report template no longer matches the standardized baseline; no replacement layout was generated.")
+
     if sys.platform == "linux" and Path("/opt/daedalus/browser-runtime").is_dir():
         os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/daedalus/browser-runtime")
 
