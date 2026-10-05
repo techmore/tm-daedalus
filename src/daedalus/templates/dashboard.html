@@ -162,8 +162,8 @@
           </div>
           <div class="copy-row"><button class="button button-primary" id="issue-scanner-enrollment" type="button">Create scoped enrollment code</button></div>
           <div class="copy-row"><a class="button button-small button-quiet" href="https://github.com/techmore/TM-NmapUI" target="_blank" rel="noopener noreferrer">NmapUI source</a><a class="button button-small" href="/api/agents/bridge/download">Download NmapUI + Daedalus kit</a></div>
-          <div class="copy-row"><code id="enrollment-code">Preparing one-time code…</code><button class="button button-small" id="copy-code">Copy code</button></div>
-          <div class="copy-row"><code id="enrollment-command">Preparing installer command…</code><button class="button button-small button-quiet" id="copy-enrollment">Copy command</button></div>
+          <div class="copy-row"><code id="enrollment-code">Preparing one-time code…</code><button class="button button-small" id="copy-code" disabled>Copy code</button></div>
+          <div class="copy-row"><code id="enrollment-command">Preparing installer command…</code><button class="button button-small button-quiet" id="copy-enrollment" disabled>Copy command</button></div>
           <p class="fine-print">NmapUI runs locally on loopback and keeps its data on this device. The bridge asks for the one-time code without showing it on screen, reports NmapUI scan events, and receives workspace-scoped commands. Managed macOS installs support audited NmapUI restarts.</p>
           <p class="fine-print">If NmapUI Basic Authentication is enabled, set <code>NMAPUI_USERNAME</code> and <code>NMAPUI_PASSWORD</code> in Terminal before running the command.</p>
         </div>
@@ -519,6 +519,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261005-102" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261005-103" defer></script>
 </body>
 </html>

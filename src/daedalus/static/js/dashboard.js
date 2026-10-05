@@ -1245,6 +1245,11 @@
         return;
       }
       issueScannerEnrollment.disabled = true;
+      delete codeOutput.dataset.code;
+      delete commandOutput.dataset.scannerName;
+      document.getElementById("copy-code").disabled = true;
+      document.getElementById("copy-enrollment").disabled = true;
+      text(commandOutput, "Create an enrollment code to prepare the command.");
       text(codeOutput, "Preparing one-time code…");
       try {
         var response = await fetch("/api/enrollment-tokens", {
@@ -1259,7 +1264,11 @@
         var installerName = scannerInstaller(selectedPlatform);
         var command = "cd \"$HOME/Downloads/daedalus-scanner-kit\" && sh " + installerName + " " +
           shellQuote(location.origin) + " " + shellQuote(scannerName);
+        if (typeof body.code !== "string" || !body.code.trim()) throw new Error("No enrollment code was returned. Try again.");
+        codeOutput.dataset.code = body.code;
         text(codeOutput, body.code + "  (expires in 15 minutes)");
+        document.getElementById("copy-code").disabled = false;
+        document.getElementById("copy-enrollment").disabled = false;
         commandOutput.dataset.scannerName = scannerName;
         text(commandOutput, command);
       } catch (error) {
@@ -1279,7 +1288,9 @@
   var copyEnrollment = document.getElementById("copy-enrollment");
   if (copyEnrollment) {
     copyEnrollment.addEventListener("click", async function () {
-      var value = document.getElementById("enrollment-command").textContent;
+      var command = document.getElementById("enrollment-command");
+      if (!command.dataset.scannerName) return;
+      var value = command.textContent;
       try {
         await navigator.clipboard.writeText(value);
         text(copyEnrollment, "Copied");
@@ -1292,7 +1303,8 @@
   var copyCode = document.getElementById("copy-code");
   if (copyCode) {
     copyCode.addEventListener("click", async function () {
-      var value = document.getElementById("enrollment-code").textContent.split("  (expires")[0];
+      var value = document.getElementById("enrollment-code").dataset.code;
+      if (!value) return;
       try {
         await navigator.clipboard.writeText(value);
         text(copyCode, "Copied");

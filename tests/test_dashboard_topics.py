@@ -6,6 +6,19 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_enrollment_copy_controls_require_successful_code(self):
+        root = Path(__file__).parents[1]
+        template = (root / 'src/daedalus/templates/dashboard.html').read_text()
+        source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
+        self.assertIn('id="copy-code" disabled', template)
+        self.assertIn('id="copy-enrollment" disabled', template)
+        self.assertIn('delete codeOutput.dataset.code;', source)
+        self.assertIn('delete commandOutput.dataset.scannerName;', source)
+        self.assertIn('codeOutput.dataset.code = body.code;', source)
+        self.assertNotIn('.textContent.split("  (expires")', source)
+        self.assertIn('if (!command.dataset.scannerName) return;', source)
+
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_scanner_platform_choice_selects_target_installer(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
