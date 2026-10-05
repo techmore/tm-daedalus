@@ -81,6 +81,14 @@ jobs:
             --no-deps /home/daedalusqa/project
           sudo /home/daedalusqa/project/.venv/bin/python -m playwright install-deps chromium
           sudo runuser -u daedalusqa -- /home/daedalusqa/project/.venv/bin/python -m playwright install chromium --only-shell
+          scanner_python=/home/daedalusqa/project/.venv/bin/python
+          if [ "$SCANNER_VALIDATION_SCENARIO" != lifecycle ]; then
+            sudo runuser -u daedalusqa -- python3 -m venv /home/daedalusqa/nmapui-runtime
+            sudo runuser -u daedalusqa -- bash -c 'unzip -p /home/daedalusqa/project/src/daedalus/agent_bundle/nmapui-source.zip daedalus-nmapui-source/requirements.txt > /home/daedalusqa/nmapui-requirements.txt'
+            sudo runuser -u daedalusqa -- /home/daedalusqa/nmapui-runtime/bin/pip install \
+              -r /home/daedalusqa/nmapui-requirements.txt
+            scanner_python=/home/daedalusqa/nmapui-runtime/bin/python
+          fi
           sudo runuser -u daedalusqa -- env \
             XDG_CONFIG_HOME="/home/daedalusqa/.config" \
             XDG_DATA_HOME="/home/daedalusqa/.local/share" \
@@ -90,7 +98,7 @@ jobs:
               /home/daedalusqa/project/scripts/validate_scanner_local.py \
               --run-loopback \
               "${scenario_args[@]}" \
-              --nmapui-python /home/daedalusqa/project/.venv/bin/python \
+              --nmapui-python "$scanner_python" \
               --receipt /home/daedalusqa/managed-scanner.json
       - name: Retain isolated scanner evidence
         if: always()

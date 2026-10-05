@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Expanded Linux CI runtime correction — 2026-10-05
+
+Run 37385558110 finished: managed lifecycle passed, while both packaged scenarios failed before scanner readiness. The interruption receipt records NmapUI exiting with code 1 before bridge startup, with zero commands/events. These failures do not prove comparison or interruption behavior. Review found the packaged jobs supplied the portal-only virtual environment instead of a NmapUI runtime; the managed installer creates its own runtime. CI now creates a separate environment from the shipped NmapUI requirements for packaged scenarios. YAML/shell syntax and the archive dependency path passed validation; successful rerun evidence is pending. Private failed evidence: `validation/ci-interrupted-bridge-37385558110/`.
+
 ## Linux evidence acceptance and expanded scenarios — 2026-10-05
 
 Managed Linux run 37385197549 completed successfully for source 9fe2d0c. Its downloaded receipt confirms a succeeded real loopback scan, original XML, 17 realtime messages, completed PDF, managed restart/upgrade, preserved enrollment and saved evidence, local restart heartbeat recovery, point-in-time portal recovery and cleanup. The retained PDF SHA-256 matches its receipt. JSON-artifact recovery, repeated comparison and interruption were not exercised by that job. Private evidence: `validation/ci-linux-9fe2d0c/`.
