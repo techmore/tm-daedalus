@@ -165,6 +165,24 @@ def test_replaced_standardized_template_is_rejected_before_generation(monkeypatc
 
 
 @pytest.mark.parametrize("asset", ["tailwind.css", "fonts/inter-latin-opsz-normal.woff2", "fonts/instrument-serif-latin-400-normal.woff2"])
+def test_missing_styling_asset_stops_generation_without_fallback(asset, monkeypatch, tmp_path):
+    import shutil
+    from daedalus import scanner_report_template as module
+    shutil.copytree(ASSETS, tmp_path / "assets")
+    (tmp_path / "assets" / asset).unlink()
+    monkeypatch.setattr(module, "ASSETS", tmp_path / "assets")
+    with pytest.raises(ValueError, match="styling asset is unavailable"):
+        standardized_scanner_html(XML)
+
+
+def test_missing_standardized_template_stops_generation_without_fallback(monkeypatch, tmp_path):
+    from daedalus import scanner_report_template as module
+    monkeypatch.setattr(module, "ASSETS", tmp_path)
+    with pytest.raises(ValueError, match="template is unavailable"):
+        standardized_scanner_html(XML)
+
+
+@pytest.mark.parametrize("asset", ["tailwind.css", "fonts/inter-latin-opsz-normal.woff2", "fonts/instrument-serif-latin-400-normal.woff2"])
 def test_replaced_styling_asset_is_rejected_without_changing_template(asset, monkeypatch, tmp_path):
     import shutil
     from daedalus import scanner_report_template as module

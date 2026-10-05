@@ -23,7 +23,10 @@ REPORT_ASSET_SHA256 = {
 
 
 def _report_asset_bytes(name: str) -> bytes:
-    data = (ASSETS / name).read_bytes()
+    try:
+        data = (ASSETS / name).read_bytes()
+    except OSError as exc:
+        raise ValueError("Scanner PDF styling asset is unavailable; report generation stopped.") from exc
     if hashlib.sha256(data).hexdigest() != REPORT_ASSET_SHA256[name]:
         raise ValueError("Scanner PDF styling asset differs from the pinned rendering baseline; report generation stopped.")
     return data
@@ -105,7 +108,10 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         raise ValueError("Original Nmap XML has invalid host coverage counts.") from exc
     if min(up, down, total) < 0 or up + down != total:
         raise ValueError("Original Nmap XML has inconsistent host coverage counts.")
-    template_bytes = (ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes()
+    try:
+        template_bytes = (ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes()
+    except OSError as exc:
+        raise ValueError("Standardized scanner PDF template is unavailable; report generation stopped.") from exc
     if hashlib.sha256(template_bytes).hexdigest() != APPROVED_TEMPLATE_SHA256:
         raise ValueError("Scanner PDF template differs from the pinned standardized baseline; report generation stopped.")
     stylesheet = etree.parse(io.BytesIO(template_bytes), parser=parser)
