@@ -57,7 +57,7 @@ def original_xml_documents(events: list[dict]) -> list[bytes]:
     return documents
 
 
-def standardized_scanner_html(xml: bytes) -> str:
+def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) -> str:
     """Apply the approved PDF XSL without network access or XML entity expansion.
 
     Accept original XML only: parsed observation summaries cannot establish the
@@ -90,6 +90,17 @@ def standardized_scanner_html(xml: bytes) -> str:
     if min(up, down, total) < 0 or up + down != total:
         raise ValueError("Original Nmap XML has inconsistent host coverage counts.")
     stylesheet = etree.parse(str(ASSETS / "nmap-pdf-olive-legacy.xsl"), parser=parser)
+    if target_label is not None:
+        # Supply the combined scope through the existing target field without
+        # changing the standardized stylesheet's layout or its command evidence.
+        namespace = {"xsl": "http://www.w3.org/1999/XSL/Transform"}
+        for call in stylesheet.xpath("//xsl:call-template[@name='last-command-argument']", namespaces=namespace):
+            parameter = call.find("xsl:with-param", namespaces=namespace)
+            if parameter is not None and parameter.get("select") == "/nmaprun/@args":
+                replacement = etree.Element("{http://www.w3.org/1999/XSL/Transform}text")
+                replacement.text = target_label
+                replacement.tail = call.tail
+                call.getparent().replace(call, replacement)
     transform = etree.XSLT(stylesheet, access_control=etree.XSLTAccessControl.DENY_ALL)
     html = str(transform(document))
     font_css = ""
@@ -191,7 +202,7 @@ def standardized_scanner_run_html(events: list[dict]) -> str:
         finished.set("timestr", text)
         if starts:
             finished.set("elapsed", str(max(0, ended - min(starts)[0])))
-    return standardized_scanner_html(etree.tostring(merged))
+    return standardized_scanner_html(etree.tostring(merged), target_label=", ".join(sorted(observed_addresses)))
 
 
 def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:

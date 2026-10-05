@@ -95,3 +95,15 @@ def test_completely_missing_host_xml_upload_cannot_silently_omit_host():
 def test_matching_detail_and_xml_host_evidence_renders():
     events = xml_events() + [{"event_name": "deep_scan_results", "payload": [{"ip": "127.0.0.1"}]}]
     assert "Example service" in standardized_scanner_run_html(events)
+
+
+def test_combined_xml_target_field_lists_all_hosts_without_losing_commands():
+    second = XML.replace(b"127.0.0.1", b"127.0.0.2")
+    events = xml_events() + [{"event_name": "scan_xml_chunk", "payload": {
+        "target": "127.0.0.2", "sha256": hashlib.sha256(second).hexdigest(),
+        "byte_count": len(second), "chunk_count": 1, "chunk_index": 0, "xml": second.decode(),
+    }}]
+    html = standardized_scanner_run_html(events)
+    assert "127.0.0.1, 127.0.0.2" in html
+    assert "nmap -sV 127.0.0.1" in html
+    assert "nmap -sV 127.0.0.2" in html
