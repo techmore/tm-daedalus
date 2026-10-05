@@ -74,10 +74,19 @@ installer. These actions manage macOS user LaunchAgents.
 ## Managed install on Linux
 
 Use a Linux host with systemd, an active systemd user manager, Python 3.11 or
-newer, Nmap, and `unzip`. The units use `PrivateTmp`, which needs unprivileged
+newer, Nmap, and `unzip`. Clean Ubuntu installations also need `build-essential`
+and `python3-dev` to build the scanner's `netifaces` dependency. Install those
+alongside `python3-venv` and `dbus-user-session` before running the user installer.
+The units use `PrivateTmp`, which needs unprivileged
 user namespaces in a user service ([systemd's namespace requirements](https://raw.githubusercontent.com/systemd/systemd/v255/man/system-or-user-ns.xml)).
 Our Incus lifecycle validation required `security.nesting=true` on the
 disposable scanner instance. The installer does not change host policy.
+For Ubuntu prerequisites:
+
+```sh
+sudo apt-get install -y python3-venv nmap unzip dbus-user-session build-essential python3-dev
+```
+
 From the extracted kit, run:
 
 ```sh
