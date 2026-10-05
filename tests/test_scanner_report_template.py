@@ -149,3 +149,24 @@ def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch):
     monkeypatch.setattr(Page, "pdf", checked_pdf)
     pdf = module.render_standardized_scanner_pdf({"scanner": {"events": []}})
     assert observed and pdf.startswith(b"%PDF-")
+
+
+def test_historical_table_typography_inherits_report_font_in_current_browser(tmp_path):
+    from playwright.sync_api import sync_playwright
+    path = tmp_path / "report.html"
+    path.write_text(standardized_scanner_html(XML))
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+        try:
+            page = browser.new_page(java_script_enabled=False)
+            page.emulate_media(media="print")
+            page.goto(path.as_uri())
+            sizes = page.evaluate("""() => ({
+                body: getComputedStyle(document.body).fontSize,
+                overview: getComputedStyle(document.querySelector('#table-overview')).fontSize,
+                service: getComputedStyle(document.querySelector('#table-services')).fontSize
+            })""")
+            assert sizes["overview"] == sizes["body"]
+            assert sizes["service"] == "14px"
+        finally:
+            browser.close()

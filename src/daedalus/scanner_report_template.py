@@ -131,7 +131,9 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         css = css.replace(f"oklch({values} 110)", color)
         css = css.replace(f"oklch({values.replace(' .', ' 0.')} 110)", color)
     style = etree.Element("style", id="nmapui-tailwind-css")
-    style.text = font_css + css
+    # Current Chromium's table UA font defaults differ from the saved export.
+    # Preserve inherited report typography; explicit table utility sizes win.
+    style.text = font_css + "table{font-size:inherit;line-height:inherit}" + css
     # The historical CDN appended its generated utility stylesheet after the
     # template's inline styles. Preserve that cascade order locally.
     head.append(style)

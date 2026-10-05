@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Historical table typography preserved — 2026-10-05
+
+Current Chromium's default table font produced larger overview text than the saved export. Explicit inheritance of the surrounding report font restores the saved overview header sizes and horizontal text positions; explicit service-table utility sizing remains intact. This compatibility rule changes neither historical body markup nor report sections. A real browser regression checks inherited overview typography and the explicit 14px service table. Eighteen template tests passed. A small vertical form-control/spacing difference and full final page review remain open before production activation.
+
 ## Historical CSS cascade restored — 2026-10-05
 
 Text bounding-box comparison found matching font sizes/word widths but shifted heading positions. The historical CDN appended generated utility CSS after the inline template styles; local embedding had inserted it before them, changing the cascade. The renderer now preserves the historical loading order. In the reproduction, the first-page heading and version words now match the saved PDF's exact x/y coordinates, with seven Letter pages retained. A regression assertion pins this stylesheet order; 17 template tests passed. Table/form-control spacing still differs and complete visual acceptance remains outstanding. No production template or release was changed.
