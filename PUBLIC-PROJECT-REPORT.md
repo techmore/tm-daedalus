@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## Expanded scanner CI acceptance and historical SER8 rendering — 2026-10-05
+
+Run 37386836097 passed all three Linux scenarios: managed lifecycle, packaged bridge interruption and repeated scan comparison. The downloaded comparison artifact retains distinct run IDs, exact `127.0.0.1/32` coverage from successful single-IP commands, zero host/port differences and a PDF matching its receipt hash. The normal cooldown was retained. Private evidence: `validation/ci-repeat-comparison-37386836097/`. Backend CI 37386836276 passed at the same source; the full local suite passed 625 tests and 129 subtests.
+
+Separately, the current historical-template renderer ran in an isolated SER8 candidate under the production service's user and filesystem restrictions. It produced seven Letter pages, 288,951 bytes, SHA-256 `8ba488c475baf449e4676f719ff4783c4490373ebba3a8a088f0af8b1b6f84da`. All seven pages were reviewed against the saved export. Sections and page count are retained, but spacing and platform typography differ; full visual fidelity remains unverified. Private receipt: `validation/pdf-runtime-preservation-ser8-0a107a9.json`. No active release or customer ReportJob changed.
+
+Live diagnostic commands 29/30 succeeded on both enrolled Mac/Linux scanners, reported ready with zero pending scan events, and retained queued/succeeded audit records. Published marketing home/platform pages loaded with the expected separate portal links; returning preserved sign-in and `#cis`. Private receipts: `validation/live-scanner-diagnostics-20261005.json` and `validation/marketing-live-routing-20261005.json`. Screenshot capture still failed despite a confirmed desktop viewport, so rendered UI acceptance remains open.
+
 ## Linux interruption acceptance and comparison harness correction — 2026-10-05
 
 Run 37385943889 completed with managed lifecycle and packaged bridge interruption passing. The interruption artifact verifies ten queued events recovered with unchanged IDs/timestamps, one deep Nmap execution, retained command claim, terminal acknowledgement, drained queues and a PDF matching its receipt hash. Private evidence: `validation/ci-interrupted-bridge-37385943889/`.
