@@ -36,4 +36,8 @@ jobs:
           uv export --locked --no-dev --no-emit-project --no-annotate --format requirements-txt > "$RUNNER_TEMP/requirements-production.txt"
           diff -u requirements-production.txt "$RUNNER_TEMP/requirements-production.txt"
       - name: Run application and static-site tests
-        run: uv run --locked python -m pytest -q
+        # Hosted report tests use the same browser renderer as production.
+        # Install its pinned executable rather than relying on runner caches.
+        run: |
+          uv run --locked python -m playwright install --with-deps chromium --only-shell
+          uv run --locked python -m pytest -q

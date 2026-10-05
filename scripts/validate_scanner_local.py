@@ -241,12 +241,25 @@ def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, i
             guard_dir.mkdir()
             wrapper = guard_dir / "nmap"
             wrapper.write_text(f'''#!{nmap_python.absolute()}
-import sys, subprocess, json, time
+import sys, subprocess, json, time, os, tempfile
 from pathlib import Path
 args=sys.argv[1:]
 if args == ["--version"]:
     raise SystemExit(subprocess.run([{nmap!r}, "--version"]).returncode)
-if not args or args[-1] != "127.0.0.1" or args[:-1] not in (["-sn", "-Pn"], ["-T3", "-sV", "-Pn"]):
+xml_destination=None
+normalized=list(args)
+if "-oX" in normalized:
+    index=normalized.index("-oX")
+    if index+1 >= len(normalized): raise SystemExit("Missing scanner XML path")
+    xml_destination=Path(normalized[index+1])
+    parent=xml_destination.parent
+    if (not xml_destination.is_absolute() or xml_destination.name != "scan.xml"
+        or not parent.name.startswith("nmapui-evidence-") or parent.is_symlink()
+        or parent.parent.resolve() != Path(tempfile.gettempdir()).resolve()
+        or parent.stat().st_uid != os.getuid() or xml_destination.exists() or xml_destination.is_symlink()):
+        raise SystemExit("Loopback harness rejected unexpected XML destination")
+    del normalized[index:index+2]
+if not normalized or normalized[-1] != "127.0.0.1" or normalized[:-1] not in (["-sn", "-Pn"], ["-T3", "-sV", "-Pn"]):
     raise SystemExit("Loopback harness rejected unexpected scanner arguments")
 cmd=[{nmap!r}, "-n", "--host-timeout", "15s"]
 if "-sn" in args:
@@ -263,6 +276,9 @@ except subprocess.TimeoutExpired:
     child.kill();child.communicate(timeout=5)
     raise SystemExit("Harness Nmap deadline exceeded")
 completed=subprocess.CompletedProcess(cmd,child.returncode,stdout,stderr)
+if xml_destination is not None and completed.returncode == 0:
+    with xml_destination.open("xb") as output:
+        output.write(Path({str(root / 'actual-scan.xml')!r}).read_bytes())
 if {interrupt_bridge!r} and "-sn" not in args:
     deadline=time.monotonic()+45
     while not Path({str(root / 'release-deep-result')!r}).exists():
