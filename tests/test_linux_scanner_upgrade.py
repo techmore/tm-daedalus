@@ -13,6 +13,10 @@ from test_managed_scanner_upgrade import make_bundle
 
 
 class LinuxUpgradeTests(unittest.TestCase):
+    def test_missing_recovery_transaction_has_clear_message(self):
+        with self.assertRaisesRegex(service.ServiceError, 'No interrupted upgrade transaction'):
+            upgrade.read_pending(self.unit_dir, self.config)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='daedalus-linux-upgrade-')
         self.addCleanup(temporary.cleanup)

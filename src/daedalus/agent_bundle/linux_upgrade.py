@@ -90,6 +90,8 @@ def replace_field(contents, prefix, replacement):
 
 
 def read_pending(unit_dir, config_dir):
+    if not (config_dir / PENDING).exists() and not (config_dir / PENDING).is_symlink():
+        raise service.ServiceError('No interrupted upgrade transaction exists to recover.')
     try:
         record = json.loads(service._private_bytes(config_dir / PENDING))
         if record['format'] != 1 or record['unit_dir'] != str(unit_dir) or record['config_dir'] != str(config_dir):

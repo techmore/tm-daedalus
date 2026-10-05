@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Production Linux scanner upgrade acceptance — 2026-10-05
+
+Scanner 3 completed an in-place upgrade using kit SHA-256 `3a9a176fefc34b424c44f2abdb863b920ed16d3fe71bb030bd1dace7e932e487`. The verified upgrade reported preserved enrollment, credentials and data; a fresh portal check found the same scanner online with saved run `2156a367-2b4f-4933-a21f-1efc3df2c86b` intact. Repeating the same kit returned `already_current=true` and `upgraded=false`. Private logs/receipt: `validation/ser8-linux-managed-upgrade*20261005.log` and `validation/ser8-linux-post-upgrade-20261005.json`.
+
+An explicit recovery command after the successful upgrade was refused before service changes because no interrupted transaction existed. This does not establish live failure rollback acceptance; interrupted rollback remains covered by transaction fixtures. The helper now distinguishes that missing transaction from changed recovery files, and the README explains its scope. Fifteen focused Linux credential/upgrade tests passed. A fresh signing-identity check still found no Developer ID Application identity, so trusted Mac distribution remains open alongside the approved PDF layout and other full-project gates.
+
 ## Production Linux scanner acceptance — 2026-10-05
 
 A dedicated Ubuntu 24.04 Incus scanner (`daedalus-scanner-linux`) now runs on SER8, separate from the portal. It enrolled in CSP as scanner 3, detects its connected subnet automatically, and has only `127.0.0.1/32` authorized for validation. The managed NmapUI and outbound bridge run as unprivileged systemd user services; NmapUI binds only to `127.0.0.1:9000`, with enrollment and local authentication files mode 0600.

@@ -169,6 +169,9 @@ only the two verified units and their ownership record. NmapUI must become
 ready before the bridge starts. Repeating the same installed kit is a no-op.
 The portal does not install upgrades remotely.
 
+`upgrade-rollback` recovers an interrupted transaction. A successfully completed
+upgrade has no pending transaction to recover; repeating its kit is a no-op.
+
 Failures attempt to restore the exact previous descriptors and start both
 previous services. If interrupted or recovery fails, the private transaction
 record stays in the configuration directory. From the same extracted kit run:
