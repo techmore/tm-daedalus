@@ -285,7 +285,7 @@ Modern bundled NmapUI emits command-linked accepted/terminal receipts and replay
 
 NmapUI's **Scan known targets without host discovery** option is off by default. Enable it in local scanner settings when a known host blocks discovery probes. It adds Nmap's `-Pn` to discovery and subsequent scans; target profiles can inherit the global choice or explicitly override it. This may scan unresponsive addresses. Existing comprehensive report scans already use `-Pn`. **Scan-only mode** independently skips MAC/vendor enrichment. When exclusions are configured, ARP enrichment is skipped so it cannot probe excluded addresses; Nmap retains its exclusions. Completion history reports the number of discovered or explicitly selected hosts, including zero.
 
-## Mac menu bar status
+## Mac scanner window and menu bar status
 
 After managed enrollment, run `sh install-status-macos.sh` to install the native
 Daedalus Scanner Status companion. It starts at login, reads the existing private
@@ -294,3 +294,14 @@ status, and the five latest saved runs. Open the local UI for detailed live scan
 results or the portal for saved history. Quitting the indicator leaves scanning
 services running. Building this local companion requires Apple's Swift command
 line tools; it is locally ad-hoc signed, not a notarized distribution package.
+
+The Mac companion also opens the full existing NmapUI web interface in a native
+resizable window. Launch `~/Applications/Daedalus Scanner Status.app` or choose
+**Open scanner window** in its menu. The window uses the same local backend,
+scan controls, results and history as the browser interface; it does not run a
+second scanner. Its header shows engine availability, bridge connectivity and
+active work. **Open in browser** remains available for reports and browser-only
+flows. Login startup uses `--background` to avoid opening a window at every login.
+Closing the window leaves the scanner and status indicator running. Portal
+enrollment credentials stay in the native status client and are not injected
+into the web view. External pages open in the system browser.
