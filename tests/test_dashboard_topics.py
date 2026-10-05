@@ -6,6 +6,21 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_dns_lookup_recovery_copy_distinguishes_availability_from_empty_records(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function displayCheckValue('):source.index('  function appendEmpty(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.equal(displayCheckValue(null, 'resolver_errors.DS'), 'Lookup available');
+assert.equal(displayCheckValue('unavailable', 'resolver_errors.DS'), 'Lookup unavailable');
+assert.equal(displayCheckValue(undefined, 'resolver_errors.DS'), 'Not captured');
+assert.equal(displayCheckValue([], 'records.DS'), 'No values returned');
+assert.equal(displayCheckValue(null, 'tls.subject'), 'No value returned');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('displayCheckValue(pair[1], change.field_path)', source)
+
     def test_enrollment_copy_controls_require_successful_code(self):
         root = Path(__file__).parents[1]
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()

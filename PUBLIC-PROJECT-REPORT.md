@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Signed-in DNS history wording — 2026-10-05
+
+The existing agent-owned ego-browser session exposed live production scanner availability and the DNS assessment/history. The DNS lookup recovery row showed `No value returned` for the absence of a resolver error, obscuring the actual recovery. Change history now labels normalized resolver states `Lookup unavailable` and `Lookup available`, while empty record collections and uncaptured evidence retain distinct wording. Forty-nine dashboard/refresh tests and two subtests passed, including executable JavaScript checks. Screenshot capture timed out; this semantic inspection does not establish visual layout acceptance. The copy correction is not yet deployed and changes no PDF template.
+
 ## Full suite and live readiness recheck — 2026-10-05
 
 After the DNSSEC and cookie comparison corrections, `uv run --locked python -m pytest -q` passed 609 tests and 129 subtests, with two dependency deprecation warnings. The standalone `pytest` launcher initially failed collection because repository scripts were outside its import path; the documented command now matches CI's module invocation. Fresh SER8 checks found the portal service active with database/report storage ready, and the application symlink still targeting release archive `ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d`. At 18:26 UTC both the Mac and Linux scanners were online with fresh check-ins; the retired demo scanner remained offline. Private receipt: `validation/live-scanner-readiness-20261005.json`. No production release or PDF template was changed by this validation.

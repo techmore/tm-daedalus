@@ -2630,7 +2630,11 @@
     });
   }
 
-  function displayCheckValue(value) {
+  function displayCheckValue(value, fieldPath) {
+    if (typeof fieldPath === "string" && fieldPath.startsWith("resolver_errors.")) {
+      if (value === null) return "Lookup available";
+      if (value === "unavailable") return "Lookup unavailable";
+    }
     if (value === undefined) return "Not captured";
     if (value === null) return "No value returned";
     if (typeof value === "string") return value || "Empty value";
@@ -3369,7 +3373,7 @@
           var label = document.createElement("span");
           label.textContent = pair[0];
           var pre = document.createElement("pre");
-          pre.textContent = displayCheckValue(pair[1]);
+          pre.textContent = displayCheckValue(pair[1], change.field_path);
           box.append(label, pre);
           values.append(box);
         });
