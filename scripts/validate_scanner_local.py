@@ -41,9 +41,11 @@ def port() -> int:
         return sock.getsockname()[1]
 
 
-def wait_for(predicate, timeout=45):
+def wait_for(predicate, timeout=45, process=None):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError("Owned validation process exited before readiness")
         try:
             result = predicate()
             if result:
@@ -297,12 +299,12 @@ raise SystemExit(completed.returncode)
             portal_argv = [sys.executable, "-m", "uvicorn", "daedalus.server:app", "--host", "127.0.0.1", "--port", str(portal_port)]
             portal_process = launch("portal", portal_argv, environment, root)
             if not managed_linux:
-                launch("nmapui", [str(nmap_python.absolute()), str(source / "app.py")], scanner_env, source)
+                nmapui_process = launch("nmapui", [str(nmap_python.absolute()), str(source / "app.py")], scanner_env, source)
             with httpx.Client(base_url=portal, timeout=10, follow_redirects=True) as client:
-                wait_for(lambda: client.get("/healthz").status_code == 200)
+                wait_for(lambda: client.get("/healthz").status_code == 200, process=portal_process)
                 client.post("/dev/login").raise_for_status()
                 if not managed_linux:
-                    wait_for(lambda: httpx.get(scanner + "/api/health/ready", auth=(scanner_env["NMAPUI_USERNAME"], scanner_env["NMAPUI_PASSWORD"]), timeout=2).json().get("ready"))
+                    wait_for(lambda: httpx.get(scanner + "/api/health/ready", auth=(scanner_env["NMAPUI_USERNAME"], scanner_env["NMAPUI_PASSWORD"]), timeout=2).json().get("ready"), process=nmapui_process)
                 code = client.post("/api/enrollment-tokens").json()["code"]
                 if managed_linux:
                     # The user manager inherits the guard only for this disposable validation.

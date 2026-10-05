@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Scanner startup validation guard — 2026-10-05
+
+The isolated harness now checks its owned portal/NmapUI process before accepting readiness and stops immediately if that process has exited. This avoids waiting on HTTP timeouts or accepting an unrelated listener after the owned process stops. Two regression fixtures cover an exited process and a live successful process; all eight local harness tests passed. The corrected Linux scenario run 37385943889 remains active; this guard is committed separately and will be pushed after that run finishes to avoid cancelling its evidence collection.
+
 ## Expanded Linux CI runtime correction — 2026-10-05
 
 Run 37385558110 finished: managed lifecycle passed, while both packaged scenarios failed before scanner readiness. The interruption receipt records NmapUI exiting with code 1 before bridge startup, with zero commands/events. These failures do not prove comparison or interruption behavior. Review found the packaged jobs supplied the portal-only virtual environment instead of a NmapUI runtime; the managed installer creates its own runtime. CI now creates a separate environment from the shipped NmapUI requirements for packaged scenarios. YAML/shell syntax and the archive dependency path passed validation; successful rerun evidence is pending. Private failed evidence: `validation/ci-interrupted-bridge-37385558110/`.

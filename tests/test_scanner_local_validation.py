@@ -9,6 +9,23 @@ spec.loader.exec_module(validation)
 
 
 class ScannerLocalEvidenceTests(unittest.TestCase):
+    def test_readiness_refuses_exited_process_before_accepting_response(self):
+        from unittest.mock import Mock, patch
+        process = Mock()
+        process.poll.return_value = 1
+        predicate = Mock(return_value=True)
+        with patch.object(validation.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'exited before readiness'):
+                validation.wait_for(predicate, process=process)
+        predicate.assert_not_called()
+        sleep.assert_not_called()
+
+    def test_readiness_accepts_live_owned_process(self):
+        from unittest.mock import Mock
+        process = Mock()
+        process.poll.return_value = None
+        self.assertEqual(validation.wait_for(lambda: 'ready', process=process), 'ready')
+
     def test_managed_validation_refuses_root_or_non_linux_before_manager_operations(self):
         import sys
         from unittest.mock import patch
