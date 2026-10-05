@@ -28,6 +28,7 @@ class CISHeartbeatTests(unittest.TestCase):
         headers = self.enroll()
         before = self.client.get('/api/cis/status').json()['devices'][0]
         self.assertEqual(before['client_state'], 'unknown')
+        self.assertEqual(before['latest_assessment_summary']['pass'], 1)
         response = self.client.post('/api/cis/client/heartbeat', headers=headers, json={'device_identifier': 'heartbeat-fixture'})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.headers['cache-control'], 'no-store')
@@ -69,6 +70,7 @@ class CISHeartbeatTests(unittest.TestCase):
         status = self.client.get('/api/cis/status').json()
         self.assertEqual(status['devices'][0]['assessment_state'], 'missing')
         self.assertIsNone(status['devices'][0]['latest_report_id'])
+        self.assertIsNone(status['devices'][0]['latest_assessment_summary'])
         self.assertEqual(status['assessment_counts']['missing'], 1)
 
     def test_late_upload_does_not_replace_more_recent_collection(self):
@@ -101,6 +103,28 @@ class CISHeartbeatTests(unittest.TestCase):
         self.assertTrue(status['devices_truncated'])
         self.assertEqual(status['assessment_counts']['missing'], 250)
         self.assertEqual(sum(status['assessment_counts'].values()), 251)
+
+    def test_each_device_exposes_its_own_latest_assessment(self):
+        self.enroll()
+        second_summary = {'total': 4, 'pass': 1, 'fail': 1, 'manual': 2, 'error': 0, 'score': 25.0}
+        with self.session_factory() as db:
+            first = db.scalar(select(CISReport))
+            now = server.utcnow()
+            second = CISDevice(organization_id=first.organization_id, device_fingerprint='a'*64,
+                name='Second endpoint', first_seen_at=now, last_seen_at=now)
+            db.add(second)
+            db.flush()
+            second_id = second.id
+            first_device_id = first.device_id
+            db.add(CISReport(organization_id=first.organization_id, device_id=second.id,
+                client_report_hash='b'*64, profile_slug=first.profile_slug, profile_version=first.profile_version,
+                collected_at=now, summary=second_summary, results=[], created_at=now))
+            db.commit()
+        devices = {device['id']: device for device in self.client.get('/api/cis/status').json()['devices']}
+        self.assertEqual(devices[second_id]['latest_assessment_summary'], second_summary)
+        self.assertEqual(devices[first_device_id]['latest_assessment_summary']['pass'], 1)
+        self.assertEqual(devices[first_device_id]['latest_assessment_summary']['fail'], 0)
+        self.assertNotIn('results', devices[second_id])
 
     def test_unknown_endpoint_and_revoked_key_cannot_check_in(self):
         headers = self.enroll()

@@ -2190,6 +2190,19 @@
     });
   }
 
+  function cisDeviceAssessmentLabel(device) {
+    var summary = device.latest_assessment_summary;
+    if (!summary) return "Assessment results unavailable";
+    var counts = ["total", "pass", "fail", "manual", "error"];
+    if (!counts.every(function (key) { return Number.isInteger(summary[key]) && summary[key] >= 0; })
+        || summary.total !== summary.pass + summary.fail + summary.manual + summary.error
+        || summary.total === 0 || typeof summary.score !== "number" || !Number.isFinite(summary.score)
+        || summary.score < 0 || summary.score > 100) return "Assessment results need review";
+    return "Latest assessment: " + summary.score.toFixed(1) + "% pass rate · "
+      + (summary.pass + summary.fail) + " of " + summary.total + " checks assessed · "
+      + summary.fail + " failed · " + summary.manual + " manual · " + summary.error + " errors";
+  }
+
   function renderCISDevices(devices) {
     var list = document.getElementById("cis-device-list");
     if (!list) return;
@@ -2218,6 +2231,9 @@
       var assessmentLabels = {current: "Recent assessment", stale: "Assessment overdue", missing: "No saved assessment", unknown: "Assessment time needs review"};
       assessment.textContent = (assessmentLabels[device.assessment_state] || "Assessment recency unknown") + (device.last_collected_at ? " · collected " + dateLabel(device.last_collected_at) : "");
       main.append(assessment);
+      var results = document.createElement("small");
+      results.textContent = cisDeviceAssessmentLabel(device);
+      main.append(results);
       card.append(main, state);
       list.append(card);
     });

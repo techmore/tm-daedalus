@@ -415,6 +415,21 @@ assert.match(cisAssessmentScope({}),/Profile not identified/);
         self.assertIn('text(document.getElementById("cis-assessment-scope"), cisAssessmentScope(reports[0]))', source)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_device_assessment_labels_preserve_coverage_and_unknown_results(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function cisDeviceAssessmentLabel('):source.index('  function renderCISDevices(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.equal(cisDeviceAssessmentLabel({}), 'Assessment results unavailable');
+const summary={total:4,pass:1,fail:1,manual:2,error:0,score:25};
+assert.equal(cisDeviceAssessmentLabel({latest_assessment_summary:summary}), 'Latest assessment: 25.0% pass rate · 2 of 4 checks assessed · 1 failed · 2 manual · 0 errors');
+for (const invalid of [{...summary,total:5},{...summary,pass:'1'},{...summary,score:NaN},{...summary,error:-1},{...summary,score:101}]) {
+  assert.equal(cisDeviceAssessmentLabel({latest_assessment_summary:invalid}), 'Assessment results need review');
+}
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_endpoint_coverage_keeps_incomplete_counts_unknown(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function renderCISCoverage('):source.index('  function renderCISDevices(')]
