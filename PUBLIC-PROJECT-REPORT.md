@@ -1005,3 +1005,10 @@ The corrective renderer now checks SHA-256 digests for its embedded Tailwind CSS
 ## Frozen scanner report styling provenance — October 5, 2026
 
 New scanner report snapshots and request audit records retain the CSS/font digest map. Rendering rejects a queued snapshot with a different map before preparing HTML, while legacy snapshots without that optional field retain compatibility with the existing pinned renderer. Browser fixtures verify generation with both legacy and current provenance; mismatched and malformed maps are rejected. All **49 scanner/template tests passed**; the request/audit assertions also passed the 19-test scanner-run suite. No report body, asset bytes or production release changed.
+
+
+## Latest Linux evidence retained and full local safeguards validated — October 5, 2026
+
+Linux CI **37388355476** completed successfully at source **c315d7b**, covering managed lifecycle, packaged bridge interruption and repeated comparison. All three downloaded PDFs match their receipt sizes and SHA-256 digests. The comparison retains distinct run IDs, sixteen second-run events, exact qualified `127.0.0.1/32` coverage and zero observed host/port differences. The interruption receipt verifies ten queued events retained their identities/timestamps, exactly one deep Nmap invocation, terminal acknowledgement and drained queues. Private artifacts: validation/ci-comparison-c315d7b/, validation/ci-lifecycle-c315d7b/ and validation/ci-interrupted-bridge-c315d7b/. This is disposable loopback acceptance, not multiple-VLAN deployment or fleet soak.
+
+The subsequent local source **618f45e**, including CSS/font runtime integrity and frozen report provenance, passed the complete suite: **633 tests and 129 subtests**, with two dependency deprecation warnings. Those later safeguards were not part of CI 37388355476. A fresh authenticated production endpoint observation could not complete because credential retrieval over SSH timed out; this does not prove a production outage or endpoint heartbeat failure. Production activation and the remaining completion matrix remain open.
