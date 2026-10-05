@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Combined scanner evidence overlap guard — 2026-10-05
+
+Combined XML reports now reject any shared IP address across host observations, rather than checking only identical complete address tuples. Previously, an IPv4-only observation and a second observation with that same IPv4 plus an IPv6 alias could be counted as distinct hosts. The new fixture rejects that ambiguity; all 24 template tests passed. The standardized report layout is unchanged. This correction is committed locally pending completion of the active comparison CI run before push.
+
 ## Mail route summary interpretation — 2026-10-05
 
 The dashboard no longer renders uncaptured MX evidence as zero routes or a null MX as a positive mail route. It distinguishes lookup failure, unknown evidence, confirmed empty MX with unevaluated address fallback, a single null MX declaring no incoming mail, and a null MX conflicting with other records. Ordinary published MX records do not imply tested delivery. Interpretation follows [RFC 7505](https://www.rfc-editor.org/rfc/rfc7505). The dashboard suites passed 51 tests and two subtests; syntax and diff checks passed. This correction is not yet deployed. Before this UI addition, the full suite with the new startup guard passed 622 tests and 129 subtests.

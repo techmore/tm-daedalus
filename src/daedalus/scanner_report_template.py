@@ -206,9 +206,9 @@ def standardized_scanner_run_html(events: list[dict]) -> str:
             totals[key] += value
         for host in root.findall("host"):
             addresses = tuple(sorted(address.get("addr", "") for address in host.findall("address") if address.get("addrtype") in {"ipv4", "ipv6"}))
-            if not addresses or addresses in seen:
+            if not addresses or seen.intersection(addresses):
                 raise ValueError("Overlapping or unidentified host XML cannot produce an unambiguous combined report.")
-            seen.add(addresses)
+            seen.update(addresses)
             merged.insert(len(merged) - 1, copy.deepcopy(host))
     merged.set("args", "\n".join(commands))
     counts = merged.find("runstats/hosts")

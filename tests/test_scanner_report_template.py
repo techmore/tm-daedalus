@@ -122,6 +122,16 @@ def test_combined_xml_target_field_lists_all_hosts_without_losing_commands():
     assert "nmap -sV 127.0.0.1" in html
     assert "nmap -sV 127.0.0.2" in html
 
+def test_combined_xml_rejects_shared_address_with_different_alias_sets():
+    aliased = XML.replace(b'<ports>', b'<address addr="::1" addrtype="ipv6"/><ports>')
+    events = xml_events() + [{"event_name": "scan_xml_chunk", "payload": {
+        "target": "::1", "sha256": hashlib.sha256(aliased).hexdigest(),
+        "byte_count": len(aliased), "chunk_count": 1, "chunk_index": 0,
+        "xml": aliased.decode(),
+    }}]
+    with pytest.raises(ValueError, match="Overlapping"):
+        standardized_scanner_run_html(events)
+
 
 def test_template_evidence_error_becomes_a_readable_validation_failure(monkeypatch):
     from daedalus import scanner_report_template as module
