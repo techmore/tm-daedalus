@@ -3476,7 +3476,7 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
             "last_collected_at": iso_utc(latest_reports[device.id].collected_at) if device.id in latest_reports else None,
             "assessment_state": assessment_state(latest_reports.get(device.id)),
             "last_client_heartbeat_at": iso_utc(device.last_client_heartbeat_at),
-            "client_state": "unknown" if device.last_client_heartbeat_at is None else "online" if device.last_client_heartbeat_at >= now - timedelta(minutes=15) else "offline",
+            "client_state": "unknown" if device.last_client_heartbeat_at is None or device.last_client_heartbeat_at > now else "online" if device.last_client_heartbeat_at >= now - timedelta(minutes=15) else "offline",
         }
         for device in device_rows
     ]
@@ -3490,7 +3490,7 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
         "report_recency_seconds": 36 * 60 * 60,
         "assessment_counts": assessment_counts,
         "client_presence_seconds": 15 * 60,
-        "online_client_count": db.scalar(select(func.count(CISDevice.id)).where(CISDevice.organization_id == organization.id, CISDevice.last_client_heartbeat_at >= now - timedelta(minutes=15))) or 0,
+        "online_client_count": db.scalar(select(func.count(CISDevice.id)).where(CISDevice.organization_id == organization.id, CISDevice.last_client_heartbeat_at >= now - timedelta(minutes=15), CISDevice.last_client_heartbeat_at <= now)) or 0,
         "devices_truncated": devices > len(device_rows),
         "devices": device_statuses,
         "can_manage": membership.role == "admin",

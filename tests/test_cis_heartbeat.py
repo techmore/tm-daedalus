@@ -104,6 +104,15 @@ class CISHeartbeatTests(unittest.TestCase):
         self.assertEqual(status['assessment_counts']['missing'], 250)
         self.assertEqual(sum(status['assessment_counts'].values()), 251)
 
+    def test_future_checkin_is_unknown_and_excluded_from_online_count(self):
+        self.enroll()
+        with self.session_factory() as db:
+            db.scalar(select(CISDevice)).last_client_heartbeat_at = server.utcnow() + timedelta(days=1)
+            db.commit()
+        status = self.client.get('/api/cis/status').json()
+        self.assertEqual(status['devices'][0]['client_state'], 'unknown')
+        self.assertEqual(status['online_client_count'], 0)
+
     def test_missing_summary_keeps_device_status_available(self):
         self.enroll()
         with self.session_factory() as db:
