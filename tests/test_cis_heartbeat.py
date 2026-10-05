@@ -34,6 +34,7 @@ class CISHeartbeatTests(unittest.TestCase):
         self.assertEqual(response.headers['cache-control'], 'no-store')
         after = self.client.get('/api/cis/status').json()['devices'][0]
         self.assertEqual(after['client_state'], 'online')
+        self.assertEqual(self.client.get('/api/cis/status').json()['online_client_count'], 1)
         self.assertEqual(after['last_seen_at'], before['last_seen_at'])
         with self.session_factory() as db:
             self.assertEqual(db.scalar(select(func.count(CISReport.id))), 1)
@@ -43,6 +44,7 @@ class CISHeartbeatTests(unittest.TestCase):
             device.last_client_heartbeat_at = server.utcnow() - timedelta(minutes=16)
             db.commit()
         self.assertEqual(self.client.get('/api/cis/status').json()['devices'][0]['client_state'], 'offline')
+        self.assertEqual(self.client.get('/api/cis/status').json()['online_client_count'], 0)
 
     def test_fresh_checkin_does_not_make_old_collection_current(self):
         headers = self.enroll()

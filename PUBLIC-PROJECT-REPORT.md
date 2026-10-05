@@ -1033,3 +1033,10 @@ The offline historical scanner still retains its last ready flag. The dashboard 
 Backend CI 37389120074 and all three Linux scenarios in run 37389120042 passed for source cda0f1b. The retained comparison artifact has qualified exact loopback coverage, zero recorded differences and a matching PDF size/hash. Later OS-result/status corrections are not included in those CI results.
 
 Full local validation of the latest OS-result and stale-readiness corrections passed **635 tests and 129 subtests**, with two dependency deprecation warnings. JavaScript syntax and diff checks passed. Full project completion and standardized scanner PDF acceptance remain open.
+
+
+## Endpoint status resilience — October 5, 2026
+
+A saved report with a null summary no longer breaks the endpoint-status response: the device and latest report remain visible with unknown summary values. Future-dated stored check-ins now produce unknown presence and are excluded from online_client_count. Incoming client timestamps are not accepted; normal check-ins continue using server receipt time. Fixtures cover missing summaries, future presence, online count after a real fixture heartbeat and zero online count after expiry. All **eleven heartbeat/status tests passed**, with two dependency deprecation warnings. These changes are not deployed; physical macOS 26, login/reboot persistence and trusted distribution remain open.
+
+Full local validation with these endpoint corrections passed **637 tests and 129 subtests**. The additional online-count assertions independently passed the eleven-test targeted suite. Backend CI 37390575830 passed for earlier pushed source 8017884; Linux CI 37390575772 is still active, so these later corrections are not covered by that CI result.
