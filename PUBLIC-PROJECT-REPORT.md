@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Linux interruption acceptance and comparison harness correction — 2026-10-05
+
+Run 37385943889 completed with managed lifecycle and packaged bridge interruption passing. The interruption artifact verifies ten queued events recovered with unchanged IDs/timestamps, one deep Nmap execution, retained command claim, terminal acknowledgement, drained queues and a PDF matching its receipt hash. Private evidence: `validation/ci-interrupted-bridge-37385943889/`.
+
+Repeat comparison performed two successful scans after the normal cooldown with identical listener observations, then failed an outdated harness assertion expecting unknown coverage. The portal now qualifies host coverage from a successful single-IP command. The harness explicitly requires exact `127.0.0.1/32` scope and that command provenance for both runs, alongside its existing no-difference checks. It does not infer full port coverage. Fifteen harness/comparison tests passed, including rejection of broader or unqualified coverage. A new end-to-end rerun remains required. Waiting local startup, MX-summary and overlap-guard commits are now ready for push after the completed run.
+
 ## Combined scanner evidence overlap guard — 2026-10-05
 
 Combined XML reports now reject any shared IP address across host observations, rather than checking only identical complete address tuples. Previously, an IPv4-only observation and a second observation with that same IPv4 plus an IPv6 alias could be counted as distinct hosts. The new fixture rejects that ambiguity; all 24 template tests passed. The standardized report layout is unchanged. This correction is committed locally pending completion of the active comparison CI run before push.

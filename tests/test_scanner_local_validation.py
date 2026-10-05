@@ -9,6 +9,22 @@ spec.loader.exec_module(validation)
 
 
 class ScannerLocalEvidenceTests(unittest.TestCase):
+    def test_repeat_coverage_requires_exact_loopback_and_command_provenance(self):
+        import copy
+        comparison = {"coverage": {"comparable": True, "reasons": [],
+            "previous_targets": ["127.0.0.1/32"], "current_targets": ["127.0.0.1/32"]},
+            "previous_run": {"covered_targets_source": "successful_daedalus_single_ip_command"},
+            "current_run": {"covered_targets_source": "successful_daedalus_single_ip_command"}}
+        validation.validate_loopback_comparison_coverage(comparison)
+        for change in (lambda c: c['coverage'].update(comparable=False),
+                       lambda c: c['coverage'].update(current_targets=['127.0.0.0/8']),
+                       lambda c: c['coverage'].update(reasons=['incomplete']),
+                       lambda c: c['current_run'].clear()):
+            bad = copy.deepcopy(comparison)
+            change(bad)
+            with self.assertRaises(RuntimeError):
+                validation.validate_loopback_comparison_coverage(bad)
+
     def test_readiness_refuses_exited_process_before_accepting_response(self):
         from unittest.mock import Mock, patch
         process = Mock()

@@ -94,6 +94,18 @@ def validate_xml_evidence(xml, listener_port):
     raise RuntimeError("Actual Nmap XML is missing the open loopback listener")
 
 
+def validate_loopback_comparison_coverage(comparison):
+    coverage = comparison.get("coverage", {})
+    if coverage.get("comparable") is not True or coverage.get("reasons"):
+        raise RuntimeError("Repeated loopback coverage is not confirmed")
+    for field in ("previous_targets", "current_targets"):
+        if coverage.get(field) != ["127.0.0.1/32"]:
+            raise RuntimeError("Comparison coverage extends beyond the loopback command")
+    for field in ("previous_run", "current_run"):
+        if comparison.get(field, {}).get("covered_targets_source") != "successful_daedalus_single_ip_command":
+            raise RuntimeError("Comparison is missing successful single-IP command provenance")
+
+
 class FixtureHTTPServer(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError)):
@@ -458,9 +470,8 @@ raise SystemExit(completed.returncode)
                     comparison = comparison_response.json()
                     if not comparison.get("available") or any(comparison.get(key) for key in ("hosts_added", "hosts_removed", "hosts_not_observed", "port_changes")):
                         raise RuntimeError("Identical repeated loopback observations did not compare cleanly")
-                    if comparison["coverage"]["comparable"]:
-                        raise RuntimeError("Comparison inferred complete coverage from unqualified scan results")
-                    comparison_proof = {"previous_run_id": run_id, "current_run_id": second_id, "second_run_event_count": second_detail["run"]["event_count"], "counts": comparison["counts"], "coverage_comparable": False, "coverage_reasons": comparison["coverage"]["reasons"]}
+                    validate_loopback_comparison_coverage(comparison)
+                    comparison_proof = {"previous_run_id": run_id, "current_run_id": second_id, "second_run_event_count": second_detail["run"]["event_count"], "counts": comparison["counts"], "coverage_comparable": True, "covered_targets": comparison["coverage"]["current_targets"], "coverage_source": "successful_daedalus_single_ip_command", "coverage_reasons": comparison["coverage"]["reasons"]}
                 socket_live.close()
                 with sqlite3.connect(portal_database) as db:
                     acknowledgements = [json.loads(row[0]).get("status") for row in db.execute("SELECT details FROM audit_logs WHERE action='scanner.command_result_reported'")]
