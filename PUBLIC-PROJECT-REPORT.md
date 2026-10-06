@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Fresh off-host production backup and isolated restore — 2026-10-06
+
+The current backup_incus.sh completed against SER8 over LAN SSH, created a consistent backup in the persistent volume and copied it to this Mac. Archive path/manifest/digest and SQLite verification passed before publication. The archive then restored successfully into a separate private directory; restored SQLite integrity is OK and database permissions are 0600. Recovered counts are two organizations, five users, five memberships, three agents, 298 scan events, 39 report jobs, 58 external audits and 418 audit-log entries, with 39 saved PDF files.
+
+The live service and application data were unchanged; backup creation wrote a new archive inside the production backup directory. This proves current data/report backup and extraction, not separate recovery-secret custody, restored OAuth or a running restored service. The backup contains private data and remains ignored by Git. Private receipt: validation/recovery-restore-20261006.json; archive: backups/incus-production/daedalus-data-20261006T143105Z.tar.gz.
+
 ## Fresh Incus release inspection and full validation — 2026-10-06
 
 LAN SSH to SER8 succeeded without another identity prompt. The active app symlink resolves to /opt/daedalus/releases/ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d inside daedalus-prod, systemd reports the service active and public health returns OK. Hash comparison against local Git history matches deployed server.py to 2f8c81705b0edef1fa943b36eeb532208e1f2fcb. The deployed scanner PDF function still constructs the replacement ReportLab layout. This confirms the mismatch; it does not approve the historical candidate or establish its visual fidelity. No release, service or PDF generation was changed.
