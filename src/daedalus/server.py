@@ -1569,8 +1569,6 @@ def _execute_external_check(
                     ExternalCheckRun.status.in_(("queued", "running")),
                 ).limit(1)) is not None:
                     raise HTTPException(status_code=409, detail="An active website check is already running for this workspace.")
-            if trigger_source == "schedule" and organization.verification_status != "verified":
-                raise HTTPException(status_code=403, detail="Scheduled checks require a verified domain")
             if trigger_source == "schedule":
                 schedule = db.scalar(
                     select(ExternalCheckSchedule).where(
@@ -1904,7 +1902,6 @@ def claim_due_external_check_schedules(limit: int = 25) -> list[dict[str, Any]]:
             .where(
                 ExternalCheckSchedule.enabled.is_(True),
                 ExternalCheckSchedule.next_run_at <= now,
-                Organization.verification_status == "verified",
             )
             .order_by(ExternalCheckSchedule.next_run_at.asc())
             .limit(limit)
@@ -5152,12 +5149,6 @@ async def update_external_check_schedule(
     if check_type not in {"dns", "web"}:
         raise HTTPException(status_code=404, detail="Unknown external check")
     user, organization, _ = get_org_context(request, db, admin=True)
-    if payload.enabled and organization.verification_status != "verified":
-        raise HTTPException(
-            status_code=403,
-            detail="Verify this domain before enabling recurring checks.",
-        )
-
     now = utcnow()
     schedule = db.scalar(
         select(ExternalCheckSchedule).where(

@@ -889,7 +889,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
             report_assessment = report_job.report_snapshot["checks"]["dns"]["run"]["snapshot"]["email_authentication_assessment"]
             self.assertEqual(report_assessment["dmarc"]["policy"], "reject")
 
-    def test_external_check_schedules_are_admin_controlled_and_verified_only(self):
+    def test_external_check_schedules_are_admin_controlled_and_need_no_verification(self):
         initial = self.client.get("/api/external-checks/dns")
         self.assertEqual(initial.status_code, 200, initial.text)
         self.assertFalse(initial.json()["schedule"]["enabled"])
@@ -909,11 +909,18 @@ class CISReportPDFFlowTests(unittest.TestCase):
             )
             organization.verification_status = "pending"
             db.commit()
-        denied = self.client.put(
+        # Domain owners may schedule audits before TXT verification.
+        unverified = self.client.put(
             "/api/external-checks/web/schedule",
             json={"enabled": True, "interval_hours": 168},
         )
-        self.assertEqual(denied.status_code, 403, denied.text)
+        self.assertEqual(unverified.status_code, 200, unverified.text)
+        with self.session_factory() as db:
+            schedule = db.scalar(select(ExternalCheckSchedule).where(ExternalCheckSchedule.check_type == "web"))
+            schedule.next_run_at = server.utcnow()
+            db.commit()
+        claimed = server.claim_due_external_check_schedules()
+        self.assertEqual([item["check_type"] for item in claimed if item["check_type"] == "web"], ["web"])
 
         disabled = self.client.put(
             "/api/external-checks/dns/schedule",
