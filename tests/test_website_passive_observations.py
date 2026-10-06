@@ -105,6 +105,26 @@ class WebsitePassiveObservationTests(unittest.TestCase):
         self.assertEqual(result["page_content"]["sha256"], hashlib.sha256(b"<html><title>Landing</title></html>").hexdigest())
         self.assertIs(result["page_content"]["comparison_eligible"], True)
 
+    def test_body_read_failure_retains_response_without_inventing_page_evidence(self):
+        response = FixtureResponse(extra_headers=[("X-Content-Type-Options", "nosniff")])
+        def failed_read(limit):
+            raise TimeoutError()
+        response.read = failed_read
+        connection = FixtureConnection(response)
+        with patch("daedalus.external_checks._public_addresses", return_value=["8.8.8.8"]), patch(
+            "daedalus.external_checks._PinnedHTTPSConnection", return_value=connection
+        ):
+            with self.assertRaises(ExternalCheckFailure) as failure:
+                run_website_check("example.test")
+        snapshot = failure.exception.snapshot
+        self.assertEqual(snapshot["http_status"], 200)
+        self.assertEqual(snapshot["final_url"], "https://example.test/")
+        self.assertEqual(snapshot["tls"]["negotiated_protocol"], "TLSv1.3")
+        self.assertEqual(snapshot["security_headers"]["x-content-type-options"], "nosniff")
+        for key in ("page_content", "title", "external_resources"):
+            self.assertNotIn(key, snapshot)
+        self.assertTrue(connection.closed)
+
     def test_cookie_values_and_names_never_persist_and_nonce_values_are_redacted(self):
         private = "fixture-session-value-must-not-be-saved"
         result = self.collect(FixtureResponse(extra_headers=[

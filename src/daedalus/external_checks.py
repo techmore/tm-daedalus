@@ -613,6 +613,18 @@ def run_website_check(domain: str) -> dict[str, Any]:
                 response_headers["content-security-policy"] = re.sub(r"'nonce-[^']*(?:'|$)", "'nonce-[redacted]'", response_headers["content-security-policy"])
             cookie_observations = _cookie_attribute_observations(response.headers.get_all("Set-Cookie") or [])
             content_type = response.getheader("Content-Type", "")
+            # Retain observed response evidence even if reading the body fails.
+            # Page content and dependency evidence require a completed read.
+            snapshot.update({
+                "final_url": current_url,
+                "http_status": response.status,
+                "http_reason": response.reason[:120] if response.reason else "",
+                "content_type": content_type[:256],
+                "security_headers": response_headers,
+                "tls": cert_snapshot,
+                "cookie_observations": cookie_observations,
+                "header_observations": header_observations,
+            })
             body = response.read(MAX_PAGE_BYTES + 1)
             html_truncated = len(body) > MAX_PAGE_BYTES
             body = body[:MAX_PAGE_BYTES]
