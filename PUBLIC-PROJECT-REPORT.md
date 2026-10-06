@@ -1258,3 +1258,7 @@ The sibling NmapUI source now emits an explicit fingerprinting-enabled boolean i
 ## Packaged scanner route status — October 6, 2026
 
 Rebuilding the scanner source bundle changed only runtime_info.py, discovery_ui.js and manifest.json relative to the previous archive. All report assets remain byte-identical. The bundled UI regression executes the route rendering function and checks disabled, unavailable and lookup-error messages; all three bundle tests passed with `uv run --locked python -m pytest` (the pytest console entry point initially lacked the repository root for importing scripts). The report-template and Mac/Linux upgrade group passed 60 tests. Bundle source digest: 1a1b9eb5f0391fcdeb41e5d0f1e447329d37c795a0fac5d1db9cd5409ed17c8b. Installed-device and production activation remain pending.
+
+## Current full source validation — October 6, 2026
+
+Source c5b92b3 passed the full local suite: 665 tests, 181 subtests, one Linux-only skip and two dependency deprecation warnings in 41.40 seconds. The installed Mac scanner readiness endpoint reports ready with recovered runtime storage and Nmap available. These checks do not prove installation of the new bundle or full project completion. GitHub backend run 37400926021 and Linux integration run 37400925999 were confirmed in progress; all three Linux scenario jobs were running at inspection.
