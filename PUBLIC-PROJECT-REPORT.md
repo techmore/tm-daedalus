@@ -4,8 +4,8 @@
 
 **The full project is not complete.** Historical entries below describe their own source and environment; they are not current production acceptance claims.
 
-- **Repository:** origin/main is `60b1962`. Local commits `cfb0fac` (empty vendor feedback cleanup) and `b785ee0` (CIS documentation reconciliation) await the active Linux CI run before push.
-- **Validation:** the renderer cleanup passed 703 local tests and 214 subtests. Backend CI 37414305932 succeeded; Linux 37414305924 has passed lifecycle and interrupted-bridge, with repeat-comparison still active. Later UI/CIS documentation work has focused validation, not a new full-suite result.
+- **Repository:** current source includes removal of the unused alternate scanner renderer, empty vendor-feedback cleanup and reconciled CIS documentation. Production activation remains pending.
+- **Validation:** the combined source at `982abac` passed 704 local tests and 214 subtests, with one Linux-only skip and two dependency warnings in 40.89 seconds. Backend CI 37414305932 and all three Linux scenarios in 37414305924 succeeded at preceding source `60b1962`; these do not establish CI acceptance of later changes.
 - **Local runtime:** isolated loopback QA runs the current source with background workers disabled. A complete UI-triggered DNS run saved as #25 in 3.7 seconds. Its 15 differences were availability recoveries, not configuration changes. Registration evidence was observed; certificate history retained HTTP 502 as unavailable. This does not prove successful public certificate-history retrieval.
 - **Production:** public health returned OK. Fresh SSH release inspection could not complete: LAN access timed out and Tailscale required another identity check. No deployment was attempted during this review.
 - **Standardized PDF:** the unused alternate scanner renderer is removed from current source. Historical template assets are unchanged. The exact human-approved PDF reference, visual fidelity and corrective production activation remain unresolved; filenames and passing tests do not establish approval.
@@ -1509,3 +1509,7 @@ The current local Website topic displays run 9 inventory independently from earl
 ## CIS distributed documentation reconciled — October 6, 2026
 
 The project alignment document and client-distributed copy now match. Current profile tests prove 94 mapped rule IDs, with 87/100 Level 1 and 92/119 Level 2 mappings; these are not verified full benchmark procedure counts. Documentation now separates the five-minute client heartbeat and 15-minute presence window from 36-hour report recency. Physical managed macOS 26 deployment and procedure validation remain outstanding. A regression check prevents the two documentation copies from drifting. The CIS profile/heartbeat/MDM selection passed 26 checks and five subtests before adding the sync test; all 11 profile checks including synchronization then passed. The initial command referenced a nonexistent test file and ran no tests; corrected commands above supplied validation. No client executable, published profile, report template or production release changed.
+
+## Combined source validation — October 6, 2026
+
+Source 982abac passed the complete documented local command: 704 tests and 214 subtests, one Linux-only skip, two dependency warnings, 40.89 seconds. The specific preceding Linux run 37414305924 completed successfully in all three scenarios, allowing the retained UI/documentation commits to be pushed without cancelling it. No production release or PDF asset changed.
