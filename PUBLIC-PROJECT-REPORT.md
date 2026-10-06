@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## Original remote-control scope review — 2026-10-05
+
+The full local suite at 7bee22d passed 648 tests and 157 subtests, with two dependency deprecation warnings. This includes the pending connection-freshness dashboard change.
+
+Re-read ../remote-control/README.md and its outbound-agent command dispatcher. The original project covers service actions, OS update installation and policy, reboot/power actions, storage checks/cleanup, fleet monitors and dated monitor history, in addition to inventory. Daedalus currently exposes bounded scan/cancel, managed NmapUI restart, health/diagnostics, NmapUI update checks and read-only macOS update checks. These are potential integration capabilities, not an instruction to port the entire original project. The broader device-management integration and deployment-target validation remain open.
+
+The original control plane uses a private-network/tailnet model and one control-plane token, while Daedalus requires independent domain workspaces and per-device enrollment. Its API cannot be directly exposed as a shared public tenant-management interface without workspace/device authorization and command-result integration. No remote-control listener, permission, service, token or policy was changed by this read-only review.
+
 ## Hosted scanner connection-change evidence — 2026-10-05
 
 Fresh authenticated HTTPS reads confirm Mac agent 2 is online, NmapUI ready and reporting its current automatically derived 192.168.222.0/24 network to the production portal. Its approved scope remains 10.20.0.0/24. The Linux agent is also online/ready, reporting 10.96.131.0/24 with approved loopback-only scope. These are current readings after the managed Mac update, not a production portal deployment.
