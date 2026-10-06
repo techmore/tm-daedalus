@@ -110,12 +110,12 @@
         {% if membership.role == 'admin' %}
         {% if probation_override %}
         <section class="override-card override-active" id="probation-override-card">
-          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Probation controls are open through <time>{{ probation_override.expires_at.isoformat() }} UTC</time></h3><p class="muted">Reason: {{ probation_override.reason }} Revoking closes controls, cancels queued scans, and requests cancellation of an active scan.</p></div>
+          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Probation controls are open through <time data-local-time datetime="{{ probation_override.expires_at.isoformat() }}Z">{{ probation_override.expires_at.strftime("%b %d, %Y %H:%M UTC") }}</time></h3><p class="muted">Reason: {{ probation_override.reason }} Revoking closes controls, cancels queued scans, and requests cancellation of an active scan.</p></div>
           <button class="button button-quiet" type="button" data-revoke-override="{{ probation_override.id }}">Revoke now</button>
         </section>
         {% else %}
         <section class="override-card" id="probation-override-card">
-          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Need scanner or sharing controls before verification?</h3><p class="muted">An admin can open those controls for 14 days. Each grant and revocation is recorded with the admin and reason.</p></div>
+          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Need active assessment, scanner or sharing controls before verification?</h3><p class="muted">An admin can open those controls for 14 days. Each grant and revocation is recorded with the admin and reason.</p></div>
           <form id="grant-override-form" class="override-form">
             <label for="override-reason">Reason for the override</label>
             <input id="override-reason" name="reason" minlength="8" maxlength="500" required placeholder="Why are these controls needed now?">
@@ -523,6 +523,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261005-113" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261005-114" defer></script>
 </body>
 </html>

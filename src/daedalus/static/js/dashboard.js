@@ -286,6 +286,10 @@
     desired.forEach(connectPendingMembershipFeed);
   }
 
+  document.querySelectorAll("time[data-local-time][datetime]").forEach(function (element) {
+    element.textContent = dateLabel(element.getAttribute("datetime"));
+  });
+
   var mobileNavigationToggle = document.getElementById("mobile-navigation-toggle");
   var sidebarNavigation = document.getElementById("sidebar-navigation");
   function setMobileNavigation(open) {
