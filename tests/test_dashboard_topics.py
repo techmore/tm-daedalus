@@ -806,7 +806,7 @@ requests[0](response('Stale evidence'));await old;
 assert.equal(host.children[0].children[2].textContent,'<script>new evidence</script>');
 assert.equal(host.children[0].children[1].textContent,'Not assessed');
 assert.equal(focused,'dns');
-assert.equal(priorities.children[0].children[0].textContent,'Everything checked is OK');
+assert.equal(priorities.children[0].children[0].textContent,'Nothing has been checked yet');
 assert.equal(priorities.children[1].children[0].children[3].textContent,'');
 host.children[0].events.click();assert.equal(opened,'dns');
 })().catch(error=>{console.error(error);process.exitCode=1;});

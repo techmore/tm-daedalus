@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daedalus-ux",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["DAEDALUS_ENV=development", "DAEDALUS_DEMO_MODE=true", "DAEDALUS_SESSION_SECRET=ux-local-only-secret-value-1234567890", "DAEDALUS_DATABASE_URL=sqlite:///./tmp/ux/ux.db", "DAEDALUS_DATA_DIR=./tmp/ux", "DAEDALUS_BASE_URL=http://127.0.0.1:8765", ".venv/bin/python", "-m", "uvicorn", "daedalus.server:app", "--host", "127.0.0.1", "--port", "8765", "--app-dir", "src"],
+      "port": 8765
+    }
+  ]
+}

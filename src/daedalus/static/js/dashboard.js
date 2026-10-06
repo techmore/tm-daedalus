@@ -1150,28 +1150,39 @@
       else if (area.state === "not_assessed") { level = "idle"; verdict = "Not checked yet"; }
       else if (area.state === "running") { level = "idle"; verdict = "Checking now"; }
       else if (area.updated_at && stale(area.updated_at)) { level = "warn"; verdict = "Out of date"; }
-      var action = null;
       var sched = area.schedule;
-      if (sched && !sched.enabled) {
-        if (level === "ok") { level = "warn"; verdict = "OK, but not rechecked"; }
-        action = {label: role === "admin" ? "Turn on daily check" : "Daily check is off", key: area.key, enable: role === "admin"};
-      }
-      rows.push({area: area, level: level, verdict: verdict, action: action, when: area.updated_at ? ago(area.updated_at) : ""});
+      var daily = sched && !sched.enabled;
+      if (daily && level === "ok") { level = "warn"; verdict = "OK, but not rechecked"; }
+      rows.push({area: area, level: level, verdict: verdict, daily: daily, canRun: !!sched,
+                 when: area.updated_at ? ago(area.updated_at) : ""});
     });
     var order = {bad: 0, warn: 1, idle: 2, ok: 3};
     rows.sort(function (x, y) { return order[x.level] - order[y.level]; });
     var bad = rows.filter(function (r) { return r.level === "bad"; }).length;
     var warn = rows.filter(function (r) { return r.level === "warn"; }).length;
-    var idle = rows.filter(function (r) { return r.level === "idle"; }).length;
+    var checked = rows.filter(function (r) { return r.area.updated_at; }).length;
     var banner = document.createElement("div");
-    banner.className = "status-banner is-" + (bad ? "bad" : warn ? "warn" : idle ? "idle" : "ok");
+    var tone = bad ? "bad" : warn ? "warn" : !checked ? "idle" : "ok";
+    banner.className = "status-banner is-" + tone;
     var headline = document.createElement("strong");
     headline.textContent = bad || warn ? (bad + warn) + (bad + warn === 1 ? " thing needs" : " things need") + " attention"
-      : idle ? "Everything checked is OK" : "All good";
+      : !checked ? "Nothing has been checked yet" : "All good";
     var sub = document.createElement("span");
     var newest = rows.map(function (r) { return r.area.updated_at; }).filter(Boolean).sort().pop();
-    sub.textContent = newest ? "Latest check " + ago(newest) : "No checks have run yet";
+    sub.textContent = newest ? "Latest check " + ago(newest) : "Run a check to see where you stand";
     banner.append(headline, sub);
+    if (role === "admin") {
+      var runAll = document.createElement("button"); runAll.type = "button"; runAll.className = "button button-primary status-run-all";
+      runAll.textContent = "Check now";
+      runAll.addEventListener("click", async function () {
+        runAll.disabled = true; runAll.textContent = "Checking…";
+        await Promise.all(["dns", "web"].map(function (type) {
+          return fetch("/api/external-checks/" + type + "/run", {method: "POST", credentials: "same-origin"}).catch(function () {});
+        }));
+        await loadWorkspacePosture();
+      });
+      banner.append(runAll);
+    }
     host.append(banner);
     var list = document.createElement("ul"); list.className = "status-list";
     rows.forEach(function (r) {
@@ -1181,21 +1192,27 @@
       name.addEventListener("click", function () { activateTab(r.area.key, true); });
       var verdict = document.createElement("span"); verdict.className = "status-verdict"; verdict.textContent = r.verdict;
       var when = document.createElement("span"); when.className = "status-when"; when.textContent = r.when;
-      li.append(dot, name, verdict, when);
-      if (r.action) {
-        var act = document.createElement(r.action.enable ? "button" : "span");
-        act.className = r.action.enable ? "button button-primary status-action" : "status-when";
-        act.textContent = r.action.label;
-        if (r.action.enable) act.addEventListener("click", async function () {
-          act.disabled = true; act.textContent = "Turning on…";
-          try {
-            var resp = await fetch("/api/external-checks/" + r.action.key + "/schedule", {method: "PUT", credentials: "same-origin",
-              headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: 24})});
-            if (!resp.ok) throw new Error();
-            await loadWorkspacePosture();
-          } catch (_e) { act.disabled = false; act.textContent = "Could not turn on — retry"; }
-        });
-        li.append(act);
+      var action = document.createElement("span"); action.className = "status-action-slot";
+      if (r.daily) {
+        if (role === "admin") {
+          var turnOn = document.createElement("button"); turnOn.type = "button"; turnOn.className = "button button-quiet status-action";
+          turnOn.textContent = "Turn on daily";
+          turnOn.addEventListener("click", async function () {
+            turnOn.disabled = true; turnOn.textContent = "Turning on…";
+            try {
+              var resp = await fetch("/api/external-checks/" + r.area.key + "/schedule", {method: "PUT", credentials: "same-origin",
+                headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: 24})});
+              if (!resp.ok) throw new Error();
+              await loadWorkspacePosture();
+            } catch (_e) { turnOn.disabled = false; turnOn.textContent = "Retry"; }
+          });
+          action.append(turnOn);
+        } else { action.textContent = "Daily off"; action.className += " status-when"; }
+      } else if (r.canRun) { action.textContent = "Daily ✓"; action.className += " status-when"; }
+      li.append(dot, name, verdict, when, action);
+      if (r.level !== "ok" && r.level !== "idle" && r.area.summary) {
+        var why = document.createElement("span"); why.className = "status-why"; why.textContent = r.area.summary; why.title = r.area.summary;
+        li.append(why);
       }
       list.append(li);
     });
