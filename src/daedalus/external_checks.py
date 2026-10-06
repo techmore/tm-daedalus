@@ -6,6 +6,7 @@ import ipaddress
 import re
 import socket
 import ssl
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -300,13 +301,13 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_reg
     errors: dict[str, str] = {}
     observations: dict[str, dict[str, Any]] = {}
 
-    def lookup(name: str, record_type: str, key: str) -> list[str]:
+    def lookup(query: tuple[str, str, str]):
+        name, record_type, key = query
         observation = {
             "query_name": name.casefold().rstrip("."), "record_type": record_type,
             "status": "error", "observed_ttl_seconds": None,
             "canonical_name": None, "record_count": None, "resolver_ad": None,
         }
-        observations[key] = observation
         try:
             answers = resolver.resolve(f"{name}.", record_type, search=False)
             values = sorted({_record_text(record_type, record) for record in answers})
@@ -320,7 +321,7 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_reg
             if isinstance(flags, int):
                 observation["resolver_ad"] = bool(flags & dns.flags.AD)
             observation.update(status="answer", record_count=len(values))
-            return values
+            return values, observation, None
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer) as exc:
             observation.update(status="nxdomain" if isinstance(exc, dns.resolver.NXDOMAIN) else "no_answer", record_count=0)
             # A negative response may itself carry an upstream AD assertion.
@@ -328,33 +329,37 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_reg
             flags = getattr(response, "flags", None)
             if isinstance(flags, int):
                 observation["resolver_ad"] = bool(flags & dns.flags.AD)
-            return []
+            return [], observation, None
         except dns.exception.DNSException as exc:
-            errors[key] = _resolver_error_label(exc)
-            return []
+            return [], observation, _resolver_error_label(exc)
         except (OSError, ValueError) as exc:
-            errors[key] = type(exc).__name__
-            return []
+            return [], observation, type(exc).__name__
 
-    records: dict[str, Any] = {}
-    for record_type in ("A", "AAAA", "CNAME", "NS", "SOA", "MX", "TXT", "SRV", "CAA", "DS", "DNSKEY"):
-        records[record_type] = lookup(domain, record_type, record_type)
-
-    for record_type in ("A", "AAAA", "CNAME"):
-        records[f"WWW_{record_type}"] = lookup(
-            f"www.{domain}", record_type, f"www {record_type}"
-        )
+    queries = [(domain, kind, kind) for kind in ("A", "AAAA", "CNAME", "NS", "SOA", "MX", "TXT", "SRV", "CAA", "DS", "DNSKEY")]
+    queries.extend((f"www.{domain}", kind, f"www {kind}") for kind in ("A", "AAAA", "CNAME"))
+    queries.append((f"_dmarc.{domain}", "TXT", "DMARC"))
+    queries.extend((f"{selector}._domainkey.{domain}", "TXT", f"DKIM {selector}") for selector in DKIM_SELECTORS)
+    results = {}
+    # Resolver configuration is fixed before concurrent resolve calls. Workers
+    # return isolated observations; merge in query order for stable snapshots.
+    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="daedalus-dns") as pool:
+        for query, (values, observation, error) in zip(queries, pool.map(lookup, queries)):
+            key = query[2]
+            results[key] = values
+            observations[key] = observation
+            if error is not None:
+                errors[key] = error
+    records: dict[str, Any] = {kind: results[kind] for _, kind, key in queries if kind == key}
+    records.update({f"WWW_{kind}": results[f"www {kind}"] for kind in ("A", "AAAA", "CNAME")})
 
     records["SPF"] = sorted(
         # Retain malformed SPF-looking values for the policy interpreter.
         # Do not strip the saved evidence or turn leading whitespace valid.
         value for value in records["TXT"] if value.lstrip().casefold().startswith("v=spf1")
     )
-    records["DMARC"] = lookup(f"_dmarc.{domain}", "TXT", "DMARC")
+    records["DMARC"] = results["DMARC"]
     records["DKIM"] = {
-        selector: lookup(
-            f"{selector}._domainkey.{domain}", "TXT", f"DKIM {selector}"
-        )
+        selector: results[f"DKIM {selector}"]
         for selector in DKIM_SELECTORS
     }
     email_authentication_assessment = analyze_email_auth(records, errors)

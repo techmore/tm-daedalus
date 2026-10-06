@@ -42,6 +42,35 @@ class FixtureResolver:
 
 
 class DNSCollectorObservationTests(unittest.TestCase):
+    def test_queries_overlap_with_six_workers_and_stable_evidence_order(self):
+        import threading
+        class ConcurrentResolver(FixtureResolver):
+            def __init__(self):
+                super().__init__()
+                self.lock = threading.Lock()
+                self.barrier = threading.Barrier(6)
+                self.started = self.active = self.maximum = 0
+            def resolve(self, *args, **kwargs):
+                with self.lock:
+                    self.started += 1
+                    initial = self.started <= 6
+                    self.active += 1
+                    self.maximum = max(self.maximum, self.active)
+                try:
+                    if initial:
+                        self.barrier.wait(timeout=2)
+                    return super().resolve(*args, **kwargs)
+                finally:
+                    with self.lock:
+                        self.active -= 1
+        resolver = ConcurrentResolver()
+        with patch('daedalus.external_checks.dns.resolver.Resolver', return_value=resolver):
+            result = run_dns_check('example.test')
+        self.assertEqual(resolver.started, 21)
+        self.assertEqual(resolver.maximum, 6)
+        self.assertEqual(list(result['query_observations'])[:6], ['A', 'AAAA', 'CNAME', 'NS', 'SOA', 'MX'])
+        self.assertEqual(result['resolver_errors'], {})
+
     def test_nameserver_configuration_is_bounded_and_literal(self):
         self.assertEqual(parse_audit_nameservers('1.1.1.1, 2606:4700:4700::1111 1.1.1.1'), ('1.1.1.1', '2606:4700:4700::1111'))
         self.assertEqual(parse_audit_nameservers(''), ())
