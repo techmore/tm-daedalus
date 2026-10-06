@@ -3,7 +3,11 @@ const feedback = document.getElementById("key-feedback");
 async function keyRequest(url, options = {}) {
   const response = await fetch(url, { ...options, headers: {"Content-Type": "application/json"} });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.detail || "Request failed");
+  if (!response.ok) {
+    const error = new Error(data.detail || "Request failed");
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 const login = document.getElementById("token-login");
@@ -37,7 +41,10 @@ async function loadKeys() {
       button.setAttribute("aria-label", `Revoke ${key.name}`);
       button.addEventListener("click", async () => {
         try { await keyRequest(`/api/user-keys/${key.id}`, {method: "DELETE"}); await loadKeys(); }
-        catch (error) { feedback.textContent = error.message; }
+        catch (error) {
+          if (error.status === 401) { location.assign("/"); return; }
+          feedback.textContent = error.message;
+        }
       }); row.append(button);
     } list.append(row);
   }
