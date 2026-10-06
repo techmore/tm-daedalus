@@ -5,6 +5,18 @@ from daedalus.external_checks import compare_snapshots
 
 
 class DNSComparisonTests(unittest.TestCase):
+    def test_malformed_lookup_metadata_does_not_infer_dns_changes(self):
+        previous = {"records": {"A": ["203.0.113.7"]}, "resolver_errors": {},
+                    "http_status": 200}
+        for errors in (False, 0, 42, [], ["A"], "SERVFAIL", {1: "SERVFAIL"}):
+            with self.subTest(errors=errors):
+                current = {"records": {"A": []}, "resolver_errors": errors,
+                           "http_status": 503}
+                self.assertEqual(compare_snapshots(previous, current),
+                                 [("http_status", 200, 503)])
+                self.assertEqual(compare_snapshots(current, previous),
+                                 [("http_status", 503, 200)])
+
     def test_failed_lookup_reports_resolver_change_without_record_removal(self):
         previous = {"records": {"WWW_A": ["203.0.113.7"]}, "resolver_errors": {}}
         current = {"records": {"WWW_A": []}, "resolver_errors": {"www A": "SERVFAIL"}}

@@ -6,7 +6,7 @@ from daedalus.email_policy import analyze_email_auth
 class EmailPolicyAssessmentTests(unittest.TestCase):
     def test_malformed_error_collection_cannot_establish_policy(self):
         records = {"SPF": ["v=spf1 -all"], "DMARC": ["v=DMARC1; p=reject"]}
-        for errors in ([], ["TXT"], "SERVFAIL", 0, False):
+        for errors in ([], ["TXT"], "SERVFAIL", 0, False, {1: "SERVFAIL"}):
             with self.subTest(errors=errors):
                 result = analyze_email_auth(records, errors)
                 for protocol in ("spf", "dmarc"):

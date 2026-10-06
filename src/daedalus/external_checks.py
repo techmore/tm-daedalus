@@ -756,7 +756,16 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
 
     def incomplete_record_paths(snapshot: dict[str, Any]) -> set[str]:
         paths: set[str] = set()
-        for lookup in (snapshot.get("resolver_errors") or {}):
+        errors = snapshot.get("resolver_errors")
+        if errors is not None and (
+            not isinstance(errors, dict) or not all(isinstance(key, str) for key in errors)
+        ):
+            # Corrupt lookup metadata cannot establish which DNS observations
+            # were available. Preserve the snapshots, but do not infer DNS
+            # configuration changes from them. Other evidence remains comparable.
+            return {"records", "query_observations", "dnssec_observations",
+                    "email_authentication_assessment", "resolver_errors"}
+        for lookup in (errors or {}):
             # Missing metadata from an unavailable response is not a change
             # to records or DNSSEC protection. Availability is compared above.
             paths.add(f"query_observations.{lookup}")
