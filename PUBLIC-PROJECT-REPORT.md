@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Advisory review links and published-source CI — 2026-10-06
+
+Saved package advisory matches now link directly to their OSV records. Links use a fixed provider origin, validated bounded IDs and explicit new-tab labels. At most ten links per package are displayed, with additional saved IDs counted. Plain DNS values are not converted into links. No HTML or URL supplied by the advisory provider is injected into the dashboard. Sixty-six focused dashboard/report-flow tests and ten subtests passed. Populated browser visual review remains pending.
+
+Both Backend 37477504469 and Linux scanner 37477504280 succeeded at published source 04dca2d. Linux passed lifecycle, interrupted-bridge and repeat comparison. These results cover that source; subsequent commits require their own CI. Production and PDF assets are unchanged.
+
 ## jsDelivr package declaration coverage and hosted Mac status — 2026-10-06
 
 The website collector now recognizes exact stable npm versions in jsDelivr /npm/package@version paths, including scoped packages and stylesheet references. Source hosts remain saved; tags, ranges, prereleases, GitHub and combined endpoints, credentials, nondefault ports and lookalike hosts remain unidentified. Only returned root HTML attributes are inspected; package bytes and execution are unverified. The provider's documented format is https://www.jsdelivr.com/ .

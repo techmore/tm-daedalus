@@ -940,3 +940,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .audit-record-table td, .audit-record-table td:first-child, .audit-record-table td:nth-child(2) { width: auto; max-width: none; padding: 5px 0; border: 0; font-size: 13px; overflow-wrap: anywhere; }
   .audit-record-table td::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 700; font-family: inherit; text-transform: uppercase; letter-spacing: .05em; }
 }
+
+.audit-advisory-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.audit-advisory-links a { color: var(--olive-900); text-decoration: underline; text-underline-offset: 3px; }

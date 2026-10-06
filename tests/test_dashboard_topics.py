@@ -29,6 +29,26 @@ class DashboardTopicTests(unittest.TestCase):
         self.assertIn('scroller.setAttribute("role", "region");', helper)
         self.assertIn('title + "; record evidence"', helper)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_advisory_links_use_fixed_provider_and_safe_ids(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function makeAuditTable('):source.index('  function rowsForRecord(')]
+        script = """const assert=require('node:assert/strict');
+class Node { constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.textContent='';this.attrs={};} append(...nodes){this.children.push(...nodes);} setAttribute(k,v){this.attrs[k]=v;} }
+const document={createElement:tag=>new Node(tag)};
+""" + helper + """
+const result=makeAuditTable('Packages','Scope',[{type:'npm',name:'fixture',value:'1.2.3',present:true,advisoryIds:['GHSA-fixture','javascript:alert(1)','../bad','<script>',null,...Array.from({length:20},(_,i)=>'CVE-fixture-'+i)]}]);
+function all(node){return [node,...node.children.flatMap(all)];}
+const links=all(result).filter(n=>n.tag==='a');
+assert.equal(links.length,10);
+assert.equal(links[0].href,'https://osv.dev/vulnerability/GHSA-fixture');
+assert.ok(links.every(n=>n.href.startsWith('https://osv.dev/vulnerability/')&&n.target==='_blank'&&n.rel==='noopener noreferrer'));
+assert.ok(links[0].attrs['aria-label'].includes('opens in a new tab'));
+assert.equal(all(makeAuditTable('DNS','Scope',[{type:'TXT',name:'record',value:'GHSA-fixture',present:true}])).filter(n=>n.tag==='a').length,0);
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_empty_change_history_does_not_imply_only_one_assessment(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         self.assertIn('No confirmed changes are recorded in the saved assessment history.', source)
@@ -242,7 +262,7 @@ assert.ok(declaredPackageEvidence({dependency_package_observations:{schema_versi
 const base={dependency_package_observations:{schema_version:1,truncated:false,packages:[{ecosystem:'npm',name:'react',version:'18.3.1',source_host:'unpkg.com'}]}};
 const packageResult={ecosystem:'npm',name:'react',version:'18.3.1',state:'observed',advisory_ids:['GHSA-test']};
 let row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'observed',packages:[packageResult]}}).rows[0];
-assert.equal(row.statusText,'1 OSV advisory match(es)');assert.equal(row.statusTone,'is-absent');assert.ok(row.value.includes('GHSA-test'));
+assert.equal(row.statusText,'1 OSV advisory match(es)');assert.equal(row.statusTone,'is-absent');assert.deepEqual(row.advisoryIds,['GHSA-test']);
 row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'observed',packages:[{...packageResult,advisory_ids:[]}]}}).rows[0];
 assert.equal(row.statusText,'No OSV matches returned');assert.equal(row.statusTone,'is-neutral');
 row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'unavailable',packages:[]}}).rows[0];assert.equal(row.statusText,'Advisory lookup unavailable');

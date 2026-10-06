@@ -2823,6 +2823,20 @@
       valueCell.className = "audit-record-value";
       valueCell.dataset.label = "Value";
       valueCell.textContent = row.value;
+      if (Array.isArray(row.advisoryIds)) {
+        var links = document.createElement("div");
+        links.className = "audit-advisory-links";
+        row.advisoryIds.filter(function (id) { return typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id); }).slice(0, 10).forEach(function (id) {
+          var link = document.createElement("a");
+          link.href = "https://osv.dev/vulnerability/" + encodeURIComponent(id);
+          link.textContent = id;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.setAttribute("aria-label", "Review OSV advisory " + id + " (opens in a new tab)");
+          links.append(link);
+        });
+        if (links.children.length) valueCell.append(links);
+      }
       tableRow.append(valueCell);
       var statusCell = document.createElement("td");
       statusCell.dataset.label = "Status";
@@ -3345,8 +3359,8 @@
       var ids = observed && Array.isArray(observed.advisory_ids) ? observed.advisory_ids : [];
       var status = !audit ? "Advisories not assessed" : audit.state === "unavailable" ? "Advisory lookup unavailable" : !observed ? "Advisories not assessed" : observed.state === "partial" ? "Partial advisory lookup" : ids.length ? ids.length + " OSV advisory match(es)" : "No OSV matches returned";
       var value = item.version + " · declared by " + (item.source_host || "source unknown");
-      if (ids.length) value += " · " + ids.slice(0, 10).join(", ") + (ids.length > 10 ? " · " + (ids.length - 10) + " more saved IDs" : "");
-      return {type: "npm", name: item.name, value: value, present: true, statusTone: ids.length ? "is-absent" : "is-neutral", statusText: status};
+      if (ids.length > 10) value += " · " + (ids.length - 10) + " more saved IDs";
+      return {type: "npm", name: item.name, value: value, advisoryIds: ids, present: true, statusTone: ids.length ? "is-absent" : "is-neutral", statusText: status};
     });
     var sourceScope = metadata.scope === "exact_stable_unpkg_versions_in_root_html_attributes" ? "UNPKG" : "supported UNPKG/jsDelivr";
     return {rows: rows, scope: "Exact stable versions declared in " + sourceScope + " root-page references only. Package bytes and execution were not verified. Advisory matches describe declared versions only. " + (metadata.truncated ? "The saved package list is truncated." : "Tags, ranges and unsupported reference formats remain unidentified.")};
