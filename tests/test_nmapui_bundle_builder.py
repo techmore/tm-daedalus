@@ -2,11 +2,38 @@ import subprocess
 import tempfile
 from pathlib import Path
 import unittest
+import shutil
+import zipfile
 
 from scripts.build_nmapui_source_bundle import _source_worktree_paths
 
 
 class NmapUISourceProvenanceTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_packaged_partial_initial_message_preserves_discovered_network(self):
+        archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
+        with zipfile.ZipFile(archive) as bundle:
+            source = bundle.read('daedalus-nmapui-source/static/js/scan_runtime.js').decode()
+        start = source.index("    socket.on('initial_data', (data) => {")
+        branch = source[start:source.index("    socket.emit('get_initial_data');", start)]
+        script = """const assert=require('node:assert/strict');let handler;
+const fields={'local-ip-value':{textContent:'10.20.0.107'},'subnet-mask-value':{textContent:'255.255.255.0'},'cidr-value':{textContent:'10.20.0.0/24'},'public-ip-value':{textContent:'observed'},'scan-target':{value:''}};
+const document={getElementById:id=>fields[id]};function setText(id,value){fields[id].textContent=value;}
+const socket={on:(name,callback)=>handler=callback};
+""" + branch + """
+handler({autoScan:{enabled:false}});
+assert.equal(fields['local-ip-value'].textContent,'10.20.0.107');
+assert.equal(fields['cidr-value'].textContent,'10.20.0.0/24');
+assert.equal(fields['scan-target'].value,'');
+handler({localIP:'10.20.0.108',mask:'255.255.255.0',cidr:'10.20.0.0/24',publicIP:''});
+assert.equal(fields['local-ip-value'].textContent,'10.20.0.108');
+assert.equal(fields['scan-target'].value,'10.20.0.0/24');
+fields['scan-target'].value='operator-selection';handler({cidr:'10.21.0.0/24'});
+assert.equal(fields['scan-target'].value,'operator-selection');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_manifest_can_identify_uncommitted_runtime_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
