@@ -1,3 +1,7 @@
+import ast
+import os
+from unittest.mock import patch
+from urllib.parse import urlsplit
 import subprocess
 import tempfile
 from pathlib import Path
@@ -93,6 +97,19 @@ renderReportsTab([]);assert.equal(message,'No saved report files found on this s
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_packaged_management_history_url_rejects_unsafe_links(self):
+        archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
+        with zipfile.ZipFile(archive) as bundle:
+            tree = ast.parse(bundle.read('daedalus-nmapui-source/nmapui/handlers/routes.py').decode())
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'management_history_url')
+        namespace = {'os': os, 'urlsplit': urlsplit}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), '<bundled-helper>', 'exec'), namespace)
+        for value in ['', 'javascript:alert(1)', 'https://user:secret@example.com', 'http://example.com', 'https://example.com?token=secret', 'https://example.com/#fragment', 'https://example.com:0', 'https://example.com' + chr(92) + 'evil']:
+            with self.subTest(value=value), patch.dict(os.environ, {'NMAPUI_MANAGEMENT_PORTAL_URL': value}):
+                self.assertEqual(namespace['management_history_url'](), '')
+        with patch.dict(os.environ, {'NMAPUI_MANAGEMENT_PORTAL_URL': 'https://portal.example/'}):
+            self.assertEqual(namespace['management_history_url'](), 'https://portal.example/dashboard#scanners')
 
     def test_manifest_can_identify_uncommitted_runtime_files(self):
         with tempfile.TemporaryDirectory() as temporary:
