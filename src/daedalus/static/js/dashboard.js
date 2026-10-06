@@ -1258,6 +1258,42 @@
     } }
   }
 
+  async function loadPendingApprovals() {
+    var host = document.getElementById("pending-approvals");
+    if (!host || role !== "admin") return;
+    try {
+      var response = await fetch("/api/memberships", { credentials: "same-origin" });
+      var body = await response.json();
+      var pending = response.ok && Array.isArray(body.members) ? body.members.filter(function (member) { return member.status === "pending"; }) : [];
+      host.replaceChildren();
+      if (!pending.length) return;
+      var card = document.createElement("section"); card.className = "approval-card";
+      var title = document.createElement("strong"); title.textContent = pending.length === 1 ? "1 person is waiting for access" : pending.length + " people are waiting for access";
+      card.append(title);
+      var note = document.createElement("p"); note.className = "status-when approval-note"; note.hidden = true;
+      pending.forEach(function (member) {
+        var row = document.createElement("div"); row.className = "approval-row";
+        var who = document.createElement("span"); who.className = "approval-who"; who.textContent = member.email || member.name || "Unknown user";
+        var approve = document.createElement("button"); approve.type = "button"; approve.className = "button button-primary status-action"; approve.textContent = "Approve";
+        var deny = document.createElement("button"); deny.type = "button"; deny.className = "button button-quiet status-action"; deny.textContent = "Deny";
+        [[approve, true], [deny, false]].forEach(function (pair) {
+          pair[0].addEventListener("click", async function () {
+            approve.disabled = true; deny.disabled = true;
+            try {
+              await postJson("/api/memberships/" + member.id + "/decision", { approve: pair[1] });
+              await loadPendingApprovals();
+            } catch (error) {
+              note.textContent = error.message; note.hidden = false; approve.disabled = false; deny.disabled = false;
+            }
+          });
+        });
+        row.append(who, approve, deny); card.append(row);
+      });
+      card.append(note);
+      host.append(card);
+    } catch (_error) { /* the Members tab remains the fallback */ }
+  }
+
   function refresh(force) {
     if (dashboardRefreshPromise) {
       if (force) return dashboardRefreshPromise.then(function () { return refresh(true); });
@@ -1271,7 +1307,7 @@
         updateWorkspaceControls(data.organization);
         if (!force && document.querySelector(".inline-confirmation")) return;
         render(data);
-        if (activeTab === "overview") await loadWorkspacePosture();
+        if (activeTab === "overview") { await loadWorkspacePosture(); await loadPendingApprovals(); }
       } catch (_error) {
         // Periodic refresh retries transient failures without changing saved evidence.
       }

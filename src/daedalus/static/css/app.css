@@ -983,3 +983,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .check-item.is-bad .check-mark { color: #b5483a; }
 .check-detail { color: var(--ink); font-size: 14px; line-height: 1.45; }
 @media (max-width: 640px) { .check-item { grid-template-columns: 22px 1fr; } .check-detail { grid-column: 2; } .check-action-bar .button { flex: 1 1 100%; } }
+
+.approval-card { margin-top: 14px; padding: 16px 18px; border: 1px solid #d8c98f; border-radius: 12px; background: #f7f0d4; display: grid; gap: 10px; }
+.approval-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.approval-who { flex: 1 1 200px; font-weight: 600; overflow-wrap: anywhere; }
+.approval-note { margin: 0; color: #8a3b2f; }
