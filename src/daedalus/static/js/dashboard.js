@@ -286,9 +286,29 @@
     desired.forEach(connectPendingMembershipFeed);
   }
 
+  var mobileNavigationToggle = document.getElementById("mobile-navigation-toggle");
+  var sidebarNavigation = document.getElementById("sidebar-navigation");
+  function setMobileNavigation(open) {
+    if (!mobileNavigationToggle || !sidebarNavigation) return;
+    sidebarNavigation.classList.toggle("is-open", open);
+    mobileNavigationToggle.setAttribute("aria-expanded", String(open));
+    mobileNavigationToggle.textContent = open ? "Close menu" : "Menu";
+  }
+  if (mobileNavigationToggle) mobileNavigationToggle.addEventListener("click", function () {
+    setMobileNavigation(mobileNavigationToggle.getAttribute("aria-expanded") !== "true");
+  });
+  function handleMobileNavigationEscape(event) {
+    if (event.key === "Escape" && window.matchMedia("(max-width: 760px)").matches) {
+      setMobileNavigation(false);
+      mobileNavigationToggle.focus();
+    }
+  }
+  if (sidebarNavigation) sidebarNavigation.addEventListener("keydown", handleMobileNavigationEscape);
+  if (mobileNavigationToggle) mobileNavigationToggle.addEventListener("keydown", handleMobileNavigationEscape);
   document.querySelectorAll("[data-tab]").forEach(function (item) {
     item.addEventListener("click", function () {
       activateTab(item.dataset.tab, true);
+      if (window.matchMedia("(max-width: 760px)").matches) setMobileNavigation(false);
     });
   });
 

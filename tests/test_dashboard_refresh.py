@@ -6,6 +6,32 @@ from pathlib import Path
 
 class DashboardRefreshTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
+    def test_mobile_menu_toggle_and_escape(self):
+        root = Path(__file__).parents[1]
+        source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
+        start = source.index('  var mobileNavigationToggle =')
+        end = source.index('  document.querySelectorAll("[data-tab]")', start)
+        script = "const assert = require('node:assert/strict');" + """
+let focused=false, mobile=true;
+const handlers={}, attrs={'aria-expanded':'false'}, classes=new Set();
+const toggle={textContent:'Menu',getAttribute:k=>attrs[k],setAttribute:(k,v)=>{attrs[k]=v;},addEventListener:(k,f)=>{handlers[k]=f;},focus:()=>{focused=true;}};
+const panel={classList:{toggle:(k,on)=>on?classes.add(k):classes.delete(k)},addEventListener:()=>{}};
+const document={getElementById:id=>id==='mobile-navigation-toggle'?toggle:panel};
+const window={matchMedia:()=>({matches:mobile})};
+""" + source[start:end] + """
+handlers.click(); assert.equal(attrs['aria-expanded'],'true');
+assert.equal(classes.has('is-open'),true); assert.equal(toggle.textContent,'Close menu');
+handlers.keydown({key:'Escape'}); assert.equal(attrs['aria-expanded'],'false');
+assert.equal(focused,true); assert.equal(toggle.textContent,'Menu');
+handlers.click(); mobile=false; handlers.keydown({key:'Escape'});
+assert.equal(attrs['aria-expanded'],'true');
+"""
+        result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        template = (root / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertIn('aria-expanded="false" aria-controls="sidebar-navigation"', template)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_skip_content_focus_preserves_topic_fragment(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         start = source.index('  function handleSkipToContent(')

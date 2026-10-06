@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261005-108">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261005-109">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -18,6 +18,8 @@
         <span class="brand-wordmark"><strong>Daedalus</strong><small>Cyber Security Pilot</small></span>
       </a>
       {% if organization %}
+      <button id="mobile-navigation-toggle" class="mobile-navigation-toggle" type="button" aria-expanded="false" aria-controls="sidebar-navigation">Menu</button>
+      <div id="sidebar-navigation" class="sidebar-navigation-content">
       <label class="workspace-switcher" for="workspace-select">
         <span class="workspace-icon">{{ organization.name[:1]|upper }}</span>
         <span class="workspace-copy">
@@ -46,6 +48,7 @@
       <nav class="main-nav" aria-label="Administration">
         <button class="nav-item" data-tab="members"><span>♙</span>Members &amp; access</button>
       </nav>
+      </div>
       {% endif %}
       <div class="sidebar-spacer"></div>
       <div class="sidebar-footer">
@@ -520,6 +523,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261005-111" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261005-112" defer></script>
 </body>
 </html>
