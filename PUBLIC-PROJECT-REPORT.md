@@ -1559,3 +1559,8 @@ Additional executed JavaScript renderer assertions prove that stale ready teleme
 The installed scanner's readiness endpoint returned ready with Nmap 7.991 and interface en0. Runtime status reported zero active jobs. The running native indicator's fresh observation reported NmapUI running, Daedalus bridge connected, scan activity idle and five retained completed runs. This is current local/native telemetry, not a fresh visual inspection of production or additional subnet coverage. No scan or PDF generation was requested. Receipt: validation/mac-scanner-current-status-20261006.json.
 
 The complete suite at 082b832 passed 708 tests and 224 subtests in 42.39 seconds, with one Linux-only skip and two dependency warnings. Linux CI 37416713205 remains active; pending commits are retained locally until that run reaches a terminal state. Production and standardized report assets remain unchanged.
+
+
+## Every dashboard topic survives refresh — October 6, 2026
+
+The existing isolated local member browser navigated via each actual sidebar control and reloaded all nine topics: overview, scanners, Meraki, DNS/email, website, CIS, reports, notifications and members. Each reload retained its matching URL hash, active panel, heading and aria-current navigation item. Receipt: validation/all-topic-refresh-member-20261006.json. This proves local member routing persistence; it does not establish populated visual acceptance, admin behavior or production deployment. No scan, report generation or configuration mutation occurred.
