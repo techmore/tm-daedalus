@@ -2956,6 +2956,16 @@
       var missing = Object.keys(policies).filter(function (name) { return !policies[name]; });
       if (missing.length) finding("Browser protection", "Browser policy headers absent from the response: " + missing.join(", ") + ". Review which policies are appropriate for this site.");
       if (!Object.keys(policies).length) finding("Browser protection unknown", "Browser policy header evidence is unavailable.");
+      var advisory = snapshot.dependency_advisory_observations;
+      if (advisory && (advisory.state === "unavailable" || advisory.state === "partial")) {
+        finding("Dependency advisory coverage", "The saved OSV lookup is " + advisory.state + ". Missing matches remain unknown; inspect package evidence below.");
+      }
+      var matchedPackages = advisory && Array.isArray(advisory.packages) ? advisory.packages.filter(function (item) {
+        return item && Array.isArray(item.advisory_ids) && item.advisory_ids.length > 0;
+      }) : [];
+      if (matchedPackages.length) {
+        finding("Declared dependencies have advisory matches", matchedPackages.length + " declared package version(s) returned OSV advisory IDs. Review the saved matches and update applicability; URL declarations do not verify loaded bytes, execution or exploitability.");
+      }
       if (!items.length) finding("Saved website evidence recorded", "No response, certificate-expiry, or missing-header concern was identified in this saved snapshot. Deeper audit coverage is separate.");
     }
     var group = document.createElement("div");

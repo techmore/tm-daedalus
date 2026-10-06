@@ -684,6 +684,13 @@ assert.doesNotMatch(flatten(nodes['dns-priorities'].children[0]),/missing select
 renderTopicPriorities('web',{http_status:200,tls:{valid_until:'2100-01-01'},security_headers:{}});
 assert.match(flatten(nodes['web-priorities']),/evidence is unavailable/);
 assert.doesNotMatch(flatten(nodes['web-priorities']),/No response, certificate/);
+renderTopicPriorities('web',{http_status:200,tls:{valid_until:'2100-01-01'},security_headers:{hsts:'set'},dependency_advisory_observations:{state:'observed',packages:[{advisory_ids:['GHSA-fixture']}]}});
+assert.match(flatten(nodes['web-priorities']),/Declared dependencies have advisory matches/);
+assert.match(flatten(nodes['web-priorities']),/do not verify loaded bytes/);
+renderTopicPriorities('web',{http_status:200,tls:{valid_until:'2100-01-01'},security_headers:{hsts:'set'},dependency_advisory_observations:{state:'unavailable',packages:[]}});
+assert.match(flatten(nodes['web-priorities']),/Missing matches remain unknown/);
+assert.doesNotMatch(flatten(nodes['web-priorities']),/Saved website evidence recorded/);
+
 renderWebsiteAuditOutcome('audit','Audit',{status:'completed_with_warnings',snapshot:{findings:[],coverage_complete:false}});
 assert.match(nodes.audit.textContent,/absence does not establish resolution/);
 renderWebsiteAuditOutcome('audit','Audit',{status:'failed'});
