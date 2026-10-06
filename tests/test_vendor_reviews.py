@@ -42,6 +42,8 @@ class VendorReviewTests(unittest.TestCase):
         self.assertTrue(self.client.post('/api/vendor-reviews',json=changed).json()['created'])
         saved=self.client.get('/api/vendor-reviews',params={'run_id':run}).json()
         self.assertEqual(len(saved['history']),2)
+        self.assertEqual(saved['reviews'][0]['reviewer'], 'CSP Demo Admin')
+        self.assertTrue(all(row['reviewer'] == 'CSP Demo Admin' for row in saved['history']))
         self.assertEqual(len(saved['reviews']),1)
         self.assertEqual(saved['reviews'][0]['status'],'reviewed')
         self.assertFalse(saved['security_assessment'])

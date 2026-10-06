@@ -5256,8 +5256,13 @@ def list_vendor_reviews(run_id: int, request: Request, before: int | None = None
     rows = db.scalars(query.order_by(VendorReview.id.desc()).limit(101)).all()
     more = len(rows) > 100
     rows = rows[:100]
-    return {"reviews": [_serialize_vendor_review(row) for row in latest],
-            "history": [_serialize_vendor_review(row) for row in rows],
+    actor_ids = {row.actor_user_id for row in [*latest, *rows] if row.actor_user_id is not None}
+    actors = {actor.id: actor for actor in db.scalars(select(User).where(User.id.in_(actor_ids))).all()} if actor_ids else {}
+    def serialize_with_reviewer(row):
+        actor = actors.get(row.actor_user_id)
+        return {**_serialize_vendor_review(row), "reviewer": (actor.display_name or actor.email) if actor else "Former member"}
+    return {"reviews": [serialize_with_reviewer(row) for row in latest],
+            "history": [serialize_with_reviewer(row) for row in rows],
             "history_has_more": more, "history_next_before": rows[-1].id if more else None,
             "security_assessment": False}
 

@@ -3127,7 +3127,7 @@
       var title = document.createElement("strong");
       title.textContent = (row.origin || {}).host + " · " + (vendorReviewLabels[row.status] || "Unknown decision");
       var note = document.createElement("p"); note.textContent = row.note;
-      var when = document.createElement("small"); when.textContent = "Reviewer #" + (row.actor_user_id || "former member") + " · " + dateLabel(row.created_at);
+      var when = document.createElement("small"); when.textContent = (row.reviewer || "Former member") + " · " + dateLabel(row.created_at);
       item.append(title, note, when); host.append(item);
     });
   }
