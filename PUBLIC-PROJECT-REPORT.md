@@ -1,5 +1,34 @@
 # Daedalus project report
 
+## Current completion summary — October 6, 2026
+
+**The full project is not complete.** Historical entries below describe their own source and environment; they are not current production acceptance claims.
+
+- **Repository:** origin/main is `60b1962`. Local commits `cfb0fac` (empty vendor feedback cleanup) and `b785ee0` (CIS documentation reconciliation) await the active Linux CI run before push.
+- **Validation:** the renderer cleanup passed 703 local tests and 214 subtests. Backend CI 37414305932 succeeded; Linux 37414305924 has passed lifecycle and interrupted-bridge, with repeat-comparison still active. Later UI/CIS documentation work has focused validation, not a new full-suite result.
+- **Local runtime:** isolated loopback QA runs the current source with background workers disabled. A complete UI-triggered DNS run saved as #25 in 3.7 seconds. Its 15 differences were availability recoveries, not configuration changes. Registration evidence was observed; certificate history retained HTTP 502 as unavailable. This does not prove successful public certificate-history retrieval.
+- **Production:** public health returned OK. Fresh SSH release inspection could not complete: LAN access timed out and Tailscale required another identity check. No deployment was attempted during this review.
+- **Standardized PDF:** the unused alternate scanner renderer is removed from current source. Historical template assets are unchanged. The exact human-approved PDF reference, visual fidelity and corrective production activation remain unresolved; filenames and passing tests do not establish approval.
+
+### Full scope still requiring completion evidence
+
+| Area | Remaining requirement |
+| --- | --- |
+| Portal theme and topic UX | Current populated desktop/mobile acceptance across every topic and production activation |
+| Marketing Pages | Final content acceptance |
+| Incus operations | Fresh release verification, separate recovery-secret custody, public DNS/TLS failover and restored Google login |
+| Google identity and users | Broader real-user onboarding, approved sharing, domain independence and admin succession |
+| Domain verification | Real second-domain TXT onboarding and probation/override expiry/renewal acceptance |
+| DNS, email and website audits | Broader checker semantics and owner/provider review; successful public certificate-history collection remains unverified |
+| Internal scanners | Additional VLAN/subnet locations and fleet soak |
+| Remote management | Agreed broader integration scope and validation on deployment targets |
+| Meraki | Larger authorized device inventory and review of unavailable controls |
+| CIS endpoints | Physical managed macOS 26 deployment, remaining check semantics, signing/notarization and login/reboot persistence |
+| Linked vendors | Automated provider assessment remains unimplemented; inventory and human decisions are not security verdicts |
+| Reports | Approved standardized scanner PDF fidelity and activation, plus production report regressions |
+
+The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
+
 ## Recovered CIS visual review and compact summary — 2026-10-05
 
 Selecting the existing agent-owned QA space 8 in the native Ego workspace selector, then resetting page zoom, restored its screenshot capture. No new TaskSpace or ownership takeover was used. Reviewed the production CIS page at 1154 pixels and a temporary preview of the two-property dashboard CSS correction. The original metric grid occupied a tall narrow column beside empty space; the preview places summary text above five wrapping metric tiles, bringing assessment coverage into the first desktop screen. The matching source CSS and asset cache version are updated locally; 59 dashboard/CIS route tests and seven subtests passed, as did diff checks.
