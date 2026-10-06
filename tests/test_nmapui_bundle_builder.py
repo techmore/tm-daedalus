@@ -34,6 +34,26 @@ assert.equal(fields['scan-target'].value,'operator-selection');
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_packaged_route_status_distinguishes_disabled_and_unavailable(self):
+        archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
+        with zipfile.ZipFile(archive) as bundle:
+            source = bundle.read('daedalus-nmapui-source/static/js/discovery_ui.js').decode()
+        function = source[source.index('function renderRoutePath(data)'):source.index('function updateHistoryBadge')]
+        script = """const assert=require('node:assert/strict');
+const route={children:[],replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);}};
+const document={getElementById:()=>route,createElement:()=>({})};
+""" + function + """
+renderRoutePath({fingerprinting_enabled:false});
+assert.equal(route.children[0].textContent,'External route discovery is disabled for this scanner.');
+renderRoutePath({fingerprinting_enabled:true});
+assert.equal(route.children[0].textContent,'No route data available');
+renderRoutePath({error:'Lookup failed'});
+assert.equal(route.children[0].textContent,'Lookup failed');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_manifest_can_identify_uncommitted_runtime_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)

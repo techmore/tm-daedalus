@@ -1254,3 +1254,7 @@ Read-only original remote-control review confirms service actions, update instal
 ## Local scanner route status clarity — October 6, 2026
 
 The sibling NmapUI source now emits an explicit fingerprinting-enabled boolean in a copied network-key payload. Its empty topology message distinguishes configuration-disabled external route discovery from missing lookup results. Managed scanner configuration remains disabled; no report templates or report assets changed. All 23 runtime-info handler tests passed, including the disabled setting avoiding traceroute and public-IP lookup while retaining local CIDR. JavaScript syntax and sibling diff checks passed. This source change is not yet bundled, installed or deployed; actual UI validation remains pending.
+
+## Packaged scanner route status — October 6, 2026
+
+Rebuilding the scanner source bundle changed only runtime_info.py, discovery_ui.js and manifest.json relative to the previous archive. All report assets remain byte-identical. The bundled UI regression executes the route rendering function and checks disabled, unavailable and lookup-error messages; all three bundle tests passed with `uv run --locked python -m pytest` (the pytest console entry point initially lacked the repository root for importing scripts). The report-template and Mac/Linux upgrade group passed 60 tests. Bundle source digest: 1a1b9eb5f0391fcdeb41e5d0f1e447329d37c795a0fac5d1db9cd5409ed17c8b. Installed-device and production activation remain pending.
