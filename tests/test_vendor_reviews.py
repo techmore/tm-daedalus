@@ -52,6 +52,10 @@ class VendorReviewTests(unittest.TestCase):
             self.assertEqual(len(db.scalars(select(VendorReview)).all()),2)
         next_run=self.inventory()
         self.assertEqual(self.client.get('/api/vendor-reviews',params={'run_id':next_run}).json()['reviews'],[])
+        combined = self.client.get('/api/vendor-reviews', params={'run_id':next_run, 'history_all':True}).json()
+        self.assertEqual(combined['reviews'], [])
+        self.assertEqual(len(combined['history']), 2)
+        self.assertTrue(all(row['run_id'] == run for row in combined['history']))
 
     def test_invalid_inventory_and_rationale_are_rejected(self):
         run=self.inventory();payload=self.payload(run)
@@ -70,6 +74,14 @@ class VendorReviewTests(unittest.TestCase):
         other_run=self.inventory(other_id)
         self.assertEqual(self.client.post('/api/vendor-reviews',json=self.payload(other_run)).status_code,404)
         self.assertEqual(self.client.get('/api/vendor-reviews',params={'run_id':other_run}).status_code,404)
+        self.assertEqual(self.client.get('/api/vendor-reviews',params={'run_id':other_run,'history_all':True}).status_code,404)
+        with self.session_factory() as db:
+            db.add(VendorReview(organization_id=other_id,run_id=other_run,resource_index=0,
+                request_id=str(uuid4()),origin={'host':'private.other.example','scheme':'https','port':None},
+                status='monitor',note='Foreign review',actor_user_id=user,created_at=server.utcnow()))
+            db.commit()
+        combined = self.client.get('/api/vendor-reviews',params={'run_id':run,'history_all':True}).json()
+        self.assertEqual(combined['history'], [])
         with self.session_factory() as db:
             member=db.scalar(select(Membership).where(Membership.organization_id==org,Membership.user_id==user));member.role='user';db.commit()
         self.assertEqual(self.client.post('/api/vendor-reviews',json=self.payload(run)).status_code,403)

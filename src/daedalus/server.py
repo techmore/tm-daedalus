@@ -5246,13 +5246,14 @@ def _serialize_vendor_review(row):
 
 
 @app.get("/api/vendor-reviews")
-def list_vendor_reviews(run_id: int, request: Request, before: int | None = None, db: Session = Depends(get_db)):
+def list_vendor_reviews(run_id: int, request: Request, before: int | None = None, history_all: bool = False, db: Session = Depends(get_db)):
     _, organization, _ = get_org_context(request, db)
     _vendor_review_run(db, organization.id, run_id)
     scope = (VendorReview.organization_id == organization.id, VendorReview.run_id == run_id)
     ranked = select(VendorReview.id, func.row_number().over(partition_by=VendorReview.resource_index, order_by=VendorReview.id.desc()).label("rank")).where(*scope).subquery()
     latest = db.scalars(select(VendorReview).join(ranked, ranked.c.id == VendorReview.id).where(ranked.c.rank == 1).order_by(VendorReview.resource_index)).all()
-    query = select(VendorReview).where(*scope)
+    history_scope = (VendorReview.organization_id == organization.id,) if history_all else scope
+    query = select(VendorReview).where(*history_scope)
     if before is not None:
         query = query.where(VendorReview.id < max(1, before))
     rows = db.scalars(query.order_by(VendorReview.id.desc()).limit(101)).all()

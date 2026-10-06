@@ -3133,7 +3133,7 @@
       var title = document.createElement("strong");
       title.textContent = (row.origin || {}).host + " · " + (vendorReviewLabels[row.status] || "Unknown decision");
       var note = document.createElement("p"); note.textContent = row.note;
-      var when = document.createElement("small"); when.textContent = (row.reviewer || "Former member") + " · " + dateLabel(row.created_at);
+      var when = document.createElement("small"); when.textContent = (row.reviewer || "Former member") + " · " + dateLabel(row.created_at) + " · Website run #" + row.run_id;
       item.append(title, note, when); host.append(item);
     });
   }
@@ -3142,7 +3142,7 @@
     if (!vendorReviewContext) return;
     var runId = vendorReviewContext.runId, sequence = ++vendorReviewSequence;
     try {
-      var response = await fetch("/api/vendor-reviews?run_id=" + runId + (older && vendorReviewBefore ? "&before=" + vendorReviewBefore : ""), {credentials: "same-origin"});
+      var response = await fetch("/api/vendor-reviews?run_id=" + runId + "&history_all=true" + (older && vendorReviewBefore ? "&before=" + vendorReviewBefore : ""), {credentials: "same-origin"});
       var body = await response.json();
       if (!response.ok) throw new Error(body.detail || "Review decisions unavailable.");
       if (sequence !== vendorReviewSequence || !vendorReviewContext || vendorReviewContext.runId !== runId) return;
