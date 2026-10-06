@@ -636,8 +636,20 @@ def get_org_context(
         and organization.verification_expires_at is not None
         and organization.verification_expires_at <= utcnow()
     ):
-        organization.verification_status = "expired"
+        changed = db.execute(
+            update(Organization)
+            .where(Organization.id == organization.id, Organization.verification_status == "pending", Organization.verification_expires_at <= utcnow())
+            .values(verification_status="expired")
+            .execution_options(synchronize_session=False)
+        )
+        if changed.rowcount == 1:
+            audit(db, organization.id, None, "workspace.probation_expired", {
+                "domain": organization.domain,
+                "expires_at": iso_utc(organization.verification_expires_at),
+                "observed_at": iso_utc(utcnow()),
+            })
         db.commit()
+        db.refresh(organization)
     if admin and membership.role != "admin":
         raise HTTPException(status_code=403, detail="Workspace admin role required")
     return user, organization, membership

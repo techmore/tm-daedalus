@@ -300,6 +300,25 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             self.assertEqual((membership.status, membership.role), ('approved', 'admin'))
             self.assertEqual(db.scalar(select(func.count(AuditLog.id)).where(AuditLog.action.in_(['membership.approved', 'membership.denied']))), 0)
 
+    def test_probation_expiry_is_audited_once_when_observed(self):
+        response = self.admin_client.post('/api/workspaces', json={'name': 'Expiry fixture', 'domain': 'expiry.example.org'})
+        self.assertEqual(response.status_code, 200, response.text)
+        organization_id = response.json()['organization_id']
+        expiry = server.utcnow() - server.timedelta(seconds=1)
+        with self.session_factory() as db:
+            organization = db.get(Organization, organization_id)
+            organization.verification_expires_at = expiry
+            db.commit()
+        for _ in range(2):
+            self.assertEqual(self.admin_client.get('/api/dashboard').status_code, 200)
+        with self.session_factory() as db:
+            self.assertEqual(db.get(Organization, organization_id).verification_status, 'expired')
+            events = db.scalars(select(AuditLog).where(AuditLog.organization_id == organization_id, AuditLog.action == 'workspace.probation_expired')).all()
+            self.assertEqual(len(events), 1)
+            self.assertIsNone(events[0].actor_user_id)
+            self.assertEqual(events[0].details['expires_at'], server.iso_utc(expiry))
+            self.assertIn('observed_at', events[0].details)
+
     def test_membership_request_and_decision_publish_after_commit_to_scoped_recipients(self):
         login = self.google_callback(
             {
