@@ -39,7 +39,7 @@ The live service and application data were unchanged; backup creation wrote a ne
 
 LAN SSH to SER8 succeeded without another identity prompt. The active app symlink resolves to /opt/daedalus/releases/ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d inside daedalus-prod, systemd reports the service active and public health returns OK. Hash comparison against local Git history matches deployed server.py to 2f8c81705b0edef1fa943b36eeb532208e1f2fcb. The deployed scanner PDF function still constructs the replacement ReportLab layout. This confirms the mismatch; it does not approve the historical candidate or establish its visual fidelity. No release, service or PDF generation was changed.
 
-The full local suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Published dd48765 backend CI succeeded; its Linux repeat-comparison job remains active while lifecycle and interrupted-bridge have passed. Private receipt: validation/incus-release-inspection-20261006.json.
+The full local suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Published dd48765 backend CI succeeded; its Linux run 37478571617 succeeded across lifecycle, interrupted-bridge and repeat comparison. Private receipt: validation/incus-release-inspection-20261006.json.
 
 ## Open-dashboard override expiry — 2026-10-06
 
