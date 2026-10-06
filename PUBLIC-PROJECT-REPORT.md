@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Restored current-source runtime — 2026-10-06
+
+Current source d5347f3 started successfully against the separately restored production database on loopback port 8014, with demo login and both background workers disabled. Public health returned OK. The existing installed Mac scanner token authenticated against its restored record; its client-status response retained five completed workflows and five hosted report entries. Anonymous client-status and dashboard requests returned 401. SQLite integrity remained OK after startup migration. The old saved heartbeat correctly appeared offline; no scanner was pointed at this instance and no new scan was initiated.
+
+The temporary server was shut down after the check. This validates current-source startup, migrations, scanner authentication and retained history on restored data. Google sign-in, decryption-dependent integrations and separate recovery-secret custody remain unverified. No production service or application data changed. Private receipt: validation/restored-runtime-20261006.json.
+
 ## Fresh off-host production backup and isolated restore — 2026-10-06
 
 The current backup_incus.sh completed against SER8 over LAN SSH, created a consistent backup in the persistent volume and copied it to this Mac. Archive path/manifest/digest and SQLite verification passed before publication. The archive then restored successfully into a separate private directory; restored SQLite integrity is OK and database permissions are 0600. Recovered counts are two organizations, five users, five memberships, three agents, 298 scan events, 39 report jobs, 58 external audits and 418 audit-log entries, with 39 saved PDF files.
