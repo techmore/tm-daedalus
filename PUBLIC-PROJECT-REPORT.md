@@ -4,10 +4,10 @@
 
 **The full project is not complete.** Historical entries below describe their own source and environment; they are not current production acceptance claims.
 
-- **Repository:** published source 48044bd includes declared UNPKG versions, saved OSV advisory evidence and mobile record layouts. Additional committed refinements add malformed-pagination rejection, dated match-notice coverage and primary-assessment advisory findings. Production activation remains pending.
-- **Validation:** the full suite for f483ce5 passed 741 tests and 246 subtests in 36.96 seconds, with one Linux-only skip and two dependency warnings. Backend CI 37476167650 succeeded at published 48044bd; Linux 37476167655 succeeded across lifecycle, interrupted-bridge and repeat comparison. These results do not establish approved PDF fidelity or production readiness.
+- **Repository:** published source dd48765 includes UNPKG/jsDelivr declarations, saved OSV advisory evidence, review links and mobile record layouts. Additional committed refinements add malformed-pagination rejection, dated match-notice coverage and primary-assessment advisory findings. Production activation remains pending.
+- **Validation:** the full suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Backend CI 37476167650 succeeded at published 48044bd; Linux 37476167655 succeeded across lifecycle, interrupted-bridge and repeat comparison. These results do not establish approved PDF fidelity or production readiness.
 - **Local runtime:** a fresh isolated loopback QA instance runs da8c756 with background workers disabled. Two authenticated website runs saved distinct timestamped records, returned HTTP 200 and retained four linked origins. The repeat produced zero changes and zero notifications. No supported exact package versions were present, so advisory coverage correctly remained not assessed. The earlier DNS #25 receipt belongs to the previous temporary database, which is no longer available. Current populated browser review remains pending because the existing browser space is user-owned.
-- **Production:** public health returned OK. Fresh SSH release inspection could not complete: LAN access timed out and Tailscale required another identity check. No deployment was attempted during this review.
+- **Production:** public health returned OK. Fresh LAN SSH inspection now succeeded. The active Incus release digest is ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d; its server.py hash matches source 2f8c817. The service is active, and the scanner PDF builder still uses the replacement ReportLab layout. No deployment was attempted during this review.
 - **Standardized PDF:** the unused alternate scanner renderer is removed from current source. Historical template assets are unchanged. The exact human-approved PDF reference, visual fidelity and corrective production activation remain unresolved; filenames and passing tests do not establish approval.
 
 ### Full scope still requiring completion evidence
@@ -28,6 +28,12 @@
 | Reports | Approved standardized scanner PDF fidelity and activation, plus production report regressions |
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
+
+## Fresh Incus release inspection and full validation — 2026-10-06
+
+LAN SSH to SER8 succeeded without another identity prompt. The active app symlink resolves to /opt/daedalus/releases/ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d inside daedalus-prod, systemd reports the service active and public health returns OK. Hash comparison against local Git history matches deployed server.py to 2f8c81705b0edef1fa943b36eeb532208e1f2fcb. The deployed scanner PDF function still constructs the replacement ReportLab layout. This confirms the mismatch; it does not approve the historical candidate or establish its visual fidelity. No release, service or PDF generation was changed.
+
+The full local suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Published dd48765 backend CI succeeded; its Linux repeat-comparison job remains active while lifecycle and interrupted-bridge have passed. Private receipt: validation/incus-release-inspection-20261006.json.
 
 ## Open-dashboard override expiry — 2026-10-06
 
