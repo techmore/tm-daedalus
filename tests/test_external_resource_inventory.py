@@ -7,6 +7,35 @@ from daedalus.external_checks import (
 
 
 class ExternalResourceInventoryTests(unittest.TestCase):
+    def test_package_parser_rollout_and_partial_coverage_do_not_create_false_changes(self):
+        import copy
+        baseline = _external_resource_inventory('<script src="https://unpkg.com/react@18.3.1/a.js"></script>', 'https://example.com/', 'example.com')
+        historical = copy.deepcopy(baseline)
+        historical.pop('dependency_package_observations')
+        self.assertEqual(compare_snapshots(historical, baseline), [])
+        partial = copy.deepcopy(baseline)
+        partial['dependency_package_observations']['packages'] = []
+        partial['dependency_package_observations']['truncated'] = True
+        self.assertEqual(compare_snapshots(baseline, partial), [])
+
+    def test_exact_unpkg_package_declarations_are_metadata_not_verdicts(self):
+        html = '<script src="https://unpkg.com/react@18.3.1/dist/react.js?private=secret"></script><script src="https://unpkg.com/@scope/name@1.2.3/file.js"></script><script src="https://unpkg.com/react@18.3.1/other.js"></script>'
+        result = _external_resource_inventory(html, 'https://example.com/', 'example.com')
+        metadata = result['dependency_package_observations']
+        self.assertEqual([(p['name'], p['version']) for p in metadata['packages']], [('@scope/name', '1.2.3'), ('react', '18.3.1')])
+        self.assertFalse(metadata['package_bytes_verified'])
+        self.assertFalse(metadata['vulnerabilities_assessed'])
+        self.assertNotIn('secret', str(result))
+
+    def test_unpkg_ranges_lookalikes_credentials_and_non_script_refs_are_not_exact_packages(self):
+        urls = ['https://unpkg.com/react@latest/a.js', 'https://unpkg.com/react@18/a.js', 'https://unpkg.com/react@^18.3.1/a.js', 'https://unpkg.com/react@01.2.3/a.js', 'https://unpkg.com/react@1.2.3-beta/a.js', 'https://unpkg.com.evil.test/react@1.2.3/a.js', 'https://user@unpkg.com/react@1.2.3/a.js', 'https://unpkg.com:8443/react@1.2.3/a.js']
+        for url in urls:
+            with self.subTest(url=url):
+                result = _external_resource_inventory('<script src="'+url+'"></script>', 'https://example.com/', 'example.com')
+                self.assertEqual(result['dependency_package_observations']['packages'], [])
+        result = _external_resource_inventory('<img src="https://unpkg.com/react@1.2.3/a.js">', 'https://example.com/', 'example.com')
+        self.assertEqual(result['dependency_package_observations']['packages'], [])
+
     def test_catalog_labels_do_not_alert_or_rewrite_saved_dependencies(self):
         import copy
         current = _external_resource_inventory('<script src="https://cdn.tailwindcss.com"></script>', 'https://example.com/', 'example.com')

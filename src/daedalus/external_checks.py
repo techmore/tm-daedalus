@@ -149,6 +149,24 @@ def _vendor_for_host(host: str) -> tuple[str, str]:
     return "Unclassified external host", "Other"
 
 
+def _declared_unpkg_package(parsed) -> tuple[str, str] | None:
+    """Identify a stable exact npm version declared in UNPKG's documented URL format.
+
+    This does not fetch or verify package bytes, execution or vulnerability status.
+    Tags, ranges, prereleases and unsupported CDN formats remain unidentified.
+    """
+    if parsed.hostname != "unpkg.com" or parsed.username is not None or parsed.password is not None:
+        return None
+    match = re.fullmatch(
+        r"/((?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*)@"
+        r"((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))(?:/[^\s]*)?",
+        parsed.path,
+    )
+    if match is None or len(match[1]) > 214 or len(match[2]) > 64:
+        return None
+    return match[1], match[2]
+
+
 def _external_resource_inventory(
     html: str,
     page_url: str,
@@ -169,6 +187,7 @@ def _external_resource_inventory(
             resource_base = page_url
     references: dict[tuple[str, str, int | None, str], int] = {}
 
+    declared_packages: set[tuple[str, str]] = set()
     origin_counts: dict[tuple[str, str, int | None], dict[str, int]] = {}
     dependency_counts = {"http_reference_count": 0, "script_reference_count": 0, "stylesheet_reference_count": 0, "integrity_declared_reference_count": 0, "integrity_missing_reference_count": 0}
     for kind, raw_url, integrity_declared in parser.references:
@@ -187,6 +206,10 @@ def _external_resource_inventory(
             continue
         if host == base_domain or host.endswith("." + base_domain):
             continue
+        if kind in {"Script", "Stylesheet"} and port is None:
+            package = _declared_unpkg_package(parsed)
+            if package is not None:
+                declared_packages.add(package)
         origin_key = (host, parsed.scheme.casefold(), port)
         observed = origin_counts.setdefault(origin_key, {key: 0 for key in dependency_counts})
         if parsed.scheme.casefold() == "http":
@@ -225,6 +248,13 @@ def _external_resource_inventory(
         item["resource_types"] = sorted(set(item["resource_types"]))
 
     return {
+        "dependency_package_observations": {
+            "schema_version": 1, "scope": "exact_stable_unpkg_versions_in_root_html_attributes",
+            "package_bytes_verified": False, "vulnerabilities_assessed": False,
+            "truncated": len(declared_packages) > 100,
+            "packages": [{"ecosystem": "npm", "name": name, "version": version, "source_host": "unpkg.com"}
+                         for name, version in sorted(declared_packages)[:100]],
+        },
         "dependency_observations": {"schema_version": 1, "scope": "returned_root_html_attributes", "integrity_validated": False, **dependency_counts},
         "external_host_count": len({item["host"] for item in origins}),
         "external_origin_count": len(origins),
@@ -880,6 +910,13 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
                 for snapshot in (previous, current)):
                 continue
             if path != "dependency_origin_observations.origins":
+                continue
+        if path == "dependency_package_observations" or path.startswith("dependency_package_observations."):
+            if path != "dependency_package_observations.packages" or page_incomplete:
+                continue
+            package_metadata = [snapshot.get("dependency_package_observations") for snapshot in (previous, current)]
+            if not all(isinstance(item, dict) and item.get("schema_version") == 1
+                       and item.get("truncated") is False for item in package_metadata):
                 continue
         if path == "dependency_observations" or path.startswith("dependency_observations."):
             if page_incomplete or not all((snapshot.get("dependency_observations") or {}).get("schema_version") == 1 for snapshot in (previous, current)):
