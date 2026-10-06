@@ -382,6 +382,7 @@ async def lifespan(_app: FastAPI):
     recover_interrupted_report_jobs()
     recover_interrupted_external_checks()
     recover_interrupted_external_check_schedules()
+    ensure_default_external_schedules()
     tasks = []
     if BACKGROUND_WORKERS_ENABLED:
         tasks = [asyncio.create_task(external_check_scheduler()), asyncio.create_task(website_audit_worker())]
@@ -1982,6 +1983,34 @@ def claim_due_external_check_schedules(limit: int = 25) -> list[dict[str, Any]]:
     return claimed
 
 
+def ensure_default_external_schedules() -> int:
+    """Audits should happen without anyone remembering to turn them on.
+
+    Create an enabled 24-hour DNS and website schedule for every workspace that
+    has no schedule row. An existing row, enabled or not, is an explicit choice
+    and is never changed.
+    """
+    created = 0
+    now = utcnow()
+    with SessionLocal() as db:
+        for organization in db.scalars(select(Organization)).all():
+            for check_type in ("dns", "web"):
+                exists = db.scalar(select(ExternalCheckSchedule.id).where(
+                    ExternalCheckSchedule.organization_id == organization.id,
+                    ExternalCheckSchedule.check_type == check_type))
+                if exists is not None:
+                    continue
+                db.add(ExternalCheckSchedule(
+                    organization_id=organization.id, check_type=check_type, enabled=True,
+                    interval_hours=24, next_run_at=now + timedelta(minutes=2 if created == 0 else 2 + created * 2),
+                    updated_by_user_id=None, updated_at=now))
+                audit(db, organization.id, None, "external_check.schedule_defaulted",
+                      {"check_type": check_type, "interval_hours": 24})
+                created += 1
+        db.commit()
+    return created
+
+
 def recover_interrupted_external_check_schedules() -> int:
     """Reconcile claims left running by a process exit before schedule completion."""
     now = utcnow()
@@ -2132,8 +2161,12 @@ async def publish_external_check_result(
 
 
 async def external_check_scheduler() -> None:
+    last_defaults = 0.0
     while True:
         try:
+            if time.monotonic() - last_defaults > 3600:
+                last_defaults = time.monotonic()
+                await run_in_threadpool(ensure_default_external_schedules)
             expired_overrides = await run_in_threadpool(record_expired_probation_overrides)
             for item in expired_overrides:
                 await live_hub.publish(item["organization_id"], {"type": "workspace_notification_created", "source_type": "probation_override_expired", "source_id": item["override_id"]})

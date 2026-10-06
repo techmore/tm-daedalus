@@ -1068,6 +1068,24 @@ class CISReportPDFFlowTests(unittest.TestCase):
             self.assertIsNone(schedule.next_run_at)
         self.assertEqual(server.claim_due_external_check_schedules(), [])
 
+    def test_workspaces_get_daily_schedules_by_default_without_overriding_choices(self):
+        with self.session_factory() as db:
+            for row in db.scalars(select(ExternalCheckSchedule)).all():
+                db.delete(row)
+            db.commit()
+        # An explicit "off" for DNS must survive the backfill.
+        off = self.client.put("/api/external-checks/dns/schedule", json={"enabled": False, "interval_hours": 24})
+        self.assertEqual(off.status_code, 200, off.text)
+        created = server.ensure_default_external_schedules()
+        with self.session_factory() as db:
+            rows = {(row.organization_id, row.check_type): row for row in db.scalars(select(ExternalCheckSchedule)).all()}
+        organizations = {org_id for org_id, _ in rows}
+        self.assertGreaterEqual(len(organizations), 1)
+        self.assertGreaterEqual(created, 1)
+        self.assertTrue(all(row.enabled for key, row in rows.items() if key[1] == "web"))
+        self.assertFalse(any(row.enabled for key, row in rows.items() if key[1] == "dns" and row.updated_by_user_id is not None))
+        self.assertEqual(server.ensure_default_external_schedules(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
