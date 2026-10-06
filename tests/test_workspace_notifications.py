@@ -378,6 +378,17 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 2)
         self.assertNotEqual(server.external_check_warning_signature("dns", {"resolver_errors": {"DS": "SERVFAIL"}}), server.external_check_warning_signature("dns", {"resolver_errors": {"DNSKEY": "SERVFAIL"}}))
 
+    def test_dns_notice_separates_record_changes_from_lookup_coverage(self):
+        self.run_dns({"records": {"A": ["192.0.2.1"]}, "resolver_errors": {}})
+        run = self.run_dns({"records": {"A": ["192.0.2.2"]}, "resolver_errors": {"DS": "SERVFAIL"}})
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        notice = next(n for n in notices if n["source_id"] == run["id"])
+        self.assertIn("1 material change detected: DNS records", notice["summary"])
+        self.assertIn("1 lookup coverage change detected: DNS lookup status", notice["summary"])
+        self.assertNotIn("No confirmed configuration changes", notice["summary"])
+        self.assertEqual(notice["reason"], "changes_and_warnings")
+        self.assertTrue(notice["detected_at"])
+
     def test_dns_lookup_recovery_notice_does_not_claim_configuration_change(self):
         self.run_dns({"records": {"A": ["192.0.2.1"]}, "resolver_errors": {"DS": "SERVFAIL"}})
         run = self.run_dns({"records": {"A": ["192.0.2.1"]}, "resolver_errors": {}})

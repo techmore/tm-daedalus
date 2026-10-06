@@ -1788,8 +1788,6 @@ def _execute_external_check(
                         parts.append(f"{coverage_count} lookup coverage {count_label} detected: {coverage_fields}")
                     if not material_count:
                         parts.append("No confirmed configuration changes were detected")
-                    if len(changes) > 3:
-                        parts.append(f"and {len(changes) - 3} more field changes")
                 if warning_reasons:
                     parts.append("Check warning: " + "; ".join(warning_reasons))
                     if not changes:
