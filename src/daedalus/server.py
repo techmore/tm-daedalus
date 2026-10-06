@@ -1400,6 +1400,7 @@ def external_check_field_label(field_path: str) -> str:
         "http_status": "Website HTTP status",
         "title": "Website page title",
         "external_resources": "Linked third-party resources",
+        "dependency_package_observations.packages": "Declared dependency package versions",
         "external_host_count": "Linked third-party hosts",
         "tls.valid": "TLS certificate validity",
         "tls.days_remaining": "TLS certificate lifetime",
@@ -1442,7 +1443,7 @@ def external_check_change_group(check_type: str, field_path: str) -> str:
             return "security headers"
         if field_path.startswith("tls."):
             return "TLS certificate"
-        if field_path.startswith(("external_resources", "external_host_count")):
+        if field_path.startswith(("external_resources", "external_host_count", "dependency_package_observations")):
             return "linked third-party resources"
         return "website configuration"
     if field_path.startswith("records."):

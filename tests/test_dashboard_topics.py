@@ -228,6 +228,20 @@ loadVendorReviewContext(null,null);assert.equal(vendorReviewContext,null);assert
         self.assertEqual(result.returncode,0,result.stderr)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_declared_package_evidence_is_not_a_vulnerability_verdict(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function declaredPackageEvidence('):source.index('  function groupExternalDependencies(')]
+        script = "const assert=require('node:assert/strict');" + helper + """
+assert.ok(declaredPackageEvidence({}).scope.includes('not collected'));
+const result=declaredPackageEvidence({dependency_package_observations:{schema_version:1,truncated:false,packages:[{ecosystem:'npm',name:'react',version:'18.3.1',source_host:'unpkg.com'},null]}});
+assert.equal(result.rows.length,1);assert.equal(result.rows[0].name,'react');assert.equal(result.rows[0].statusText,'Advisories not assessed');
+assert.ok(result.scope.includes('were not verified'));assert.ok(result.scope.includes('remain unidentified'));
+assert.ok(declaredPackageEvidence({dependency_package_observations:{schema_version:1,truncated:true,packages:[]}}).scope.includes('truncated'));
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_vendor_groups_preserve_observations_and_avoid_object_key_collisions(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function groupExternalDependencies('):source.index('  function renderWebsiteSnapshot(')]

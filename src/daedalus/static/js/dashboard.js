@@ -3319,6 +3319,19 @@
   var vendorReviewOlder = document.getElementById("vendor-review-older");
   if (vendorReviewOlder) vendorReviewOlder.addEventListener("click", function () { fetchVendorReviews(true); });
 
+  function declaredPackageEvidence(snapshot) {
+    var metadata = snapshot.dependency_package_observations;
+    if (!metadata || metadata.schema_version !== 1 || !Array.isArray(metadata.packages)) {
+      return {rows: [], scope: "Package version declarations were not collected in this saved run."};
+    }
+    var rows = metadata.packages.filter(function (item) {
+      return item && item.ecosystem === "npm" && typeof item.name === "string" && typeof item.version === "string";
+    }).slice(0, 100).map(function (item) {
+      return {type: "npm", name: item.name, value: item.version + " · declared by " + (item.source_host || "source unknown"), present: true, statusTone: "is-neutral", statusText: "Advisories not assessed"};
+    });
+    return {rows: rows, scope: "Exact stable versions declared in UNPKG root-page references only. Package bytes, execution and vulnerability status were not verified. " + (metadata.truncated ? "The saved package list is truncated." : "Tags, ranges and unsupported reference formats remain unidentified.")};
+  }
+
   function groupExternalDependencies(resources) {
     var groups = new Map();
     (Array.isArray(resources) ? resources : []).forEach(function (resource) {
@@ -3441,6 +3454,12 @@
         var dependencyScope = document.createElement("p"); dependencyScope.className = "muted";
         dependencyScope.textContent = "Integrity attributes are counted, not validated. Missing metadata needs context; this does not prove a vulnerable dependency. Linked content and vendor security were not assessed.";
         vendors.append(dependencyMetrics, dependencyScope);
+      }
+
+      var packageEvidence = declaredPackageEvidence(snapshot);
+      vendors.append(makeAuditTable("Declared package versions", packageEvidence.scope, packageEvidence.rows, "declared"));
+      if (!packageEvidence.rows.length) {
+        appendEmpty(vendors, "No exact supported package version is recorded. This does not establish that dependencies are safe or absent.");
       }
 
       if (!Array.isArray(snapshot.external_resources)) {
