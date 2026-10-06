@@ -254,3 +254,19 @@ def test_historical_table_typography_inherits_report_font_in_current_browser(tmp
             assert sizes["service"] == "14px"
         finally:
             browser.close()
+
+
+def test_changes_panel_matches_nmapui_markup_and_omits_empty_changes():
+    from daedalus.scanner_report_template import changes_since_previous_html
+    panel = changes_since_previous_html({"baseline": "2026-03-15T14:31:17Z", "counts": {
+        "hosts_added": 1, "hosts_removed": 0, "hosts_not_observed": 0,
+        "newly_observed_ports": 2, "reported_port_changes": 0, "confirmed_removed_ports": 2}})
+    assert 'id="scan-diff-summary"' in panel and "Changes Since Previous Scan" in panel
+    assert "Baseline: 2026-03-15T14:31:17Z" in panel
+    assert "1 newly observed host(s)" in panel and "2 removed port(s)" in panel
+    assert "removed host" not in panel
+    zero = {key: 0 for key in ("hosts_added", "hosts_removed", "hosts_not_observed",
+            "newly_observed_ports", "reported_port_changes", "confirmed_removed_ports")}
+    assert changes_since_previous_html({"counts": zero}) == ""
+    assert changes_since_previous_html(None) == ""
+    assert "&lt;b&gt;" in changes_since_previous_html({"baseline": "<b>", "counts": {**zero, "hosts_added": 1}})

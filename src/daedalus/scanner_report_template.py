@@ -250,6 +250,41 @@ def standardized_scanner_run_html(events: list[dict]) -> str:
     return standardized_scanner_html(etree.tostring(merged), target_label=", ".join(sorted(observed_addresses)))
 
 
+def changes_since_previous_html(changes: dict | None) -> str:
+    """NmapUI's leading change panel, fed by a saved Daedalus run comparison.
+
+    Wording stays within what the comparison proves: added hosts/ports are
+    newly observed and absence is only reported when coverage was comparable.
+    """
+    from html import escape
+    if not isinstance(changes, dict):
+        return ""
+    counts = changes.get("counts")
+    if not isinstance(counts, dict):
+        return ""
+    labels = [
+        ("hosts_added", "newly observed host(s)"), ("hosts_removed", "removed host(s)"),
+        ("hosts_not_observed", "host(s) not observed (coverage not comparable)"),
+        ("newly_observed_ports", "newly observed port(s)"),
+        ("reported_port_changes", "port(s) with changed state or service"),
+        ("confirmed_removed_ports", "removed port(s)"),
+    ]
+    facts = [f"{counts[key]} {text}" for key, text in labels
+             if type(counts.get(key)) is int and counts[key] > 0]
+    if not facts:
+        return ""
+    baseline = str(changes.get("baseline") or "").strip()
+    items = "".join(f'<li style="margin:0 0 6px;">{escape(fact)}</li>' for fact in facts)
+    return (
+        '<section id="scan-diff-summary" '
+        'style="margin:24px 0;padding:18px 20px;border:1px solid #d8c98f;'
+        'border-radius:14px;background:#f7f0d4;color:#4c3f1f;">'
+        '<h2 style="margin:0 0 8px;font-size:1.2rem;">Changes Since Previous Scan</h2>'
+        + (f'<p style="margin:0 0 12px;font-size:0.92rem;color:#6a5a2a;">Baseline: {escape(baseline)}</p>' if baseline else "")
+        + f'<ul style="margin:0;padding-left:20px;">{items}</ul></section>'
+    )
+
+
 def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     """Render the historical candidate using NmapUI browser print settings."""
     import tempfile
@@ -271,6 +306,11 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     if not isinstance(events, list):
         raise ValueError("The NmapUI scan report requires a saved run with original Nmap XML evidence.")
     html = standardized_scanner_run_html(events)
+    panel = changes_since_previous_html(scanner.get("changes_since_previous"))
+    if panel:
+        html, inserted = re.subn(r"(<body[^>]*>)", lambda m: m.group(1) + panel, html, count=1)
+        if not inserted:
+            raise ValueError("The standardized report body could not receive the change summary.")
     with tempfile.TemporaryDirectory(prefix="daedalus-scanner-pdf-") as directory:
         path = Path(directory) / "report.html"
         path.write_text(html, encoding="utf-8")

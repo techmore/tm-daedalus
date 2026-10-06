@@ -6996,6 +6996,17 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
         standardized_scanner_run_html(saved_events)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    saved_comparison = db.scalar(select(ScannerRunComparison).where(
+        ScannerRunComparison.agent_id == agent.id, ScannerRunComparison.current_run_id == str(source_job_id),
+    ).order_by(ScannerRunComparison.id.desc()).limit(1))
+    changes_since_previous = None
+    if saved_comparison is not None and isinstance(saved_comparison.comparison, dict):
+        previous_run = saved_comparison.comparison.get("previous_run") or {}
+        changes_since_previous = {
+            "counts": saved_comparison.comparison.get("counts"),
+            "baseline": previous_run.get("last_occurred_at"),
+            "comparison_id": saved_comparison.id,
+        }
     now = utcnow()
     job = ReportJob(organization_id=organization.id, created_by_user_id=user.id, report_type="scanner_results",
         domain=organization.domain, status="queued", progress=0, stage="Queued", file_name="pending.pdf",
@@ -7006,7 +7017,8 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
                                         "stylesheet_sha256": HISTORICAL_TEMPLATE_SHA256,
                                         "asset_sha256": dict(REPORT_ASSET_SHA256)},
             "scanner": {"name": agent.name, "agent_id": agent.id, "source_job_id": str(source_job_id),
-                        "run": run, "events": saved_events, "payload": []}})
+                        "run": run, "events": saved_events, "payload": [],
+                        "changes_since_previous": changes_since_previous}})
     db.add(job)
     db.flush()
     job.file_name = f"daedalus-scanner-{agent.id}-run-{source_job_id}-{job.id}.pdf"
