@@ -710,7 +710,7 @@ assert.equal(assess('2028-02-29T12:00:00.123456+00:00').state,'recorded');
         priority=source[source.index('  function websiteCertificateAssessment('):source.index('  function renderDnsSnapshot(')]
         outcome=source[source.index('  function renderWebsiteAuditOutcome('):source.index('  function renderActiveExposure(')]
         script='''const assert=require('node:assert/strict');
-class Node { constructor(){this.children=[];this.textContent='';} replaceChildren(){this.children=[];} append(...items){this.children.push(...items);} }
+class Node { constructor(){this.children=[];this.textContent='';} replaceChildren(){this.children=[];} append(...items){this.children.push(...items);} setAttribute(){} }
 const nodes={}; const document={getElementById:id=>nodes[id]||(nodes[id]=new Node()),createElement:()=>new Node()};
 function appendEmpty(node,message){node.textContent=message;}
 function text(node,message){node.textContent=message;}

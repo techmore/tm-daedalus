@@ -3104,6 +3104,15 @@
     return {value: String(records.MX.length), detail: "MX records published; delivery was not tested", state: "neutral"};
   }
 
+  function appendCheckRow(list, level, label, detailText) {
+    var marks = {ok: "✓", info: "~", warn: "!", bad: "✕"};
+    var li = document.createElement("li"); li.className = "check-item is-" + level;
+    var icon = document.createElement("span"); icon.className = "check-mark"; icon.textContent = marks[level] || "!"; icon.setAttribute("aria-hidden", "true");
+    var name = document.createElement("strong"); name.textContent = label;
+    var detail = document.createElement("span"); detail.className = "check-detail"; detail.textContent = detailText;
+    li.append(icon, name, detail); list.append(li);
+  }
+
   function renderTopicPriorities(type, snapshot) {
     var container = document.getElementById(type + "-priorities");
     if (!container) return;
@@ -3142,16 +3151,20 @@
       if (Object.keys(errors).length) finding("DNS lookup coverage", "Some DNS lookups failed. Those records remain unknown; review the lookup evidence below.");
       if (!items.length) finding("Email protection evidence recorded", "No concern was identified in the saved SPF and DMARC assessment. Review domain resolution and selector evidence below.");
     } else {
-      var code = Number(snapshot.http_status || 0);
-      if (!code || code >= 400) finding("Website availability", "Website response needs review: " + (code || "no HTTP response") + ".");
+      var checklist = document.createElement("ul"); checklist.className = "check-list";
+      var statusCode = Number(snapshot.http_status || 0);
+      appendCheckRow(checklist, statusCode >= 200 && statusCode < 400 ? "ok" : "bad", "Website",
+        statusCode ? (statusCode < 400 ? "Responds over HTTPS (" + statusCode + ")." : "Returned an error response (" + statusCode + ").") : "No HTTP response was received.");
       var certificateAssessment = websiteCertificateAssessment(snapshot.tls);
-      if (certificateAssessment.state === "unknown") finding("Certificate expiry unknown", "Certificate expiry evidence is unavailable or has an unsupported timestamp.");
-      else if (certificateAssessment.state === "expired") finding("Certificate expired", "The observed TLS certificate has expired.");
-      else if (certificateAssessment.state === "expiring") finding("Certificate renewal approaching", "The observed TLS certificate expires within 30 days (about " + certificateAssessment.days + " days remaining).");
-      var policies = snapshot.security_headers || {};
-      var missing = Object.keys(policies).filter(function (name) { return !policies[name]; });
-      if (missing.length) finding("Browser protection", "Browser policy headers absent from the response: " + missing.join(", ") + ". Review which policies are appropriate for this site.");
-      if (!Object.keys(policies).length) finding("Browser protection unknown", "Browser policy header evidence is unavailable.");
+      appendCheckRow(checklist, certificateAssessment.state === "expired" ? "bad" : certificateAssessment.state === "expiring" || certificateAssessment.state === "unknown" ? "warn" : "ok", "Certificate",
+        certificateAssessment.state === "expired" ? "The TLS certificate has expired." : certificateAssessment.state === "unknown" ? "Certificate expiry could not be read." :
+        certificateAssessment.state === "expiring" ? "Renew soon: expires in about " + certificateAssessment.days + " days." : "Valid" + (certificateAssessment.days != null ? "; about " + certificateAssessment.days + " days left." : "."));
+      var headerMap = snapshot.security_headers || {};
+      var headerNames = Object.keys(headerMap);
+      var absentHeaders = headerNames.filter(function (name) { return !headerMap[name]; });
+      appendCheckRow(checklist, !headerNames.length ? "info" : absentHeaders.length ? "warn" : "ok", "Browser headers",
+        !headerNames.length ? "Header evidence is unavailable." : absentHeaders.length ? absentHeaders.length + " of " + headerNames.length + " selected protections are absent: " + absentHeaders.join(", ") + "." : "All selected protections are present.");
+      container.append(checklist);
       var advisory = snapshot.dependency_advisory_observations;
       if (advisory && (advisory.state === "unavailable" || advisory.state === "partial")) {
         finding("Dependency advisory coverage", "The saved OSV lookup is " + advisory.state + ". Missing matches remain unknown; inspect package evidence below.");
@@ -3165,7 +3178,6 @@
       if (matchedPackages.length) {
         finding("Declared dependencies have advisory matches", matchedPackages.length + " declared package version(s) returned OSV advisory IDs. Review the saved matches and update applicability; URL declarations do not verify loaded bytes, execution or exploitability.");
       }
-      if (!items.length) finding("Saved website evidence recorded", "No response, certificate-expiry, or missing-header concern was identified in this saved snapshot. Deeper audit coverage is separate.");
     }
     var group = document.createElement("div");
     group.className = "assessment-findings";
