@@ -337,7 +337,7 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = ()) -> dict[str
             return []
 
     records: dict[str, Any] = {}
-    for record_type in ("A", "AAAA", "CNAME", "NS", "SOA", "MX", "TXT", "CAA", "DS", "DNSKEY"):
+    for record_type in ("A", "AAAA", "CNAME", "NS", "SOA", "MX", "TXT", "SRV", "CAA", "DS", "DNSKEY"):
         records[record_type] = lookup(domain, record_type, record_type)
 
     for record_type in ("A", "AAAA", "CNAME"):

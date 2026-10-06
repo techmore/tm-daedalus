@@ -94,6 +94,13 @@ class DNSCollectorObservationTests(unittest.TestCase):
         self.assertIs(security["local_chain_validation_performed"], False)
         self.assertNotIn("validated", security["assessment"])
 
+    def test_root_srv_records_retain_values_and_query_scope(self):
+        value = "10 5 443 service.example.test."
+        result = self.collect(FixtureResolver({("example.test", "SRV"): ([value], 600, False)}))
+        self.assertEqual(result["records"]["SRV"], [value.rstrip(".")])
+        self.assertEqual(result["query_observations"]["SRV"]["record_count"], 1)
+        self.assertEqual(result["query_observations"]["SRV"]["observed_ttl_seconds"], 600)
+
     def test_confirmed_absence_differs_from_dnssec_lookup_error(self):
         absent = self.collect(FixtureResolver())
         self.assertEqual(absent["dnssec_observations"]["assessment"], "no_records_observed")

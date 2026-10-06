@@ -2978,7 +2978,7 @@
     var records = snapshot.records;
     var errors = snapshot.resolver_errors || {};
     var inventoryRows = [];
-    ["A", "AAAA", "CNAME", "NS", "SOA", "TXT", "CAA", "DS", "DNSKEY"].forEach(function (key) {
+    ["A", "AAAA", "CNAME", "NS", "SOA", "TXT", "SRV", "CAA", "DS", "DNSKEY"].forEach(function (key) {
       if (!Object.prototype.hasOwnProperty.call(records, key)) { inventoryRows.push(uncheckedRecordRow(key, "@")); return; }
       var values = records[key] || [];
       if (key === "TXT") {
