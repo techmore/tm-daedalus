@@ -2798,7 +2798,7 @@
     scroller.className = "audit-table-scroll";
     scroller.tabIndex = 0;
     scroller.setAttribute("role", "region");
-    scroller.setAttribute("aria-label", title + "; scroll horizontally to view all columns");
+    scroller.setAttribute("aria-label", title + "; record evidence");
     var table = document.createElement("table");
     table.className = "audit-record-table";
     var thead = document.createElement("thead");
@@ -2813,16 +2813,19 @@
     var tbody = document.createElement("tbody");
     rows.forEach(function (row) {
       var tableRow = document.createElement("tr");
-      [row.type, row.name].forEach(function (value) {
+      [row.type, row.name].forEach(function (value, index) {
         var cell = document.createElement("td");
         cell.textContent = value;
+        cell.dataset.label = index === 0 ? "Type" : "Name";
         tableRow.append(cell);
       });
       var valueCell = document.createElement("td");
       valueCell.className = "audit-record-value";
+      valueCell.dataset.label = "Value";
       valueCell.textContent = row.value;
       tableRow.append(valueCell);
       var statusCell = document.createElement("td");
+      statusCell.dataset.label = "Status";
       var status = document.createElement("span");
       var checked = row.present !== null;
       status.className = "audit-state-badge " + (row.statusTone || (row.present ? "is-present" : (checked ? "is-absent" : "is-neutral")));

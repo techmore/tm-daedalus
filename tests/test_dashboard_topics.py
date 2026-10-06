@@ -23,8 +23,11 @@ class DashboardTopicTests(unittest.TestCase):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function makeAuditTable('):source.index('  function rowsForRecord(')]
         self.assertIn('scroller.tabIndex = 0;', helper)
+        self.assertIn('cell.dataset.label = index === 0 ? "Type" : "Name"', helper)
+        self.assertIn('valueCell.dataset.label = "Value"', helper)
+        self.assertIn('statusCell.dataset.label = "Status"', helper)
         self.assertIn('scroller.setAttribute("role", "region");', helper)
-        self.assertIn('title + "; scroll horizontally to view all columns"', helper)
+        self.assertIn('title + "; record evidence"', helper)
 
     def test_empty_change_history_does_not_imply_only_one_assessment(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
