@@ -2,6 +2,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 import unittest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,12 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn("Live Tahoe validation and trusted client distribution remain in progress", overview)
         self.assertNotIn("ongoing alignment work for current macOS releases", overview)
 
+    def test_overview_describes_independent_domain_roles_and_override_duration(self):
+        overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
+        for detail in ("a separate role in each", "30-day probation window", "14-day administrator overrides", "requires its administrator's approval", "Approved collaborators start with the user role", "Project status: active pilot"):
+            with self.subTest(detail=detail):
+                self.assertIn(detail, overview)
+
     def test_overview_anchor_offset_and_reduced_motion_styles(self):
         overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
         self.assertIn("section[id]{scroll-margin-top:84px}", overview)
@@ -81,6 +88,13 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn("path: site", workflow)
         self.assertIn("actions/upload-pages-artifact", workflow)
         self.assertIn("actions/deploy-pages", workflow)
+        configuration = yaml.safe_load(workflow)
+        upload_steps = [step for job in configuration["jobs"].values() for step in job["steps"] if step.get("uses", "").startswith("actions/upload-pages-artifact@")]
+        self.assertEqual(len(upload_steps), 1)
+        self.assertEqual(upload_steps[0]["with"]["path"], "site")
+        self.assertFalse((SITE / ".env").exists())
+        self.assertFalse((SITE / "data").exists())
+        self.assertFalse((SITE / "backups").exists())
 
 
 if __name__ == "__main__":

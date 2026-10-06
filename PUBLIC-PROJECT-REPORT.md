@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Marketing Pages publication and access-model copy — 2026-10-06
+
+GitHub Pages reports the configured custom domain cybersecuritypilot.org as built, using workflow publishing with HTTPS enforcement. Fresh HTTP reads of the homepage and /daedalus.html returned 200 and exactly matched their repository versions; both contain the client-portal link. This proves published bytes and entrypoint reachability, not desktop/mobile visual acceptance or final content approval.
+
+The product overview now states the existing 30-day verification probation and 14-day admin override durations explicitly. A regression check covers separate domain roles, approved sharing, collaborator default role and active-pilot status. The Pages workflow check now parses its actual upload step and requires its artifact path to be exactly site; local .env, data and backups paths are excluded. Eight site tests and six subtests passed. The copy refinement awaits publication. Private HTTP receipt: validation/marketing-pages-current-20261006.json.
+
 ## Saved standardized-report references — 2026-10-06
 
 A private local comparison now presents the first-page images and direct links to three existing saved PDFs: the January 10 compact olive report, March 15 serif/olive report with change summary, and landscape Techmore Enhanced Report. The comparison records each original fingerprint and explicitly treats all three as references awaiting identification. It does not generate a report, modify template assets or infer approval. The exact standardized reference is requested from the owner before candidate activation. Private review artifact: validation/scan-report-reference-comparison.html.
