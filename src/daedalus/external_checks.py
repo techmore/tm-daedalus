@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import hashlib
 import http.client
 import ipaddress
@@ -313,6 +314,9 @@ def _resolver_error_label(exc: dns.exception.DNSException) -> str:
     return type(exc).__name__
 
 
+FALLBACK_NAMESERVERS = ("1.1.1.1", "8.8.8.8", "9.9.9.9")
+
+
 def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_registration: bool = False, include_transparency: bool = False) -> dict[str, Any]:
     explicit = parse_audit_nameservers(" ".join(nameservers))
     resolver = dns.resolver.Resolver(configure=True)
@@ -333,6 +337,27 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_reg
     # Request DNSSEC records, but do not equate an upstream AD assertion with
     # local trust-chain validation. See RFC4035 and dnspython Resolver.use_edns.
     resolver.use_edns(edns=0, ednsflags=dns.flags.DO, payload=1232)
+    # A stub resolver (for example systemd-resolved in a container) can return
+    # SERVFAIL for DNSSEC queries that public recursive resolvers answer. In
+    # system mode, retry only failed lookups through public resolvers and say so;
+    # a failure from both is a real fault, not an unknown.
+    fallback_holder: list = []
+    fallback_lock = threading.Lock()
+    if not explicit:
+        resolver_context["fallback_nameservers"] = list(FALLBACK_NAMESERVERS)
+
+    def fallback_resolver():
+        with fallback_lock:
+            if not fallback_holder:
+                backup = dns.resolver.Resolver(configure=False)
+                backup.nameservers = list(FALLBACK_NAMESERVERS)
+                backup.search = []
+                backup.timeout = 2.0
+                backup.lifetime = 5.0
+                backup.use_edns(edns=0, ednsflags=dns.flags.DO, payload=1232)
+                fallback_holder.append(backup)
+            return fallback_holder[0]
+
     errors: dict[str, str] = {}
     observations: dict[str, dict[str, Any]] = {}
 
@@ -343,8 +368,14 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_reg
             "status": "error", "observed_ttl_seconds": None,
             "canonical_name": None, "record_count": None, "resolver_ad": None,
         }
+        active = resolver
         try:
-            answers = resolver.resolve(f"{name}.", record_type, search=False)
+            try:
+                answers = active.resolve(f"{name}.", record_type, search=False)
+            except (dns.resolver.NoNameservers, dns.resolver.LifetimeTimeout, dns.resolver.Timeout) if not explicit else ():
+                active = fallback_resolver()
+                observation["resolver"] = "fallback"
+                answers = active.resolve(f"{name}.", record_type, search=False)
             values = sorted({_record_text(record_type, record) for record in answers})
             ttl = getattr(getattr(answers, "rrset", None), "ttl", None)
             if type(ttl) is int and 0 <= ttl <= 2**32 - 1:

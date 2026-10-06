@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 import dns.flags
@@ -98,7 +99,9 @@ class DNSCollectorObservationTests(unittest.TestCase):
     def collect(self, resolver):
         with patch("daedalus.external_checks.dns.resolver.Resolver", return_value=resolver) as factory:
             result = run_dns_check("example.test")
-        factory.assert_called_once_with(configure=True)
+        # The primary system resolver is built first; a failing lookup may
+        # lazily build the public fallback resolver (configure=False).
+        self.assertEqual(factory.call_args_list[0], unittest.mock.call(configure=True))
         return result
 
     def test_collects_authority_dnssec_and_ttl_without_claiming_local_validation(self):
@@ -227,3 +230,25 @@ class DNSCollectorObservationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_system_resolver_servfail_retries_through_public_resolver_and_is_labeled():
+    import dns.resolver
+    from unittest.mock import patch
+    from daedalus import external_checks
+
+    class Resolver:
+        def __init__(self, configure=True):
+            self.nameservers = ["127.0.0.53"]
+            self.search = []
+        def use_edns(self, *a, **k): pass
+        def resolve(self, name, record_type, search=False):
+            if self.nameservers == ["127.0.0.53"]:
+                raise dns.resolver.NoNameservers()
+            raise dns.resolver.NoAnswer()
+
+    with patch.object(external_checks.dns.resolver, "Resolver", Resolver):
+        result = external_checks.run_dns_check("example.test")
+    assert "DNSKEY" not in result["resolver_errors"]
+    assert result["query_observations"]["DNSKEY"]["resolver"] == "fallback"
+    assert result["resolver_context"]["fallback_nameservers"] == ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
