@@ -265,6 +265,8 @@ Saved production evidence includes DNS/email and bounded website audits, Meraki 
 
 ## Completion review — October 5, 2026
 
+Actual isolated account UI created a personal key, then a separate token sign-in request established a session. Both its session and bearer dashboard access returned HTTP 200. Revocation through the account UI caused the existing session, bearer request and new token-login attempt to return HTTP 401. The token was held only in process memory, omitted from outputs/receipts and cleared from the page by reload. Receipt: validation/user-key-revocation-cf6e1bd.json. This verifies actual key creation/revocation/session enforcement with demo membership; it does not establish real Google onboarding, browser token-login form acceptance or production deployment.
+
 Full local validation at cf6e1bd passed 662 tests and 181 subtests in 43.91 seconds, with one Linux-only skip and two dependency deprecation warnings, using the documented `uv run --locked python -m pytest -q` command. This covers the latest saved-evidence handling and dashboard accessibility/copy corrections; production activation and full project acceptance remain outstanding.
 
 Linux run 37398044751 completed successfully at source 8605029 in all three scenarios. All downloaded PDF byte counts and SHA-256 digests match their receipts. Repeat comparison retained distinct run IDs, comparable loopback-only coverage and zero host/port changes. Interrupted-bridge recovery retained ten pending event identities and the original command claim, drained queues, and recorded one deep Nmap invocation without restarting the source process. Evidence is retained under validation/ci-linux-8605029/. Artifact integrity does not resolve standardized PDF visual acceptance.
