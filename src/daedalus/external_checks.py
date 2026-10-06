@@ -277,7 +277,7 @@ def _resolver_error_label(exc: dns.exception.DNSException) -> str:
     return type(exc).__name__
 
 
-def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_registration: bool = False) -> dict[str, Any]:
+def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_registration: bool = False, include_transparency: bool = False) -> dict[str, Any]:
     explicit = parse_audit_nameservers(" ".join(nameservers))
     resolver = dns.resolver.Resolver(configure=True)
     if explicit:
@@ -380,6 +380,9 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_reg
     if include_registration:
         from .registration_checks import run_registration_check
         snapshot["registration_observations"] = run_registration_check(domain)
+    if include_transparency:
+        from .certificate_transparency import run_transparency_check
+        snapshot["certificate_transparency"] = run_transparency_check(domain)
     return snapshot
 
 
@@ -834,6 +837,15 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     )
     changes = []
     for path in sorted(paths | error_paths):
+        if path.startswith("certificate_transparency."):
+            if path not in {"certificate_transparency.state", "certificate_transparency.collection_partial"}:
+                continue
+            blocks = [snapshot.get("certificate_transparency") for snapshot in (previous, current)]
+            if not all(isinstance(block, dict) and block.get("provider") == "crt.sh"
+                       and block.get("scope") == "domain_and_subdomains"
+                       and block.get("domain") == snapshot.get("domain")
+                       for block, snapshot in zip(blocks, (previous, current))) or previous.get("domain") != current.get("domain"):
+                continue
         if path.startswith("registration_observations."):
             field = path.removeprefix("registration_observations.")
             if field not in {"state", "collection_partial", "registrars", "nameservers", "events"}:
@@ -890,4 +902,9 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
         new = new_values.get(path)
         if old != new or (path not in old_values) != (path not in new_values):
             changes.append((path, old, new))
+    if previous.get("domain") == current.get("domain") and isinstance(current.get("domain"), str):
+        from .certificate_transparency import newly_observed_entries
+        additions = newly_observed_entries(previous.get("certificate_transparency"), current.get("certificate_transparency"), current["domain"])
+        if additions:
+            changes.append(("certificate_transparency.newly_observed_entries", [], additions))
     return changes

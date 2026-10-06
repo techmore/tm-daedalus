@@ -3104,6 +3104,39 @@
     }
     grid.append(evidenceGroup("dns-registration-group", registrationHeading, registrationMetrics, "Registration evidence",
       makeAuditTable("Registry observations", "Saved provider metadata; unavailable fields remain unknown. Registration dates are not ownership approval.", registrationRows, "observations")));
+    var transparency = snapshot.certificate_transparency;
+    var transparencyHeading = document.createElement("h3");
+    transparencyHeading.className = "topic-group-heading";
+    transparencyHeading.textContent = "Certificate issuance history";
+    var transparencyMetrics = document.createElement("div");
+    transparencyMetrics.className = "audit-metric-grid dns-audit-metrics";
+    var observedTransparency = transparency && transparency.state === "observed";
+    var certificateEntries = observedTransparency && Array.isArray(transparency.entries) ? transparency.entries : [];
+    transparencyMetrics.append(makeAuditMetric("History lookup", !transparency ? "Not assessed" : observedTransparency ? transparency.collection_partial ? "Partial evidence" : "Evidence saved" : "Unavailable",
+      "crt.sh observations do not verify the website's live TLS certificate", observedTransparency ? "neutral" : transparency ? "attention" : "neutral"));
+    if (observedTransparency) {
+      var observedNames = new Set();
+      certificateEntries.forEach(function (entry) { (entry.dns_names || []).forEach(function (name) { observedNames.add(name); }); });
+      transparencyMetrics.append(
+        makeAuditMetric("Saved log entries", String(certificateEntries.length), "Bounded observations; certificate and precertificate entries may overlap", "neutral"),
+        makeAuditMetric("Observed DNS names", String(observedNames.size), "Domain and subdomain names; availability has not been tested", "neutral"),
+        makeAuditMetric("Log proof validation", "Not performed", "Issuance history only; no log inclusion or consistency proof", "neutral")
+      );
+    }
+    var certificateRows = certificateEntries.map(function (entry) {
+      return {type: "Entry " + entry.id, name: (entry.dns_names || []).join(", "),
+        value: entry.issuer + " · validity " + dateLabel(entry.not_before) + " to " + dateLabel(entry.not_after),
+        present: true, statusText: "Observed", statusTone: "is-neutral"};
+    });
+    var certificateEvidence;
+    if (observedTransparency) {
+      certificateEvidence = makeAuditTable("Certificate log observations", "Missing later entries do not establish revocation. New entries are newly observed provider records, not confirmed new issuances.", certificateRows, "observations");
+    } else {
+      certificateEvidence = document.createElement("p");
+      certificateEvidence.className = "muted";
+      certificateEvidence.textContent = transparency ? "Certificate history is unavailable; issuance remains unknown." : "No certificate history assessment is stored yet.";
+    }
+    grid.append(evidenceGroup("dns-certificate-history-group", transparencyHeading, transparencyMetrics, "Certificate log evidence", certificateEvidence));
     var diagnostics = document.createElement("details");
     diagnostics.className = "topic-secondary";
     var diagnosticHeading = document.createElement("summary"); diagnosticHeading.textContent = "Resolver diagnostics & lookup coverage";

@@ -261,6 +261,33 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(message['source'], 'schedule')
         self.assertTrue(message['notice_suppressed'])
 
+    def test_certificate_history_alerts_only_for_new_retained_entries(self):
+        def snapshot(ids):
+            entries = [{"id": entry_id, "issuer_ca_id": 2, "issuer": "Fixture issuer", "serial_number": "01af",
+                "dns_names": ["cybersecuritypilot.org"], "not_before": "2026-01-01T00:00:00+00:00",
+                "not_after": "2027-01-01T00:00:00+00:00"} for entry_id in ids]
+            return {"domain": "cybersecuritypilot.org", "records": {}, "resolver_errors": {},
+                "certificate_transparency": {"domain": "cybersecuritypilot.org", "provider": "crt.sh",
+                    "scope": "domain_and_subdomains", "state": "observed", "collection_partial": False, "entries": entries}}
+        self.run_dns(snapshot([1]))
+        addition = self.run_dns(snapshot([1, 2]))
+        self.assertEqual(addition["change_count"], 1)
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        self.assertEqual(len(notices), 1)
+        self.assertEqual(notices[0]["source_id"], addition["id"])
+        self.assertIn("certificate log observations", notices[0]["summary"])
+        self.assertTrue(notices[0]["detected_at"])
+        self.assertEqual(self.run_dns(snapshot([2]))["change_count"], 0)
+        self.assertEqual(self.run_dns(snapshot([1, 2]))["change_count"], 0)
+        self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 1)
+        unavailable = snapshot([])
+        unavailable["certificate_transparency"] = {"domain": "cybersecuritypilot.org", "provider": "crt.sh", "scope": "domain_and_subdomains", "state": "unavailable", "error_type": "TimeoutError"}
+        self.assertEqual(self.run_dns(unavailable)["status"], "completed_with_warnings")
+        self.assertTrue(self.run_dns(unavailable)["notice_suppressed"])
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        self.assertEqual(len(notices), 2)
+        self.assertIn("Certificate history lookup was unavailable", notices[0]["summary"])
+
     def test_registration_changes_and_provider_outages_have_scoped_dated_notices(self):
         from copy import deepcopy
         baseline = {"domain": "cybersecuritypilot.org", "records": {}, "resolver_errors": {},

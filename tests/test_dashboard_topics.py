@@ -506,8 +506,10 @@ function emailAuthenticationMetrics(){return [{label:'SPF',value:'Unknown',detai
 function makeAuditTable(title,note,rows){return {title,note,rows};}
 """ + helper + """
 renderDnsSnapshot({domain:'example.org',records:{A:['192.0.2.1'],AAAA:[],CNAME:[],MX:['mail.example.org'],SPF:[],DMARC:[],DKIM:{}},resolver_errors:{'www A':'SERVFAIL'},dnssec_observations:{assessment:'lookup_incomplete'}});
-assert.equal(grid.children.length,4);
-const [resolution,email,registration,diagnostics]=grid.children;
+assert.equal(grid.children.length,5);
+const [resolution,email,registration,certificateHistory,diagnostics]=grid.children;
+assert.equal(certificateHistory.attributes['aria-labelledby'],'dns-certificate-history-group');
+assert.equal(certificateHistory.children[1].children[0].value,'Not assessed');
 assert.equal(registration.attributes['aria-labelledby'],'dns-registration-group');
 assert.equal(registration.children[1].children[0].value,'Not assessed');
 assert.equal(registration.children[2].children[0].textContent,'Registration evidence');
@@ -530,6 +532,14 @@ assert.equal(observedRegistration.children[1].children[2].value,'2027-01-01T00:0
 assert.equal(observedRegistration.children[2].children[1].rows.length,3);
 renderDnsSnapshot({domain:'example.org',records:{},registration_observations:{state:'unavailable'}});
 assert.equal(grid.children[2].children[1].children[0].value,'Unavailable');
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'observed',collection_partial:false,entries:[{id:1,issuer:'Fixture issuer',dns_names:['example.org'],not_before:'2026-01-01',not_after:'2027-01-01'}]}});
+assert.equal(grid.children[3].children[1].children.length,4);
+assert.equal(grid.children[3].children[1].children[1].value,'1');
+assert.equal(grid.children[3].children[2].children[1].rows[0].statusTone,'is-neutral');
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'unavailable'}});
+assert.equal(grid.children[3].children[1].children[0].value,'Unavailable');
+assert.match(grid.children[3].children[2].children[1].textContent,/issuance remains unknown/);
+
 renderDnsSnapshot(null);assert.equal(grid.children.length,1);
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)

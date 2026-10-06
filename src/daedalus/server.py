@@ -1408,6 +1408,9 @@ def external_check_field_label(field_path: str) -> str:
         "registration_observations.registrars": "Registry-reported registrars",
         "registration_observations.nameservers": "Registry-reported nameservers",
         "registration_observations.events": "Domain registration events",
+        "certificate_transparency.state": "Certificate history lookup status",
+        "certificate_transparency.collection_partial": "Certificate history evidence coverage",
+        "certificate_transparency.newly_observed_entries": "Newly observed certificate log entries",
     }
     if field_path in labels:
         return labels[field_path]
@@ -1452,6 +1455,8 @@ def external_check_change_group(check_type: str, field_path: str) -> str:
         if field_path in {"registration_observations.state", "registration_observations.collection_partial"}:
             return "domain registration lookup coverage"
         return "domain registration"
+    if field_path.startswith("certificate_transparency."):
+        return "certificate log observations" if field_path.endswith("newly_observed_entries") else "certificate history lookup coverage"
     return "DNS and email configuration"
 
 
@@ -1468,6 +1473,12 @@ def external_check_warning_reasons(check_type: str, snapshot: dict[str, Any]) ->
                 reasons.append("Domain registration lookup was unavailable")
             elif registration.get("collection_partial") is True:
                 reasons.append("Domain registration evidence was partial")
+        transparency = snapshot.get("certificate_transparency")
+        if isinstance(transparency, dict):
+            if transparency.get("state") != "observed":
+                reasons.append("Certificate history lookup was unavailable")
+            elif transparency.get("collection_partial") is True:
+                reasons.append("Certificate history evidence was partial")
     elif check_type == "web":
         status = snapshot.get("http_status")
         if type(status) is int and not 200 <= status < 300:
@@ -1602,7 +1613,7 @@ def _execute_external_check(
                     raise PermissionError("Active website authorization expired before collection")
             snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
-            snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS, include_registration=True) if check_type == "dns" else run_website_check(domain)
+            snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS, include_registration=True, include_transparency=True) if check_type == "dns" else run_website_check(domain)
         failure = ("Active website collection could not validate a public target." if snapshot.get("error_code") else None) if check_type in {"web-active", "web-nikto"} else None
         if check_type == "web-nikto" and snapshot.get("error_code"):
             failure = "Nikto runtime is unavailable on this server." if snapshot["error_code"] == "nikto_runtime_unavailable" else "Nikto collection failed; check the recorded coverage state."
@@ -1664,6 +1675,26 @@ def _execute_external_check(
                         snapshot["comparison_scope"] = "new_observations_only"
                 else:
                     changes = compare_snapshots(prior.snapshot, snapshot)
+            if check_type == "dns" and any(path == "certificate_transparency.newly_observed_entries" for path, _, _ in changes):
+                from .certificate_transparency import retained_entry_ids
+                seen_ids: set[int] = set()
+                history = db.scalars(select(ExternalCheckRun.snapshot).where(
+                    ExternalCheckRun.organization_id == organization_id,
+                    ExternalCheckRun.domain == domain,
+                    ExternalCheckRun.check_type == "dns", ExternalCheckRun.id < run.id,
+                    ExternalCheckRun.status.in_(("completed", "completed_with_warnings")),
+                ).execution_options(yield_per=100))
+                for saved in history:
+                    if isinstance(saved, dict):
+                        seen_ids.update(retained_entry_ids(saved.get("certificate_transparency"), domain))
+                filtered_changes = []
+                for path, before, after in changes:
+                    if path == "certificate_transparency.newly_observed_entries":
+                        after = [entry for entry in after if entry["id"] not in seen_ids]
+                        if not after:
+                            continue
+                    filtered_changes.append((path, before, after))
+                changes = filtered_changes
             for field_path, previous_value, current_value in changes:
                 db.add(
                     ExternalCheckChange(

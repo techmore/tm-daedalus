@@ -124,3 +124,48 @@ def run_transparency_check(domain: str) -> dict:
     except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
         return {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
                 "error_type": type(exc).__name__, "log_proofs_verified": False, "live_certificate_verified": False}
+
+
+def newly_observed_entries(previous: object, current: object, domain: str) -> list:
+    """Compare complete matching provider observations; never infer removals."""
+    try:
+        domain = normalize_domain(domain)
+        for block in (previous, current):
+            if (not isinstance(block, dict) or block.get("domain") != domain or block.get("provider") != "crt.sh"
+                    or block.get("scope") != "domain_and_subdomains" or block.get("state") != "observed"
+                    or block.get("collection_partial") is not False or not isinstance(block.get("entries"), list)
+                    or len(block["entries"]) > MAX_SAVED_ENTRIES):
+                return []
+            ids = set()
+            for entry in block["entries"]:
+                if not isinstance(entry, dict) or type(entry.get("id")) is not int or not 0 < entry["id"] < 2**63 or entry["id"] in ids:
+                    return []
+                ids.add(entry["id"])
+                if not isinstance(entry.get("dns_names"), list) or not entry["dns_names"]:
+                    return []
+                for name in entry["dns_names"]:
+                    normalized = normalize_domain(name.removeprefix("*."))
+                    if normalized != domain and not normalized.endswith("." + domain):
+                        return []
+                if (_date(entry.get("not_after")) < _date(entry.get("not_before"))
+                        or type(entry.get("issuer_ca_id")) is not int or not 0 < entry["issuer_ca_id"] < 2**63
+                        or not isinstance(entry.get("issuer"), str) or not 0 < len(entry["issuer"]) <= 256
+                        or not isinstance(entry.get("serial_number"), str)
+                        or not re.fullmatch(r"[0-9a-fA-F]{1,128}", entry["serial_number"])):
+                    return []
+        previous_ids = {entry["id"] for entry in previous["entries"]}
+        return sorted([entry for entry in current["entries"] if entry["id"] not in previous_ids], key=lambda entry: entry["id"])
+    except (ValueError, TypeError, AttributeError):
+        return []
+
+
+def retained_entry_ids(block: object, domain: str) -> set[int]:
+    """Valid saved rows remain previously observed even in a partial collection."""
+    if not isinstance(block, dict):
+        return set()
+    empty = {"domain": domain, "provider": "crt.sh", "scope": "domain_and_subdomains",
+             "state": "observed", "collection_partial": False, "entries": []}
+    # This copy relaxes collection completeness only for validating retained
+    # rows. It does not alter the stored coverage or qualify new comparisons.
+    candidate = {**block, "collection_partial": False}
+    return {entry["id"] for entry in newly_observed_entries(empty, candidate, domain)}

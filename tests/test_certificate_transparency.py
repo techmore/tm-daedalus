@@ -67,3 +67,29 @@ class CertificateTransparencyTests(unittest.TestCase):
             resolve.assert_called_once_with("crt.sh")
             self.assertEqual(connection.request.call_args.args[:2], ("GET", "/?q=%25.example.org&output=json" if status == 200 and body == b'[]' else "/?q=example.org&output=json"))
             self.assertEqual(connection.close.call_count, 2 if status == 200 and body == b'[]' else 1)
+
+class CertificateTransparencyComparisonTests(unittest.TestCase):
+    row = CertificateTransparencyTests.row
+    def block(self, ids):
+        return transparency_evidence("example.org", [self.row(i) for i in ids])
+
+    def compare(self, before, after):
+        from daedalus.external_checks import compare_snapshots
+        return compare_snapshots({"domain": "example.org", "certificate_transparency": before},
+                                 {"domain": "example.org", "certificate_transparency": after})
+
+    def test_additions_are_new_observations_and_omissions_are_not_revocations(self):
+        self.assertEqual(self.compare(self.block([1, 2]), self.block([1])), [])
+        changes = self.compare(self.block([1, 2]), self.block([1, 3]))
+        self.assertEqual(changes[0][0], "certificate_transparency.newly_observed_entries")
+        self.assertEqual([entry["id"] for entry in changes[0][2]], [3])
+        self.assertEqual(self.compare(self.block([1, 2]), self.block([2, 1])), [])
+
+    def test_partial_unavailable_foreign_and_malformed_blocks_cannot_claim_additions(self):
+        from copy import deepcopy
+        baseline = self.block([1])
+        for change in ({"collection_partial": True}, {"state": "unavailable"}, {"domain": "other.org"}, {"provider": "other"}, {"scope": "other"}, {"entries": [{"id": 3}]}):
+            current = {**self.block([1, 3]), **change}
+            self.assertFalse(any(path.endswith("newly_observed_entries") for path, _, _ in self.compare(baseline, current)))
+        current = deepcopy(self.block([1, 3]));current["entries"][0]["dns_names"] = ["other.org"]
+        self.assertFalse(any(path.endswith("newly_observed_entries") for path, _, _ in self.compare(baseline, current)))
