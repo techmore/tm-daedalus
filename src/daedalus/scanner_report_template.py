@@ -251,7 +251,7 @@ def standardized_scanner_run_html(events: list[dict]) -> str:
 
 
 def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
-    """Render the approved stylesheet with the same browser print settings as NmapUI."""
+    """Render the historical candidate using NmapUI browser print settings."""
     import tempfile
     from playwright.sync_api import sync_playwright
 

@@ -1306,3 +1306,7 @@ Authenticated production review at 390px inspected populated Internal network, M
 ## Scanner report-source wording — October 6, 2026
 
 Source inspection confirms the local Reports tab reads /api/runtime/reports and displays locally saved HTML/PDF/XML, while the native Daedalus status app separately lists hosted PDFs. Uploaded scan runs may have no local report files. The bundled browser subtitle and empty-state message now explicitly describe local saved files rather than implying no completed reports exist anywhere. The bundled renderReportsTab empty-state regression passed with all six bundle tests; preceding report/bundle group passed 39 tests. This copy correction is not installed yet and does not add hosted-report integration to the browser. No PDF body/assets changed.
+
+## Report approval terminology correction — October 6, 2026
+
+The report-assets README still called the historical candidate an approved renderer baseline, and its rendering docstring called the stylesheet approved. These descriptions now explicitly state that the source is a corrective historical candidate, its filename does not establish human approval, and the exact standardized reference remains pending. No stylesheet/font/CSS bytes or rendering behavior changed. The native scanner hosted-report path uses authenticated agent client-status/report endpoints; the local browser currently lacks that integration, so it must not claim hosted-report availability in its local list. Linux CI 37401501940 completed successfully.
