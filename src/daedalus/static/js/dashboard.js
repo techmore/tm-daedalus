@@ -3130,7 +3130,31 @@
     });
     var certificateEvidence;
     if (observedTransparency) {
-      certificateEvidence = makeAuditTable("Certificate log observations", "Missing later entries do not establish revocation. New entries are newly observed provider records, not confirmed new issuances.", certificateRows, "observations");
+      certificateEvidence = document.createElement("div");
+      var certificateTable = makeAuditTable("Certificate log observations", "Missing later entries do not establish revocation. New entries are newly observed provider records, not confirmed new issuances.", certificateRows, "observations");
+      certificateTable.className = "audit-table-card certificate-history-table";
+      var mobileEntries = document.createElement("div");
+      mobileEntries.className = "certificate-history-mobile-list";
+      var mobileScope = document.createElement("p");
+      mobileScope.className = "muted";
+      mobileScope.textContent = "Provider observations only. Missing later entries do not establish revocation; new entries do not confirm a new issuance.";
+      mobileEntries.append(mobileScope);
+      certificateEntries.forEach(function (entry) {
+        var card = document.createElement("article");
+        card.className = "certificate-history-entry";
+        var heading = document.createElement("h4");
+        heading.textContent = "Observed entry " + entry.id;
+        var fields = document.createElement("dl");
+        [["Issuer", entry.issuer], ["DNS names", (entry.dns_names || []).join(", ")],
+          ["Validity starts", dateLabel(entry.not_before)], ["Validity ends", dateLabel(entry.not_after)]].forEach(function (field) {
+          var label = document.createElement("dt"); label.textContent = field[0];
+          var value = document.createElement("dd"); value.textContent = field[1];
+          fields.append(label, value);
+        });
+        card.append(heading, fields);
+        mobileEntries.append(card);
+      });
+      certificateEvidence.append(certificateTable, mobileEntries);
     } else {
       certificateEvidence = document.createElement("p");
       certificateEvidence.className = "muted";

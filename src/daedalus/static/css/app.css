@@ -918,3 +918,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .audit-event-summary { margin: 0; color: var(--olive-900); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .audit-event-details summary { cursor: pointer; color: var(--olive-700); font-size: 12px; }
 .audit-event-details pre { margin-top: 8px; overflow-wrap: anywhere; }
+
+.certificate-history-mobile-list { display: none; }
+@media (max-width: 600px) {
+  .certificate-history-table { display: none; }
+  .certificate-history-mobile-list { display: grid; gap: 12px; }
+  .certificate-history-entry { padding: 16px; border: 1px solid var(--card-line); border-radius: 14px; background: var(--card-surface); min-width: 0; }
+  .certificate-history-entry h4 { margin: 0 0 12px; font-size: 15px; }
+  .certificate-history-entry dl { margin: 0; }
+  .certificate-history-entry dt { margin-top: 10px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+  .certificate-history-entry dd { margin: 4px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+}
