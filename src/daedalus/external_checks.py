@@ -911,6 +911,15 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
                 continue
             if path != "dependency_origin_observations.origins":
                 continue
+        if path == "dependency_advisory_observations" or path.startswith("dependency_advisory_observations."):
+            blocks = [snapshot.get("dependency_advisory_observations") for snapshot in (previous, current)]
+            if not all(isinstance(block, dict) and block.get("schema_version") == 1 for block in blocks):
+                continue
+            if path == "dependency_advisory_observations.packages":
+                if page_incomplete or not all(block.get("state") == "observed" for block in blocks):
+                    continue
+            elif path != "dependency_advisory_observations.state":
+                continue
         if path == "dependency_package_observations" or path.startswith("dependency_package_observations."):
             if path != "dependency_package_observations.packages" or page_incomplete:
                 continue

@@ -3327,9 +3327,15 @@
     var rows = metadata.packages.filter(function (item) {
       return item && item.ecosystem === "npm" && typeof item.name === "string" && typeof item.version === "string";
     }).slice(0, 100).map(function (item) {
-      return {type: "npm", name: item.name, value: item.version + " · declared by " + (item.source_host || "source unknown"), present: true, statusTone: "is-neutral", statusText: "Advisories not assessed"};
+      var audit = snapshot.dependency_advisory_observations;
+      var observed = audit && Array.isArray(audit.packages) ? audit.packages.find(function (p) { return p.name === item.name && p.version === item.version && p.ecosystem === item.ecosystem; }) : null;
+      var ids = observed && Array.isArray(observed.advisory_ids) ? observed.advisory_ids : [];
+      var status = !audit ? "Advisories not assessed" : audit.state === "unavailable" ? "Advisory lookup unavailable" : !observed ? "Advisories not assessed" : observed.state === "partial" ? "Partial advisory lookup" : ids.length ? ids.length + " OSV advisory match(es)" : "No OSV matches returned";
+      var value = item.version + " · declared by " + (item.source_host || "source unknown");
+      if (ids.length) value += " · " + ids.slice(0, 10).join(", ") + (ids.length > 10 ? " · " + (ids.length - 10) + " more saved IDs" : "");
+      return {type: "npm", name: item.name, value: value, present: true, statusTone: ids.length ? "is-absent" : "is-neutral", statusText: status};
     });
-    return {rows: rows, scope: "Exact stable versions declared in UNPKG root-page references only. Package bytes, execution and vulnerability status were not verified. " + (metadata.truncated ? "The saved package list is truncated." : "Tags, ranges and unsupported reference formats remain unidentified.")};
+    return {rows: rows, scope: "Exact stable versions declared in UNPKG root-page references only. Package bytes and execution were not verified. Advisory matches describe declared versions only. " + (metadata.truncated ? "The saved package list is truncated." : "Tags, ranges and unsupported reference formats remain unidentified.")};
   }
 
   function groupExternalDependencies(resources) {

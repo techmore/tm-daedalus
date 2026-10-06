@@ -103,6 +103,7 @@ from daedalus.domain_verification import (
 )
 from daedalus.active_website_checks import run_active_website_check
 from daedalus.nikto_checks import run_nikto_check
+from daedalus.dependency_advisories import query_declared_package_advisories
 from daedalus.external_checks import (
     ExternalCheckFailure,
     compare_snapshots,
@@ -1401,6 +1402,8 @@ def external_check_field_label(field_path: str) -> str:
         "title": "Website page title",
         "external_resources": "Linked third-party resources",
         "dependency_package_observations.packages": "Declared dependency package versions",
+        "dependency_advisory_observations.state": "Dependency advisory lookup coverage",
+        "dependency_advisory_observations.packages": "Dependency advisory matches",
         "external_host_count": "Linked third-party hosts",
         "tls.valid": "TLS certificate validity",
         "tls.days_remaining": "TLS certificate lifetime",
@@ -1437,6 +1440,10 @@ def external_check_change_group(check_type: str, field_path: str) -> str:
     if check_type in {"web-active", "web-nikto"}:
         return "website findings"
     if check_type == "web":
+        if field_path == "dependency_advisory_observations.state":
+            return "dependency advisory lookup coverage"
+        if field_path.startswith("dependency_advisory_observations"):
+            return "dependency advisory matches"
         if field_path.startswith("page_content."):
             return "page content"
         if field_path.startswith("security_headers."):
@@ -1491,6 +1498,9 @@ def external_check_warning_reasons(check_type: str, snapshot: dict[str, Any]) ->
             reasons.append("Page content was partial or not eligible for comparison")
         if snapshot.get("page_html_truncated") is True:
             reasons.append("Page HTML exceeded the collection limit")
+        advisory = snapshot.get("dependency_advisory_observations")
+        if isinstance(advisory, dict) and advisory.get("state") in {"unavailable", "partial"}:
+            reasons.append("Dependency advisory lookup was " + advisory["state"])
         for key, label in (("header_observations", "security header"), ("cookie_observations", "cookie")):
             observation = snapshot.get(key)
             if isinstance(observation, dict) and observation.get("analysis_partial") is True:
@@ -1615,6 +1625,15 @@ def _execute_external_check(
             snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
             snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS, include_registration=True, include_transparency=True) if check_type == "dns" else run_website_check(domain)
+        if check_type == "web" and isinstance(snapshot.get("dependency_package_observations"), dict):
+            metadata = snapshot["dependency_package_observations"]
+            if (snapshot.get("page_content") or {}).get("comparison_eligible") is True:
+                snapshot["dependency_advisory_observations"] = query_declared_package_advisories(metadata)
+            else:
+                snapshot["dependency_advisory_observations"] = {
+                    "schema_version": 1, "provider": "OSV", "state": "not_assessed", "packages": [],
+                    "reason": "Root-page collection was incomplete or unsuccessful.",
+                }
         failure = ("Active website collection could not validate a public target." if snapshot.get("error_code") else None) if check_type in {"web-active", "web-nikto"} else None
         if check_type == "web-nikto" and snapshot.get("error_code"):
             failure = "Nikto runtime is unavailable on this server." if snapshot["error_code"] == "nikto_runtime_unavailable" else "Nikto collection failed; check the recorded coverage state."
@@ -1637,7 +1656,7 @@ def _execute_external_check(
         run.error_summary = failure[:500] if failure else None
         run.status = "failed" if failure else (
             "completed_with_warnings"
-            if (check_type == "dns" and external_check_warning_reasons(check_type, snapshot)) or (check_type in {"web-active", "web-nikto"} and snapshot.get("coverage_complete") is not True)
+            if (check_type == "dns" and external_check_warning_reasons(check_type, snapshot)) or (check_type == "web" and (snapshot.get("dependency_advisory_observations") or {}).get("state") in {"unavailable", "partial"}) or (check_type in {"web-active", "web-nikto"} and snapshot.get("coverage_complete") is not True)
             else "completed"
         )
         changes: list[tuple[str, Any, Any]] = []
@@ -1773,7 +1792,7 @@ def _execute_external_check(
                         external_check_change_group(check_type, field_path)
                         for field_path, _, _ in changes
                     ))
-                    coverage_groups = {"DNS lookup status", "domain registration lookup coverage", "certificate history lookup coverage"}
+                    coverage_groups = {"DNS lookup status", "domain registration lookup coverage", "certificate history lookup coverage", "dependency advisory lookup coverage"}
                     coverage_count = sum(
                         external_check_change_group(check_type, field_path) in coverage_groups
                         for field_path, _, _ in changes

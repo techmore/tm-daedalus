@@ -378,6 +378,32 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 2)
         self.assertNotEqual(server.external_check_warning_signature("dns", {"resolver_errors": {"DS": "SERVFAIL"}}), server.external_check_warning_signature("dns", {"resolver_errors": {"DNSKEY": "SERVFAIL"}}))
 
+    def test_website_advisory_lookup_is_saved_and_failure_preserves_page_evidence(self):
+        from unittest.mock import patch
+        snapshot = {"http_status": 200, "page_content": {"comparison_eligible": True},
+            "dependency_package_observations": {"schema_version": 1, "packages": [{"ecosystem": "npm", "name": "react", "version": "18.3.1"}]}}
+        advisory = {"schema_version": 1, "state": "unavailable", "packages": [], "error_type": "ReadTimeout"}
+        with patch.object(server, "query_declared_package_advisories", return_value=advisory) as query:
+            run = self.run_web(snapshot)
+        query.assert_called_once()
+        self.assertEqual(run["status"], "completed_with_warnings")
+        with self.session_factory() as db:
+            saved = db.get(ExternalCheckRun, run["id"])
+            self.assertEqual(saved.snapshot["http_status"], 200)
+            self.assertEqual(saved.snapshot["dependency_advisory_observations"], advisory)
+        notice = self.client.get("/api/notifications").json()["notifications"][0]
+        self.assertIn("Dependency advisory lookup was unavailable", notice["summary"])
+
+    def test_partial_page_does_not_query_package_advisories(self):
+        from unittest.mock import patch
+        snapshot = {"http_status": 206, "page_content": {"comparison_eligible": False, "partial": True},
+            "dependency_package_observations": {"schema_version": 1, "packages": []}}
+        with patch.object(server, "query_declared_package_advisories") as query:
+            run = self.run_web(snapshot)
+        query.assert_not_called()
+        with self.session_factory() as db:
+            self.assertEqual(db.get(ExternalCheckRun, run["id"]).snapshot["dependency_advisory_observations"]["state"], "not_assessed")
+
     def test_dns_notice_separates_record_changes_from_lookup_coverage(self):
         self.run_dns({"records": {"A": ["192.0.2.1"]}, "resolver_errors": {}})
         run = self.run_dns({"records": {"A": ["192.0.2.2"]}, "resolver_errors": {"DS": "SERVFAIL"}})

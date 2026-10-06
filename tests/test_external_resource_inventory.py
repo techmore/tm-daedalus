@@ -7,6 +7,17 @@ from daedalus.external_checks import (
 
 
 class ExternalResourceInventoryTests(unittest.TestCase):
+    def test_advisory_outage_does_not_remove_saved_matches(self):
+        import copy
+        baseline = {"dependency_advisory_observations": {"schema_version": 1, "state": "observed", "observed_at": "before", "packages": [{"name": "jquery", "version": "1.12.4", "advisory_ids": ["GHSA-test"]}]}}
+        outage = copy.deepcopy(baseline)
+        outage['dependency_advisory_observations'].update(state='unavailable', observed_at='after', packages=[])
+        self.assertEqual(compare_snapshots(baseline, outage), [('dependency_advisory_observations.state', 'observed', 'unavailable')])
+        repeated = copy.deepcopy(baseline)
+        repeated['dependency_advisory_observations']['observed_at'] = 'later'
+        self.assertEqual(compare_snapshots(baseline, repeated), [])
+        self.assertEqual(compare_snapshots({}, baseline), [])
+
     def test_package_parser_rollout_and_partial_coverage_do_not_create_false_changes(self):
         import copy
         baseline = _external_resource_inventory('<script src="https://unpkg.com/react@18.3.1/a.js"></script>', 'https://example.com/', 'example.com')
