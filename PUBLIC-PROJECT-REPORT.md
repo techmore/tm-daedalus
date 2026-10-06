@@ -1318,3 +1318,7 @@ The bundled scanner browser now optionally shows a Daedalus scan-history link wh
 ## Managed scanner portal-link wiring — October 6, 2026
 
 Mac installs pass the enrollment server URL into the NmapUI LaunchAgent after URL validation. Mac upgrades recover that public address from enrollment and update the environment while preserving the token. Linux unit generation and upgrades likewise derive only the public server address from existing enrollment; unsupported/unsafe links are omitted. The browser template remains conditional, and no agent token is exposed through that link. Managed-service/upgrade validation and installed browser acceptance are pending completion; no PDF renderer or asset changed.
+
+## Installed scanner portal link and installer regression repair — October 6, 2026
+
+The Mac scanner upgraded successfully to the portal-link kit (SHA-256 6899bd4db5d84595e86d1a2d71c4b01151acb9aab87ab3d0a38b8ed5eb31239d). Actual 390px browser rendering shows the configured Daedalus history link and distinguishes local files from hosted reports, with document width 382px. The full suite found four Linux installer fixture failures caused by a new dependency on the Mac helper module. Linux URL validation is now self-contained; installer, Linux/Mac upgrade and credentials/service tests passed 79 tests and 20 subtests. Strengthened upgrade fixtures assert the portal address is included and enrollment tokens are excluded from scanner descriptors. A new full-suite run remains necessary after the repair. No PDF generated or template asset changed.

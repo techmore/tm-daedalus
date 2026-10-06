@@ -169,6 +169,8 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
         old_nmap = plistlib.loads(self.old_bytes[macos_service.NMAPUI_LABEL])
         old_bridge = plistlib.loads(self.old_bytes[macos_service.BRIDGE_LABEL])
         env = nmap["EnvironmentVariables"]
+        self.assertEqual(env["NMAPUI_MANAGEMENT_PORTAL_URL"], "https://portal.example")
+        self.assertNotIn("private-fixture-token", str(env))
         for key, value in old_nmap["EnvironmentVariables"].items():
             if key != "PLAYWRIGHT_BROWSERS_PATH":
                 self.assertEqual(env[key], value)

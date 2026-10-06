@@ -14,10 +14,7 @@ import subprocess
 import sys
 
 
-try:
-    from .macos_service import management_portal_url
-except ImportError:
-    from macos_service import management_portal_url
+from urllib.parse import urlparse
 
 NMAPUI_UNIT = "daedalus-nmapui.service"
 BRIDGE_UNIT = "daedalus-scanner-bridge.service"
@@ -103,6 +100,24 @@ def _write_exclusive(path: Path, contents: bytes, mode: int = 0o600) -> None:
     except BaseException:
         path.unlink(missing_ok=True)
         raise
+
+
+def management_portal_url(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    try:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"https", "http"} or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or chr(92) in value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            return ""
+        if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return ""
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            return ""
+        return value.rstrip("/")
+    except ValueError:
+        return ""
+
 
 
 def _nmapui_unit(args: argparse.Namespace, env_path: Path) -> str:

@@ -27,7 +27,7 @@ class LinuxUpgradeTests(unittest.TestCase):
         self.support = self.data_home / 'daedalus'
         self.config.mkdir(parents=True, mode=0o700)
         self.enrollment = self.config / 'managed-agent.json'
-        self.enrollment.write_text('{"agent_id":7,"agent_token":"synthetic-enrollment"}')
+        self.enrollment.write_text('{"server":"https://portal.example","agent_id":7,"agent_token":"synthetic-enrollment"}')
         self.enrollment.chmod(0o600)
         self.evidence = self.support / 'nmapui-data/evidence.json'
         self.evidence.parent.mkdir(parents=True)
@@ -85,6 +85,10 @@ class LinuxUpgradeTests(unittest.TestCase):
     def test_upgrade_preserves_enrollment_evidence_auth_and_updates_fingerprints(self):
         result = self.operate()
         self.assertTrue(result['upgraded'])
+        unit = (self.unit_dir / service.NMAPUI_UNIT).read_text()
+        self.assertIn('NMAPUI_MANAGEMENT_PORTAL_URL=', unit)
+        self.assertIn('https://portal.example', unit)
+        self.assertNotIn('synthetic-enrollment', unit)
         backup = Path(result['backup_file'])
         self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
         saved = json.loads(backup.read_text())
