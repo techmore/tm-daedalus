@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Calendar-label scanner candidate isolation — 2026-10-06
+
+The repository NmapUI source ZIP digest exactly matches the installed Mac release identifier: 1491af73a5fc90a5e1dc067e6d8023249ab9ce347f6eb5cfb348f5d25918c5bc. A private candidate ZIP was built from that frozen bundle with only static/js/scan_banners.js replaced and its source manifest/digest updated. Full archive comparison confirms identical entry names and byte-for-byte equality of every other file, including both report stylesheets and runtime assets. Candidate digest: b4a6ad04efc868ff3559c9a8ebd83554b2374814e53629bd1f1d83a987d88ae9. This avoids pulling unrelated changes from the dirty original source checkout.
+
+The candidate is not installed or promoted to the distributed kit. Managed upgrade validation and native visual revalidation remain next. Private receipt: validation/nmapui-calendar-candidate.json.
+
 ## Original scanner calendar-age correction — 2026-10-06
 
 The original NmapUI scan banner used elapsed 24-hour age_days, so an afternoon scan from the previous calendar date could appear as Today the next morning. Its source now compares local calendar dates instead; invalid, missing or future dates remain unconfirmed. A saved Node regression passes seven cases, including midnight and a daylight-saving transition. Changes are limited to ../nmapUI/static/js/scan_banners.js and its new focused test. The installed app has not been updated, and PDF assets were not changed. Scanner packaging/installation and native UI revalidation remain pending.
