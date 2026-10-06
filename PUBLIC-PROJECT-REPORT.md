@@ -4,8 +4,8 @@
 
 **The full project is not complete.** Historical entries below describe their own source and environment; they are not current production acceptance claims.
 
-- **Repository:** published source dd48765 includes UNPKG/jsDelivr declarations, saved OSV advisory evidence, review links and mobile record layouts. Additional committed refinements add malformed-pagination rejection, dated match-notice coverage and primary-assessment advisory findings. Production activation remains pending.
-- **Validation:** the full suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Backend CI 37476167650 succeeded at published 48044bd; Linux 37476167655 succeeded across lifecycle, interrupted-bridge and repeat comparison. These results do not establish approved PDF fidelity or production readiness.
+- **Repository:** published source d5347f3 includes UNPKG/jsDelivr package declarations, saved OSV evidence and review links, domain-isolation validation, scanner freshness and open-dashboard override-expiry handling. Production activation remains pending.
+- **Validation:** the full suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Backend CI 37479767626 succeeded at published d5347f3; its Linux 37479767745 is still active. The preceding published source dd48765 passed all three Linux scanner scenarios. A current-source isolated runtime also opened and migrated restored production data, authenticated the installed scanner token and served retained history. These results do not establish approved PDF fidelity, restored Google sign-in or production readiness.
 - **Local runtime:** a fresh isolated loopback QA instance runs da8c756 with background workers disabled. Two authenticated website runs saved distinct timestamped records, returned HTTP 200 and retained four linked origins. The repeat produced zero changes and zero notifications. No supported exact package versions were present, so advisory coverage correctly remained not assessed. The earlier DNS #25 receipt belongs to the previous temporary database, which is no longer available. Current populated browser review remains pending because the existing browser space is user-owned.
 - **Production:** public health returned OK. Fresh LAN SSH inspection now succeeded. The active Incus release digest is ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d; its server.py hash matches source 2f8c817. The service is active, and the scanner PDF builder still uses the replacement ReportLab layout. No deployment was attempted during this review.
 - **Standardized PDF:** the unused alternate scanner renderer is removed from current source. Historical template assets are unchanged. The exact human-approved PDF reference, visual fidelity and corrective production activation remain unresolved; filenames and passing tests do not establish approval.
@@ -16,7 +16,7 @@
 | --- | --- |
 | Portal theme and topic UX | Current populated desktop/mobile acceptance across every topic and production activation |
 | Marketing Pages | Final content acceptance |
-| Incus operations | Fresh release verification, separate recovery-secret custody, public DNS/TLS failover and restored Google login |
+| Incus operations | Current-source activation, separate recovery-secret custody, public DNS/TLS failover and restored Google login |
 | Google identity and users | Broader real-user onboarding, approved sharing, domain independence and admin succession |
 | Domain verification | Real second-domain TXT onboarding and probation/override expiry/renewal acceptance |
 | DNS, email and website audits | Broader checker semantics and owner/provider review; successful public certificate-history collection remains unverified |
@@ -24,10 +24,14 @@
 | Remote management | Agreed broader integration scope and validation on deployment targets |
 | Meraki | Larger authorized device inventory and review of unavailable controls |
 | CIS endpoints | Physical managed macOS 26 deployment, remaining check semantics, signing/notarization and login/reboot persistence |
-| Linked vendors | Automated provider assessment remains unimplemented; inventory and human decisions are not security verdicts |
+| Linked vendors | Broader package/version coverage and automated provider posture assessment; URL-declared advisory matches do not verify loaded code or vendor security |
 | Reports | Approved standardized scanner PDF fidelity and activation, plus production report regressions |
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
+
+## Saved standardized-report references — 2026-10-06
+
+A private local comparison now presents the first-page images and direct links to three existing saved PDFs: the January 10 compact olive report, March 15 serif/olive report with change summary, and landscape Techmore Enhanced Report. The comparison records each original fingerprint and explicitly treats all three as references awaiting identification. It does not generate a report, modify template assets or infer approval. The exact standardized reference is requested from the owner before candidate activation. Private review artifact: validation/scan-report-reference-comparison.html.
 
 ## Restored current-source runtime — 2026-10-06
 
