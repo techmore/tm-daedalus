@@ -227,6 +227,12 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         nmap = replace_field(nmap, 'Environment=PLAYWRIGHT_BROWSERS_PATH=', 'Environment=PLAYWRIGHT_BROWSERS_PATH=' + service._environment_quote(str(nmap_release / 'playwright-browsers'), 'browsers'))
         bridge = replace_field(old[service.BRIDGE_UNIT], 'WorkingDirectory=', 'WorkingDirectory=' + service._unit_path(str(bridge_release), 'bridge'))
         bridge = replace_field(bridge, 'ExecStart=', 'ExecStart=' + service._exec_quote(str(bridge_release / '.venv/bin/daedalus-agent'), 'bridge') + ' --config ' + service._exec_quote(str(config_dir / 'managed-agent.json'), 'enrollment'))
+        enrolled = json.loads(enrollment)
+        portal = service.management_portal_url(enrolled.get('server') if isinstance(enrolled, dict) else None)
+        lines = [line for line in nmap.decode().splitlines() if not line.startswith('Environment=NMAPUI_MANAGEMENT_PORTAL_URL=')]
+        if portal:
+            lines.insert(lines.index('[Service]') + 1, 'Environment=NMAPUI_MANAGEMENT_PORTAL_URL=' + service._environment_quote(portal, 'portal URL'))
+        nmap = ('\n'.join(lines) + '\n').encode()
         state = json.loads(old[service.STATE_FILE])
         state['files'][service.NMAPUI_UNIT], state['files'][service.BRIDGE_UNIT] = digest(nmap), digest(bridge)
         candidate = {service.NMAPUI_UNIT: nmap, service.BRIDGE_UNIT: bridge, service.STATE_FILE: (json.dumps(state, sort_keys=True, indent=2) + '\n').encode()}
