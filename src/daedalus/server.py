@@ -5446,8 +5446,10 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
             spf = (assessment.get("spf") or {}).get("label") or "Not assessed"
             dmarc = (assessment.get("dmarc") or {}).get("label") or "Not assessed"
             unknown = len(snapshot.get("resolver_errors") or {})
-            summary = f"SPF: {spf} · DMARC: {dmarc} · {unknown} unknown lookup(s)"
-            if unknown or saved.status == "completed_with_warnings" or any((assessment.get(policy) or {}).get("tone") != "good" for policy in ("spf", "dmarc")): state = "attention"
+            dkim = (assessment.get("dkim") or {}).get("label") or "Not assessed"
+            summary = f"SPF: {spf} · DKIM: {dkim} · DMARC: {dmarc} · {unknown} lookup(s) failed"
+            needs_action = any(item.get("level") == "action" for item in (assessment.get("guidance") or []) if isinstance(item, dict))
+            if unknown or needs_action or saved.status == "completed_with_warnings" or any((assessment.get(policy) or {}).get("tone") != "good" for policy in ("spf", "dmarc")): state = "attention"
         elif saved:
             observed_headers = snapshot.get("security_headers")
             headers = observed_headers if isinstance(observed_headers, dict) else {}

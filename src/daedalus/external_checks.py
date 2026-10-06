@@ -882,6 +882,7 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
                 })
             elif lookup.startswith("DKIM "):
                 paths.add(f"records.DKIM.{lookup.removeprefix('DKIM ')}")
+                paths.add("email_authentication_assessment.dkim")
             elif lookup.startswith("www "):
                 record_type = lookup.removeprefix("www ").upper()
                 paths.add(f"records.WWW_{record_type}")
@@ -974,6 +975,12 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
             if path in {"dependency_observations.schema_version", "dependency_observations.scope", "dependency_observations.integrity_validated"}:
                 continue
         if path == "resolver_context" or path.startswith("resolver_context."):
+            continue
+        # Guidance is derived text and the answering resolver is provenance;
+        # neither is a change to the domain's DNS.
+        if path == "email_authentication_assessment.guidance" or path.startswith("email_authentication_assessment.guidance"):
+            continue
+        if path.startswith("query_observations.") and path.endswith(".resolver"):
             continue
         # Recursive resolver TTL is remaining cache lifetime, not an authoritative
         # configuration change. Retain it as report evidence without alert churn.

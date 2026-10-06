@@ -89,3 +89,17 @@ class DNSComparisonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_email_guidance_covers_spf_dkim_dmarc_with_plain_actions():
+    from daedalus.email_policy import analyze_email_auth
+    healthy = analyze_email_auth({"TXT": ["v=spf1 include:_spf.google.com -all"],
+        "DMARC": ["v=DMARC1; p=reject; rua=mailto:a@example.test"],
+        "DKIM": {"google": ["v=DKIM1; k=rsa; p=" + "A" * 400]}}, {})
+    assert [g["level"] for g in healthy["guidance"]] == ["good", "good", "good"]
+    assert healthy["dkim"]["status"] == "published"
+    bare = analyze_email_auth({"TXT": [], "DMARC": [], "DKIM": {"google": []}}, {})
+    assert [(g["area"], g["level"]) for g in bare["guidance"]] == [("SPF", "action"), ("DKIM", "action"), ("DMARC", "action")]
+    failed = analyze_email_auth({"TXT": [], "DMARC": [], "DKIM": {}}, {"TXT": "SERVFAIL"})
+    assert failed["spf"]["status"] == "lookup_failed"
+    assert next(g for g in failed["guidance"] if g["area"] == "SPF")["level"] == "info"

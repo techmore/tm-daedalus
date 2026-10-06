@@ -3033,9 +3033,17 @@
     function finding(title, detail) { items.push({title: title, detail: detail}); }
     if (type === "dns") {
       var errors = snapshot.resolver_errors || {};
-      emailAuthenticationMetrics(snapshot.email_authentication_assessment).forEach(function (metric) {
-        if (metric.state !== "good") finding(metric.label + ": " + metric.value, metric.detail);
-      });
+      var guidance = snapshot.email_authentication_assessment && snapshot.email_authentication_assessment.guidance;
+      if (Array.isArray(guidance)) {
+        guidance.forEach(function (item) {
+          if (item && item.level !== "good") finding(item.area + (item.level === "action" ? " — fix this" : " — worth a look"), item.text);
+        });
+        if (guidance.length && !items.length) finding("Email protection looks healthy", guidance.map(function (item) { return item.area + " OK"; }).join(" · ") + ". " + guidance.map(function (item) { return item.text; }).join(" "));
+      } else {
+        emailAuthenticationMetrics(snapshot.email_authentication_assessment).forEach(function (metric) {
+          if (metric.state !== "good") finding(metric.label + ": " + metric.value, metric.detail);
+        });
+      }
       if (Object.keys(errors).length) finding("DNS lookup coverage", "Some DNS lookups failed. Those records remain unknown; review the lookup evidence below.");
       if (!items.length) finding("Email protection evidence recorded", "No concern was identified in the saved SPF and DMARC assessment. Review domain resolution and selector evidence below.");
     } else {

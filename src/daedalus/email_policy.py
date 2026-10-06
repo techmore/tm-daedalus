@@ -6,6 +6,8 @@ messages, resolve SPF dependencies, or determine whether legitimate mail aligns.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from typing import Any
 
@@ -268,6 +270,99 @@ def _dmarc_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[s
     }
 
 
+def _dkim_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[str, Any]:
+    """Describe DKIM public keys found at the selectors Daedalus probes.
+
+    DKIM selectors cannot be enumerated from DNS, so absence at the probed
+    selectors is not proof that mail is unsigned.
+    """
+    dkim = records.get("DKIM")
+    if not isinstance(dkim, dict):
+        return {"status": "not_captured", "selectors": [], "label": "Not captured", "tone": "neutral",
+                "summary": "This saved DNS snapshot does not contain DKIM lookups."}
+    keys, revoked = [], []
+    for selector, values in sorted(dkim.items()):
+        for value in _string_records(values) or []:
+            tags = {}
+            for part in value.split(";"):
+                name, _, tag_value = part.strip().partition("=")
+                tags[name.strip().lower()] = tag_value.strip()
+            if tags.get("v", "DKIM1").upper() != "DKIM1" or "p" not in tags:
+                continue
+            if not tags["p"]:
+                revoked.append(selector)
+                continue
+            try:
+                der = base64.b64decode("".join(tags["p"].split()), validate=True)
+            except (binascii.Error, ValueError):
+                continue
+            bits = None
+            if tags.get("k", "rsa").lower() == "rsa":
+                bits = 2048 if len(der) >= 270 else 1024 if len(der) >= 150 else None
+            keys.append({"selector": selector, "key_type": tags.get("k", "rsa").lower(), "rsa_bits_at_least": bits})
+    if keys:
+        weak = [key["selector"] for key in keys if key["rsa_bits_at_least"] == 1024]
+        return {"status": "published", "selectors": keys, "label": "Key published",
+                "tone": "good" if not weak else "attention",
+                "summary": "A DKIM public key is published at: " + ", ".join(key["selector"] for key in keys)
+                           + (". A 1024-bit key was observed at: " + ", ".join(weak) if weak else ".")}
+    failed = [name for name in errors if name.startswith("DKIM ")]
+    if failed:
+        return {"status": "lookup_failed", "selectors": [], "label": "Lookup failed", "tone": "neutral",
+                "summary": "Some DKIM selector lookups failed; DKIM status is unknown."}
+    if revoked:
+        return {"status": "revoked", "selectors": [], "label": "Key revoked", "tone": "attention",
+                "summary": "The DKIM key at " + ", ".join(revoked) + " is empty, which marks it revoked."}
+    return {"status": "not_found", "selectors": [], "label": "Not found at common selectors", "tone": "neutral",
+            "summary": "No DKIM key was found at the selectors Daedalus checks. Your provider may use a different selector."}
+
+
+def _guidance(spf: dict[str, Any], dkim: dict[str, Any], dmarc: dict[str, Any]) -> list[dict[str, str]]:
+    """Plain next steps. level: good, info, warn or action."""
+    items = []
+    def add(area, level, text): items.append({"area": area, "level": level, "text": text})
+    status = spf.get("status")
+    if status == "published":
+        if spf.get("policy") == "hard_fail":
+            add("SPF", "good", "SPF is published and rejects unlisted senders (-all).")
+        elif spf.get("policy") == "soft_fail":
+            add("SPF", "info", "SPF is published with ~all. Once every service that sends your mail is listed, tighten it to -all.")
+        else:
+            add("SPF", "warn", "SPF is published but does not restrict senders. End the record with ~all, then -all.")
+    elif status == "not_published":
+        add("SPF", "action", "No SPF record. Publish one TXT record starting v=spf1 that lists your mail services and ends in ~all.")
+    elif status in {"multiple_records", "invalid_record"}:
+        add("SPF", "action", "The SPF record is invalid or duplicated, which breaks SPF. Publish exactly one valid v=spf1 record.")
+    else:
+        add("SPF", "info", "SPF could not be assessed from this check. Run it again.")
+    dstatus = dkim.get("status")
+    if dstatus == "published":
+        add("DKIM", "good" if dkim.get("tone") == "good" else "warn",
+            "DKIM signing key found." if dkim.get("tone") == "good" else "A DKIM key is 1024-bit. Rotate to 2048-bit in your mail provider.")
+    elif dstatus == "not_found":
+        add("DKIM", "action", "No DKIM key at common selectors. Turn on DKIM signing in your mail provider, publish the key it gives you, and confirm it appears here.")
+    elif dstatus == "revoked":
+        add("DKIM", "action", "A DKIM key is revoked (empty). Publish a new key if you still send mail with that selector.")
+    else:
+        add("DKIM", "info", "DKIM could not be assessed from this check. Run it again.")
+    mstatus = dmarc.get("status")
+    if mstatus == "published":
+        policy = dmarc.get("effective_policy") or dmarc.get("policy")
+        if policy == "reject":
+            add("DMARC", "good", "DMARC is published at reject, the strongest policy." + ("" if dmarc.get("aggregate_reporting_configured") else " Add a rua= address to receive reports."))
+        elif policy == "quarantine":
+            add("DMARC", "info", "DMARC is at quarantine. After reviewing reports and confirming legitimate mail passes, move to reject.")
+        else:
+            add("DMARC", "action", "DMARC is monitor-only (p=none). Review the reports, then move to quarantine and then reject.")
+    elif mstatus == "not_published":
+        add("DMARC", "action", "No DMARC record. Publish a TXT record at _dmarc with v=DMARC1; p=none; rua=mailto:you@domain to start, then tighten it.")
+    elif mstatus in {"multiple_records", "invalid_record"}:
+        add("DMARC", "action", "The DMARC record is invalid or duplicated. Publish exactly one valid v=DMARC1 record.")
+    else:
+        add("DMARC", "info", "DMARC could not be assessed from this check. Run it again.")
+    return items
+
+
 def analyze_email_auth(records: Any, resolver_errors: Any = None) -> dict[str, Any]:
     """Interpret observed root SPF and DMARC records without extra DNS queries."""
     if resolver_errors is not None and (
@@ -284,8 +379,13 @@ def analyze_email_auth(records: Any, resolver_errors: Any = None) -> dict[str, A
         }
     records = records if isinstance(records, dict) else {}
     errors = resolver_errors if isinstance(resolver_errors, dict) else {}
+    spf = _spf_assessment(records, errors)
+    dkim = _dkim_assessment(records, errors)
+    dmarc = _dmarc_assessment(records, errors)
     return {
         "version": 1,
-        "spf": _spf_assessment(records, errors),
-        "dmarc": _dmarc_assessment(records, errors),
+        "spf": spf,
+        "dkim": dkim,
+        "dmarc": dmarc,
+        "guidance": _guidance(spf, dkim, dmarc),
     }
