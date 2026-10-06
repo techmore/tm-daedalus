@@ -378,6 +378,28 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 2)
         self.assertNotEqual(server.external_check_warning_signature("dns", {"resolver_errors": {"DS": "SERVFAIL"}}), server.external_check_warning_signature("dns", {"resolver_errors": {"DNSKEY": "SERVFAIL"}}))
 
+    def test_new_package_advisory_match_creates_dated_human_readable_notice(self):
+        from unittest.mock import patch
+        from copy import deepcopy
+        snapshot = {"http_status": 200, "page_content": {"comparison_eligible": True},
+            "dependency_package_observations": {"schema_version": 1, "truncated": False,
+                "packages": [{"ecosystem": "npm", "name": "react", "version": "18.3.1"}]}}
+        first = {"schema_version": 1, "state": "observed", "packages": [
+            {"ecosystem": "npm", "name": "react", "version": "18.3.1", "state": "observed", "advisory_ids": []}]}
+        with patch.object(server, "query_declared_package_advisories", return_value=first):
+            self.run_web(deepcopy(snapshot))
+        changed = deepcopy(first)
+        changed["packages"][0]["advisory_ids"] = ["GHSA-fixture-only"]
+        with patch.object(server, "query_declared_package_advisories", return_value=changed):
+            run = self.run_web(deepcopy(snapshot))
+        notice = self.client.get("/api/notifications").json()["notifications"][0]
+        self.assertEqual(notice["source_id"], run["id"])
+        self.assertIn("dependency advisory matches", notice["summary"])
+        self.assertNotIn("dependency_advisory_observations", notice["summary"])
+        self.assertTrue(notice["detected_at"])
+        history = self.client.get("/api/external-checks/web").json()
+        self.assertEqual(history["changes"][0]["field_label"], "Dependency advisory matches")
+
     def test_website_advisory_lookup_is_saved_and_failure_preserves_page_evidence(self):
         from unittest.mock import patch
         snapshot = {"http_status": 200, "page_content": {"comparison_eligible": True},
