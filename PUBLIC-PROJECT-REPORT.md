@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Installed Mac scanner network display — 2026-10-05
+
+The managed Mac scanner was upgraded to the bundle at `9dede43`, with a successful readiness check and retained data reported by the upgrade transaction. The native window now displays IP `192.168.222.244`, mask `255.255.255.0` and CIDR `192.168.222.0/24`; the IP and mask match the current system en0 configuration. Its existing operator-selected target `10.20.0.107` is preserved. NmapUI remains running and its bridge connected, with scan activity idle. Both shipped scanner XSL files were byte-identical to the installed versions before the upgrade. Six focused bundle/release tests passed. Public IP is still absent; no new scan or production portal release was started. Private receipt: `validation/mac-network-display-9dede43.json`.
+
 ## PDF platform font investigation — 2026-10-05
 
 Embedded-font inspection confirms that the saved Mac export uses Menlo while the isolated SER8 render uses Liberation Mono for monospaced evidence. A private reference-font experiment on SER8 embedded Menlo and retained seven pages, but did not reproduce the saved first-page spacing. Font fallback is therefore a typography difference, not a complete explanation of layout parity. No repository font asset, production renderer or customer report was changed. Private receipts: `validation/pdf-font-platform-comparison-20261005.json` and `validation/pdf-menlo-reference-20261005.json`. Final PDF visual fidelity remains open.
