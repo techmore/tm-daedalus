@@ -62,6 +62,23 @@ assert.equal(route.children[0].textContent,'Lookup failed');
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_packaged_discovery_results_only_show_on_dashboard(self):
+        archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
+        with zipfile.ZipFile(archive) as bundle:
+            source = bundle.read('daedalus-nmapui-source/static/js/reports_tab.js').decode()
+        function = source[source.index('function switchAppTab('):source.index('function initializeReportsTab(')]
+        script = """const assert=require('node:assert/strict');let currentAppTab,historyViewMode='current';
+const elements={};const document={getElementById(id){return elements[id]??=( {hidden:false,classList:{toggle(name,value){if(name==='hidden')elements[id].hidden=value;}}});}};
+const window={location:{hash:''},history:{replaceState(_a,_b,hash){window.location.hash=hash;}}};
+function setTabButtonState(){} function loadHistoryTab(){} function loadReportsTab(){}
+""" + function + """
+for(const tab of ['dashboard','history','reports','customers','logs','settings','dashboard']){
+switchAppTab(tab);assert.equal(elements['dashboard-results-panel'].hidden,tab!=='dashboard');}
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_manifest_can_identify_uncommitted_runtime_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
