@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import http.client
+from datetime import datetime
 from urllib.parse import urlsplit
 
 from .domain_verification import normalize_domain
@@ -80,33 +81,55 @@ def registration_evidence(domain: str, document: dict) -> dict:
     entities = document.get("entities", [])
     if any(not isinstance(value, list) for value in (nameservers, events, entities)):
         raise ValueError("Malformed RDAP evidence collections")
+    partial = any(key not in document for key in ("nameservers", "events", "entities"))
+    partial = partial or any(len(value) > 100 for value in (nameservers, events, entities))
     names = set()
     for item in nameservers[:100]:
         if isinstance(item, dict) and isinstance(item.get("ldhName"), str):
             names.add(normalize_domain(item["ldhName"]))
-    dates = []
+        else:
+            partial = True
+    dates = set()
     for item in events[:100]:
-        if isinstance(item, dict) and item.get("eventAction") in {"registration", "expiration", "last changed"}:
+        if not isinstance(item, dict):
+            partial = True
+            continue
+        if item.get("eventAction") in {"registration", "expiration", "last changed"}:
             value = item.get("eventDate")
-            if isinstance(value, str) and len(value) <= 64:
-                dates.append({"action": item["eventAction"], "date": value})
+            try:
+                if not isinstance(value, str) or len(value) > 64 or datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is None:
+                    raise ValueError("Invalid registration event date")
+            except ValueError:
+                partial = True
+                continue
+            dates.add((item["eventAction"], value))
     registrars = set()
     for entity in entities[:100]:
         if not isinstance(entity, dict):
+            partial = True
             continue
         roles = entity.get("roles")
-        if not isinstance(roles, list) or "registrar" not in roles:
+        if not isinstance(roles, list):
+            partial = True
+            continue
+        if "registrar" not in roles:
             continue
         card = entity.get("vcardArray")
         if not isinstance(card, list) or len(card) != 2 or not isinstance(card[1], list):
+            partial = True
             continue
+        partial = partial or len(card[1]) > 100
+        found_name = False
         for field in card[1][:100]:
-            if isinstance(field, list) and len(field) == 4 and field[0] == "fn" and isinstance(field[3], str):
+            if isinstance(field, list) and len(field) == 4 and field[0] == "fn" and isinstance(field[3], str) and field[3].strip():
                 registrars.add(field[3][:256])
+                partial = partial or len(field[3]) > 256
+                found_name = True
+        partial = partial or not found_name
     return {"domain": domain, "state": "observed", "protocol": "rdap",
             "nameservers": sorted(names), "registrars": sorted(registrars),
-            "events": sorted(dates, key=lambda item: (item["action"], item["date"])),
-            "collection_partial": any(len(value) > 100 for value in (nameservers, events, entities)),
+            "events": [{"action": action, "date": date} for action, date in sorted(dates)],
+            "collection_partial": partial or not registrars,
             "registration_owner_verified": False}
 
 

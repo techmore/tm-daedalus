@@ -521,6 +521,15 @@ assert.ok(email.children[2].children[1].rows.some(r=>r.type==='MX'));
 assert.equal(diagnostics.tag,'details');
 assert.match(diagnostics.children.at(-1).textContent,/unknown, not missing/);
 assert.equal(resolution.children[1].children[1].value,'Unknown');
+function dateLabel(value){return value;}
+renderDnsSnapshot({domain:'example.org',records:{},registration_observations:{state:'observed',collection_partial:false,registrars:['Fixture registrar'],nameservers:['ns.example.org'],events:[{action:'expiration',date:'2027-01-01T00:00:00Z'}]}});
+const observedRegistration=grid.children[2];
+assert.equal(observedRegistration.children[1].children.length,4);
+assert.equal(observedRegistration.children[1].children[1].value,'Fixture registrar');
+assert.equal(observedRegistration.children[1].children[2].value,'2027-01-01T00:00:00Z');
+assert.equal(observedRegistration.children[2].children[1].rows.length,3);
+renderDnsSnapshot({domain:'example.org',records:{},registration_observations:{state:'unavailable'}});
+assert.equal(grid.children[2].children[1].children[0].value,'Unavailable');
 renderDnsSnapshot(null);assert.equal(grid.children.length,1);
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)

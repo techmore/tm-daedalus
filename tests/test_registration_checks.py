@@ -42,6 +42,30 @@ class RegistrationChecksTests(unittest.TestCase):
         document["events"] *= 101
         self.assertTrue(registration_evidence("example.org", document)["collection_partial"])
 
+    def test_missing_and_unreadable_metadata_is_partial_not_confirmed_removal(self):
+        from copy import deepcopy
+        from daedalus.external_checks import compare_snapshots
+        baseline = registration_evidence("example.org", self.document())
+        baseline["source_url"] = "https://registry.example/domain/example.org"
+        for change in ({"nameservers": [{}]}, {"events": [{"eventAction": "expiration", "eventDate": "invalid"}]},
+                       {"entities": [{"roles": ["registrar"], "vcardArray": []}]}, {"entities": []}):
+            with self.subTest(change=change):
+                current = registration_evidence("example.org", {**self.document(), **change})
+                self.assertTrue(current["collection_partial"])
+                current["source_url"] = baseline["source_url"]
+                paths = [path for path, _, _ in compare_snapshots(
+                    {"domain": "example.org", "registration_observations": baseline},
+                    {"domain": "example.org", "registration_observations": current})]
+                self.assertFalse(set(paths) & {"registration_observations.registrars", "registration_observations.nameservers", "registration_observations.events"})
+        document = deepcopy(self.document())
+        del document["nameservers"]
+        self.assertTrue(registration_evidence("example.org", document)["collection_partial"])
+
+    def test_repeated_events_are_canonicalized(self):
+        document = self.document()
+        document["events"] *= 2
+        self.assertEqual(len(registration_evidence("example.org", document)["events"]), 1)
+
     def test_failure_is_unavailable_not_empty_registration(self):
         with patch("daedalus.registration_checks.fetch_json", side_effect=TimeoutError):
             result = run_registration_check("example.org")

@@ -3087,6 +3087,14 @@
       "Public RDAP evidence does not verify domain ownership", observedRegistration ? "neutral" : registration ? "attention" : "neutral"));
     var registrationRows = [];
     if (observedRegistration) {
+      var registrarNames = registration.registrars || [];
+      var registryNameservers = registration.nameservers || [];
+      var expiryEvents = (registration.events || []).filter(function (event) { return event.action === "expiration"; });
+      registrationMetrics.append(
+        makeAuditMetric("Registrar", registrarNames.join(", ") || "Unknown", "Registry's public registrar metadata", "neutral"),
+        makeAuditMetric("Registration expiry", expiryEvents.length === 1 ? dateLabel(expiryEvents[0].date) : expiryEvents.length ? "Multiple dates" : "Unknown", "Provider-reported date; review saved event evidence", "neutral"),
+        makeAuditMetric("Registry nameservers", registryNameservers.length ? String(registryNameservers.length) : "Unknown", registryNameservers.join(", ") || "Not supplied by provider", "neutral")
+      );
       ["registrars", "nameservers"].forEach(function (key) {
         registrationRows.push({type: key === "registrars" ? "Registrar" : "Nameservers", name: "RDAP", value: (registration[key] || []).join(", ") || "Not supplied by provider", present: Boolean((registration[key] || []).length), statusTone: "is-neutral", statusText: (registration[key] || []).length ? "Observed" : "Unknown"});
       });
