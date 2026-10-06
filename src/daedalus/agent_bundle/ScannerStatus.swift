@@ -26,6 +26,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
     let windowHistory = NSTextField(wrappingLabelWithString: "Managed scan history is loading…")
     let windowBody = NSStackView()
     let windowHistoryPanel = NSStackView()
+    let windowHistoryScroll = NSScrollView()
     let hostedReportPanel = NSStackView()
     let hostedReportStatus = NSTextField(wrappingLabelWithString: "")
     var hostedReportFingerprint = ""
@@ -178,8 +179,12 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             hostedReportPanel.orientation = .vertical; hostedReportPanel.alignment = .leading; hostedReportPanel.spacing = 6
             windowHistoryPanel.addArrangedSubview(hostedReportPanel)
             windowHistoryPanel.addArrangedSubview(hostedReportStatus)
-            windowHistoryPanel.isHidden = true
-            windowBody.addArrangedSubview(windowHistoryPanel); windowBody.addArrangedSubview(web)
+            windowHistoryScroll.hasVerticalScroller = true
+            windowHistoryScroll.drawsBackground = false
+            windowHistoryPanel.translatesAutoresizingMaskIntoConstraints = false
+            windowHistoryScroll.documentView = windowHistoryPanel
+            windowHistoryScroll.isHidden = true
+            windowBody.addArrangedSubview(windowHistoryScroll); windowBody.addArrangedSubview(web)
             for view in [windowStatus, controls, windowBody] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
             NSLayoutConstraint.activate([
                 windowStatus.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
@@ -189,7 +194,12 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
                 controls.centerYAnchor.constraint(equalTo: windowStatus.centerYAnchor),
                 windowBody.leadingAnchor.constraint(equalTo: root.leadingAnchor), windowBody.trailingAnchor.constraint(equalTo: root.trailingAnchor),
                 windowBody.topAnchor.constraint(equalTo: windowStatus.bottomAnchor, constant: 12), windowBody.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-                web.widthAnchor.constraint(equalTo: windowBody.widthAnchor), windowHistoryPanel.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
+                web.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
+                windowHistoryScroll.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
+                windowHistoryScroll.heightAnchor.constraint(equalToConstant: 220),
+                windowHistoryPanel.leadingAnchor.constraint(equalTo: windowHistoryScroll.contentView.leadingAnchor),
+                windowHistoryPanel.topAnchor.constraint(equalTo: windowHistoryScroll.contentView.topAnchor),
+                windowHistoryPanel.widthAnchor.constraint(equalTo: windowHistoryScroll.contentView.widthAnchor),
                 web.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
             ])
             scannerWindow = window; scannerWebView = web
@@ -263,8 +273,8 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         }.resume()
     }
     @objc func toggleRecent() {
-        windowHistoryPanel.isHidden.toggle()
-        windowHistoryButton.title = windowHistoryPanel.isHidden ? "Recent scans" : "Hide recent scans"
+        windowHistoryScroll.isHidden.toggle()
+        windowHistoryButton.title = windowHistoryScroll.isHidden ? "Recent scans" : "Hide recent scans"
     }
     @objc func reloadScanner() {
         if let url = scannerWebView?.url, sameScannerOrigin(url) { scannerWebView?.reload() }
