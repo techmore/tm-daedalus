@@ -848,7 +848,7 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .topic-priority > .eyebrow { color: var(--olive-600); }
 .topic-priority > h3 { font-size: 24px; }
 
-.topic-priority > .cis-hero-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.topic-priority > .cis-hero-card { padding: 0; border: 0; background: transparent; box-shadow: none; grid-template-columns: 1fr; align-items: start; }
 .topic-priority > .cis-hero-card h3 { font-size: 24px; }
 .topic-priority .cis-mini-metric span { font-size: 12px; }
 .topic-priority .cis-mini-metric strong { font-size: 26px; }

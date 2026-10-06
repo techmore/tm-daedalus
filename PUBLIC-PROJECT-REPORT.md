@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## Recovered CIS visual review and compact summary — 2026-10-05
+
+Selecting the existing agent-owned QA space 8 in the native Ego workspace selector, then resetting page zoom, restored its screenshot capture. No new TaskSpace or ownership takeover was used. Reviewed the production CIS page at 1154 pixels and a temporary preview of the two-property dashboard CSS correction. The original metric grid occupied a tall narrow column beside empty space; the preview places summary text above five wrapping metric tiles, bringing assessment coverage into the first desktop screen. The matching source CSS and asset cache version are updated locally; 59 dashboard/CIS route tests and seven subtests passed, as did diff checks.
+
+A reviewed 390x844 mobile preview has no horizontal overflow, but its expanded navigation occupies much of the first screen before assessment data. Mobile information hierarchy remains unfinished. This review covers the production CIS page and the temporary summary layout preview, not every topic or the entire current local release. No PDF layout or production release changed. Private images/receipt: validation/dashboard-cis-{normal,compact-desktop,compact-mobile}-20261005.png and validation/cis-layout-review-20261005.json.
+
+Backend CI 37394318484 at bd9ca59 passed on both Python 3.11 and 3.12: 656 tests and 168 subtests per job with no skip. This includes the new real Linux APT-index test, which was skipped locally on Mac. It proves read-only collector execution on the CI Linux host, not production Linux command delivery or deployment activation.
+
 ## Read-only Linux cached-update checks — 2026-10-05
 
 Bridge protocol 4 adds a Linux APT-index check using /usr/bin/apt list --upgradable with a C locale and a 30-second timeout. It does not refresh repositories, install packages or request elevated privileges. Results retain source=existing_apt_index and catalog_refreshed=false, preserve unavailable/error/timeout/unknown states, and bound displayed package details while retaining the observed count. Non-APT hosts return unavailable. Protocol 3 macOS checks remain compatible; the server refuses Linux checks on older bridges or offline devices.
