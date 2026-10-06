@@ -77,7 +77,7 @@ def _run_streaming_ssh(arguments: list[str]) -> str:
 
 
 def _ssh(host: str, command: list[str]) -> str:
-    return _run_streaming_ssh(["ssh", host, shlex.join(command)])
+    return _run_streaming_ssh(["ssh", "-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1", host, shlex.join(command)])
 
 
 def _validate(host: str, instance: str, *, require_clean: bool = True) -> None:

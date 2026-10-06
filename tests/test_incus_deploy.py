@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.deploy_incus import DeployError, _validate, deploy, _run_streaming_ssh
+from scripts.deploy_incus import DeployError, _validate, deploy, _run_streaming_ssh, _ssh
 
 
 ROOT = Path(__file__).parents[1]
@@ -25,6 +25,14 @@ class IncusDeployTests(unittest.TestCase):
         self.assertIn('Tailscale SSH requires an additional check', output.getvalue())
         self.assertIn('https://login.tailscale.com/a/test12345678', output.getvalue())
         self.assertNotIn('private diagnostic', output.getvalue())
+
+    def test_ssh_bounds_connection_without_limiting_remote_work(self):
+        with patch("scripts.deploy_incus._run_streaming_ssh", return_value="ready") as command:
+            self.assertEqual(_ssh("operator@incus-host", ["incus", "exec", "daedalus-prod", "--", "echo", "a b"]), "ready")
+        self.assertEqual(command.call_args.args[0], [
+            "ssh", "-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1",
+            "operator@incus-host", "incus exec daedalus-prod -- echo 'a b'",
+        ])
 
     def test_streaming_ssh_retains_exit_failure(self):
         with self.assertRaisesRegex(DeployError, r'Command failed \(7\): fixture failure'):
