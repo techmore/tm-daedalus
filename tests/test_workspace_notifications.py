@@ -378,6 +378,15 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/notifications").json()["notifications"]), 2)
         self.assertNotEqual(server.external_check_warning_signature("dns", {"resolver_errors": {"DS": "SERVFAIL"}}), server.external_check_warning_signature("dns", {"resolver_errors": {"DNSKEY": "SERVFAIL"}}))
 
+    def test_dns_lookup_recovery_notice_does_not_claim_configuration_change(self):
+        self.run_dns({"records": {"A": ["192.0.2.1"]}, "resolver_errors": {"DS": "SERVFAIL"}})
+        run = self.run_dns({"records": {"A": ["192.0.2.1"]}, "resolver_errors": {}})
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        notice = next(n for n in notices if n["source_id"] == run["id"])
+        self.assertIn("lookup coverage change", notice["summary"])
+        self.assertIn("No confirmed configuration changes", notice["summary"])
+        self.assertNotIn("material", notice["summary"])
+
     def test_website_change_notices_and_history_use_human_readable_labels(self):
         baseline = {
             "domain": "cybersecuritypilot.org", "http_status": 200,

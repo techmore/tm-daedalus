@@ -1772,9 +1772,22 @@ def _execute_external_check(
                         external_check_change_group(check_type, field_path)
                         for field_path, _, _ in changes
                     ))
-                    fields = ", ".join(groups[:3])
-                    count_label = "change" if len(changes) == 1 else "changes"
-                    parts.append(f"{len(changes)} material {count_label} detected" + (f": {fields}" if fields else ""))
+                    coverage_groups = {"DNS lookup status", "domain registration lookup coverage", "certificate history lookup coverage"}
+                    coverage_count = sum(
+                        external_check_change_group(check_type, field_path) in coverage_groups
+                        for field_path, _, _ in changes
+                    )
+                    material_count = len(changes) - coverage_count
+                    if material_count:
+                        count_label = "change" if material_count == 1 else "changes"
+                        material_fields = ", ".join(group for group in groups if group not in coverage_groups)
+                        parts.append(f"{material_count} material {count_label} detected" + (f": {material_fields}" if material_fields else ""))
+                    if coverage_count:
+                        count_label = "change" if coverage_count == 1 else "changes"
+                        coverage_fields = ", ".join(group for group in groups if group in coverage_groups)
+                        parts.append(f"{coverage_count} lookup coverage {count_label} detected: {coverage_fields}")
+                    if not material_count:
+                        parts.append("No confirmed configuration changes were detected")
                     if len(changes) > 3:
                         parts.append(f"and {len(changes) - 3} more field changes")
                 if warning_reasons:
