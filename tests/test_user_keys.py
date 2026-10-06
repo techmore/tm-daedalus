@@ -15,6 +15,8 @@ class UserKeyTests(unittest.TestCase):
         self.assertIn('keyDate(key.revoked_at)', script)
         self.assertIn('keyDate(key.expires_at)', script)
         self.assertIn('button.setAttribute("aria-label", `Revoke ${key.name}`)', script)
+        self.assertIn('error.status = response.status;', script)
+        self.assertIn('if (error.status === 401) { location.assign("/"); return; }', script)
         self.assertIn('#create-key, #token-login { display: grid;', css)
         self.assertIn('#new-key { white-space: pre-wrap; overflow-wrap: anywhere; }', css)
 
