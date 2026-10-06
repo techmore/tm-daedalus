@@ -20,6 +20,10 @@ def env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+# Platform owners are made admins of every workspace created through Daedalus.
+PLATFORM_ADMIN_EMAILS = tuple(sorted({
+    email.strip().lower() for email in os.environ.get("DAEDALUS_PLATFORM_ADMIN_EMAILS", "").split(",") if "@" in email
+}))
 AUDIT_DNS_NAMESERVERS = parse_audit_nameservers(os.environ.get("DAEDALUS_AUDIT_DNS_NAMESERVERS", ""))
 
 APP_ENV = os.environ.get("DAEDALUS_ENV", "development").strip().lower()

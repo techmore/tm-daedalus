@@ -4492,15 +4492,21 @@
       text(feedback, "Creating workspace…");
       var form = new FormData(createWorkspaceForm);
       try {
-        var body = await postJson("/api/workspaces", {
+        var body = await postJson("/api/customers", {
           name: form.get("name"),
-          domain: form.get("domain")
+          domains: String(form.get("domains") || "").split(/[\s,;]+/).filter(Boolean)
         });
-        text(document.getElementById("created-record-name"), body.txt.record_name);
-        text(document.getElementById("created-record-value"), body.txt.record_value);
-        text(document.getElementById("created-probation"), "Add this record within 30 days. Challenge expires " + new Date(body.txt.expires_at).toLocaleString() + ".");
-        text(feedback, body.name + " is ready. Save the DNS record now; Daedalus will switch into this workspace when you continue.");
-        challenge.classList.remove("hidden");
+        var lines = body.results.map(function (item) {
+          var label = item.domain || item.input;
+          return label + " — " + (item.status === "created" ? "added, daily checks starting" : item.status === "exists" ? "already has a workspace (ask its admin for access)" : item.detail || "not valid");
+        });
+        text(feedback, body.created ? body.customer + ": " + lines.join(" · ") : lines.join(" · "));
+        if (body.created) {
+          text(document.getElementById("created-record-name"), "Optional ownership check");
+          text(document.getElementById("created-record-value"), "Open each workspace's Members page to copy its TXT record when you want it verified.");
+          text(document.getElementById("created-probation"), "Audits do not wait for verification.");
+          challenge.classList.remove("hidden");
+        }
         createWorkspaceForm.reset();
       } catch (error) {
         showError(feedback, error.message);

@@ -41,6 +41,7 @@ from daedalus import __version__
 from daedalus.config import (
     APP_ENV,
     AUDIT_DNS_NAMESERVERS,
+    PLATFORM_ADMIN_EMAILS,
     ALLOWED_HOSTS,
     BASE_URL,
     BACKGROUND_WORKERS_ENABLED,
@@ -2694,31 +2695,31 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
-@app.post("/api/workspaces")
-def create_workspace(
-    payload: WorkspaceCreateRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    user = get_session_user(request, db)
-    try:
-        domain = normalize_domain(payload.domain)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+def clean_domain_input(raw: str) -> str:
+    """Accept what people paste: a URL, a www host or a bare domain."""
+    value = (raw or "").strip().lower()
+    value = re.sub(r"^[a-z][a-z0-9+.-]*://", "", value)
+    value = re.split(r"[/?#]", value, maxsplit=1)[0]
+    value = re.sub(r":\d+$", "", value).strip(".")
+    if value.startswith("www.") and value.count(".") >= 2:
+        value = value[4:]
+    return normalize_domain(value)
+
+
+def create_domain_workspace(db: Session, user: User, name: str, domain: str) -> tuple[Organization, dict[str, Any]]:
     existing = db.scalar(select(Organization).where(Organization.domain == domain))
     if existing is not None:
         raise HTTPException(
             status_code=409,
             detail="This domain already has a workspace. Request access from its administrator.",
         )
-
     slug_base = re.sub(r"[^a-z0-9]+", "-", domain).strip("-")[:68] or "workspace"
     slug = slug_base
     if db.scalar(select(Organization).where(Organization.slug == slug)) is not None:
         slug = slug_base + "-" + secrets.token_hex(3)
     now = utcnow()
     organization = Organization(
-        name=payload.name.strip(),
+        name=name.strip(),
         slug=slug,
         domain=domain,
         verification_status="pending",
@@ -2745,10 +2746,31 @@ def create_workspace(
             "workspace.created",
             {"domain": domain, "verification_status": "pending"},
         )
+        for owner in db.scalars(select(User).where(func.lower(User.email).in_(PLATFORM_ADMIN_EMAILS))).all() if PLATFORM_ADMIN_EMAILS else []:
+            if owner.id == user.id:
+                continue
+            db.add(Membership(user_id=owner.id, organization_id=organization.id, role="admin", status="approved", created_at=now))
+            audit(db, organization.id, user.id, "membership.platform_admin_added", {"user_id": owner.id, "email": owner.email})
         db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="This domain is already claimed.") from exc
+    return organization, challenge
+
+
+@app.post("/api/workspaces")
+def create_workspace(
+    payload: WorkspaceCreateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = get_session_user(request, db)
+    try:
+        domain = clean_domain_input(payload.domain)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    organization, challenge = create_domain_workspace(db, user, payload.name, domain)
+    ensure_default_external_schedules()
     request.session["organization_id"] = organization.id
     return {
         "organization_id": organization.id,
@@ -2758,6 +2780,50 @@ def create_workspace(
         "probation_expires_at": organization.verification_expires_at.isoformat() + "Z",
         "txt": challenge,
     }
+
+
+class CustomerCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    domains: list[str] = Field(min_length=1, max_length=20)
+
+
+@app.post("/api/customers")
+def create_customer_workspaces(
+    payload: CustomerCreateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """One customer, one or more domains: a workspace per domain, audited daily."""
+    user = get_session_user(request, db)
+    results: list[dict[str, Any]] = []
+    created: list[Organization] = []
+    seen: set[str] = set()
+    cleaned: list[tuple[str, str | None]] = []
+    for raw in payload.domains:
+        try:
+            domain = clean_domain_input(raw)
+        except ValueError as exc:
+            results.append({"input": raw, "status": "invalid", "detail": str(exc)})
+            continue
+        if domain in seen:
+            continue
+        seen.add(domain)
+        cleaned.append((domain, None))
+    multiple = len(cleaned) > 1
+    for domain, _ in cleaned:
+        label = f"{payload.name.strip()} · {domain}" if multiple else payload.name.strip()
+        try:
+            organization, challenge = create_domain_workspace(db, user, label, domain)
+        except HTTPException as exc:
+            results.append({"domain": domain, "status": "exists" if exc.status_code == 409 else "invalid", "detail": exc.detail})
+            continue
+        created.append(organization)
+        results.append({"domain": domain, "status": "created", "organization_id": organization.id,
+                        "name": organization.name, "txt": challenge})
+    if created:
+        ensure_default_external_schedules()
+        request.session["organization_id"] = created[0].id
+    return {"customer": payload.name.strip(), "results": results, "created": len(created)}
 
 
 @app.post("/api/workspaces/{organization_id}/domain-challenge")

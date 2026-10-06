@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-127">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-128">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -499,15 +499,15 @@
   </div>
   <div id="check-toast" class="check-toast hidden" role="status" aria-live="polite"></div>
   <dialog class="workspace-dialog" id="workspace-dialog" aria-labelledby="workspace-dialog-title">
-    <div class="dialog-heading"><div><p class="eyebrow">DAEDALUS WORKSPACES</p><h2 id="workspace-dialog-title">Create or join a workspace</h2></div><button class="icon-button dialog-close" type="button" data-close-workspace-dialog aria-label="Close">×</button></div>
+    <div class="dialog-heading"><div><p class="eyebrow">DAEDALUS WORKSPACES</p><h2 id="workspace-dialog-title">Add a customer or join a workspace</h2></div><button class="icon-button dialog-close" type="button" data-close-workspace-dialog aria-label="Close">×</button></div>
     <p class="muted">Domains have independent workspaces. Matching email addresses do not grant access automatically.</p>
     <div class="workspace-forms">
       <form id="create-workspace-form" class="workspace-form">
-        <h3>Create a domain workspace</h3>
-        <label>Workspace name<input name="name" required minlength="2" maxlength="200" placeholder="Cyber Security Pilot"></label>
-        <label>Domain you manage<input name="domain" required minlength="3" maxlength="253" placeholder="example.com" autocomplete="url"></label>
-        <button class="button button-primary" type="submit">Create workspace</button>
-        <small>You'll start as its admin. Add a DNS TXT record within 30 days to verify ownership.</small>
+        <h3>Add a customer</h3>
+        <label>Customer name<input name="name" required minlength="2" maxlength="200" placeholder="Deep Run Hemp"></label>
+        <label>Domains, one per line<textarea name="domains" required rows="4" maxlength="2000" placeholder="deeprunshop.com&#10;deeprunhemp.com"></textarea></label>
+        <button class="button button-primary" type="submit">Add customer</button>
+        <small>You can paste full web addresses. Each domain gets its own workspace, and DNS, email and website checks start automatically every day. TXT verification is optional.</small>
       </form>
       <form id="request-access-form" class="workspace-form">
         <h3>Request access</h3>
@@ -526,6 +526,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261006-144" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261006-145" defer></script>
 </body>
 </html>

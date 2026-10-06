@@ -193,7 +193,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261006-144", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261006-145", response.text)
         self.assertIn('data-load-older-checks="dns"', response.text)
         self.assertIn('data-load-older-checks="web"', response.text)
         self.assertIn('data-load-older-active="changes"', response.text)
@@ -1067,6 +1067,29 @@ class CISReportPDFFlowTests(unittest.TestCase):
             self.assertEqual(schedule.last_run_status, "cancelled")
             self.assertIsNone(schedule.next_run_at)
         self.assertEqual(server.claim_due_external_check_schedules(), [])
+
+    def test_customer_onboarding_accepts_urls_creates_a_workspace_per_domain_and_adds_platform_admins(self):
+        with self.session_factory() as db:
+            owner = db.scalar(select(User).where(User.email == "demo.admin@cybersecuritypilot.org"))
+            owner_id = owner.id
+        with patch.object(server, "PLATFORM_ADMIN_EMAILS", ("demo.admin@cybersecuritypilot.org",)):
+            response = self.client.post("/api/customers", json={"name": "Deep Run", "domains": [
+                "https://deeprunshop.com/", "www.deeprunhemp.com", "deeprunshop.com", "not a domain"]})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        statuses = {item.get("domain") or item.get("input"): item["status"] for item in body["results"]}
+        self.assertEqual(statuses["deeprunshop.com"], "created")
+        self.assertEqual(statuses["deeprunhemp.com"], "created")
+        self.assertEqual(statuses["not a domain"], "invalid")
+        self.assertEqual(body["created"], 2)
+        with self.session_factory() as db:
+            names = sorted(org.name for org in db.scalars(select(Organization).where(Organization.domain.in_(("deeprunshop.com", "deeprunhemp.com")))).all())
+            self.assertEqual(names, ["Deep Run · deeprunhemp.com", "Deep Run · deeprunshop.com"])
+            schedules = db.scalars(select(ExternalCheckSchedule).join(Organization, Organization.id == ExternalCheckSchedule.organization_id).where(Organization.domain.like("deeprun%"))).all()
+            self.assertEqual(len(schedules), 4)
+            self.assertTrue(all(row.enabled for row in schedules))
+        again = self.client.post("/api/customers", json={"name": "Deep Run", "domains": ["deeprunshop.com"]})
+        self.assertEqual(again.json()["results"][0]["status"], "exists")
 
     def test_workspaces_get_daily_schedules_by_default_without_overriding_choices(self):
         with self.session_factory() as db:
