@@ -360,6 +360,28 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertEqual(body["profiles"][0]["version"], profile["version"])
         self.assertEqual(body["profiles"][0]["checks"], profile["checks"])
 
+    def test_approved_login_message_is_delivered_in_immutable_profile_version(self):
+        from copy import deepcopy
+        profile = {'slug': 'approved-login', 'name': 'Approved login', 'version': '1', 'platform': 'macos',
+                   'checks': [{'id': 'login', 'category': 'macos', 'description': 'Login warning',
+                               'rule_id': 'system_settings_loginwindow_loginwindowtext_enable',
+                               'expected_login_message': '  Approved warning\nAuthorized only  '}]}
+        published = self.client.post('/api/cis/profiles', json=profile)
+        self.assertEqual(published.status_code, 200, published.text)
+        key = self.client.post('/api/cis/api-key').json()['api_key']
+        catalog = self.client.get('/api/cis/client/profiles', headers={'X-API-Key': key})
+        self.assertEqual(catalog.status_code, 200)
+        self.assertEqual(catalog.json()['profiles'][0]['checks'][0]['expected_login_message'],
+                         profile['checks'][0]['expected_login_message'])
+        changed = deepcopy(profile)
+        changed['checks'][0]['expected_login_message'] = 'Another approved warning'
+        self.assertEqual(self.client.post('/api/cis/profiles', json=changed).status_code, 409)
+        changed['version'] = '2'
+        self.assertEqual(self.client.post('/api/cis/profiles', json=changed).status_code, 200)
+        versions = self.client.get('/api/cis/client/profiles', headers={'X-API-Key': key}).json()['profiles']
+        self.assertEqual({p['version']: p['checks'][0]['expected_login_message'] for p in versions},
+                         {'1': profile['checks'][0]['expected_login_message'], '2': 'Another approved warning'})
+
     def test_macos26_revision_publication_preserves_old_versions(self):
         from copy import deepcopy
         old_profiles = deepcopy(server.load_macos26_starter_profiles())

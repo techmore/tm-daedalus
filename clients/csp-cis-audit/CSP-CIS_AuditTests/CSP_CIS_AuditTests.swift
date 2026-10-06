@@ -11,6 +11,27 @@ import XCTest
 @testable import CSP_CIS_Audit
 
 struct CSP_CIS_AuditTests {
+    @Test func approvedLoginMessageUsesExactCapturedPreferenceWithoutTextDisclosure() throws {
+        let rule = "system_settings_loginwindow_loginwindowtext_enable"
+        let check = CISCheck(id: rule, category: "macos", description: "Login warning", ruleID: rule, expectedLoginMessage: "Approved warning\nAuthorized only")
+        let decoded = try JSONDecoder().decode(CISCheck.self, from: JSONEncoder().encode(check))
+        #expect(decoded.expectedLoginMessage == check.expectedLoginMessage)
+        let passing = MacOSChecks.runTahoe(check: decoded, osMajorVersion: 26) { suite, key in
+            #expect(suite == "com.apple.loginwindow")
+            #expect(key == "LoginwindowText")
+            return "Approved warning\nAuthorized only"
+        }
+        #expect(passing.status == "pass")
+        #expect(!passing.details.contains("Approved warning"))
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 26) { _, _ in "Other private text" }.status == "fail")
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 26) { _, _ in "" }.status == "fail")
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 26) { _, _ in nil }.status == "manual")
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 26) { _, _ in true }.status == "manual")
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 26) { _, _ in String(repeating: "x", count: 2049) }.status == "manual")
+        #expect(MacOSChecks.runTahoe(check: check, osMajorVersion: 27) { _, _ in Issue.record("Unexpected preference read"); return nil }.status == "manual")
+        let absent = CISCheck(id: rule, category: "macos", description: "Login warning", ruleID: rule)
+        #expect(MacOSChecks.runTahoe(check: absent, osMajorVersion: 26) { _, _ in Issue.record("Unexpected unconfigured read"); return nil }.status == "manual")
+    }
 
     @Test func missingBrowserPreferencesRemainManualWithoutGuessingDefaults() {
         let chrome = CISCheck(id: "chrome_1", category: "chrome", description: "Ensure Safe Browsing settings are enabled")

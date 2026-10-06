@@ -14,6 +14,32 @@ from daedalus.reports import build_cis_endpoint_pdf
 
 
 class CISProfileTests(unittest.TestCase):
+    def test_approved_login_message_is_preserved_and_changes_profile_checksum(self):
+        from copy import deepcopy
+        profile = {'name': 'Approved message', 'version': '1', 'platform': 'macos', 'checks': [
+            {'id': 'login', 'category': 'macos', 'description': 'Login message',
+             'rule_id': 'system_settings_loginwindow_loginwindowtext_enable',
+             'expected_login_message': '  Organization warning\nAuthorized use only  '}]}
+        valid = validate_profile(profile)
+        self.assertEqual(valid['checks'][0]['expected_login_message'], profile['checks'][0]['expected_login_message'])
+        changed = deepcopy(valid)
+        changed['checks'][0]['expected_login_message'] = 'Other approved message'
+        self.assertNotEqual(profile_checksum(valid), profile_checksum(changed))
+        for value in (None, False, 1, [], '', '   ', 'x\x00', 'x\x7f', '\ud800', 'é' * 1025):
+            bad = deepcopy(profile)
+            bad['checks'][0]['expected_login_message'] = value
+            with self.subTest(value=repr(value)), self.assertRaises(CISDataError):
+                validate_profile(bad)
+        for field, value in (('rule_id', 'other_rule'), ('category', 'chrome')):
+            bad = deepcopy(profile)
+            bad['checks'][0][field] = value
+            with self.assertRaises(CISDataError):
+                validate_profile(bad)
+        bad = deepcopy(profile)
+        bad['platform'] = 'multi'
+        with self.assertRaises(CISDataError):
+            validate_profile(bad)
+
     def test_distributed_alignment_document_matches_project_copy(self):
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]

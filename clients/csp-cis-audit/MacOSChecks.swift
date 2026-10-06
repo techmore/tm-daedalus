@@ -215,6 +215,24 @@ struct MacOSChecks {
         guard osMajorVersion == 26 else {
             return CheckResult(check: check, status: "manual", details: "This profile targets macOS 26.0; the local CSP check was not run on this OS version.")
         }
+        if check.ruleID == "system_settings_loginwindow_loginwindowtext_enable" {
+            func readable(_ value: String) -> Bool {
+                value.utf8.count <= 2048 && !value.unicodeScalars.contains {
+                    ($0.value < 32 && $0.value != 10 && $0.value != 9) || $0.value == 127
+                }
+            }
+            guard let expected = check.expectedLoginMessage, readable(expected),
+                  !expected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return CheckResult(check: check, status: "manual", details: "The selected profile has no valid organization-approved login message. No example message or nonempty-text test was substituted.")
+            }
+            guard let observed = readPreference("com.apple.loginwindow", "LoginwindowText") as? String,
+                  readable(observed) else {
+                return CheckResult(check: check, status: "manual", details: "The login-window message preference was missing, unreadable or unsupported. Its text was not collected into report details.")
+            }
+            let matches = observed.utf8.elementsEqual(expected.utf8)
+            return CheckResult(check: check, status: matches ? "pass" : "fail",
+                details: matches ? "Captured login-window preference matches the organization-approved profile message. This is preference evidence, not a live login-screen observation." : "Captured login-window preference differs from the organization-approved profile message. Message text remains local.")
+        }
         if check.ruleID == "audit_retention_configure" {
             return checkTahoeAuditRetention(check: check, readControl: readAuditPolicy)
         }

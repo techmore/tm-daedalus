@@ -14,6 +14,7 @@ struct CISCheck: Codable {
     let description: String
     let ruleID: String?
     let benchmarkIDs: [String]?
+    let expectedLoginMessage: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -21,6 +22,7 @@ struct CISCheck: Codable {
         case description
         case ruleID = "rule_id"
         case benchmarkIDs = "benchmark_ids"
+        case expectedLoginMessage = "expected_login_message"
     }
 
     init(
@@ -28,13 +30,15 @@ struct CISCheck: Codable {
         category: String,
         description: String,
         ruleID: String? = nil,
-        benchmarkIDs: [String]? = nil
+        benchmarkIDs: [String]? = nil,
+        expectedLoginMessage: String? = nil
     ) {
         self.id = id
         self.category = category
         self.description = description
         self.ruleID = ruleID
         self.benchmarkIDs = benchmarkIDs
+        self.expectedLoginMessage = expectedLoginMessage
     }
 
     init(from decoder: Decoder) throws {
@@ -44,6 +48,7 @@ struct CISCheck: Codable {
         description = try values.decode(String.self, forKey: .description)
         ruleID = try values.decodeIfPresent(String.self, forKey: .ruleID)
         benchmarkIDs = try values.decodeIfPresent([String].self, forKey: .benchmarkIDs)
+        expectedLoginMessage = try values.decodeIfPresent(String.self, forKey: .expectedLoginMessage)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -53,6 +58,7 @@ struct CISCheck: Codable {
         try values.encode(description, forKey: .description)
         try values.encodeIfPresent(ruleID, forKey: .ruleID)
         try values.encodeIfPresent(benchmarkIDs, forKey: .benchmarkIDs)
+        try values.encodeIfPresent(expectedLoginMessage, forKey: .expectedLoginMessage)
     }
 }
 

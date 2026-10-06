@@ -1513,3 +1513,9 @@ The project alignment document and client-distributed copy now match. Current pr
 ## Combined source validation — October 6, 2026
 
 Source 982abac passed the complete documented local command: 704 tests and 214 subtests, one Linux-only skip, two dependency warnings, 40.89 seconds. The specific preceding Linux run 37414305924 completed successfully in all three scenarios, allowing the retained UI/documentation commits to be pushed without cancelling it. No production release or PDF asset changed.
+
+## Organization-approved CIS login-message check — October 6, 2026
+
+A new optional expected_login_message field is accepted only on the macOS login-window rule in an immutable profile version. Validation preserves exact whitespace, rejects invalid Unicode/control characters or values over 2048 UTF-8 bytes, and includes the value in the profile checksum. API validation proves authenticated client catalog delivery, same-version mutation rejection and preservation of separate versions. The Swift client checks captured LoginwindowText only on macOS 26: exact UTF-8 match passes, explicit mismatch fails, and absent/unreadable/unsupported evidence or missing approved configuration stays manual. Observed message text is not placed in uploaded result details. The generated default profiles and default mapping counts remain unchanged.
+
+Native xcodebuild unit validation returned 114 passes, zero failures and one skipped real Tahoe assessment, retained in validation/cis-approved-message-native-summary.json. The final Python suite passed 706 tests and 224 subtests, with one Linux-only skip and two dependency warnings in 39.96 seconds. This proves fixture and API behavior, not physical managed macOS 26 preference/GUI enforcement. No PDF asset, installed production client or hosted production release changed. Linux run 37414966541 remains active, so this source is committed locally pending its completion.

@@ -83,6 +83,20 @@ def validate_profile(profile: Any) -> dict[str, Any]:
             if not PROFILE_ID.fullmatch(rule_id):
                 raise CISDataError("A check rule ID contains unsupported characters.")
             normalized_check["rule_id"] = rule_id
+        if "expected_login_message" in row:
+            message = row["expected_login_message"]
+            if (rule_id != "system_settings_loginwindow_loginwindowtext_enable"
+                    or platform != "macos" or category != "macos"
+                    or not isinstance(message, str) or not message.strip()
+                    or any((ord(c) < 32 and c not in "\n\t") or ord(c) == 127 for c in message)):
+                raise CISDataError("An approved login message belongs only to the macOS login-window rule.")
+            try:
+                size = len(message.encode("utf-8"))
+            except UnicodeEncodeError as exc:
+                raise CISDataError("The approved login message must be valid Unicode.") from exc
+            if size > 2048:
+                raise CISDataError("The approved login message exceeds 2048 UTF-8 bytes.")
+            normalized_check["expected_login_message"] = message
         benchmark_ids = row.get("benchmark_ids")
         if benchmark_ids is not None:
             if (
