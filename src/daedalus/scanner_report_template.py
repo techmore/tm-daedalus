@@ -1,4 +1,8 @@
-"""Render the standardized NmapUI report from original Nmap XML evidence."""
+"""Render a pinned historical NmapUI candidate from original XML evidence.
+
+The historical asset is retained for fidelity review; its filename and digest
+do not establish user approval of this candidate.
+"""
 
 from pathlib import Path
 import hashlib
@@ -14,7 +18,7 @@ from lxml import etree
 
 ASSETS = Path(__file__).with_name("scanner_report_assets")
 MAX_XML_BYTES = 16 * 1024 * 1024
-APPROVED_TEMPLATE_SHA256 = "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537"
+HISTORICAL_TEMPLATE_SHA256 = "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537"
 REPORT_ASSET_SHA256 = {
     "tailwind.css": "c9f25a1f752e7d51faca479a190657929812107a465e8b24d7866115c838f73d",
     "fonts/inter-latin-opsz-normal.woff2": "2c295d99e26dcf357d4d01bcf270fd6924b600c9a13dd8c363ef114f4c6976fa",
@@ -59,7 +63,7 @@ def original_xml_documents(events: list[dict]) -> list[bytes]:
             raise ValueError("Conflicting original XML chunk content.")
         group["chunks"][index] = chunk
     if not groups:
-        raise ValueError("This scan has no original Nmap XML evidence for the approved PDF template.")
+        raise ValueError("This scan has no original Nmap XML evidence for the original NmapUI report template.")
     documents = []
     total_bytes = 0
     for (_, expected), group in groups.items():
@@ -77,7 +81,7 @@ def original_xml_documents(events: list[dict]) -> list[bytes]:
 
 
 def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) -> str:
-    """Apply the approved PDF XSL without network access or XML entity expansion.
+    """Apply the historical NmapUI XSL without network access or XML entity expansion.
 
     Accept original XML only: parsed observation summaries cannot establish the
     scan coverage, product versions and script evidence this report displays.
@@ -112,7 +116,7 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
         template_bytes = (ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes()
     except OSError as exc:
         raise ValueError("Standardized scanner PDF template is unavailable; report generation stopped.") from exc
-    if hashlib.sha256(template_bytes).hexdigest() != APPROVED_TEMPLATE_SHA256:
+    if hashlib.sha256(template_bytes).hexdigest() != HISTORICAL_TEMPLATE_SHA256:
         raise ValueError("Scanner PDF template differs from the pinned standardized baseline; report generation stopped.")
     stylesheet = etree.parse(io.BytesIO(template_bytes), parser=parser)
     if target_label is not None:
@@ -130,7 +134,7 @@ def standardized_scanner_html(xml: bytes, *, target_label: str | None = None) ->
     try:
         html = str(transform(document))
     except etree.XSLTApplyError as exc:
-        raise ValueError("Original Nmap XML could not be rendered by the approved template.") from exc
+        raise ValueError("Original Nmap XML could not be rendered by the historical NmapUI template.") from exc
     font_css = ""
     for family, filename, weight in [
         ("Inter", "inter-latin-opsz-normal.woff2", "100 900"),
@@ -254,7 +258,7 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     provenance = report_snapshot.get("scanner_report_template")
     if provenance is not None and (
         not isinstance(provenance, dict)
-        or provenance.get("stylesheet_sha256") != APPROVED_TEMPLATE_SHA256
+        or provenance.get("stylesheet_sha256") != HISTORICAL_TEMPLATE_SHA256
         or ("asset_sha256" in provenance and provenance["asset_sha256"] != REPORT_ASSET_SHA256)
     ):
         raise ValueError("The saved report template no longer matches the standardized baseline; no replacement layout was generated.")
@@ -265,7 +269,7 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
     scanner = report_snapshot.get("scanner") or {}
     events = scanner.get("events")
     if not isinstance(events, list):
-        raise ValueError("The approved scan PDF requires a saved run with original Nmap XML evidence.")
+        raise ValueError("The NmapUI scan report requires a saved run with original Nmap XML evidence.")
     html = standardized_scanner_run_html(events)
     with tempfile.TemporaryDirectory(prefix="daedalus-scanner-pdf-") as directory:
         path = Path(directory) / "report.html"

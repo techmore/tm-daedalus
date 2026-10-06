@@ -5860,7 +5860,7 @@ def create_scanner_results_pdf(event_id: int, request: Request, background_tasks
     if event.event_name not in {"scan_results", "quickscan_results", "deep_scan_results"}:
         raise HTTPException(status_code=422, detail="Choose a saved scan_results, quickscan_results or deep_scan_results event.")
     if not event.source_job_id:
-        raise HTTPException(status_code=422, detail="This historical event has no original Nmap XML run evidence. Its saved JSON remains available; the approved PDF requires a new scanner run.")
+        raise HTTPException(status_code=422, detail="This historical event has no original Nmap XML run evidence. Its saved JSON remains available; the NmapUI report requires a new scanner run.")
     return create_scanner_run_pdf(agent.id, UUID(event.source_job_id), request, background_tasks, db)
 
 
@@ -6853,8 +6853,8 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
            "snapshot_payload_bytes": payload_bytes, "snapshot_event_limit": MAX_SCANNER_RUN_PDF_EVENTS,
            "snapshot_byte_limit": MAX_SCANNER_RUN_PDF_BYTES, "truncated": False}
     if status != "completed" or run["group_metadata_conflict"]:
-        raise HTTPException(status_code=422, detail="The approved PDF requires a completed scanner run with consistent saved run metadata.")
-    from daedalus.scanner_report_template import standardized_scanner_run_html, APPROVED_TEMPLATE_SHA256, REPORT_ASSET_SHA256
+        raise HTTPException(status_code=422, detail="The NmapUI report requires a completed scanner run with consistent saved run metadata.")
+    from daedalus.scanner_report_template import standardized_scanner_run_html, HISTORICAL_TEMPLATE_SHA256, REPORT_ASSET_SHA256
     try:
         standardized_scanner_run_html(saved_events)
     except ValueError as exc:
@@ -6866,7 +6866,7 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
         report_snapshot={"domain": organization.domain, "organization_name": organization.name,
             "requested_by": user.email, "generated_at": iso_utc(now),
             "scanner_report_template": {"source_commit": "86e404fc16626c9c674d52663101600ad29de695",
-                                        "stylesheet_sha256": APPROVED_TEMPLATE_SHA256,
+                                        "stylesheet_sha256": HISTORICAL_TEMPLATE_SHA256,
                                         "asset_sha256": dict(REPORT_ASSET_SHA256)},
             "scanner": {"name": agent.name, "agent_id": agent.id, "source_job_id": str(source_job_id),
                         "run": run, "events": saved_events, "payload": []}})
@@ -6875,7 +6875,7 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
     job.file_name = f"daedalus-scanner-{agent.id}-run-{source_job_id}-{job.id}.pdf"
     audit(db, organization.id, user.id, "report.requested", {"report_id": job.id, "report_type": job.report_type,
         "source_job_id": str(source_job_id), "agent_id": agent.id, "event_count": len(saved_events), "snapshot_payload_bytes": payload_bytes,
-        "template_sha256": APPROVED_TEMPLATE_SHA256, "template_asset_sha256": dict(REPORT_ASSET_SHA256)})
+        "template_sha256": HISTORICAL_TEMPLATE_SHA256, "template_asset_sha256": dict(REPORT_ASSET_SHA256)})
     db.commit()
     db.refresh(job)
     background_tasks.add_task(generate_report_job, job.id)

@@ -17,7 +17,7 @@ XML = b'''<?xml version="1.0"?><!DOCTYPE nmaprun>
 <hosts up="1" down="0" total="1"/></runstats></nmaprun>'''
 
 
-def test_approved_template_renders_original_evidence():
+def test_historical_template_renders_original_evidence():
     html = standardized_scanner_html(XML)
     assert "127.0.0.1" in html
     assert "Example service" in html
@@ -228,7 +228,7 @@ def test_pdf_capture_finishes_template_animations_before_printing(monkeypatch, i
     snapshot = {"scanner": {"events": []}}
     if include_asset_provenance:
         snapshot["scanner_report_template"] = {
-            "stylesheet_sha256": module.APPROVED_TEMPLATE_SHA256,
+            "stylesheet_sha256": module.HISTORICAL_TEMPLATE_SHA256,
             "asset_sha256": dict(module.REPORT_ASSET_SHA256),
         }
     pdf = module.render_standardized_scanner_pdf(snapshot)
