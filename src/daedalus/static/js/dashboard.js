@@ -2818,6 +2818,62 @@
     });
   }
 
+  function buildCheckActionBar(type) {
+    var panel = document.getElementById("tab-" + type);
+    var intro = panel && panel.querySelector(".page-intro");
+    if (!intro || panel.querySelector(".check-action-bar")) return;
+    var bar = document.createElement("div"); bar.className = "check-action-bar";
+    var note = document.createElement("span"); note.className = "check-action-note";
+    var admin = role === "admin";
+    var checkNow = document.createElement("button"); checkNow.type = "button"; checkNow.className = "button button-primary"; checkNow.textContent = "Check now";
+    var daily = document.createElement("button"); daily.type = "button"; daily.className = "button button-quiet"; daily.textContent = "Daily check…";
+    var pdf = document.createElement("button"); pdf.type = "button"; pdf.className = "button button-quiet"; pdf.textContent = "Download PDF";
+    var scheduleOn = false;
+    async function syncSchedule() {
+      try {
+        var response = await fetch("/api/external-checks/" + type, {credentials: "same-origin"});
+        var body = await response.json();
+        scheduleOn = !!(body.schedule && body.schedule.enabled);
+        daily.textContent = scheduleOn ? "Daily check: on" : "Turn on daily check";
+        note.textContent = scheduleOn && body.schedule.next_run_at ? "Next automatic check " + dateLabel(body.schedule.next_run_at) : (scheduleOn ? "" : "Not checked automatically yet");
+      } catch (_e) { /* keep defaults */ }
+    }
+    checkNow.addEventListener("click", async function () {
+      checkNow.disabled = true; checkNow.textContent = "Checking…";
+      try { await postJson("/api/external-checks/" + type + "/run"); await loadExternalCheck(type); } catch (error) { note.textContent = error.message; }
+      checkNow.disabled = false; checkNow.textContent = "Check now";
+    });
+    daily.addEventListener("click", async function () {
+      daily.disabled = true;
+      try {
+        var response = await fetch("/api/external-checks/" + type + "/schedule", {method: "PUT", credentials: "same-origin",
+          headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: !scheduleOn, interval_hours: 24})});
+        if (!response.ok) throw new Error("Could not change the daily check");
+        await syncSchedule();
+      } catch (error) { note.textContent = error.message; }
+      daily.disabled = false;
+    });
+    pdf.addEventListener("click", async function () {
+      pdf.disabled = true; pdf.textContent = "Preparing PDF…";
+      try {
+        var job = await postJson("/api/reports/external-posture");
+        for (var attempt = 0; attempt < 90; attempt += 1) {
+          await new Promise(function (resolve) { window.setTimeout(resolve, 1000); });
+          var reports = (await (await fetch("/api/reports", {credentials: "same-origin"})).json()).reports || [];
+          var found = reports.find(function (report) { return report.id === job.id; });
+          if (found && found.status === "failed") throw new Error("The PDF could not be generated");
+          if (found && found.download_url) { window.location.assign(found.download_url); break; }
+        }
+      } catch (error) { note.textContent = error.message; }
+      pdf.disabled = false; pdf.textContent = "Download PDF";
+    });
+    if (admin) bar.append(checkNow, daily);
+    bar.append(pdf, note);
+    intro.after(bar);
+    syncSchedule();
+  }
+  ["dns", "web"].forEach(buildCheckActionBar);
+
   function dateLabel(value) {
     if (!value) return "Not recorded";
     var date = new Date(value);
@@ -3058,11 +3114,26 @@
     if (type === "dns") {
       var errors = snapshot.resolver_errors || {};
       var guidance = snapshot.email_authentication_assessment && snapshot.email_authentication_assessment.guidance;
-      if (Array.isArray(guidance)) {
+      if (Array.isArray(guidance) && guidance.length) {
+        var marks = {good: ["✓", "ok"], info: ["~", "info"], warn: ["!", "warn"], action: ["✕", "bad"]};
+        var list = document.createElement("ul"); list.className = "check-list";
         guidance.forEach(function (item) {
-          if (item && item.level !== "good") finding(item.area + (item.level === "action" ? " — fix this" : " — worth a look"), item.text);
+          var mark = marks[item.level] || marks.warn;
+          var li = document.createElement("li"); li.className = "check-item is-" + mark[1];
+          var icon = document.createElement("span"); icon.className = "check-mark"; icon.textContent = mark[0]; icon.setAttribute("aria-hidden", "true");
+          var label = document.createElement("strong"); label.textContent = item.area;
+          var detail = document.createElement("span"); detail.className = "check-detail"; detail.textContent = item.text;
+          li.append(icon, label, detail); list.append(li);
         });
-        if (guidance.length && !items.length) finding("Email protection looks healthy", guidance.map(function (item) { return item.area + " OK"; }).join(" · ") + ". " + guidance.map(function (item) { return item.text; }).join(" "));
+        var failed = Object.keys(errors);
+        var look = document.createElement("li"); look.className = "check-item is-" + (failed.length ? "warn" : "ok");
+        var lookIcon = document.createElement("span"); lookIcon.className = "check-mark"; lookIcon.textContent = failed.length ? "!" : "✓"; lookIcon.setAttribute("aria-hidden", "true");
+        var lookLabel = document.createElement("strong"); lookLabel.textContent = "DNS lookups";
+        var lookDetail = document.createElement("span"); lookDetail.className = "check-detail";
+        lookDetail.textContent = failed.length ? "These lookups failed and are unknown: " + failed.join(", ") + "." : "Every lookup was answered.";
+        look.append(lookIcon, lookLabel, lookDetail); list.append(look);
+        container.append(list);
+        return;
       } else {
         emailAuthenticationMetrics(snapshot.email_authentication_assessment).forEach(function (metric) {
           if (metric.state !== "good") finding(metric.label + ": " + metric.value, metric.detail);

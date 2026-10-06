@@ -973,3 +973,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 640px) { .status-row { grid-template-columns: 14px 1fr; } .status-verdict, .status-when, .status-action-slot { grid-column: 2; text-align: left; } .status-run-all { margin-left: 0; width: 100%; } }
 .status-why { grid-column: 2 / -1; margin-top: -6px; color: var(--muted); font-size: 12.5px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .status-why { white-space: normal; overflow: visible; text-overflow: clip; } }
+
+.check-action-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 6px; }
+.check-action-note { color: var(--muted); font-size: 13px; }
+.check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.check-item { display: grid; grid-template-columns: 26px 110px 1fr; align-items: baseline; gap: 10px; padding: 11px 14px; border: 1px solid var(--card-line); border-radius: 10px; background: var(--cream-50); }
+.check-mark { font-weight: 800; color: #747b50; }
+.check-item.is-warn .check-mark, .check-item.is-info .check-mark { color: #b07d16; }
+.check-item.is-bad .check-mark { color: #b5483a; }
+.check-detail { color: var(--ink); font-size: 14px; line-height: 1.45; }
+@media (max-width: 640px) { .check-item { grid-template-columns: 22px 1fr; } .check-detail { grid-column: 2; } .check-action-bar .button { flex: 1 1 100%; } }
