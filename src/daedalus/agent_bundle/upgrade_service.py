@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 import plistlib
 import shutil
@@ -289,6 +290,12 @@ def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_relea
     if not (nmap_release / "daedalus-nmapui-source/app.py").is_file():
         raise ValueError("Prepared NmapUI application is unavailable")
     nenv = dict(old_nmap["EnvironmentVariables"])
+    enrollment = json.loads(config_path.read_bytes())
+    portal = macos_service.management_portal_url(enrollment.get("server") if isinstance(enrollment, dict) else None)
+    if portal:
+        nenv["NMAPUI_MANAGEMENT_PORTAL_URL"] = portal
+    else:
+        nenv.pop("NMAPUI_MANAGEMENT_PORTAL_URL", None)
     benv = dict(old_bridge["EnvironmentVariables"])
     nenv["PLAYWRIGHT_BROWSERS_PATH"] = str(nmap_release / "playwright-browsers")
     nmap_payload = dict(old_nmap)

@@ -173,7 +173,7 @@ cp -f "$SCRIPT_DIR/src/daedalus/command_journal.py" "$BRIDGE_SOURCE/command_jour
   --enroll-only
 CONFIG_CREATED=1
 
-"$PYTHON_BIN" "$SCRIPT_DIR/macos_service.py" nmapui \
+NMAPUI_MANAGEMENT_PORTAL_URL="$DAEDALUS_SERVER" "$PYTHON_BIN" "$SCRIPT_DIR/macos_service.py" nmapui \
   --output "$NMAPUI_PLIST" --exclusive \
   --python "$NMAPUI_PYTHON" \
   --app-dir "$SOURCE_DIR" \

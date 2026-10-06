@@ -14,6 +14,12 @@ import macos_service
 
 
 class ManagedMacOSServiceTests(unittest.TestCase):
+    def test_management_portal_url_is_public_and_validated(self):
+        self.assertEqual(macos_service.management_portal_url('https://portal.example/'), 'https://portal.example')
+        for value in [None, 'https://user:secret@portal.example', 'http://portal.example', 'https://portal.example?token=secret', 'https://portal.example:0', 'javascript:alert(1)']:
+            with self.subTest(value=value):
+                self.assertEqual(macos_service.management_portal_url(value), '')
+
     def test_nmapui_launchagent_is_loopback_only_and_restarts_on_exit(self):
         with patch.dict(os.environ, {"NMAPUI_USERNAME": "", "NMAPUI_PASSWORD": ""}):
             payload = macos_service.build_nmapui_plist(

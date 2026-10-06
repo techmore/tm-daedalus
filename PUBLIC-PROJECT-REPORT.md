@@ -1314,3 +1314,7 @@ The report-assets README still called the historical candidate an approved rende
 ## Scanner web route to hosted history — October 6, 2026
 
 The bundled scanner browser now optionally shows a Daedalus scan-history link when NMAPUI_MANAGEMENT_PORTAL_URL is configured. The server-side helper permits HTTPS (and loopback-only HTTP), rejects credential-bearing URLs, query/fragment values, invalid ports, backslashes and control characters, and never reads the agent token. The Reports link is escaped by the template and opens with noopener/noreferrer. All seven bundle tests and eight unsafe-link subtests passed. Managed installer/upgrade wiring and actual installed browser acceptance are still pending, so this is not a completed hosted-report integration. Report assets remain unchanged.
+
+## Managed scanner portal-link wiring — October 6, 2026
+
+Mac installs pass the enrollment server URL into the NmapUI LaunchAgent after URL validation. Mac upgrades recover that public address from enrollment and update the environment while preserving the token. Linux unit generation and upgrades likewise derive only the public server address from existing enrollment; unsupported/unsafe links are omitted. The browser template remains conditional, and no agent token is exposed through that link. Managed-service/upgrade validation and installed browser acceptance are pending completion; no PDF renderer or asset changed.

@@ -30,6 +30,24 @@ def _absolute(path: str) -> str:
     return str(value)
 
 
+
+def management_portal_url(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    try:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"https", "http"} or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or chr(92) in value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            return ""
+        if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            return ""
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            return ""
+        return value.rstrip("/")
+    except ValueError:
+        return ""
+
+
 def _auth_environment() -> dict[str, str]:
     username = os.environ.get("NMAPUI_USERNAME", "")
     password = os.environ.get("NMAPUI_PASSWORD", "")
@@ -78,6 +96,9 @@ def build_nmapui_plist(
         "NMAPUI_ALLOW_UNSAFE_WERKZEUG": "true",
         "PLAYWRIGHT_BROWSERS_PATH": browser_dir,
     }
+    portal = management_portal_url(os.environ.get("NMAPUI_MANAGEMENT_PORTAL_URL", ""))
+    if portal:
+        environment["NMAPUI_MANAGEMENT_PORTAL_URL"] = portal
     environment.update(_auth_environment())
     return {
         "Label": NMAPUI_LABEL,

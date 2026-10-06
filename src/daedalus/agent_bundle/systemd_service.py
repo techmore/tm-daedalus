@@ -14,6 +14,11 @@ import subprocess
 import sys
 
 
+try:
+    from .macos_service import management_portal_url
+except ImportError:
+    from macos_service import management_portal_url
+
 NMAPUI_UNIT = "daedalus-nmapui.service"
 BRIDGE_UNIT = "daedalus-scanner-bridge.service"
 ENV_FILE = "daedalus-nmapui.env"
@@ -115,6 +120,13 @@ def _nmapui_unit(args: argparse.Namespace, env_path: Path) -> str:
         "NMAPUI_COOKIE_SECURE": "false",
         "PLAYWRIGHT_BROWSERS_PATH": str(args.browser_dir),
     }
+    try:
+        enrollment = json.loads(_private_bytes(Path(args.agent_config)))
+        portal = management_portal_url(enrollment.get("server") if isinstance(enrollment, dict) else None)
+    except (OSError, ValueError):
+        portal = ""
+    if portal:
+        environment["NMAPUI_MANAGEMENT_PORTAL_URL"] = portal
     lines = [
         "[Unit]",
         "Description=Daedalus managed NmapUI scanner",
