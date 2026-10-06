@@ -78,6 +78,30 @@ class ExternalReportFreshnessTests(unittest.TestCase):
         self.assertEqual(checks["dns"]["latest_attempt"]["id"], latest.id)
         self.assertEqual(checks["web"], {"run": None, "changes": [], "latest_attempt": None})
 
+    def test_failed_website_response_evidence_does_not_become_successful_baseline(self):
+        latest = self.add_run("failed", "web")
+        latest.snapshot = {
+            "final_url": "https://fixture.example/", "http_status": 200,
+            "tls": {"negotiated_protocol": "TLSv1.3"},
+        }
+        self.db.commit()
+        self.db.expire_all()
+        saved = self.db.get(ExternalCheckRun, latest.id)
+        serialized = serialize_external_run(saved)
+        self.assertEqual(serialized["status"], "failed")
+        self.assertEqual(serialized["snapshot"]["http_status"], 200)
+        check = self.capture()["checks"]["web"]
+        self.assertIsNone(check["run"])
+        self.assertEqual(check["changes"], [])
+        self.assertEqual(check["latest_attempt"]["id"], latest.id)
+        baseline = self.add_run("completed", "web")
+        later_failure = self.add_run("failed", "web")
+        later_failure.snapshot = latest.snapshot
+        self.db.commit()
+        check = self.capture()["checks"]["web"]
+        self.assertEqual(check["run"]["id"], baseline.id)
+        self.assertEqual(check["latest_attempt"]["id"], later_failure.id)
+
     def test_foreign_workspace_and_other_check_type_do_not_replace_latest(self):
         baseline = self.add_run("completed")
         web = self.add_run("running", "web")
