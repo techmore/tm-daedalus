@@ -14,6 +14,12 @@ from daedalus.reports import build_cis_endpoint_pdf
 
 
 class CISProfileTests(unittest.TestCase):
+    def test_distributed_alignment_document_matches_project_copy(self):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        self.assertEqual((root / 'CIS-MACOS26-ALIGNMENT.md').read_bytes(),
+                         (root / 'clients/csp-cis-audit/CIS-MACOS26-ALIGNMENT.md').read_bytes())
+
     def test_bundled_csp_starter_profile_has_all_check_categories(self):
         profile = load_starter_profile()
         categories = {category: 0 for category in ("macos", "chrome", "safari")}

@@ -1,6 +1,6 @@
 # CIS macOS 26 alignment
 
-**Status:** Daedalus now has installable macOS 26 Tahoe Level 1 and Level 2 profile data. The CSP client implements 87 of the 100 Level 1 rules and 92 of the 119 Level 2 rules using bundled read-only checks. Those routines have not yet been validated on macOS 26, so the result remains a CSP pass rate, not a CIS attestation.
+**Status:** Daedalus now has installable macOS 26 Tahoe Level 1 and Level 2 profile data. The CSP client maps 87 of the 100 Level 1 rule IDs and 92 of the 119 Level 2 rule IDs to bundled read-only checks. Mapping counts do not establish complete benchmark procedure coverage. macOS 26 CI evidence exists, but physical managed endpoint deployment and procedure-by-procedure validation remain outstanding; results remain CSP pass rates, not CIS attestations.
 
 ## Source and attribution
 
@@ -37,7 +37,7 @@ The legacy CSP profile remains available and contains 154 checks (98 macOS, 33 C
 
 ## Check-in and deployment limits
 
-The menu-bar client runs at launch, on demand, and every 24 hours while it remains open. Daedalus marks a device online for 36 hours after its latest report. The client offers opt-in launch at login. A signed/notarized MDM package and verified login-item deployment are still pending; an endpoint that is shut down or has the app closed will not check in.
+The menu-bar client runs assessments at launch, on demand, and every 24 hours while it remains open. It sends a separate client heartbeat every five minutes. Daedalus considers client presence online when a nonfuture heartbeat is within 15 minutes; no heartbeat is unknown. The separate 36-hour report-recency window describes assessment freshness and does not establish that the client is running. The client offers opt-in launch at login. A signed/notarized MDM package and verified login-item deployment are still pending; an endpoint that is shut down or has the app closed will not check in.
 
 The Xcode deployment target is macOS 15.4, which is the minimum OS for the app binary. A Tahoe profile itself requires macOS 26. The local Mac has not been used for a live Tahoe audit in this implementation pass. Unit tests and profile installation tests run on the available macOS 27.0 host; these establish fixture behavior and profile coverage, not macOS 26 runtime conformance.
 
