@@ -6381,6 +6381,12 @@ SCANNER_RESULT_EVENTS = ("scan_results", "quickscan_results", "deep_scan_results
 def scanner_run_summary(db: Session, agent: Agent, source_job_id: str) -> dict[str, Any]:
     scope = (ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
              ScanEvent.source_job_id == source_job_id)
+    snapshot_event_id = db.scalar(select(func.max(ScanEvent.id)).where(*scope))
+    if snapshot_event_id is None:
+        raise HTTPException(status_code=404, detail="Scanner run not found in this workspace")
+    # Events are append-only. Keep every read within this captured boundary so
+    # uploads arriving between SELECTs cannot mix summary and detail states.
+    scope = (*scope, ScanEvent.id <= snapshot_event_id)
     occurred = func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at)
     count, first, last, job_types = db.execute(select(func.count(ScanEvent.id), func.min(occurred),
         func.max(occurred), func.count(func.distinct(ScanEvent.source_job_type))).where(*scope)).one()
@@ -6397,6 +6403,7 @@ def scanner_run_summary(db: Session, agent: Agent, source_job_id: str) -> dict[s
         if isinstance(candidate, str) and candidate in {"queued", "running", "cancelling", "completed", "failed", "cancelled", "interrupted"} and (declared_type is None or declared_type == job_type):
             status = candidate
     return {"source_job_id": source_job_id, "source_job_type": job_type, "agent_id": agent.id,
+            "snapshot_event_id": snapshot_event_id,
             "first_occurred_at": iso_utc(first), "last_occurred_at": iso_utc(last),
             "event_count": count, "result_count": result_count, "status": status,
             "status_evidence_event_id": evidence.id if evidence and status != "unknown" else None,
@@ -6557,7 +6564,8 @@ def scanner_run_detail(agent_id: int, source_job_id: UUID, request: Request, db:
     job_id = str(source_job_id)
     summary = scanner_run_summary(db, agent, job_id)
     events = db.scalars(select(ScanEvent).where(ScanEvent.organization_id == agent.organization_id,
-        ScanEvent.agent_id == agent.id, ScanEvent.source_job_id == job_id)
+        ScanEvent.agent_id == agent.id, ScanEvent.source_job_id == job_id,
+        ScanEvent.id <= summary["snapshot_event_id"])
         .order_by(func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at).desc(), ScanEvent.id.desc()).limit(200)).all()
     serialized_events = []
     serialized_bytes = 0

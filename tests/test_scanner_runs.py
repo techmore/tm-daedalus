@@ -36,6 +36,31 @@ class ScannerRunTests(unittest.TestCase):
     def send(self, envelope):
         return self.client.post(f"/api/agents/{self.agent}/events", headers=self.headers, json=envelope)
 
+    def test_run_detail_uses_one_event_boundary_during_concurrent_upload(self):
+        self.setup_scanner()
+        self.send(self.envelope('job_status', {'status': 'completed', 'job_type': 'scan'}))
+        original = server.scanner_run_summary
+        added = []
+        def append_after_summary(db, agent, job_id):
+            summary = original(db, agent, job_id)
+            response = self.send(self.envelope('scan_feedback', {'message': 'Late durable upload'}))
+            self.assertEqual(response.status_code, 200, response.text)
+            added.append(response.json())
+            return summary
+        path = f'/api/agents/{self.agent}/runs/{self.job_id}'
+        with patch.object(server, 'scanner_run_summary', side_effect=append_after_summary):
+            response = self.client.get(path)
+        self.assertEqual(response.status_code, 200, response.text)
+        detail = response.json()
+        self.assertEqual(detail['run']['event_count'], len(detail['events']))
+        self.assertFalse(detail['truncated'])
+        self.assertEqual(len(detail['events']), 1)
+        self.assertTrue(all(e['id'] <= detail['run']['snapshot_event_id'] for e in detail['events']))
+        current = self.client.get(path).json()
+        self.assertEqual(len(current['events']), 2)
+        self.assertEqual(current['run']['event_count'], 2)
+        self.assertGreater(current['run']['snapshot_event_id'], detail['run']['snapshot_event_id'])
+
     def test_device_status_uses_only_its_enrollment_and_never_returns_token(self):
         self.setup_scanner()
         self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
