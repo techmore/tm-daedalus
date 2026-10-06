@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Shared-domain role and history isolation — 2026-10-06
+
+An integration check now exercises one user who administers CSP and requests regular-user access to a second reserved test domain. It creates that workspace through the API, rejects selection while access is pending, grants a logged probation override through the second owner, approves membership, switches domains repeatedly and revokes access. Each selection retains its own role, scanners and scan events; another domain's scanner history returns 404. Regular users cannot enroll scanners or read admin audit logs. Each owner's audit log contains only its domain's private fixture history. Revoked access returns 403, while the first domain's admin access remains valid.
+
+Auth/workspace, Meraki workspace scope and notification checks passed 53 tests and 16 subtests. These are isolated database/API tests with a simulated Google identity and explicit fixture data. They do not prove real second-domain TXT onboarding, live Google sign-in or production acceptance. No production membership, override or scanner was changed.
+
 ## Advisory review links and published-source CI — 2026-10-06
 
 Saved package advisory matches now link directly to their OSV records. Links use a fixed provider origin, validated bounded IDs and explicit new-tab labels. At most ten links per package are displayed, with additional saved IDs counted. Plain DNS values are not converted into links. No HTML or URL supplied by the advisory provider is injected into the dashboard. Sixty-six focused dashboard/report-flow tests and ten subtests passed. Populated browser visual review remains pending.

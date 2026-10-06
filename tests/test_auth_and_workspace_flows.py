@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from daedalus import server
 from daedalus.db import Base, get_db
-from daedalus.models import AuditLog, DomainChallenge, Membership, Organization, User
+from daedalus.models import Agent, ScanEvent, AuditLog, DomainChallenge, Membership, Organization, User
 
 
 class FakeGoogleClient:
@@ -78,6 +78,60 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             patch.object(server.oauth, "create_client", return_value=fake_google),
         ):
             return self.client.get("/auth/google/callback", follow_redirects=False)
+
+    def test_shared_user_roles_and_scanner_history_stay_domain_scoped(self):
+        self.assertEqual(self.google_callback({"sub": "second-domain-owner", "email": "owner@example.net", "email_verified": True, "name": "Second owner"}).status_code, 303)
+        created = self.client.post("/api/workspaces", json={"name": "Second domain fixture", "domain": "shared.example.org"})
+        self.assertEqual(created.status_code, 200, created.text)
+        second = created.json()["organization_id"]
+        first = self.admin_client.get("/api/dashboard").json()["organization"]["id"]
+        requested = self.admin_client.post("/api/membership-requests", json={"domain": "shared.example.org"})
+        self.assertEqual(requested.json()["status"], "pending")
+        self.assertEqual(self.admin_client.post("/api/workspaces/select", json={"organization_id": second}).status_code, 403)
+        self.assertEqual(self.client.post(f"/api/workspaces/{second}/probation-overrides", json={"reason": "Isolated shared-access integration test"}).status_code, 200)
+        with self.session_factory() as db:
+            admin = db.scalar(select(User).where(User.google_subject == "daedalus-local-demo-admin"))
+            membership = db.scalar(select(Membership).where(Membership.user_id == admin.id, Membership.organization_id == second))
+            membership_id = membership.id
+            scanner_ids = {}
+            for organization_id in (first, second):
+                scanner = Agent(organization_id=organization_id, name=f"Private scanner {organization_id}", token_hash=f"isolated-scanner-{organization_id}", enabled=True, created_at=server.utcnow())
+                db.add(scanner)
+                db.flush()
+                scanner_ids[organization_id] = scanner.id
+                db.add(ScanEvent(organization_id=organization_id, agent_id=scanner.id, event_name="fixture_observation", payload={"domain_fixture": organization_id}, created_at=server.utcnow()))
+                db.add(AuditLog(organization_id=organization_id, action="fixture.private_history", details={"domain_fixture": organization_id}, created_at=server.utcnow()))
+            db.commit()
+        approved = self.client.post(f"/api/memberships/{membership_id}/decision", json={"approve": True})
+        self.assertEqual(approved.status_code, 200, approved.text)
+        for selected, expected_role in ((second, "user"), (first, "admin"), (second, "user")):
+            with self.subTest(workspace=selected):
+                self.assertEqual(self.admin_client.post("/api/workspaces/select", json={"organization_id": selected}).status_code, 200)
+                dashboard = self.admin_client.get("/api/dashboard").json()
+                self.assertEqual(dashboard["organization"]["id"], selected)
+                self.assertEqual(dashboard["role"], expected_role)
+                self.assertEqual([a["id"] for a in dashboard["agents"]], [scanner_ids[selected]])
+                self.assertTrue(dashboard["events"])
+                self.assertTrue(all(e["agent_id"] == scanner_ids[selected] for e in dashboard["events"]))
+                history_response = self.admin_client.get("/api/audit-log")
+                if expected_role == "admin":
+                    self.assertEqual(history_response.status_code, 200)
+                    fixture_history = [e for e in history_response.json()["events"] if e["action"] == "fixture.private_history"]
+                    self.assertEqual([e["details"]["domain_fixture"] for e in fixture_history], [selected])
+                else:
+                    self.assertEqual(history_response.status_code, 403)
+                other = first if selected == second else second
+                self.assertEqual(self.admin_client.get(f"/api/agents/{scanner_ids[other]}/runs").status_code, 404)
+                self.assertEqual(self.admin_client.get(f"/api/agents/{scanner_ids[selected]}/runs").status_code, 200)
+                self.assertEqual(self.admin_client.post("/api/enrollment-tokens").status_code, 403 if expected_role == "user" else 200)
+        second_history = self.client.get("/api/audit-log").json()["events"]
+        self.assertEqual([e["details"]["domain_fixture"] for e in second_history if e["action"] == "fixture.private_history"], [second])
+        revoked = self.client.post(f"/api/memberships/{membership_id}/revoke")
+        self.assertEqual(revoked.status_code, 200, revoked.text)
+        self.assertEqual(self.admin_client.post("/api/workspaces/select", json={"organization_id": second}).status_code, 403)
+        self.assertEqual(self.admin_client.get(f"/api/agents/{scanner_ids[second]}/runs").status_code, 403)
+        self.assertEqual(self.admin_client.post("/api/workspaces/select", json={"organization_id": first}).status_code, 200)
+        self.assertEqual(self.admin_client.get("/api/dashboard").json()["role"], "admin")
 
     def test_recovery_inspection_can_disable_background_collectors(self):
         with (
