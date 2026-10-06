@@ -913,3 +913,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 #vendor-review-history .cis-report-card p, #vendor-review-decisions .cis-report-card p { margin: 10px 0; font-size: 13px; line-height: 1.55; }
 #vendor-review-history .cis-report-card small, #vendor-review-decisions .cis-report-card small { color: var(--muted); line-height: 1.5; }
 #new-key { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.audit-event-summary, .audit-event-details { grid-column: 1 / -1; min-width: 0; }
+.audit-event-summary { margin: 0; color: var(--olive-900); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.audit-event-details summary { cursor: pointer; color: var(--olive-700); font-size: 12px; }
+.audit-event-details pre { margin-top: 8px; overflow-wrap: anywhere; }

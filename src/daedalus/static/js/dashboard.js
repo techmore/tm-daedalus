@@ -4319,6 +4319,15 @@
     }
   }
 
+  function auditEventSummary(entry) {
+    var data = entry.details || {};
+    if (entry.action === "workspace.probation_expired") return "Domain verification probation expired for " + (data.domain || "this workspace") + " at " + dateLabel(data.expires_at) + ". Recorded when observed: " + dateLabel(data.observed_at) + ".";
+    if (entry.action === "probation_override.expired") return "Temporary override #" + data.override_id + " expired at " + dateLabel(data.expires_at) + ". Recorded when observed: " + dateLabel(data.observed_at) + ".";
+    if (entry.action === "probation_override.granted") return "Temporary override #" + data.override_id + " granted through " + dateLabel(data.expires_at) + "." + (data.reason ? " Reason: " + data.reason : "");
+    if (entry.action === "probation_override.revoked") return "Temporary override #" + data.override_id + " revoked before its scheduled expiry.";
+    return "";
+  }
+
   async function loadAuditLog() {
     var list = document.getElementById("audit-log-list");
     if (!list || !orgId || role !== "admin") return;
@@ -4340,7 +4349,20 @@
         time.textContent = dateLabel(entry.created_at);
         var details = document.createElement("pre");
         details.textContent = JSON.stringify(entry.details || {}, null, 2);
-        row.append(main, time, details);
+        row.append(main, time);
+        var description = auditEventSummary(entry);
+        if (description) {
+          var explanation = document.createElement("p");
+          explanation.className = "audit-event-summary";
+          explanation.textContent = description;
+          row.append(explanation);
+        }
+        var evidence = document.createElement("details");
+        evidence.className = "audit-event-details";
+        var disclosure = document.createElement("summary");
+        disclosure.textContent = "View saved event details";
+        evidence.append(disclosure, details);
+        row.append(evidence);
         list.append(row);
       });
       if (!body.events.length) {
