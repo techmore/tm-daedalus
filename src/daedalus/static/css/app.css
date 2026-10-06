@@ -909,4 +909,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .access-key-row { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--card-line); border-radius: 10px; background: var(--card-surface); overflow-wrap: anywhere; }
 .access-key-row span { font-size: 12px; color: var(--muted); }
 .access-key-row button { justify-self: start; }
+#vendor-review-history .cis-report-card, #vendor-review-decisions .cis-report-card { padding: 16px; overflow-wrap: anywhere; }
+#vendor-review-history .cis-report-card p, #vendor-review-decisions .cis-report-card p { margin: 10px 0; font-size: 13px; line-height: 1.55; }
+#vendor-review-history .cis-report-card small, #vendor-review-decisions .cis-report-card small { color: var(--muted); line-height: 1.5; }
 #new-key { white-space: pre-wrap; overflow-wrap: anywhere; }
