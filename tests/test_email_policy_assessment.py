@@ -4,6 +4,16 @@ from daedalus.email_policy import analyze_email_auth
 
 
 class EmailPolicyAssessmentTests(unittest.TestCase):
+    def test_malformed_error_collection_cannot_establish_policy(self):
+        records = {"SPF": ["v=spf1 -all"], "DMARC": ["v=DMARC1; p=reject"]}
+        for errors in ([], ["TXT"], "SERVFAIL", 0, False):
+            with self.subTest(errors=errors):
+                result = analyze_email_auth(records, errors)
+                for protocol in ("spf", "dmarc"):
+                    self.assertEqual(result[protocol]["status"], "evidence_unavailable")
+                    self.assertIsNone(result[protocol]["policy"])
+                    self.assertIsNone(result[protocol]["record_count"])
+
     def test_malformed_saved_evidence_is_unknown_not_absent_or_protected(self):
         for key, protocol, record in (
             ("SPF", "spf", "v=spf1 -all"),

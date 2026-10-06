@@ -700,7 +700,9 @@ def serialize_external_run(run: ExternalCheckRun, actor: User | None = None) -> 
             if any(key in records for key in ("SPF", "DMARC", "TXT")) or any(
                 key in errors for key in ("TXT", "DMARC")
             ):
-                snapshot["email_authentication_assessment"] = analyze_email_auth(records, errors)
+                snapshot["email_authentication_assessment"] = analyze_email_auth(
+                    records, snapshot.get("resolver_errors")
+                )
     return {
         "id": run.id,
         "check_type": run.check_type,

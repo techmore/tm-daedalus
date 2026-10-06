@@ -8,10 +8,18 @@ from sqlalchemy.orm import Session
 
 from daedalus.db import Base
 from daedalus.models import Organization, User, ExternalCheckRun, ExternalCheckChange
-from daedalus.server import capture_external_report_snapshot
+from daedalus.server import capture_external_report_snapshot, serialize_external_run
 
 
 class ExternalReportFreshnessTests(unittest.TestCase):
+    def test_legacy_dashboard_preserves_malformed_lookup_metadata(self):
+        run = self.add_run("completed")
+        run.snapshot = {"records": {"SPF": ["v=spf1 -all"],
+            "DMARC": ["v=DMARC1; p=reject"]}, "resolver_errors": ["TXT"]}
+        result = serialize_external_run(run)["snapshot"]["email_authentication_assessment"]
+        self.assertEqual(result["spf"]["status"], "evidence_unavailable")
+        self.assertEqual(result["dmarc"]["status"], "evidence_unavailable")
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.engine = create_engine(f"sqlite:///{Path(self.directory.name) / 'fixture.db'}")

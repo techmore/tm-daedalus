@@ -270,6 +270,15 @@ def _dmarc_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[s
 
 def analyze_email_auth(records: Any, resolver_errors: Any = None) -> dict[str, Any]:
     """Interpret observed root SPF and DMARC records without extra DNS queries."""
+    if resolver_errors is not None and not isinstance(resolver_errors, dict):
+        # A malformed saved error collection cannot establish successful DNS
+        # lookups, even when record values themselves look valid. Legacy
+        # snapshots without error metadata remain supported.
+        return {
+            "version": 1,
+            "spf": _unavailable_evidence("SPF"),
+            "dmarc": _unavailable_evidence("DMARC"),
+        }
     records = records if isinstance(records, dict) else {}
     errors = resolver_errors if isinstance(resolver_errors, dict) else {}
     return {
