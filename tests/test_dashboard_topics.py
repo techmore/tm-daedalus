@@ -351,6 +351,9 @@ controls.open=false;controls.events.toggle();assert.equal(openScannerControls.ha
         self.assertLess(template.index('id="scanner-assessment"'), template.index('id="agent-list"'))
         source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
         self.assertIn('controlDetails.open = openScannerControls.has(agent.id)', source)
+        self.assertIn('empty.textContent = document.getElementById("add-scanner")', source)
+        self.assertIn("Ask a workspace admin to enroll a scanner for this network.", source)
+        self.assertIn("Enabled scanners with a current bridge heartbeat", source)
         self.assertIn('card.append(scanHistory, comparisonHistory);', source)
         self.assertIn('if (controlDetails.childNodes.length > 1) card.append(controlDetails);\n    if (history) card.append(history);', source)
 

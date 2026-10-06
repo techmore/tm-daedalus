@@ -380,12 +380,14 @@
     var counts = scannerCoverageMetrics(agents);
     var metrics = document.createElement("div"); metrics.className = "audit-metric-grid";
     metrics.append(
-      makeAuditMetric("Online scanners", counts.online + "/" + counts.enabled, "Enabled scanners reporting ready status", counts.enabled && counts.online === counts.enabled ? "good" : "attention"),
+      makeAuditMetric("Online scanners", counts.online + "/" + counts.enabled, "Enabled scanners with a current bridge heartbeat", counts.enabled && counts.online === counts.enabled ? "good" : "attention"),
       makeAuditMetric("Scan engine ready", String(counts.ready), "Online scanners with confirmed NmapUI readiness", counts.ready ? "good" : "attention"),
       makeAuditMetric("Approved scope", counts.scoped + "/" + counts.enabled, "Scanners assigned one or more private network ranges", counts.enabled && counts.scoped === counts.enabled ? "good" : "attention")
     );
     var note = document.createElement("p"); note.className = "muted";
-    note.textContent = !counts.enabled ? "No enabled scanner is enrolled. Add a scanner for each network location you want to assess."
+    note.textContent = !counts.enabled ? (document.getElementById("add-scanner")
+          ? "No enabled scanner is enrolled. Add a scanner for each network location you want to assess."
+          : "No enabled scanner is enrolled. Ask a workspace admin to add a scanner for each network location.")
       : counts.scoped === 0 ? "No private networks are approved yet. Internal network exposure remains unassessed."
       : "Approved scope and scanner availability do not establish scan coverage. Review saved runs for targets, dates, results and collection limits.";
     host.append(metrics, note);
@@ -1052,7 +1054,9 @@
         if (!data.agents.length) {
           var empty = document.createElement("div");
           empty.className = "empty-card";
-          empty.textContent = "No scanner connected yet. Use Add scanner to enroll the Mac bridge.";
+          empty.textContent = document.getElementById("add-scanner")
+            ? "No scanner connected yet. Use Add scanner to enroll the Mac bridge."
+            : "No scanner connected yet. Ask a workspace admin to enroll a scanner for this network.";
           agentList.append(empty);
         } else {
           data.agents.forEach(function (agent) {
