@@ -531,6 +531,7 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .cis-key-actions button:disabled, .cis-key-actions select:disabled, .cis-section-toolbar button:disabled { cursor: not-allowed; opacity: .58; }
 .cis-feedback { min-height: 15px; margin: 8px 0 0; color: #6b624f; font-size: 10px; }
 .cis-feedback.is-ready { color: var(--olive-800); }
+#cis-profile-feedback:empty { display: none; }
 .cis-section-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 13px 17px; }
 .cis-profile-install-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .cis-profile-list, .cis-device-list, .cis-report-list, .cis-change-list { display: grid; gap: 9px; }

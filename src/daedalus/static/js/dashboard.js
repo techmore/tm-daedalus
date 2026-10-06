@@ -2188,7 +2188,9 @@
     if (!list) return;
     list.replaceChildren();
     if (!profiles.length) {
-      appendEmpty(list, "No profile is published yet. Install the CSP starter profile or publish a new version.");
+      appendEmpty(list, document.getElementById("cis-profile-form")
+        ? "No profile is published yet. Install the CSP starter profile or publish a new version."
+        : "No profile is published yet. Ask a workspace admin to publish a profile.");
       return;
     }
     profiles.forEach(function (profile) {
@@ -2504,15 +2506,16 @@
     cisInstallMacOS26.addEventListener("click", async function () {
       cisInstallMacOS26.disabled = true;
       text(cisInstallMacOS26, "Publishing macOS 26 profiles…");
+      text(document.getElementById("cis-profile-feedback"), "");
       try {
         var result = await postJson("/api/cis/profiles/install-macos26");
         await loadCIS();
         var count = result.installed_count || 0;
-        text(document.getElementById("cis-key-status"), count
+        text(document.getElementById("cis-profile-feedback"), count
           ? "Published " + count + " macOS 26 Tahoe CIS profile(s). Choose a level in Client profile before downloading a config."
           : "The macOS 26 Tahoe Level 1 and Level 2 profiles are already published.");
       } catch (error) {
-        text(document.getElementById("cis-key-status"), error.message);
+        text(document.getElementById("cis-profile-feedback"), error.message);
       } finally {
         text(cisInstallMacOS26, "Install macOS 26 Level 1 + 2 profiles");
         cisInstallMacOS26.disabled = false;
@@ -2538,8 +2541,9 @@
     cisInstallStarter.addEventListener("click", async function () {
       cisInstallStarter.disabled = true;
       text(cisInstallStarter, "Installing profile…");
+      text(document.getElementById("cis-profile-feedback"), "");
       try { await postJson("/api/cis/profiles/install-starter"); await loadCIS(); }
-      catch (error) { text(document.getElementById("cis-key-status"), error.message); }
+      catch (error) { text(document.getElementById("cis-profile-feedback"), error.message); }
       finally { text(cisInstallStarter, "Install CSP starter profile"); cisInstallStarter.disabled = false; }
     });
   }
@@ -2668,6 +2672,7 @@
       if (!file) return;
       submit.disabled = true;
       text(submit, "Validating profile…");
+      text(document.getElementById("cis-profile-feedback"), "");
       try {
         var profile = JSON.parse(await file.text());
         profile.name = cisProfileForm.elements.name.value;
@@ -2676,10 +2681,10 @@
         profile.description = cisProfileForm.elements.description.value;
         await postJson("/api/cis/profiles", profile);
         cisProfileForm.reset();
-        text(document.getElementById("cis-key-status"), "Profile published as a new immutable version.");
+        text(document.getElementById("cis-profile-feedback"), "Profile published as a new immutable version.");
         await loadCIS();
       } catch (error) {
-        text(document.getElementById("cis-key-status"), error instanceof SyntaxError ? "Choose a valid profile JSON file." : error.message);
+        text(document.getElementById("cis-profile-feedback"), error instanceof SyntaxError ? "Choose a valid profile JSON file." : error.message);
       } finally {
         text(submit, "Validate and publish new version");
         submit.disabled = false;

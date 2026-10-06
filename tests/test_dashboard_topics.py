@@ -6,6 +6,19 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_profile_feedback_does_not_replace_client_key_status(self):
+        root = Path(__file__).parents[1] / 'src/daedalus'
+        source = (root / 'static/js/dashboard.js').read_text()
+        for start, end in [('  var cisProfileForm =', '  var generateReport ='),
+                           ('  var cisInstallMacOS26 =', '  function notifyCISReport('),
+                           ('  var cisInstallStarter =', '  var cisIssueKey =')]:
+            handler = source[source.index(start):source.index(end)]
+            self.assertIn('cis-profile-feedback', handler)
+            self.assertNotIn('cis-key-status', handler)
+        template = (root / 'templates/dashboard.html').read_text()
+        self.assertIn('id="cis-profile-feedback" aria-live="polite"', template)
+        self.assertIn('Ask a workspace admin to publish a profile.', source)
+
     def test_audit_tables_expose_named_keyboard_scroll_regions(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function makeAuditTable('):source.index('  function rowsForRecord(')]

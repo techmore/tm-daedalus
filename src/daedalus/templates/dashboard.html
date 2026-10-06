@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-115">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-116">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -308,6 +308,7 @@
             {% if membership.role == 'admin' %}<div class="cis-profile-install-actions"><button class="button button-secondary" type="button" id="cis-install-macos26">Install macOS 26 Level 1 + 2 profiles</button><button class="button button-quiet" type="button" id="cis-install-starter">Install CSP starter profile</button></div>{% endif %}
           </div>
           <div class="cis-profile-list" id="cis-profile-list" aria-live="polite"><div class="empty-events">Loading published CIS profiles…</div></div>
+          <p class="cis-feedback" id="cis-profile-feedback" aria-live="polite"></p>
           {% if membership.role == 'admin' %}
           <details class="cis-import-panel">
             <summary>Publish a profile from JSON</summary>
@@ -523,6 +524,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261006-126" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261006-127" defer></script>
 </body>
 </html>
