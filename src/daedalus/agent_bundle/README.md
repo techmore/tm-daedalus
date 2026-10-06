@@ -235,6 +235,11 @@ protocol 3 or later to check Apple's software update catalog. The check invokes
 `/usr/sbin/softwareupdate --list`, stores a bounded structured summary in
 command history, and never installs or schedules updates.
 
+Linux scanners on bridge protocol 4 or later can read upgrades from the existing
+APT package index using `/usr/bin/apt list --upgradable`. This does not refresh
+repository metadata, install packages or establish that repositories currently
+have no updates. Hosts without APT report update information unavailable.
+
 When an admin narrows a scanner's approved CIDRs, Daedalus cancels queued scans
 outside the new scope. For already-delivered scans, it requests `cancel_scan`
 only when the scanner is online and every active scan is out of scope; NmapUI's

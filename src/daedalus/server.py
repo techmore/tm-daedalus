@@ -6102,12 +6102,13 @@ def create_agent_command(
         if (agent.command_protocol_version or 0) < 1 or not agent_bridge_online(agent):
             raise HTTPException(status_code=409, detail="An online bridge with command protocol version 1 is required.")
     elif payload.action == "check_os_updates":
-        if agent.host_platform != "Darwin":
-            raise HTTPException(status_code=409, detail="Read-only OS update checks are currently supported on macOS scanners only.")
-        if (agent.command_protocol_version or 0) < 3:
-            raise HTTPException(status_code=409, detail="Update this scanner kit to protocol version 3 before checking macOS updates.")
+        required_protocol = {"Darwin": 3, "Linux": 4}.get(agent.host_platform)
+        if required_protocol is None:
+            raise HTTPException(status_code=409, detail="Read-only OS update checks support macOS and Linux scanners.")
+        if (agent.command_protocol_version or 0) < required_protocol:
+            raise HTTPException(status_code=409, detail=f"Update this scanner kit to protocol version {required_protocol} before checking OS updates.")
         if not agent_bridge_online(agent):
-            raise HTTPException(status_code=409, detail="An online protocol v3 bridge is required to check macOS updates.")
+            raise HTTPException(status_code=409, detail="An online supported bridge is required to check OS updates.")
     elif payload.action == "restart_nmapui":
         if not agent.nmapui_restart_supported:
             raise HTTPException(

@@ -397,6 +397,13 @@ assert.equal(entry.childNodes[3].tag, 'details');
 entry.childNodes=[]; decoded.update_count='5';
 render();
 assert.equal(entry.childNodes[2].textContent, 'Some update details were omitted from this receipt.');
+entry.childNodes=[]; decoded.source='existing_apt_index'; decoded.status='no_updates'; decoded.truncated=false; decoded.updates=[];
+render();
+assert.equal(entry.childNodes[0].textContent, 'No upgrades listed in the cached APT index');
+assert(entry.childNodes[1].textContent.includes('it was not refreshed'));
+entry.childNodes=[]; decoded.status='updates_available';
+render();
+assert.equal(entry.childNodes[0].textContent, 'Cached APT index lists upgrades');
 '''
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -436,13 +443,15 @@ assert.equal(label({status:'disabled',nmapui_ready:true}), 'Scanner access revok
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_macos_update_button_uses_dashboard_api_platform_field(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
-        function = source[source.index('  function supportsMacOSUpdateCheck('):source.index('  var shell =')]
+        function = source[source.index('  function supportsOSUpdateCheck('):source.index('  var shell =')]
         script = "const assert = require('node:assert/strict');\n" + function + """
-assert.equal(supportsMacOSUpdateCheck({platform:'Darwin', command_protocol_version:3}), true);
-assert.equal(supportsMacOSUpdateCheck({platform:'Darwin', command_protocol_version:2}), false);
-assert.equal(supportsMacOSUpdateCheck({platform:'Linux', command_protocol_version:3}), false);
-assert.equal(supportsMacOSUpdateCheck({host_platform:'Darwin', command_protocol_version:3}), false);
-assert.equal(supportsMacOSUpdateCheck({platform:'Darwin', command_protocol_version:'3'}), false);
+assert.equal(supportsOSUpdateCheck({platform:'Darwin', command_protocol_version:3}), true);
+assert.equal(supportsOSUpdateCheck({platform:'Darwin', command_protocol_version:2}), false);
+assert.equal(supportsOSUpdateCheck({platform:'Linux', command_protocol_version:3}), false);
+assert.equal(supportsOSUpdateCheck({platform:'Linux', command_protocol_version:4}), true);
+assert.equal(supportsOSUpdateCheck({platform:'Windows', command_protocol_version:4}), false);
+assert.equal(supportsOSUpdateCheck({host_platform:'Darwin', command_protocol_version:3}), false);
+assert.equal(supportsOSUpdateCheck({platform:'Darwin', command_protocol_version:'3'}), false);
 """
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -33,7 +33,7 @@ from daedalus.command_journal import CommandJournal
 
 
 LOG = logging.getLogger("daedalus.agent")
-COMMAND_PROTOCOL_VERSION = 3
+COMMAND_PROTOCOL_VERSION = 4
 
 
 def discover_connected_networks() -> list[str]:
@@ -657,8 +657,10 @@ class NmapUIBridge:
             raise RuntimeError("Managed Linux service verification failed; refusing to restart NmapUI.") from exc
 
     def _check_os_updates(self) -> dict[str, Any]:
-        """Run a user-requested, read-only macOS update catalog check."""
+        """Read the macOS catalog or Linux's existing APT package index."""
         observed_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        if platform.system() == "Linux":
+            return self._check_linux_updates(observed_at)
         if platform.system() != "Darwin":
             return {"schema_version": 1, "observed_at": observed_at, "status": "unsupported", "platform": platform.system()[:32]}
         executable = Path("/usr/sbin/softwareupdate")
@@ -698,6 +700,37 @@ class NmapUIBridge:
         if re.search(r"No new software available", output, re.IGNORECASE):
             return {"schema_version": 1, "observed_at": observed_at, "status": "no_updates", "platform": "Darwin", "update_count": 0, "updates": []}
         return {"schema_version": 1, "observed_at": observed_at, "status": "unknown", "platform": "Darwin"}
+
+    def _check_linux_updates(self, observed_at: str) -> dict[str, Any]:
+        evidence = {"schema_version": 1, "observed_at": observed_at, "platform": "Linux",
+                    "source": "existing_apt_index", "catalog_refreshed": False}
+        executable = Path("/usr/bin/apt")
+        if not executable.is_file():
+            return {**evidence, "status": "unavailable"}
+        try:
+            result = subprocess.run([str(executable), "list", "--upgradable"],
+                                    capture_output=True, text=True, timeout=30, check=False,
+                                    env={**os.environ, "LC_ALL": "C", "LANG": "C"})
+        except subprocess.TimeoutExpired:
+            return {**evidence, "status": "timed_out"}
+        except OSError:
+            return {**evidence, "status": "unavailable"}
+        if result.returncode != 0:
+            return {**evidence, "status": "error"}
+        output = result.stdout
+        if not isinstance(output, str) or len(output) > 128 * 1024:
+            return {**evidence, "status": "unknown"}
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        if not lines or lines[0] != "Listing...":
+            return {**evidence, "status": "unknown"}
+        updates = []
+        for line in lines[1:]:
+            match = re.fullmatch(r"([a-z0-9][a-z0-9+.-]*(?::[a-z0-9_-]+)?)/\S+\s+(\S+)\s+\S+\s+\[upgradable from: ([^\]]+)\]", line)
+            if not match:
+                return {**evidence, "status": "unknown"}
+            updates.append({"label": match[1][:160], "title": f"{match[1]} {match[3]} → {match[2]}"[:200]})
+        return {**evidence, "status": "updates_available" if updates else "no_updates",
+                "update_count": len(updates), "updates": updates[:5], "truncated": len(updates) > 5}
 
     @contextmanager
     def _managed_restart_lock(self):

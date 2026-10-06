@@ -295,7 +295,7 @@ const role='admin',controlsEnabled=true;
 const openScannerControls=new Set(),openCommandHistories=new Set(),openScanHistories=new Set(),openComparisonHistories=new Set();
 const scannerNetworkInputs=new Map(),scannerScopeFeedback=new Map(),scannerTargets=new Map(),scannerSkipDiscovery=new Map();
 function loadSavedScannerAssessment(){}
-function canViewScannerCommandHistory(){return true;} function supportsMacOSUpdateCheck(){return false;}
+function canViewScannerCommandHistory(){return true;} function supportsOSUpdateCheck(){return false;}
 function flatten(n){return [n,...n.children.flatMap(flatten)];}
 """ + renderer + """
 const agent={id:2,name:'<script>literal</script>',status:'online',enabled:true,authorized_networks:[],command_protocol_version:3,nmapui_ready:true};

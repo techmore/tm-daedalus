@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## Read-only Linux cached-update checks — 2026-10-05
+
+Bridge protocol 4 adds a Linux APT-index check using /usr/bin/apt list --upgradable with a C locale and a 30-second timeout. It does not refresh repositories, install packages or request elevated privileges. Results retain source=existing_apt_index and catalog_refreshed=false, preserve unavailable/error/timeout/unknown states, and bound displayed package details while retaining the observed count. Non-APT hosts return unavailable. Protocol 3 macOS checks remain compatible; the server refuses Linux checks on older bridges or offline devices.
+
+The dashboard uses platform-specific controls and explicitly labels cached-index results. History explains that the index was not refreshed and cannot establish current repository availability. Twenty focused UI tests passed after the final scope assertions. The full preceding local source passed 655 tests and 168 subtests, with one Linux-only test skipped on this Mac and two dependency warnings. A real APT test is included for Linux CI. The direct candidate probe over existing SER8 SSH timed out, so live Linux execution and production command delivery remain unverified. No installed agent, production release, package installation or PDF template was changed by this implementation. The code is committed locally while the preceding Linux CI run is active.
+
+APT command reference: https://www.debian.org/doc/manuals/debian-faq/pkgtools .
+
 ## Linked dependency default-port accuracy — 2026-10-05
 
 The original JS dependency scanner uses example vulnerability mappings and URL-based version guesses; those were reviewed but not ported as verified security findings. Current inventory remains observed root-HTML dependency evidence, not an automated provider-security verdict.

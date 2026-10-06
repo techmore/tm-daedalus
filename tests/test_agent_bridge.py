@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -53,6 +54,63 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid managed Linux service settings"):
             load_config(path)
 
+    @unittest.skipUnless(sys.platform == "linux" and Path("/usr/bin/apt").is_file(), "Requires a real Linux APT host")
+    def test_actual_linux_cached_index_has_a_parseable_scoped_result(self):
+        from datetime import datetime, UTC
+        bridge = self.make_bridge()
+        result = bridge._check_linux_updates(datetime.now(UTC).isoformat())
+        self.assertIn(result["status"], {"updates_available", "no_updates"}, result)
+        self.assertEqual(result["source"], "existing_apt_index")
+        self.assertFalse(result["catalog_refreshed"])
+        self.assertGreaterEqual(result["update_count"], 0)
+        self.assertLessEqual(len(result["updates"]), 5)
+
+    def test_linux_update_check_reads_cached_index_without_refresh_or_install(self):
+        bridge = self.make_bridge()
+        output = "Listing...\n" + "\n".join(f"package-{i}/stable 2.0 amd64 [upgradable from: 1.0]" for i in range(7))
+        with patch("daedalus.agent.platform.system", return_value="Linux"), patch(
+            "daedalus.agent.Path.is_file", return_value=True
+        ), patch("daedalus.agent.subprocess.run", return_value=Mock(returncode=0, stdout=output)) as run:
+            result = bridge._check_os_updates()
+        self.assertEqual(result["status"], "updates_available")
+        self.assertEqual(result["update_count"], 7)
+        self.assertEqual(len(result["updates"]), 5)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["source"], "existing_apt_index")
+        self.assertFalse(result["catalog_refreshed"])
+        self.assertEqual(run.call_args.args[0], ["/usr/bin/apt", "list", "--upgradable"])
+        self.assertEqual(run.call_args.kwargs["env"]["LC_ALL"], "C")
+        self.assertEqual(run.call_args.kwargs["timeout"], 30)
+
+    def test_linux_empty_and_unparseable_index_results_are_distinct(self):
+        bridge = self.make_bridge()
+        for output, expected in (("Listing...\n", "no_updates"), ("", "unknown"),
+                                 ("Listing...\nunparseable package\n", "unknown"),
+                                 ("Listing...\n" + "x" * (128 * 1024), "unknown")):
+            with self.subTest(expected=expected, length=len(output)), patch(
+                "daedalus.agent.Path.is_file", return_value=True
+            ), patch("daedalus.agent.subprocess.run", return_value=Mock(returncode=0, stdout=output)):
+                result = bridge._check_linux_updates("2026-10-05T00:00:00Z")
+                self.assertEqual(result["status"], expected)
+                self.assertFalse(result["catalog_refreshed"])
+
+    def test_linux_update_check_preserves_failure_states(self):
+        import subprocess
+        bridge = self.make_bridge()
+        for failure, status in ((OSError("unavailable"), "unavailable"),
+                                (subprocess.TimeoutExpired("apt", 30), "timed_out")):
+            with self.subTest(status=status), patch("daedalus.agent.Path.is_file", return_value=True), patch(
+                "daedalus.agent.subprocess.run", side_effect=failure
+            ):
+                self.assertEqual(bridge._check_linux_updates("now")["status"], status)
+        with patch("daedalus.agent.Path.is_file", return_value=False), patch("daedalus.agent.subprocess.run") as run:
+            self.assertEqual(bridge._check_linux_updates("now")["status"], "unavailable")
+            run.assert_not_called()
+        with patch("daedalus.agent.Path.is_file", return_value=True), patch(
+            "daedalus.agent.subprocess.run", return_value=Mock(returncode=1, stdout="Listing...\n")
+        ):
+            self.assertEqual(bridge._check_linux_updates("now")["status"], "error")
+
     def test_macos_update_check_parses_bounded_read_only_catalog(self):
         bridge = self.make_bridge()
         completed = Mock(returncode=0, stdout=(
@@ -102,14 +160,14 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         self.assertEqual(result["update_count"], 0)
         self.assertNotIn("stderr", result)
 
-    def test_macos_update_command_is_local_only_and_protocol_is_three(self):
-        self.assertEqual(COMMAND_PROTOCOL_VERSION, 3)
+    def test_unsupported_update_command_is_local_only_and_protocol_is_four(self):
+        self.assertEqual(COMMAND_PROTOCOL_VERSION, 4)
         bridge = self.make_bridge()
         response = Mock()
         response.json.return_value = {"command": {"id": 31, "action": "check_os_updates"}}
         bridge._request = Mock(return_value=response)
         bridge._send_command_result = Mock()
-        with patch("daedalus.agent.platform.system", return_value="Linux"), patch(
+        with patch("daedalus.agent.platform.system", return_value="Windows"), patch(
             "daedalus.agent.subprocess.run"
         ) as run:
             bridge._run_one_command()

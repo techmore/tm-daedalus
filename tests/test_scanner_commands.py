@@ -157,6 +157,20 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
                                     headers=self.headers).json()["command"]
         self.assertEqual(delivered["action"], "check_os_updates")
 
+    def test_linux_update_check_requires_online_protocol_four(self):
+        agent = self.ready(protocol=4)
+        self.client.post(f"/api/agents/{agent}/heartbeat", headers=self.headers,
+                         json={"platform": "Linux", "nmapui_connected": True,
+                               "command_protocol_version": 4})
+        queued = self.client.post(f"/api/agents/{agent}/commands", json={"action": "check_os_updates"})
+        self.assertEqual(queued.status_code, 200, queued.text)
+        delivered = self.client.get(f"/api/agents/{agent}/commands/next", headers=self.headers).json()["command"]
+        self.assertEqual(delivered["action"], "check_os_updates")
+        with self.session_factory() as db:
+            db.get(server.Agent, agent).last_seen_at = server.utcnow() - timedelta(minutes=2)
+            db.commit()
+        self.assertEqual(self.client.post(f"/api/agents/{agent}/commands", json={"action": "check_os_updates"}).status_code, 409)
+
     def test_timeout_does_not_claim_scan_success_and_is_audited_once(self):
         agent = self.ready()
         command = self.queue(agent)

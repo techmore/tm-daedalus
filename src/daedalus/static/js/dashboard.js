@@ -16,8 +16,8 @@
     return typeof observed === "string" ? observed : "Unknown";
   }
 
-  function supportsMacOSUpdateCheck(agent) {
-    return Boolean(agent && agent.platform === "Darwin" && Number.isInteger(agent.command_protocol_version) && agent.command_protocol_version >= 3);
+  function supportsOSUpdateCheck(agent) {
+    return Boolean(agent && Number.isInteger(agent.command_protocol_version) && ((agent.platform === "Darwin" && agent.command_protocol_version >= 3) || (agent.platform === "Linux" && agent.command_protocol_version >= 4)));
   }
 
   function canViewScannerCommandHistory(workspaceRole) {
@@ -562,13 +562,13 @@
       updates.textContent = "Check NmapUI updates";
       updates.disabled = agent.status !== "online";
       actions.append(target, knownTargetLabel, knownTargetHelp, scan, stop, updates);
-      if (supportsMacOSUpdateCheck(agent)) {
+      if (supportsOSUpdateCheck(agent)) {
         var osUpdates = document.createElement("button");
         osUpdates.className = "button button-small button-quiet";
         osUpdates.dataset.command = "check_os_updates";
-        osUpdates.textContent = "Check macOS updates";
+        osUpdates.textContent = agent.platform === "Linux" ? "Check cached Linux updates" : "Check macOS updates";
         osUpdates.disabled = !agent.bridge_online;
-        osUpdates.title = "Reads Apple's software update catalog. Does not install updates.";
+        osUpdates.title = agent.platform === "Linux" ? "Reads the existing APT package index; does not refresh the index or install updates." : "Reads Apple's software update catalog. Does not install updates.";
         actions.append(osUpdates);
       }
       if (agent.nmapui_restart_supported) {
@@ -628,7 +628,7 @@
           payload.commands.slice(0, 20).forEach(function (command) {
             var entry = document.createElement("div");
             entry.className = "command-entry";
-            var actionNames = { start_scan: "Run scan", cancel_scan: "Stop scan", restart_nmapui: "Restart NmapUI", check_nmapui_updates: "Check NmapUI updates", check_os_updates: "Check macOS updates", refresh_health: "Refresh health", collect_diagnostics: "Collect diagnostics" };
+            var actionNames = { start_scan: "Run scan", cancel_scan: "Stop scan", restart_nmapui: "Restart NmapUI", check_nmapui_updates: "Check NmapUI updates", check_os_updates: "Check OS updates", refresh_health: "Refresh health", collect_diagnostics: "Collect diagnostics" };
             entry.textContent = (actionNames[command.action] || command.action) + " · " + ({queued:"Queued",delivered:"Delivered",accepted:"Accepted",succeeded:"Completed",failed:"Failed",timed_out:"Completion unconfirmed",expired:"Expired",cancelled:"Cancelled"}[command.status] || command.status);
             var timeline = document.createElement("p");
             timeline.className = "command-timeline";
@@ -656,9 +656,18 @@
                   }
                 } else if (command.action === "check_os_updates" && decoded && decoded.schema_version === 1) {
                   var updateSummary = document.createElement("p");
-                  var outcome = { updates_available: "Updates are available", no_updates: "No updates are available", unavailable: "Apple's update catalog is unavailable", timed_out: "The catalog check timed out", error: "The catalog check failed", unsupported: "This platform is not supported", unknown: "The catalog response could not be interpreted" };
+                  var outcome = { updates_available: "Updates are available", no_updates: "No updates are available", unavailable: "Update information is unavailable", timed_out: "The catalog check timed out", error: "The catalog check failed", unsupported: "This platform is not supported", unknown: "The catalog response could not be interpreted" };
+                  if (decoded.source === "existing_apt_index") {
+                    outcome.updates_available = "Cached APT index lists upgrades";
+                    outcome.no_updates = "No upgrades listed in the cached APT index";
+                  }
                   updateSummary.textContent = (outcome[decoded.status] || "Update check result") + (decoded.observed_at && Number.isFinite(Date.parse(decoded.observed_at)) ? " · Checked " + new Date(decoded.observed_at).toLocaleString() : "");
                   entry.append(updateSummary);
+                  if (decoded.source === "existing_apt_index") {
+                    var indexScope = document.createElement("p");
+                    indexScope.textContent = "Based on the existing APT package index; it was not refreshed. This does not establish current repository update availability.";
+                    entry.append(indexScope);
+                  }
                   if (Array.isArray(decoded.updates)) {
                     var updateList = document.createElement("ul");
                     decoded.updates.slice(0, 5).forEach(function (update) {
