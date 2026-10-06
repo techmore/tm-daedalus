@@ -29,6 +29,14 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Installed native scanner UI review — 2026-10-06
+
+Opened the installed Daedalus Scanner Status.app through native UI automation and reviewed its accessibility state and screenshot. The window visibly reports NmapUI running, Daedalus bridge connected and scan activity idle. Its Recent scans control opens five completed workflows and links to existing hosted PDFs; no report link or scan control was activated. The embedded scanner displays current automatically derived local IP 10.20.0.106, mask 255.255.255.0 and CIDR 10.20.0.0/24, plus retained host/service observations.
+
+One original NmapUI display defect remains: its loaded October 5 scan is labeled Today while the current date is October 6. Native status/history dates themselves are correct. This review proves the actual installed window is functional; it does not establish active-scan progress, PDF fidelity or every embedded control. Private observation receipt: validation/native-scanner-ui-review-20261006.json. No scan, PDF generation or service configuration was changed.
+
+The full suite at c41f07a passed 745 tests and 255 subtests in 38.56 seconds, with one Linux-only skip and two dependency warnings.
+
 ## Marketing Pages publication and access-model copy — 2026-10-06
 
 GitHub Pages reports the configured custom domain cybersecuritypilot.org as built, using workflow publishing with HTTPS enforcement. Fresh HTTP reads of the homepage and /daedalus.html returned 200 and exactly matched their repository versions; both contain the client-portal link. This proves published bytes and entrypoint reachability, not desktop/mobile visual acceptance or final content approval.
