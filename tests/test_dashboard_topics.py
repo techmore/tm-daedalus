@@ -237,6 +237,16 @@ const result=declaredPackageEvidence({dependency_package_observations:{schema_ve
 assert.equal(result.rows.length,1);assert.equal(result.rows[0].name,'react');assert.equal(result.rows[0].statusText,'Advisories not assessed');
 assert.ok(result.scope.includes('were not verified'));assert.ok(result.scope.includes('remain unidentified'));
 assert.ok(declaredPackageEvidence({dependency_package_observations:{schema_version:1,truncated:true,packages:[]}}).scope.includes('truncated'));
+const base={dependency_package_observations:{schema_version:1,truncated:false,packages:[{ecosystem:'npm',name:'react',version:'18.3.1',source_host:'unpkg.com'}]}};
+const packageResult={ecosystem:'npm',name:'react',version:'18.3.1',state:'observed',advisory_ids:['GHSA-test']};
+let row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'observed',packages:[packageResult]}}).rows[0];
+assert.equal(row.statusText,'1 OSV advisory match(es)');assert.equal(row.statusTone,'is-absent');assert.ok(row.value.includes('GHSA-test'));
+row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'observed',packages:[{...packageResult,advisory_ids:[]}]}}).rows[0];
+assert.equal(row.statusText,'No OSV matches returned');assert.equal(row.statusTone,'is-neutral');
+row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'unavailable',packages:[]}}).rows[0];assert.equal(row.statusText,'Advisory lookup unavailable');
+row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'partial',packages:[{...packageResult,state:'partial'}]}}).rows[0];assert.equal(row.statusText,'Partial advisory lookup');
+row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'observed',packages:[{...packageResult,version:'19.0.0'}]}}).rows[0];assert.equal(row.statusText,'Advisories not assessed');
+
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
