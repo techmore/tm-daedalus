@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## Linux CI after Mac network-display fix — 2026-10-05
+
+Run 37392903810 at f70c88c passed managed lifecycle, packaged bridge interruption and repeat comparison. All three downloaded PDF hashes and byte counts match their receipts. The repeat receipt has distinct run IDs, exact comparable 127.0.0.1/32 coverage and zero host/port changes. Its normal five-minute cooldown was preserved. Backend run 37392903968 also passed. These results precede the locally validated connection-freshness UI change and do not resolve the standardized PDF baseline. Private evidence: validation/ci-linux-f70c88c/.
+
 ## Original remote-control scope review — 2026-10-05
 
 The full local suite at 7bee22d passed 648 tests and 157 subtests, with two dependency deprecation warnings. This includes the pending connection-freshness dashboard change.
