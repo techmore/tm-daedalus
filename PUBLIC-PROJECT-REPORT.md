@@ -4,8 +4,8 @@
 
 **The full project is not complete.** Historical entries below describe their own source and environment; they are not current production acceptance claims.
 
-- **Repository:** current source includes removal of the unused alternate scanner renderer, empty vendor-feedback cleanup and reconciled CIS documentation. Production activation remains pending.
-- **Validation:** current source 73b2532 passed 710 local tests and 224 subtests, with one Linux-only skip and two dependency warnings in 41.80 seconds. Backend CI 37417308886 succeeded at preceding pushed source 4f6a0d4. Linux 37417308857 passed lifecycle and interrupted-bridge; repeat comparison remains active. Native CIS 37415780020 succeeded at 76180fc. These results do not establish approved PDF fidelity or production readiness.
+- **Repository:** published source 48044bd includes declared UNPKG versions, saved OSV advisory evidence and mobile record layouts. Local refinements add malformed-pagination rejection, dated match-notice coverage and primary-assessment advisory findings. Production activation remains pending.
+- **Validation:** the full suite at 982e893 passed 737 tests and 232 subtests in 37.63 seconds, with one Linux-only skip and two dependency warnings. Backend CI 37476167650 succeeded at published 48044bd; Linux 37476167655 passed lifecycle and interrupted-bridge while repeat comparison remains active. These results do not establish approved PDF fidelity or production readiness.
 - **Local runtime:** isolated loopback QA runs the current source with background workers disabled. A complete UI-triggered DNS run saved as #25 in 3.7 seconds. Its 15 differences were availability recoveries, not configuration changes. Registration evidence was observed; certificate history retained HTTP 502 as unavailable. This does not prove successful public certificate-history retrieval.
 - **Production:** public health returned OK. Fresh SSH release inspection could not complete: LAN access timed out and Tailscale required another identity check. No deployment was attempted during this review.
 - **Standardized PDF:** the unused alternate scanner renderer is removed from current source. Historical template assets are unchanged. The exact human-approved PDF reference, visual fidelity and corrective production activation remain unresolved; filenames and passing tests do not establish approval.
@@ -1617,3 +1617,10 @@ The full suite passed 731 tests and 232 subtests in 43.37 seconds, with one Linu
 Malformed OSV pagination values are rejected as unavailable evidence rather than implying a complete lookup. Five new token fixtures cover non-string values and excessive length. The full suite collected at d66a997 passed 736 tests and 232 subtests in 38.84 seconds, with one Linux-only skip and two dependency warnings.
 
 A separate executed API/history regression at a1abd5d proves that a new returned advisory ID creates a dated notice tied to its saved run, with human-readable dependency advisory labels in both notification and change history. All 28 notification tests passed. These fixtures do not establish a vulnerability on CSP or completed browser acceptance. Current source remains local beyond published 48044bd while its backend/Linux CI runs. Production and standardized PDF assets are unchanged.
+
+
+## Advisory findings in primary website assessment — October 6, 2026
+
+The primary website assessment now surfaces declared package versions with returned OSV IDs and unavailable/partial advisory lookup coverage. Wording explicitly distinguishes URL declarations from verified bytes, execution and exploitability. Missing lookup matches remain unknown. Executed renderer regressions verify these concerns prevent a generic no-concern summary. Sixty-four topic/CIS route tests and seven subtests passed. Dashboard JS is 20261006-132. This is renderer/API evidence; populated browser acceptance and production activation remain outstanding. PDF assets were not modified.
+
+The full suite at 982e893 exited successfully with 737 passes and 232 subtests in 37.63 seconds. Linux repeat comparison remains active as observed; pending source is retained locally.
