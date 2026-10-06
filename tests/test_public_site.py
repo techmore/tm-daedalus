@@ -99,3 +99,13 @@ class PublicSiteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_site_pages_declare_a_favicon_that_exists():
+    from pathlib import Path
+    site = Path(__file__).resolve().parents[1] / "site"
+    for page in ("index.html", "daedalus.html"):
+        html = (site / page).read_text()
+        assert 'rel="icon"' in html and "/favicon.png" in html
+    assert (site / "favicon.png").read_bytes().startswith(b"\x89PNG")
+    assert (site / "apple-touch-icon.png").exists()
