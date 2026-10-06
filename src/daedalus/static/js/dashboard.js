@@ -2903,6 +2903,9 @@
   function mailRouteMetric(records, errors) {
     if (errors.MX) return {value: "Lookup failed", detail: errors.MX, state: "neutral"};
     if (!Array.isArray(records.MX)) return {value: "Unknown", detail: "MX evidence not captured", state: "neutral"};
+    if (!records.MX.every(function (record) { return typeof record === "string" && record.trim().length > 0; })) {
+      return {value: "Unknown", detail: "Saved MX evidence is incomplete or malformed", state: "neutral"};
+    }
     var nullRecords = records.MX.filter(function (record) { return typeof record === "string" && /^\s*0\s+\.\s*$/.test(record); });
     if (nullRecords.length) {
       return records.MX.length === 1

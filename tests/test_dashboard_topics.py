@@ -13,6 +13,10 @@ class DashboardTopicTests(unittest.TestCase):
         script = "const assert=require('node:assert/strict');" + helper + """
 assert.equal(mailRouteMetric({},{}).value,'Unknown');
 assert.equal(mailRouteMetric({MX:null},{}).value,'Unknown');
+for (const MX of [[null], [''], ['  '], [false], [1], [{}], ['10 mx.example.', null]]) {
+  assert.equal(mailRouteMetric({MX},{}).value,'Unknown');
+  assert.equal(mailRouteMetric({MX},{}).state,'neutral');
+}
 assert.equal(mailRouteMetric({MX:['0 .']},{MX:'Timeout'}).value,'Lookup failed');
 assert.equal(mailRouteMetric({MX:[]},{}).value,'0');
 assert.match(mailRouteMetric({MX:[]},{}).detail,/fallback was not evaluated/);
