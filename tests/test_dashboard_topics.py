@@ -6,6 +6,13 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_audit_tables_expose_named_keyboard_scroll_regions(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function makeAuditTable('):source.index('  function rowsForRecord(')]
+        self.assertIn('scroller.tabIndex = 0;', helper)
+        self.assertIn('scroller.setAttribute("role", "region");', helper)
+        self.assertIn('title + "; scroll horizontally to view all columns"', helper)
+
     def test_empty_change_history_does_not_imply_only_one_assessment(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         self.assertIn('No confirmed changes are recorded in the saved assessment history.', source)

@@ -2787,6 +2787,9 @@
 
     var scroller = document.createElement("div");
     scroller.className = "audit-table-scroll";
+    scroller.tabIndex = 0;
+    scroller.setAttribute("role", "region");
+    scroller.setAttribute("aria-label", title + "; scroll horizontally to view all columns");
     var table = document.createElement("table");
     table.className = "audit-record-table";
     var thead = document.createElement("thead");
