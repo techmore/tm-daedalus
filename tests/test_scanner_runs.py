@@ -322,6 +322,23 @@ class ScannerRunTests(unittest.TestCase):
         with self.session_factory() as db:
             self.assertEqual(db.scalars(select(ReportJob)).all(), [])
 
+    def test_missing_template_rejects_pdf_before_job_and_request_audit(self):
+        from daedalus import scanner_report_template
+        import tempfile
+        from pathlib import Path
+        self.setup_scanner()
+        self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
+        xml = b'<nmaprun scanner="nmap" args="nmap 192.168.1.1" version="7.98"><host><status state="up"/><address addr="192.168.1.1" addrtype="ipv4"/></host><runstats><finished elapsed="1"/><hosts up="1" down="0" total="1"/></runstats></nmaprun>'
+        self.send(self.envelope("scan_xml_chunk", {"target": "192.168.1.1", "sha256": hashlib.sha256(xml).hexdigest(), "byte_count": len(xml), "chunk_count": 1, "chunk_index": 0, "xml": xml.decode()}))
+        with tempfile.TemporaryDirectory() as directory, patch.object(scanner_report_template, "ASSETS", Path(directory)), patch.object(server, "generate_report_job") as generate:
+            response = self.client.post(f"/api/agents/{self.agent}/runs/{self.job_id}/pdf")
+            generate.assert_not_called()
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertIn("template is unavailable", response.json()["detail"])
+        with self.session_factory() as db:
+            self.assertEqual(db.scalars(select(ReportJob)).all(), [])
+            self.assertEqual(db.scalars(select(AuditLog).where(AuditLog.action == "report.requested")).all(), [])
+
     def test_completed_run_without_xml_rejects_pdf_before_queueing(self):
         self.setup_scanner()
         self.send(self.envelope("job_status", {"status": "completed", "job_type": "scan"}))
