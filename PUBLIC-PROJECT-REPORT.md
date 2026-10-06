@@ -1294,3 +1294,7 @@ Actual browser clicks followed by reload verified all six installed scanner topi
 ## Installed scanner topic isolation — October 6, 2026
 
 Source e62b309 passed the full local suite: 667 tests, 181 subtests, one Linux-only skip, two dependency warnings in 41.65 seconds. Its scanner kit upgraded the idle Mac successfully (SHA-256 157c5db737fa1b6e2a4c457f8f000460bc80bbf3e3ebc08e100bb5175c4e62c9). Actual installed browser checks across all six tabs show discovery results only on Dashboard. Reports reload preserves #reports with discovery results hidden. All widths were at or below the 390px viewport. Screenshot scanner-reports-isolated-e62b309.png was reviewed; structured receipt scanner-topic-isolation-e62b309.json. No report generated or PDF asset changed.
+
+## Local portal mobile topic routing — October 6, 2026
+
+The isolated local portal on 8013 was checked through real browser navigation across all nine topics at 390px. Each requested hash selected the correct active panel and topic heading, with document width 390px. The populated DNS current-assessment screenshot was reviewed and leads with SPF/lookup availability before evidence. Receipt: validation/portal-all-topic-mobile-routing-512134f.json; screenshot portal-current-dns-mobile-e62b309.png. The local backend remains the earlier e22a9ba process while current static assets/templates are served from disk. Meraki/CIS/scanners/report library are mostly empty in this demo database; routing and width checks do not establish populated acceptance for those topics or production activation.
