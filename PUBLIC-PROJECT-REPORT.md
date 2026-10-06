@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Email evidence integrity and Linux validation — 2026-10-05
+
+Malformed saved SPF, root TXT or DMARC evidence now returns a neutral unknown-policy assessment, instead of treating non-string values as absent records or silently retaining only the valid-looking portion of a mixed list. Legacy single-string evidence and genuine empty record lists remain supported. Seventeen targeted policy/comparison tests and 23 subtests passed. The full local suite passed 647 tests and 157 subtests, with two dependency deprecation warnings. No scanner report template changed; this correction is pending production activation.
+
+Linux CI run 37392096187 at e59d6dc completed all three scenarios successfully. Downloaded PDFs match each receipt's byte count and SHA-256. The repeat run retained distinct run IDs, comparable 127.0.0.1/32 coverage and zero host/port changes. The interruption receipt retains event identities, drained queues and one deep Nmap invocation. Lifecycle evidence includes managed install/restart/upgrade, preserved enrollment/history and restored exact PDF bytes. These isolated checks do not establish fleet soak or standardized PDF visual acceptance. Private receipts: validation/ci-linux-e59d6dc/.
+
 ## Installed Mac scanner network display — 2026-10-05
 
 The managed Mac scanner was upgraded to the bundle at `9dede43`, with a successful readiness check and retained data reported by the upgrade transaction. The native window now displays IP `192.168.222.244`, mask `255.255.255.0` and CIDR `192.168.222.0/24`; the IP and mask match the current system en0 configuration. Its existing operator-selected target `10.20.0.107` is preserved. NmapUI remains running and its bridge connected, with scan activity idle. Both shipped scanner XSL files were byte-identical to the installed versions before the upgrade. Six focused bundle/release tests passed. Public IP is still absent; no new scan or production portal release was started. Private receipt: `validation/mac-network-display-9dede43.json`.

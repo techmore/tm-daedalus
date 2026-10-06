@@ -14,12 +14,23 @@ SPF_ALL = re.compile(r"^([+\-~?]?)all$", re.IGNORECASE)
 DMARC_POLICIES = {"none", "quarantine", "reject"}
 
 
-def _string_records(value: Any) -> list[str]:
+def _string_records(value: Any) -> list[str] | None:
     if isinstance(value, str):
         return [value]
-    if isinstance(value, list):
-        return [item for item in value if isinstance(item, str)]
-    return []
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    return None
+
+
+def _unavailable_evidence(protocol: str) -> dict[str, Any]:
+    assessment = {
+        "status": "evidence_unavailable", "record_count": None,
+        "policy": None, "label": "Evidence unavailable", "tone": "neutral",
+        "summary": f"The saved {protocol} record data is incomplete or malformed; policy is unknown.",
+    }
+    if protocol == "DMARC":
+        assessment["effective_policy"] = None
+    return assessment
 
 
 def _spf_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[str, Any]:
@@ -32,7 +43,10 @@ def _spf_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[str
     if "SPF" in records:
         values = _string_records(records.get("SPF"))
     elif "TXT" in records:
-        values = [value for value in _string_records(records.get("TXT"))
+        txt_values = _string_records(records.get("TXT"))
+        if txt_values is None:
+            return _unavailable_evidence("SPF")
+        values = [value for value in txt_values
                   if value.lstrip().casefold().startswith("v=spf1")]
     else:
         return {
@@ -41,6 +55,8 @@ def _spf_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[str
             "summary": "This saved DNS snapshot does not contain an SPF lookup.",
         }
 
+    if values is None:
+        return _unavailable_evidence("SPF")
     if not values:
         return {
             "status": "not_published", "record_count": 0,
@@ -147,6 +163,8 @@ def _dmarc_assessment(records: dict[str, Any], errors: dict[str, Any]) -> dict[s
             "summary": "This saved DNS snapshot does not contain a DMARC lookup.",
         }
     observed_values = _string_records(records.get("DMARC"))
+    if observed_values is None:
+        return _unavailable_evidence("DMARC")
     values = [value for value in observed_values if value.lstrip().casefold().startswith("v=dmarc1")]
     if not values:
         malformed = any(

@@ -4,6 +4,25 @@ from daedalus.email_policy import analyze_email_auth
 
 
 class EmailPolicyAssessmentTests(unittest.TestCase):
+    def test_malformed_saved_evidence_is_unknown_not_absent_or_protected(self):
+        for key, protocol, record in (
+            ("SPF", "spf", "v=spf1 -all"),
+            ("TXT", "spf", "v=spf1 -all"),
+            ("DMARC", "dmarc", "v=DMARC1; p=reject"),
+        ):
+            for value in (None, 0, False, {}, [None], [record, None]):
+                with self.subTest(key=key, value=value):
+                    assessment = analyze_email_auth({key: value})[protocol]
+                    self.assertEqual(assessment["status"], "evidence_unavailable")
+                    self.assertIsNone(assessment["record_count"])
+                    self.assertIsNone(assessment["policy"])
+                    self.assertEqual(assessment["tone"], "neutral")
+
+    def test_string_legacy_evidence_remains_supported(self):
+        assessment = analyze_email_auth({"SPF": "v=spf1 -all", "DMARC": "v=DMARC1; p=reject"})
+        self.assertEqual(assessment["spf"]["policy"], "hard_fail")
+        self.assertEqual(assessment["dmarc"]["effective_policy"], "reject")
+
     def test_spf_interprets_only_the_first_effective_all_qualifier(self):
         cases = {
             "-all": "hard_fail",
