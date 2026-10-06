@@ -2835,8 +2835,22 @@ async def decide_membership_request(
         raise HTTPException(status_code=404, detail="Membership request not found")
     if membership.status not in {"pending", "denied"}:
         raise HTTPException(status_code=409, detail="This membership is already decided.")
-    membership.status = "approved" if payload.approve else "denied"
-    membership.role = "user"
+    decided_status = "approved" if payload.approve else "denied"
+    changed = db.execute(
+        update(Membership)
+        .where(
+            Membership.id == membership.id,
+            Membership.organization_id == organization.id,
+            Membership.status == membership.status,
+            Membership.role == membership.role,
+        )
+        .values(status=decided_status, role="user")
+        .execution_options(synchronize_session=False)
+    )
+    if changed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Workspace access changed during this decision. Refresh and try again.")
+    db.refresh(membership)
     requester_user_id = membership.user_id
     decided_status = membership.status
     actor = get_session_user(request, db)

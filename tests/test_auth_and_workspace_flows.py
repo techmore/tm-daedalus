@@ -272,6 +272,34 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             self.assertEqual((membership.status, membership.role), ('approved', 'admin'))
             self.assertEqual(db.scalar(select(func.count(AuditLog.id)).where(AuditLog.action == 'membership.requested', AuditLog.actor_user_id == user_id)), 0)
 
+    def test_membership_decision_does_not_overwrite_a_concurrent_approval(self):
+        self.google_callback({'sub':'approved-race-requester','email':'approved@outside.example','email_verified':True,'name':'Requesting User'})
+        with self.session_factory() as db:
+            user = db.scalar(select(User).where(User.google_subject == 'approved-race-requester'))
+            org = db.scalar(select(Organization).where(Organization.domain == 'cybersecuritypilot.org'))
+            membership = Membership(user_id=user.id, organization_id=org.id, role='user', status='pending', created_at=server.utcnow())
+            db.add(membership)
+            db.commit()
+            membership_id, user_id = membership.id, user.id
+        original_execute = Session.execute
+        approved = False
+        def approve_before_update(db, statement, *args, **kwargs):
+            nonlocal approved
+            if not approved and getattr(statement, 'is_update', False) and statement.table.name == Membership.__tablename__:
+                approved = True
+                with self.session_factory() as approval_db:
+                    original_execute(approval_db, update(Membership).where(Membership.id == membership_id).values(status='approved', role='admin'))
+                    approval_db.commit()
+            return original_execute(db, statement, *args, **kwargs)
+        with patch.object(Session, 'execute', approve_before_update), patch.object(server.live_hub, 'publish_to_users', new_callable=AsyncMock) as publish:
+            response = self.admin_client.post(f'/api/memberships/{membership_id}/decision', json={'approve': False})
+        self.assertEqual(response.status_code, 409)
+        publish.assert_not_awaited()
+        with self.session_factory() as db:
+            membership = db.get(Membership, membership_id)
+            self.assertEqual((membership.status, membership.role), ('approved', 'admin'))
+            self.assertEqual(db.scalar(select(func.count(AuditLog.id)).where(AuditLog.action.in_(['membership.approved', 'membership.denied']))), 0)
+
     def test_membership_request_and_decision_publish_after_commit_to_scoped_recipients(self):
         login = self.google_callback(
             {
