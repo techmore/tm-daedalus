@@ -19,7 +19,7 @@ def canonical_registration_events(events: list) -> list:
         raise ValueError("Invalid registration events")
     values = set()
     for event in events:
-        if not isinstance(event, dict) or event.get("action") not in {"registration", "expiration", "last changed"}:
+        if not isinstance(event, dict) or not isinstance(event.get("action"), str) or event["action"] not in {"registration", "expiration", "last changed"}:
             raise ValueError("Invalid registration event")
         value = event.get("date")
         if not isinstance(value, str) or len(value) > 64:
@@ -104,7 +104,10 @@ def registration_evidence(domain: str, document: dict) -> dict:
     names = set()
     for item in nameservers[:100]:
         if isinstance(item, dict) and isinstance(item.get("ldhName"), str):
-            names.add(normalize_domain(item["ldhName"]))
+            try:
+                names.add(normalize_domain(item["ldhName"]))
+            except ValueError:
+                partial = True
         else:
             partial = True
     dates = set()
@@ -112,7 +115,11 @@ def registration_evidence(domain: str, document: dict) -> dict:
         if not isinstance(item, dict):
             partial = True
             continue
-        if item.get("eventAction") in {"registration", "expiration", "last changed"}:
+        action = item.get("eventAction")
+        if not isinstance(action, str):
+            partial = True
+            continue
+        if action in {"registration", "expiration", "last changed"}:
             value = item.get("eventDate")
             try:
                 if not isinstance(value, str) or len(value) > 64 or datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is None:

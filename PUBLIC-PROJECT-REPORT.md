@@ -1458,3 +1458,7 @@ A real adapter call saved Unavailable with HTTP 502; a later actual DNS run 23 i
 ## Registration event instant comparison — October 6, 2026
 
 Registration comparisons now normalize timezone-aware event instants and deduplicate equivalent events for comparison only. Saved provider dates remain unchanged. Equivalent UTC/offset representations no longer produce expiry-change alerts; a genuinely changed instant remains visible. Invalid or timezone-free saved dates cannot establish a change. The focused suite passed 14 tests and 19 subtests; the full suite passed 705 tests and 214 subtests, with one Linux-only skip and two dependency warnings in 45.62 seconds. At inspection, deccc50 backend CI succeeded; Linux lifecycle and interrupted-bridge succeeded while repeat-comparison remained active. No PDF renderer/assets or production deployment changed.
+
+## Malformed registration items retain partial evidence — October 6, 2026
+
+Invalid nameserver names and non-string provider event actions now retain other valid RDAP observations as partial evidence instead of discarding the collection or raising an unhandled TypeError. Malformed actions in saved comparison evidence cannot establish an event change. Fifteen focused tests and 19 subtests passed; the complete suite passed 706 tests and 214 subtests with one Linux-only skip and two dependency warnings in 43.26 seconds. Linux repeat-comparison run 37407775539 remained active at inspection; lifecycle and interrupted-bridge had succeeded. Report templates, production and saved evidence remain unchanged.

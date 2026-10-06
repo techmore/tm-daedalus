@@ -66,6 +66,15 @@ class RegistrationChecksTests(unittest.TestCase):
         document["events"] *= 2
         self.assertEqual(len(registration_evidence("example.org", document)["events"]), 1)
 
+    def test_malformed_provider_items_retain_valid_evidence_as_partial(self):
+        document = self.document()
+        document["nameservers"].append({"ldhName": "https://invalid.example/"})
+        document["events"].append({"eventAction": [], "eventDate": "2027-01-01T00:00:00Z"})
+        result = registration_evidence("example.org", document)
+        self.assertTrue(result["collection_partial"])
+        self.assertEqual(result["nameservers"], ["ns1.example.org"])
+        self.assertEqual(len(result["events"]), 1)
+
     def test_failure_is_unavailable_not_empty_registration(self):
         with patch("daedalus.registration_checks.fetch_json", side_effect=TimeoutError):
             result = run_registration_check("example.org")
@@ -105,6 +114,8 @@ class RegistrationComparisonTests(unittest.TestCase):
         for date in ("invalid", "2027-01-01T00:00:00"):
             current["registration_observations"]["events"][0]["date"] = date
             self.assertEqual(compare_snapshots(previous, current), [])
+        current["registration_observations"]["events"][0]["action"] = []
+        self.assertEqual(compare_snapshots(previous, current), [])
 
     def snapshot(self, registrar="First"):
         return {"domain": "example.org", "records": {}, "registration_observations": {
