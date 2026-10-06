@@ -1290,3 +1290,7 @@ Installed mobile Reports and Logs have no document overflow at 390px. Reports co
 ## Installed scanner refresh across every topic — October 6, 2026
 
 Actual browser clicks followed by reload verified all six installed scanner topics: Dashboard, History, Reports, Customers, Logs and Settings. Each retained its matching hash and visible topic panel at 390px, with document width 382px. No forms, settings or scan commands were changed. Receipt: validation/scanner-all-tab-mobile-refresh-474f095.json. This establishes topic refresh and width behavior for the installed responsive release, not every form workflow or the newer discovery-table isolation candidate. Backend CI 37401501977 completed successfully; Linux CI 37401501940 was confirmed running with interruption passed at inspection.
+
+## Installed scanner topic isolation — October 6, 2026
+
+Source e62b309 passed the full local suite: 667 tests, 181 subtests, one Linux-only skip, two dependency warnings in 41.65 seconds. Its scanner kit upgraded the idle Mac successfully (SHA-256 157c5db737fa1b6e2a4c457f8f000460bc80bbf3e3ebc08e100bb5175c4e62c9). Actual installed browser checks across all six tabs show discovery results only on Dashboard. Reports reload preserves #reports with discovery results hidden. All widths were at or below the 390px viewport. Screenshot scanner-reports-isolated-e62b309.png was reviewed; structured receipt scanner-topic-isolation-e62b309.json. No report generated or PDF asset changed.
