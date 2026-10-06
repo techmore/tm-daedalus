@@ -29,6 +29,10 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Initial scanner card freshness — 2026-10-06
+
+The server-rendered scanner card now uses the same heartbeat freshness rule as its live replacement. Offline or never-seen scanners show current NmapUI status as unknown; revoked scanners show access revoked. A saved readiness value no longer briefly appears as current readiness on refresh before JavaScript loads. Tests exercise stale, revoked and never-seen scanner records through the actual dashboard route. Forty-eight route/refresh tests and eight subtests passed. This changes the portal source only; no installed scanner or production release changed.
+
 ## Fresh local website and DNS evidence — 2026-10-06
 
 A fresh isolated instance at da8c756 saved two live cybersecuritypilot.org website runs through authenticated APIs. Both returned HTTP 200; the second retained zero changes and no notifications. Four linked origins were recorded. Supported exact package versions were absent, so OSV coverage stayed not assessed. The primary assessment now explicitly surfaces this unassessed coverage; 64 focused dashboard/report-flow tests and seven subtests passed. Visual acceptance remains pending because the existing browser space is user-owned.

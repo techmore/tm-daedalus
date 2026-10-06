@@ -526,6 +526,25 @@ class CISReportPDFFlowTests(unittest.TestCase):
             self.assertEqual(snapshot["device_name"], "Old name")
             self.assertEqual(snapshot["os_version"], "26.0")
 
+    def test_initial_scanner_card_does_not_claim_stale_readiness(self):
+        agent_id, _ = self.create_scanner()
+        for enabled, last_seen, expected in (
+            (True, server.utcnow() - timedelta(minutes=2), "Current NmapUI status unknown · scanner bridge offline"),
+            (False, server.utcnow(), "Scanner access revoked · current NmapUI status unavailable"),
+            (True, None, "Current NmapUI status unknown · scanner bridge offline"),
+        ):
+            with self.subTest(enabled=enabled, last_seen=last_seen):
+                with self.session_factory() as db:
+                    agent = db.get(Agent, agent_id)
+                    agent.enabled = enabled
+                    agent.last_seen_at = last_seen
+                    agent.nmapui_ready = True
+                    db.commit()
+                page = self.client.get("/dashboard")
+                self.assertEqual(page.status_code, 200)
+                self.assertIn(expected, page.text)
+                self.assertNotIn('class="agent-readiness">NmapUI ready', page.text)
+
     def test_scanner_heartbeat_reports_health_version_and_platform(self):
         agent_id, _admin_id = self.create_scanner()
         heartbeat = self.client.post(

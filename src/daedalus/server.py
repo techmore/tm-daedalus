@@ -5304,6 +5304,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "agents": agents,
             "recent_events": recent_events,
             "agent_status": agent_status,
+            "agent_bridge_online": agent_bridge_online,
             "workspaces": user_memberships,
             "demo_mode": DEMO_MODE,
             "workspace_controls_enabled": (
