@@ -1403,6 +1403,11 @@ def external_check_field_label(field_path: str) -> str:
         "external_host_count": "Linked third-party hosts",
         "tls.valid": "TLS certificate validity",
         "tls.days_remaining": "TLS certificate lifetime",
+        "registration_observations.state": "Domain registration lookup status",
+        "registration_observations.collection_partial": "Domain registration evidence coverage",
+        "registration_observations.registrars": "Registry-reported registrars",
+        "registration_observations.nameservers": "Registry-reported nameservers",
+        "registration_observations.events": "Domain registration events",
     }
     if field_path in labels:
         return labels[field_path]
@@ -1444,6 +1449,8 @@ def external_check_change_group(check_type: str, field_path: str) -> str:
     if field_path.startswith("email_authentication_assessment."):
         return "email authentication policy"
     if field_path.startswith("registration_observations."):
+        if field_path in {"registration_observations.state", "registration_observations.collection_partial"}:
+            return "domain registration lookup coverage"
         return "domain registration"
     return "DNS and email configuration"
 

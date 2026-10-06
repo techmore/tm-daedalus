@@ -279,11 +279,15 @@ class WorkspaceNotificationTests(unittest.TestCase):
         unavailable["registration_observations"] = {"domain": "cybersecuritypilot.org", "protocol": "rdap", "state": "unavailable", "error_type": "TimeoutError"}
         first_outage = self.run_dns(unavailable)
         self.assertEqual(first_outage["status"], "completed_with_warnings")
+        self.assertEqual(first_outage["change_count"], 1)
+        self.assertEqual(server.external_check_field_label("registration_observations.state"), "Domain registration lookup status")
+        self.assertEqual(server.external_check_change_group("dns", "registration_observations.state"), "domain registration lookup coverage")
         repeated = self.run_dns(unavailable)
         self.assertTrue(repeated["notice_suppressed"])
         notices = self.client.get("/api/notifications").json()["notifications"]
         self.assertEqual(len(notices), 2)
         self.assertIn("registration lookup was unavailable", notices[0]["summary"])
+        self.assertIn("domain registration lookup coverage", notices[0]["summary"])
 
     def test_warning_only_notice_keeps_unknown_checks_distinct_from_confirmed_changes(self):
         warning = {
