@@ -5,6 +5,7 @@ from email.message import Message
 from unittest.mock import patch
 
 from daedalus.external_checks import (
+    ExternalCheckFailure,
     MAX_COOKIE_HEADERS,
     MAX_COOKIE_HEADER_BYTES,
     MAX_PAGE_BYTES,
@@ -82,6 +83,18 @@ class WebsitePassiveObservationTests(unittest.TestCase):
         self.assertTrue(connection.closed)
         self.assertEqual(response.read_limits, [MAX_PAGE_BYTES + 1])
         return result
+
+    def test_unreadable_certificate_preserves_collected_destination_context(self):
+        connection = FixtureConnection(FixtureResponse())
+        connection.sock.getpeercert = lambda binary_form=False: {} if not binary_form else b''
+        with patch('daedalus.external_checks._public_addresses', return_value=['8.8.8.8']), patch('daedalus.external_checks._PinnedHTTPSConnection', return_value=connection):
+            with self.assertRaises(ExternalCheckFailure) as failure:
+                run_website_check('example.test')
+        self.assertEqual(failure.exception.snapshot['destination_addresses'], ['8.8.8.8'])
+        self.assertEqual(failure.exception.snapshot['requested_url'], 'https://example.test/')
+        self.assertNotIn('tls', failure.exception.snapshot)
+        self.assertNotIn('http', failure.exception.snapshot)
+        self.assertTrue(connection.closed)
 
     def test_existing_verified_handshake_supplies_negotiated_tls_without_probes(self):
         result = self.collect(FixtureResponse())

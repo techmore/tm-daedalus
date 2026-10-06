@@ -1354,3 +1354,7 @@ Portal audit rows now summarize probation expiry, override grant/expiry/revocati
 ## Full lifecycle/audit source validation — October 6, 2026
 
 Source c6068a2 passed the complete local suite: 674 tests, 195 subtests, one Linux-only skip and two dependency warnings in 39.73 seconds. This includes conditional membership decisions, probation expiry audit, override expiry notices and audit summaries. Earlier source d02b87d passed backend, Linux installer lifecycle and all three managed Linux scanner CI scenarios. Its downloaded PDFs match receipt hashes/byte counts (lifecycle 233729, interruption 233691, repeat 234420 bytes). Those PDFs are isolated integrity evidence, not approval of a report template or activation of the later workspace lifecycle code. Production source remains unchanged; standardized reference acceptance remains open.
+
+## Website collection failure context preservation — October 6, 2026
+
+A website collector ExternalCheckFailure could lose already collected requested-URL and resolved destination evidence when certificate extraction failed. The wrapper now retains current snapshot context and any explicit exception snapshot. An unreadable-certificate fixture proves the resolved address/requested URL remain saved while TLS/HTTP results remain absent, and the connection closes. Passive website and resource inventory tests passed 26 tests and eight subtests. This does not reinterpret a failed handshake as a vulnerable or healthy endpoint. No PDF body/assets changed; broader checker-semantic review and production activation remain open.

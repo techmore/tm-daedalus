@@ -664,8 +664,8 @@ def run_website_check(domain: str) -> dict[str, Any]:
                 }
             )
             return snapshot
-        except ExternalCheckFailure:
-            raise
+        except ExternalCheckFailure as exc:
+            raise ExternalCheckFailure(str(exc), {**snapshot, **exc.snapshot}) from exc
         except (OSError, http.client.HTTPException, ssl.SSLError, TimeoutError) as exc:
             raise ExternalCheckFailure(
                 f"HTTPS request failed ({type(exc).__name__}).", snapshot
