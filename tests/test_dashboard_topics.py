@@ -543,6 +543,11 @@ assert.equal(mobileEntry.children[1].children[7].textContent,'2027-01-01');
 renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'unavailable'}});
 assert.equal(grid.children[3].children[1].children[0].value,'Unavailable');
 assert.match(grid.children[3].children[2].children[1].textContent,/issuance remains unknown/);
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'unavailable',http_status:502,error_code:'provider_http_error'}});
+assert.equal(grid.children[3].children[1].children[0].detail,'History provider returned HTTP 502.');
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'unavailable',error_type:'TimeoutError'}});
+assert.equal(grid.children[3].children[1].children[0].detail,'History provider timed out.');
+
 
 renderDnsSnapshot(null);assert.equal(grid.children.length,1);
 """

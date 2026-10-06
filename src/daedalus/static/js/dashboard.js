@@ -3112,8 +3112,20 @@
     transparencyMetrics.className = "audit-metric-grid dns-audit-metrics";
     var observedTransparency = transparency && transparency.state === "observed";
     var certificateEntries = observedTransparency && Array.isArray(transparency.entries) ? transparency.entries : [];
+    function transparencyDiagnostic(evidence, subdomain) {
+      var prefix = subdomain ? "Subdomain history lookup" : "History provider";
+      var status = subdomain ? evidence.subdomain_query_http_status : evidence.http_status;
+      var errorType = subdomain ? evidence.subdomain_query_error_type : evidence.error_type;
+      if (Number.isInteger(status) && status >= 100 && status <= 599) return prefix + " returned HTTP " + status + ".";
+      if (errorType === "TimeoutError" || evidence.error_code === "timeout") return prefix + " timed out.";
+      if (!subdomain && evidence.error_code === "invalid_response") return "History provider response could not be interpreted.";
+      return prefix + " did not complete.";
+    }
+    var transparencyDetail = "crt.sh observations do not verify the website's live TLS certificate";
+    if (transparency && !observedTransparency) transparencyDetail = transparencyDiagnostic(transparency, false);
+    else if (observedTransparency && transparency.subdomain_query_error_type) transparencyDetail = transparencyDiagnostic(transparency, true);
     transparencyMetrics.append(makeAuditMetric("History lookup", !transparency ? "Not assessed" : observedTransparency ? transparency.collection_partial ? "Partial evidence" : "Evidence saved" : "Unavailable",
-      "crt.sh observations do not verify the website's live TLS certificate", observedTransparency ? "neutral" : transparency ? "attention" : "neutral"));
+      transparencyDetail, observedTransparency ? "neutral" : transparency ? "attention" : "neutral"));
     if (observedTransparency) {
       var observedNames = new Set();
       certificateEntries.forEach(function (entry) { (entry.dns_names || []).forEach(function (name) { observedNames.add(name); }); });
@@ -3158,7 +3170,7 @@
     } else {
       certificateEvidence = document.createElement("p");
       certificateEvidence.className = "muted";
-      certificateEvidence.textContent = transparency ? "Certificate history is unavailable; issuance remains unknown." : "No certificate history assessment is stored yet.";
+      certificateEvidence.textContent = transparency ? "Certificate history is unavailable; issuance remains unknown. " + transparencyDiagnostic(transparency, false) : "No certificate history assessment is stored yet.";
     }
     grid.append(evidenceGroup("dns-certificate-history-group", transparencyHeading, transparencyMetrics, "Certificate log evidence", certificateEvidence));
     var diagnostics = document.createElement("details");

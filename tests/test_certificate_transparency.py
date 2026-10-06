@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from daedalus.certificate_transparency import fetch_entries, transparency_evidence, run_transparency_check, MAX_RESPONSE_BYTES, MAX_SAVED_ENTRIES
+from daedalus.certificate_transparency import fetch_entries, transparency_evidence, run_transparency_check, ProviderHTTPFailure, MAX_RESPONSE_BYTES, MAX_SAVED_ENTRIES
 
 
 class CertificateTransparencyTests(unittest.TestCase):
@@ -52,6 +52,30 @@ class CertificateTransparencyTests(unittest.TestCase):
         self.assertTrue(result["collection_partial"])
         self.assertEqual(len(result["entries"]), 1)
         self.assertEqual(result["subdomain_query_error_type"], "TimeoutError")
+
+    def test_provider_http_status_is_saved_without_response_body(self):
+        connection = MagicMock()
+        connection.getresponse.return_value.status = 502
+        with patch("daedalus.certificate_transparency._public_addresses", return_value=["8.8.8.8"]), patch(
+            "daedalus.certificate_transparency._PinnedHTTPSConnection", return_value=connection
+        ):
+            result = run_transparency_check("example.org")
+        self.assertEqual(result["state"], "unavailable")
+        self.assertEqual(result["http_status"], 502)
+        self.assertEqual(result["error_code"], "provider_http_error")
+        connection.getresponse.return_value.read.assert_not_called()
+        connection.close.assert_called_once()
+        with self.assertRaises(ValueError):
+            ProviderHTTPFailure(900)
+
+    def test_partial_root_observations_retain_subdomain_http_failure(self):
+        with patch("daedalus.certificate_transparency._public_addresses", return_value=["8.8.8.8"]), patch(
+            "daedalus.certificate_transparency._fetch_query", side_effect=[[self.row()], ProviderHTTPFailure(429)]
+        ):
+            result = run_transparency_check("example.org")
+        self.assertEqual(result["state"], "observed")
+        self.assertTrue(result["collection_partial"])
+        self.assertEqual(result["subdomain_query_http_status"], 429)
 
     def test_provider_is_fixed_pinned_bounded_and_redirects_are_not_followed(self):
         for status, body in [(200, b'[]'), (302, b''), (200, b'x' * (MAX_RESPONSE_BYTES + 1))]:

@@ -16,10 +16,19 @@ MAX_SAVED_ENTRIES = 100
 
 
 class PartialTransparencyFailure(RuntimeError):
-    def __init__(self, rows: list, error_type: str):
+    def __init__(self, rows: list, error_type: str, http_status: int | None = None):
         super().__init__("Subdomain transparency query unavailable")
         self.rows = rows
         self.error_type = error_type
+        self.http_status = http_status
+
+
+class ProviderHTTPFailure(ValueError):
+    def __init__(self, status: int):
+        if type(status) is not int or not 100 <= status <= 599:
+            raise ValueError("Invalid provider HTTP status")
+        super().__init__("Certificate transparency provider returned an HTTP error")
+        self.http_status = status
 
 
 def _fetch_query(query: str, address: str) -> list:
@@ -29,7 +38,7 @@ def _fetch_query(query: str, address: str) -> list:
             "Accept": "application/json", "User-Agent": "Daedalus-Passive-Health-Check/1.0", "Connection": "close"})
         response = connection.getresponse()
         if response.status != 200:
-            raise ValueError("Certificate transparency provider unavailable")
+            raise ProviderHTTPFailure(response.status)
         body = response.read(MAX_RESPONSE_BYTES + 1)
         if len(body) > MAX_RESPONSE_BYTES:
             raise ValueError("Certificate transparency response exceeds evidence limit")
@@ -49,7 +58,7 @@ def fetch_entries(domain: str) -> list:
     try:
         subdomain_rows = _fetch_query("%." + domain, addresses[0])
     except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
-        raise PartialTransparencyFailure(root_rows, type(exc).__name__) from exc
+        raise PartialTransparencyFailure(root_rows, type(exc).__name__, getattr(exc, "http_status", None)) from exc
     return root_rows + subdomain_rows
 
 
@@ -120,10 +129,17 @@ def run_transparency_check(domain: str) -> dict:
                     "error_type": "ValueError", "log_proofs_verified": False, "live_certificate_verified": False}
         result["collection_partial"] = True
         result["subdomain_query_error_type"] = exc.error_type
+        if exc.http_status is not None:
+            result["subdomain_query_http_status"] = exc.http_status
         return result
     except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
-        return {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
-                "error_type": type(exc).__name__, "log_proofs_verified": False, "live_certificate_verified": False}
+        result = {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
+                  "error_type": type(exc).__name__, "log_proofs_verified": False, "live_certificate_verified": False}
+        if isinstance(exc, ProviderHTTPFailure):
+            result.update(error_code="provider_http_error", http_status=exc.http_status)
+        else:
+            result["error_code"] = "timeout" if isinstance(exc, TimeoutError) else "invalid_response" if isinstance(exc, ValueError) else "lookup_failed"
+        return result
 
 
 def newly_observed_entries(previous: object, current: object, domain: str) -> list:
