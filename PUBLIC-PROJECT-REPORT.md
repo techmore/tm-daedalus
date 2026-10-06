@@ -1564,3 +1564,10 @@ The complete suite at 082b832 passed 708 tests and 224 subtests in 42.39 seconds
 ## Every dashboard topic survives refresh — October 6, 2026
 
 The existing isolated local member browser navigated via each actual sidebar control and reloaded all nine topics: overview, scanners, Meraki, DNS/email, website, CIS, reports, notifications and members. Each reload retained its matching URL hash, active panel, heading and aria-current navigation item. Receipt: validation/all-topic-refresh-member-20261006.json. This proves local member routing persistence; it does not establish populated visual acceptance, admin behavior or production deployment. No scan, report generation or configuration mutation occurred.
+
+
+## Lookup coverage notification wording — October 6, 2026
+
+New DNS/provider notifications distinguish lookup coverage changes from material evidence changes. A lookup-only outage or recovery explicitly states that no confirmed configuration changes were detected. Mixed changes retain separate counts and category labels, while saved change history, notification timestamps and reasons remain intact. Redundant additional-field wording was removed because both counts already include every field. Existing stored notification wording was not rewritten. Twenty-five notification tests passed, including provider outage/history and mixed DNS record/lookup fixtures. This implementation does not change any PDF template.
+
+Linux CI 37416713205 completed successfully at bce732f, allowing pending source through 4f6a0d4 to be pushed. Backend 37417308886 and Linux 37417308857 at that source are currently running. The latest mixed-notice regression commit ac9dab0 is local. Its full suite passed 710 tests and 224 subtests in 42.13 seconds, with one Linux-only skip and two dependency warnings.
