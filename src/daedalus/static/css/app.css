@@ -871,6 +871,7 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 
 #vendor-review-form select, #vendor-review-form textarea { width: 100%; min-height: 40px; padding: 10px; border: 1px solid var(--card-line); border-radius: 8px; color: var(--brown-900); background: var(--cream-50); font: inherit; }
 #vendor-review-form textarea { resize: vertical; }
+#vendor-review-feedback:empty { display: none; }
 #vendor-review-decisions, #vendor-review-history { display: grid; gap: 10px; }
 
 /* Group each DNS assessment with its own expandable record evidence. */
