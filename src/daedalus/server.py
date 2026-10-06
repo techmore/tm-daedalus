@@ -80,6 +80,7 @@ from daedalus.models import (
     ExternalCheckChange,
     ExternalCheckRun,
     ExternalCheckSchedule,
+    WorkspaceIcon,
     MerakiCredential,
     MerakiOrganizationGrant,
     Membership,
@@ -1623,6 +1624,8 @@ def _execute_external_check(
             snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
             snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS, include_registration=True, include_transparency=True) if check_type == "dns" else run_website_check(domain)
+        if check_type == "web" and snapshot.get("http_status") == 200:
+            refresh_workspace_icon(organization_id, domain)
         if check_type == "web" and isinstance(snapshot.get("dependency_package_observations"), dict):
             metadata = snapshot["dependency_package_observations"]
             if (snapshot.get("page_content") or {}).get("comparison_eligible") is True:
@@ -1838,6 +1841,38 @@ def _execute_external_check(
 
 _external_check_lock = threading.Lock()
 _active_external_checks: set[tuple[int, str]] = set()
+
+
+def refresh_workspace_icon(organization_id: int, domain: str) -> None:
+    """Best effort: a missing or unreachable favicon must never fail the audit."""
+    try:
+        from daedalus.site_icon import fetch_site_icon
+        icon = fetch_site_icon(domain)
+        if icon is None:
+            return
+        content_type, data = icon
+        with SessionLocal() as db:
+            row = db.get(WorkspaceIcon, organization_id)
+            if row is None:
+                db.add(WorkspaceIcon(organization_id=organization_id, content_type=content_type, data=data, fetched_at=utcnow()))
+            else:
+                row.content_type, row.data, row.fetched_at = content_type, data, utcnow()
+            db.commit()
+    except Exception:  # noqa: BLE001 - icon is cosmetic
+        return
+
+
+@app.get("/api/workspaces/{organization_id}/icon")
+def workspace_icon(organization_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_session_user(request, db)
+    member = db.scalar(select(Membership).where(Membership.user_id == user.id,
+        Membership.organization_id == organization_id, Membership.status == "approved"))
+    icon = db.get(WorkspaceIcon, organization_id) if member else None
+    if icon is None:
+        raise HTTPException(status_code=404, detail="No icon")
+    return Response(icon.data, media_type=icon.content_type, headers={
+        "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400",
+        "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
 def execute_external_check(

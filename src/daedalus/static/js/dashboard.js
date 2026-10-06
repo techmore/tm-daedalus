@@ -1107,6 +1107,13 @@
     pauseRestrictedWorkspaceControls();
   }
 
+  document.querySelectorAll(".workspace-icon[data-icon-src]").forEach(function (holder) {
+    var image = new Image();
+    image.alt = "";
+    image.onload = function () { holder.textContent = ""; holder.classList.add("has-image"); holder.append(image); };
+    image.src = holder.dataset.iconSrc;
+  });
+
   function workspaceAssessmentSummary(areas) {
     var counts = {attention: 0, unavailable: 0, not_assessed: 0, running: 0, recorded: 0, unknown: 0};
     (Array.isArray(areas) ? areas : []).forEach(function (area) {

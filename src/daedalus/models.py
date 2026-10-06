@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, LargeBinary, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from daedalus.db import Base
@@ -501,3 +501,13 @@ class VendorReview(Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     note: Mapped[str] = mapped_column(String(2000), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class WorkspaceIcon(Base):
+    """Small raster favicon fetched from the workspace's own domain."""
+    __tablename__ = "workspace_icons"
+
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

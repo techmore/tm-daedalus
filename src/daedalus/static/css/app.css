@@ -964,3 +964,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .status-action { padding: 6px 12px; font-size: 13px; }
 @media (max-width: 640px) { .status-row { grid-template-columns: 14px 1fr auto; } .status-verdict { grid-column: 2; } .status-when, .status-action { grid-column: 2 / -1; } }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.workspace-icon.has-image { background: #fff; overflow: hidden; padding: 0; }
+.workspace-icon.has-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
