@@ -29,6 +29,10 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Original scanner calendar-age correction — 2026-10-06
+
+The original NmapUI scan banner used elapsed 24-hour age_days, so an afternoon scan from the previous calendar date could appear as Today the next morning. Its source now compares local calendar dates instead; invalid, missing or future dates remain unconfirmed. A saved Node regression passes seven cases, including midnight and a daylight-saving transition. Changes are limited to ../nmapUI/static/js/scan_banners.js and its new focused test. The installed app has not been updated, and PDF assets were not changed. Scanner packaging/installation and native UI revalidation remain pending.
+
 ## Installed native scanner UI review — 2026-10-06
 
 Opened the installed Daedalus Scanner Status.app through native UI automation and reviewed its accessibility state and screenshot. The window visibly reports NmapUI running, Daedalus bridge connected and scan activity idle. Its Recent scans control opens five completed workflows and links to existing hosted PDFs; no report link or scan control was activated. The embedded scanner displays current automatically derived local IP 10.20.0.106, mask 255.255.255.0 and CIDR 10.20.0.0/24, plus retained host/service observations.
@@ -41,7 +45,7 @@ The full suite at c41f07a passed 745 tests and 255 subtests in 38.56 seconds, wi
 
 GitHub Pages reports the configured custom domain cybersecuritypilot.org as built, using workflow publishing with HTTPS enforcement. Fresh HTTP reads of the homepage and /daedalus.html returned 200 and exactly matched their repository versions; both contain the client-portal link. This proves published bytes and entrypoint reachability, not desktop/mobile visual acceptance or final content approval.
 
-The product overview now states the existing 30-day verification probation and 14-day admin override durations explicitly. A regression check covers separate domain roles, approved sharing, collaborator default role and active-pilot status. The Pages workflow check now parses its actual upload step and requires its artifact path to be exactly site; local .env, data and backups paths are excluded. Eight site tests and six subtests passed. The copy refinement awaits publication. Private HTTP receipt: validation/marketing-pages-current-20261006.json.
+The product overview now states the existing 30-day verification probation and 14-day admin override durations explicitly. A regression check covers separate domain roles, approved sharing, collaborator default role and active-pilot status. The Pages workflow check now parses its actual upload step and requires its artifact path to be exactly site; local .env, data and backups paths are excluded. Eight site tests and six subtests passed. Pages run 37480799920 succeeded, and a fresh HTTP read exactly matches the updated source with both durations present. Private HTTP receipt: validation/marketing-pages-current-20261006.json.
 
 ## Saved standardized-report references — 2026-10-06
 
