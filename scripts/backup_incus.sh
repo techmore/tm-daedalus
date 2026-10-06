@@ -20,13 +20,13 @@ chmod 700 "$backup_dir"
 temporary=$(mktemp "$backup_dir/.daedalus-backup.XXXXXX")
 trap 'rm -f "$temporary"' EXIT HUP INT TERM
 
-backup_name=$(ssh "$incus_host" "incus exec $instance -- bash -lc 'set -a; . /etc/daedalus/production.env; set +a; cd /opt/daedalus/app; runuser -u daedalus -- .venv/bin/python scripts/backup_data.py'")
+backup_name=$(ssh -o ConnectTimeout=10 -o ConnectionAttempts=1 "$incus_host" "incus exec $instance -- bash -lc 'set -a; . /etc/daedalus/production.env; set +a; cd /opt/daedalus/app; runuser -u daedalus -- .venv/bin/python scripts/backup_data.py'")
 case "$backup_name" in
   daedalus-data-????????T??????Z.tar.gz) ;;
   *) echo "Incus backup command returned an unexpected filename." >&2; exit 1 ;;
 esac
 
-ssh "$incus_host" "incus file pull $instance/data/backups/$backup_name -" > "$temporary"
+ssh -o ConnectTimeout=10 -o ConnectionAttempts=1 "$incus_host" "incus file pull $instance/data/backups/$backup_name -" > "$temporary"
 chmod 600 "$temporary"
 python3 scripts/restore_data.py "$temporary" --verify-only
 destination="$backup_dir/$backup_name"

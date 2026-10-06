@@ -27,6 +27,7 @@ else:
 ROOT = Path(__file__).resolve().parents[1]
 INSTANCE_DEFAULT = "daedalus-prod"
 HEALTH_URL_DEFAULT = "https://daedalus.cybersecuritypilot.org/readyz"
+SSH_CONNECTION_OPTIONS = ["-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1"]
 
 
 class DeployError(RuntimeError):
@@ -77,7 +78,7 @@ def _run_streaming_ssh(arguments: list[str]) -> str:
 
 
 def _ssh(host: str, command: list[str]) -> str:
-    return _run_streaming_ssh(["ssh", "-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1", host, shlex.join(command)])
+    return _run_streaming_ssh(["ssh", *SSH_CONNECTION_OPTIONS, host, shlex.join(command)])
 
 
 def _validate(host: str, instance: str, *, require_clean: bool = True) -> None:
@@ -169,8 +170,8 @@ def deploy(host: str, instance: str, health_url: str, *, plan_only: bool = False
         script = ROOT / "scripts/deploy_incus_remote.sh"
         retain_remote_recovery = False
         try:
-            _run(["scp", str(archive), f"{host}:{remote_archive}"])
-            _run(["scp", str(script), f"{host}:{remote_script}"])
+            _run(["scp", *SSH_CONNECTION_OPTIONS, str(archive), f"{host}:{remote_archive}"])
+            _run(["scp", *SSH_CONNECTION_OPTIONS, str(script), f"{host}:{remote_script}"])
             _ssh(host, ["incus", "file", "push", remote_archive, f"{instance}{remote_archive}"])
             _ssh(host, ["incus", "file", "push", remote_script, f"{instance}{remote_script}"])
 

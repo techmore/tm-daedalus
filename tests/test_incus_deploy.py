@@ -34,6 +34,23 @@ class IncusDeployTests(unittest.TestCase):
             "operator@incus-host", "incus exec daedalus-prod -- echo 'a b'",
         ])
 
+    def test_backup_connection_failure_leaves_no_published_archive(self):
+        import os
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "ssh"
+            arguments = root / "arguments"
+            executable.write_text("#!/bin/sh\nprintf '%s\n' \"$@\" > \"$QA_SSH_ARGUMENTS\"\nexit 7\n")
+            executable.chmod(0o700)
+            environment = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
+                DAEDALUS_INCUS_HOST="operator@fixture-host", DAEDALUS_BACKUP_DIR=str(root / "backups"),
+                QA_SSH_ARGUMENTS=str(arguments))
+            result = subprocess.run(["sh", str(ROOT / "scripts/backup_incus.sh")], env=environment, capture_output=True)
+            self.assertEqual(result.returncode, 7)
+            self.assertEqual(arguments.read_text().splitlines()[:5],
+                ["-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1", "operator@fixture-host"])
+            self.assertEqual(list((root / "backups").iterdir()), [])
+
     def test_streaming_ssh_retains_exit_failure(self):
         with self.assertRaisesRegex(DeployError, r'Command failed \(7\): fixture failure'):
             _run_streaming_ssh([sys.executable, '-c', "import sys; print('fixture failure',file=sys.stderr); sys.exit(7)"])
