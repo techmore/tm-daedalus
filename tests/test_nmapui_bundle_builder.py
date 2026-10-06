@@ -79,6 +79,21 @@ switchAppTab(tab);assert.equal(elements['dashboard-results-panel'].hidden,tab!==
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_packaged_reports_empty_state_describes_local_files(self):
+        archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
+        with zipfile.ZipFile(archive) as bundle:
+            source = bundle.read('daedalus-nmapui-source/static/js/reports_tab.js').decode()
+        function = source[source.index('function renderReportsTab('):source.index('async function fetchScansForTabs(')]
+        script = """const assert=require('node:assert/strict');let reportsCustomerFilter='all',message;
+const document={getElementById:()=>({replaceChildren(){}})};
+function updateReportsBadge(){} function renderReportsCustomerFilters(){} function setTabStatus(_id,text){message=text;}
+""" + function + """
+renderReportsTab([]);assert.equal(message,'No saved report files found on this scanner for the selected customer.');
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_manifest_can_identify_uncommitted_runtime_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
