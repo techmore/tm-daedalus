@@ -49,6 +49,11 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn("Live Tahoe validation and trusted client distribution remain in progress", overview)
         self.assertNotIn("ongoing alignment work for current macOS releases", overview)
 
+    def test_overview_anchor_offset_and_reduced_motion_styles(self):
+        overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
+        self.assertIn("section[id]{scroll-margin-top:84px}", overview)
+        self.assertIn("@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}", overview)
+
     def test_existing_csp_school_resources_are_preserved(self):
         home = (SITE / "index.html").read_text(encoding="utf-8")
         legacy_directory = SITE / "Chrome_Moysle_googleadmin"
