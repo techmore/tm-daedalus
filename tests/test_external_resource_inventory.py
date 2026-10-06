@@ -7,6 +7,36 @@ from daedalus.external_checks import (
 
 
 class ExternalResourceInventoryTests(unittest.TestCase):
+    def test_exact_jsdelivr_npm_declarations_retain_source_and_privacy(self):
+        html = '<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js?private=secret"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@scope/name@1.2.3/style.css"><script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/other.js"></script>'
+        metadata = _external_resource_inventory(html, 'https://example.com/', 'example.com')['dependency_package_observations']
+        self.assertEqual([(p['name'], p['version'], p['source_host']) for p in metadata['packages']], [('@scope/name', '1.2.3', 'cdn.jsdelivr.net'), ('jquery', '3.6.4', 'cdn.jsdelivr.net')])
+        self.assertNotIn('secret', str(metadata))
+        self.assertFalse(metadata['package_bytes_verified'])
+
+    def test_jsdelivr_unsupported_formats_do_not_guess_versions(self):
+        for path in ('/npm/react@latest/a.js', '/npm/react@18/a.js', '/npm/react@^18.3.1/a.js', '/npm/react/a.js', '/gh/user/repo@1.2.3/a.js', '/combine/npm/react@1.2.3/a.js', '/npm/react@1.2.3-beta/a.js', '/npm/react@01.2.3/a.js'):
+            with self.subTest(path=path):
+                result = _external_resource_inventory('<script src="https://cdn.jsdelivr.net'+path+'"></script>', 'https://example.com/', 'example.com')
+                self.assertEqual(result['dependency_package_observations']['packages'], [])
+        for origin in ('https://cdn.jsdelivr.net.evil.test', 'https://user@cdn.jsdelivr.net', 'https://cdn.jsdelivr.net:8443'):
+            with self.subTest(origin=origin):
+                result = _external_resource_inventory('<script src="'+origin+'/npm/react@1.2.3/a.js"></script>', 'https://example.com/', 'example.com')
+                self.assertEqual(result['dependency_package_observations']['packages'], [])
+
+    def test_cdn_coverage_expansion_does_not_create_site_change_alerts(self):
+        import copy
+        current = _external_resource_inventory('<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/a.js"></script>', 'https://example.com/', 'example.com')
+        historical = copy.deepcopy(current)
+        historical['dependency_package_observations'].update(scope='exact_stable_unpkg_versions_in_root_html_attributes', packages=[])
+        historical['dependency_advisory_observations'] = {'schema_version': 1, 'state': 'not_assessed', 'packages': []}
+        current['dependency_advisory_observations'] = {'schema_version': 1, 'state': 'observed', 'packages': [{'name': 'jquery', 'version': '3.6.4', 'advisory_ids': ['GHSA-fixture']}]}
+        self.assertEqual(compare_snapshots(historical, current), [])
+        changed = copy.deepcopy(current)
+        changed['dependency_package_observations']['packages'][0]['version'] = '3.7.1'
+        paths = {item[0] for item in compare_snapshots(current, changed)}
+        self.assertIn('dependency_package_observations.packages', paths)
+
     def test_advisory_outage_does_not_remove_saved_matches(self):
         import copy
         baseline = {"dependency_advisory_observations": {"schema_version": 1, "state": "observed", "observed_at": "before", "packages": [{"name": "jquery", "version": "1.12.4", "advisory_ids": ["GHSA-test"]}]}}

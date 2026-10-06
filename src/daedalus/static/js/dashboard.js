@@ -3348,7 +3348,8 @@
       if (ids.length) value += " · " + ids.slice(0, 10).join(", ") + (ids.length > 10 ? " · " + (ids.length - 10) + " more saved IDs" : "");
       return {type: "npm", name: item.name, value: value, present: true, statusTone: ids.length ? "is-absent" : "is-neutral", statusText: status};
     });
-    return {rows: rows, scope: "Exact stable versions declared in UNPKG root-page references only. Package bytes and execution were not verified. Advisory matches describe declared versions only. " + (metadata.truncated ? "The saved package list is truncated." : "Tags, ranges and unsupported reference formats remain unidentified.")};
+    var sourceScope = metadata.scope === "exact_stable_unpkg_versions_in_root_html_attributes" ? "UNPKG" : "supported UNPKG/jsDelivr";
+    return {rows: rows, scope: "Exact stable versions declared in " + sourceScope + " root-page references only. Package bytes and execution were not verified. Advisory matches describe declared versions only. " + (metadata.truncated ? "The saved package list is truncated." : "Tags, ranges and unsupported reference formats remain unidentified.")};
   }
 
   function groupExternalDependencies(resources) {

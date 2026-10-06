@@ -237,6 +237,8 @@ const result=declaredPackageEvidence({dependency_package_observations:{schema_ve
 assert.equal(result.rows.length,1);assert.equal(result.rows[0].name,'react');assert.equal(result.rows[0].statusText,'Advisories not assessed');
 assert.ok(result.scope.includes('were not verified'));assert.ok(result.scope.includes('remain unidentified'));
 assert.ok(declaredPackageEvidence({dependency_package_observations:{schema_version:1,truncated:true,packages:[]}}).scope.includes('truncated'));
+assert.ok(!declaredPackageEvidence({dependency_package_observations:{schema_version:1,scope:'exact_stable_unpkg_versions_in_root_html_attributes',packages:[]}}).scope.includes('jsDelivr'));
+assert.ok(declaredPackageEvidence({dependency_package_observations:{schema_version:1,scope:'exact_stable_unpkg_jsdelivr_versions_in_root_html_attributes',packages:[]}}).scope.includes('jsDelivr'));
 const base={dependency_package_observations:{schema_version:1,truncated:false,packages:[{ecosystem:'npm',name:'react',version:'18.3.1',source_host:'unpkg.com'}]}};
 const packageResult={ecosystem:'npm',name:'react',version:'18.3.1',state:'observed',advisory_ids:['GHSA-test']};
 let row=declaredPackageEvidence({...base,dependency_advisory_observations:{state:'observed',packages:[packageResult]}}).rows[0];

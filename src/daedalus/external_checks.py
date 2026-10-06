@@ -149,22 +149,27 @@ def _vendor_for_host(host: str) -> tuple[str, str]:
     return "Unclassified external host", "Other"
 
 
-def _declared_unpkg_package(parsed) -> tuple[str, str] | None:
-    """Identify a stable exact npm version declared in UNPKG's documented URL format.
+def _declared_cdn_package(parsed) -> tuple[str, str, str] | None:
+    """Identify stable exact npm versions in documented UNPKG/jsDelivr URL formats.
 
     This does not fetch or verify package bytes, execution or vulnerability status.
     Tags, ranges, prereleases and unsupported CDN formats remain unidentified.
     """
-    if parsed.hostname != "unpkg.com" or parsed.username is not None or parsed.password is not None:
+    if parsed.hostname not in {"unpkg.com", "cdn.jsdelivr.net"} or parsed.username is not None or parsed.password is not None:
         return None
+    path = parsed.path
+    if parsed.hostname == "cdn.jsdelivr.net":
+        if not path.startswith("/npm/"):
+            return None
+        path = path[4:]
     match = re.fullmatch(
         r"/((?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*)@"
         r"((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))(?:/[^\s]*)?",
-        parsed.path,
+        path,
     )
     if match is None or len(match[1]) > 214 or len(match[2]) > 64:
         return None
-    return match[1], match[2]
+    return match[1], match[2], parsed.hostname
 
 
 def _external_resource_inventory(
@@ -187,7 +192,7 @@ def _external_resource_inventory(
             resource_base = page_url
     references: dict[tuple[str, str, int | None, str], int] = {}
 
-    declared_packages: set[tuple[str, str]] = set()
+    declared_packages: set[tuple[str, str, str]] = set()
     origin_counts: dict[tuple[str, str, int | None], dict[str, int]] = {}
     dependency_counts = {"http_reference_count": 0, "script_reference_count": 0, "stylesheet_reference_count": 0, "integrity_declared_reference_count": 0, "integrity_missing_reference_count": 0}
     for kind, raw_url, integrity_declared in parser.references:
@@ -207,7 +212,7 @@ def _external_resource_inventory(
         if host == base_domain or host.endswith("." + base_domain):
             continue
         if kind in {"Script", "Stylesheet"} and port is None:
-            package = _declared_unpkg_package(parsed)
+            package = _declared_cdn_package(parsed)
             if package is not None:
                 declared_packages.add(package)
         origin_key = (host, parsed.scheme.casefold(), port)
@@ -249,11 +254,11 @@ def _external_resource_inventory(
 
     return {
         "dependency_package_observations": {
-            "schema_version": 1, "scope": "exact_stable_unpkg_versions_in_root_html_attributes",
+            "schema_version": 1, "scope": "exact_stable_unpkg_jsdelivr_versions_in_root_html_attributes",
             "package_bytes_verified": False, "vulnerabilities_assessed": False,
             "truncated": len(declared_packages) > 100,
-            "packages": [{"ecosystem": "npm", "name": name, "version": version, "source_host": "unpkg.com"}
-                         for name, version in sorted(declared_packages)[:100]],
+            "packages": [{"ecosystem": "npm", "name": name, "version": version, "source_host": host}
+                         for name, version, host in sorted(declared_packages)[:100]],
         },
         "dependency_observations": {"schema_version": 1, "scope": "returned_root_html_attributes", "integrity_validated": False, **dependency_counts},
         "external_host_count": len({item["host"] for item in origins}),
@@ -910,6 +915,11 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
                 for snapshot in (previous, current)):
                 continue
             if path != "dependency_origin_observations.origins":
+                continue
+        if path.startswith(("dependency_advisory_observations", "dependency_package_observations")):
+            collection_metadata = [snapshot.get("dependency_package_observations") for snapshot in (previous, current)]
+            if all(isinstance(item, dict) for item in collection_metadata) and collection_metadata[0].get("scope") != collection_metadata[1].get("scope"):
+                # A collector expansion is not a change to the website or its advisories.
                 continue
         if path == "dependency_advisory_observations" or path.startswith("dependency_advisory_observations."):
             blocks = [snapshot.get("dependency_advisory_observations") for snapshot in (previous, current)]

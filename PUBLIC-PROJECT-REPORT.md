@@ -29,6 +29,14 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## jsDelivr package declaration coverage and hosted Mac status — 2026-10-06
+
+The website collector now recognizes exact stable npm versions in jsDelivr /npm/package@version paths, including scoped packages and stylesheet references. Source hosts remain saved; tags, ranges, prereleases, GitHub and combined endpoints, credentials, nondefault ports and lookalike hosts remain unidentified. Only returned root HTML attributes are inspected; package bytes and execution are unverified. The provider's documented format is https://www.jsdelivr.com/ .
+
+Comparison suppresses package/advisory differences when the collector scope changes, preventing this expansion from becoming a website-change alert. Subsequent version changes under equal coverage still compare. Historical UNPKG-only runs retain their original UI scope label. Parser checks passed 24 tests and 27 subtests; dashboard behavior passed 38 tests and two subtests.
+
+A fresh authenticated production client-status read returned HTTP 200 and confirmed the Mac scanner online with a current heartbeat, five completed prior workflows and a succeeded last scan request. This proves current hosted check-in and retained history, not a new scan or acceptance of existing PDF layouts. Private receipt: validation/mac-hosted-client-status-fresh-20261006.json. Production portal and installed scanner software were not changed.
+
 ## Initial scanner card freshness — 2026-10-06
 
 The server-rendered scanner card now uses the same heartbeat freshness rule as its live replacement. Offline or never-seen scanners show current NmapUI status as unknown; revoked scanners show access revoked. A saved readiness value no longer briefly appears as current readiness on refresh before JavaScript loads. Tests exercise stale, revoked and never-seen scanner records through the actual dashboard route. Forty-eight route/refresh tests and eight subtests passed. The full suite then passed 738 tests and 235 subtests, with one Linux-only skip and two dependency warnings. A fresh read of the installed Mac NmapUI readiness and runtime APIs returned ready=true, version v2026.3.14.00_10 and no active jobs; this proves current local readiness and idle state, not hosted upload health. This changes the portal source only; no installed scanner or production release changed.
