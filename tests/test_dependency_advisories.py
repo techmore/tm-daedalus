@@ -48,6 +48,13 @@ def test_pagination_does_not_claim_complete_lookup():
     assert "private-token" not in str(result)
 
 
+@pytest.mark.parametrize("token", [False, 0, [], {}, "x" * 4097])
+def test_invalid_pagination_cannot_establish_complete_lookup(token):
+    result = collect({"results": [{"next_page_token": token}]})
+    assert result["state"] == "unavailable"
+    assert result["packages"] == []
+
+
 def test_http_errors_do_not_retain_provider_body_or_follow_redirects():
     result = collect({"private": "must not retain"}, 302)
     assert result["state"] == "unavailable"

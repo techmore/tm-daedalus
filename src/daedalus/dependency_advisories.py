@@ -62,6 +62,9 @@ def query_declared_package_advisories(metadata: dict, *, client=None) -> dict:
         for package, response in zip(packages, responses):
             if not isinstance(response, dict):
                 raise ValueError("Invalid package advisory response")
+            token = response.get("next_page_token")
+            if token is not None and (not isinstance(token, str) or len(token) > 4096):
+                raise ValueError("Invalid advisory pagination metadata")
             advisories = response.get("vulns", [])
             if not isinstance(advisories, list) or len(advisories) > 1000:
                 raise ValueError("Invalid advisory list")
@@ -70,7 +73,7 @@ def query_declared_package_advisories(metadata: dict, *, client=None) -> dict:
                 raise ValueError("Invalid advisory identifier")
             ids = sorted({v["id"] for v in advisories})
             collected.append({"ecosystem": "npm", "name": package["name"], "version": package["version"],
-                              "state": "partial" if response.get("next_page_token") else "observed",
+                              "state": "partial" if token else "observed",
                               "advisory_ids": ids})
         result.update(packages=collected, state="partial" if metadata.get("truncated") or any(p["state"] == "partial" for p in collected) else "observed")
     except (httpx.HTTPError, TimeoutError, ValueError, UnicodeError) as exc:
