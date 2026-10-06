@@ -218,12 +218,30 @@ def _append_email_assessment(
             _paragraph("Aggregate reports requested" if dmarc.get("aggregate_reporting_configured") else "No aggregate report URI", styles["cell"]),
             _paragraph(coverage, styles["cell"]),
         ])
+    full = assessment if isinstance(assessment.get("guidance"), list) else analyze_email_auth(records, errors)
+    dkim = full.get("dkim") if isinstance(full.get("dkim"), dict) else {}
+    rows.insert(2, [
+        _paragraph("DKIM", styles["cell"]),
+        _paragraph(dkim.get("label") or "Unknown", styles["cell"]),
+        _paragraph(dkim.get("summary") or "No DKIM interpretation is available.", styles["cell"]),
+    ])
     story.append(Paragraph("Email authentication interpretation", styles["subsection"]))
     story.append(_paragraph(
         "This interprets the published DNS text only. Daedalus does not send or inspect email, recursively evaluate SPF dependencies, or verify actual SPF/DKIM alignment.",
         styles["small"],
     ))
     story.append(_table(rows, [1.0 * inch, 1.35 * inch, 4.15 * inch]))
+    guidance = [item for item in full.get("guidance") or [] if isinstance(item, dict)]
+    if guidance:
+        labels = {"good": "OK", "info": "Consider", "warn": "Review", "action": "Fix"}
+        steps = [[_paragraph("Control", styles["table_header"]), _paragraph("Next step", styles["table_header"]),
+                  _paragraph("What to do", styles["table_header"])]]
+        for item in guidance:
+            steps.append([_paragraph(item.get("area"), styles["cell"]),
+                          _paragraph(labels.get(item.get("level"), "Review"), styles["cell"]),
+                          _paragraph(item.get("text"), styles["cell"])])
+        story.append(Paragraph("What to do next", styles["subsection"]))
+        story.append(_table(steps, [1.0 * inch, 1.0 * inch, 4.5 * inch]))
 
 
 def _append_dns(story: list[Any], check: dict[str, Any], styles: dict[str, ParagraphStyle]) -> None:
@@ -547,6 +565,56 @@ def _overview_tile(label: str, value: Any, detail: Any, width: float, styles: di
     return tile
 
 
+def _posture_attention_items(checks: dict[str, Any], generated_at: Any) -> list[tuple[str, str]]:
+    """The same verdict the dashboard status board shows: what needs attention."""
+    items: list[tuple[str, str]] = []
+    dns = checks.get("dns") or {}
+    web = checks.get("web") or {}
+    dns_run, web_run = dns.get("run") or {}, web.get("run") or {}
+    dns_snapshot, web_snapshot = dns_run.get("snapshot") or {}, web_run.get("snapshot") or {}
+    if not dns_run:
+        items.append(("warn", "No DNS and email check has been recorded."))
+    else:
+        errors = dns_snapshot.get("resolver_errors") or {}
+        if errors:
+            items.append(("warn", "These DNS lookups failed and remain unknown: " + ", ".join(sorted(errors)) + "."))
+        assessment = dns_snapshot.get("email_authentication_assessment")
+        full = assessment if isinstance(assessment, dict) and isinstance(assessment.get("guidance"), list) \
+            else analyze_email_auth(dns_snapshot.get("records"), errors)
+        for item in full.get("guidance") or []:
+            if isinstance(item, dict) and item.get("level") in {"action", "warn"}:
+                items.append(("warn", f"{item.get('area')}: {item.get('text')}"))
+    if not web_run:
+        items.append(("warn", "No website check has been recorded."))
+    else:
+        status = web_snapshot.get("http_status")
+        if type(status) is not int or not 200 <= status < 400:
+            items.append(("bad", f"The website did not return a healthy response ({status if type(status) is int else 'no response'})."))
+        if _tls_valid_at_collection(web_snapshot.get("tls") or {}, web_run) is False:
+            items.append(("bad", "The TLS certificate was outside its validity dates when checked."))
+        headers = web_snapshot.get("security_headers")
+        absent = sum(not value for value in headers.values()) if isinstance(headers, dict) else 0
+        if absent:
+            items.append(("warn", f"{absent} selected browser security header(s) are absent."))
+    return items
+
+
+def _append_status_banner(story: list[Any], checks: dict[str, Any], generated_at: Any, styles: dict[str, ParagraphStyle], content_width: float) -> None:
+    items = _posture_attention_items(checks, generated_at)
+    story.append(Spacer(1, 8))
+    bad = any(level == "bad" for level, _ in items)
+    palette = (colors.HexColor("#f2d6cf") if bad else colors.HexColor("#f4e8c4") if items else OLIVE_100)
+    headline = ("All checked items look good" if not items
+                else f"{len(items)} thing{'s' if len(items) != 1 else ''} need{'s' if len(items) == 1 else ''} attention")
+    box = Table([[Paragraph(f"<b>{escape(headline)}</b>", ParagraphStyle(name="StatusHeadline", parent=styles["body"], fontName="Helvetica-Bold", fontSize=15, leading=19, textColor=OLIVE_950))]]
+                + [[_paragraph(("• " if True else "") + text, styles["body"])] for _, text in items], colWidths=[content_width])
+    box.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), palette), ("BOX", (0, 0), (-1, -1), 0.6, LINE),
+                             ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                             ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+    story.append(box)
+    story.append(Spacer(1, 6))
+
+
 def _append_posture_overview(story: list[Any], checks: dict[str, Any], styles: dict[str, ParagraphStyle], content_width: float) -> None:
     dns = checks.get("dns") or {}
     web = checks.get("web") or {}
@@ -721,6 +789,7 @@ def build_external_posture_pdf(report_snapshot: dict[str, Any]) -> bytes:
         styles["DaedalusSmall"],
     ))
     checks = report_snapshot.get("checks") or {}
+    _append_status_banner(story, checks, generated_at, styles, doc.width)
     _append_posture_overview(story, checks, styles, doc.width)
     _append_dns(story, checks.get("dns") or {}, styles)
     _append_website(story, checks.get("web") or {}, styles)
