@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Hosted scanner connection-change evidence — 2026-10-05
+
+Fresh authenticated HTTPS reads confirm Mac agent 2 is online, NmapUI ready and reporting its current automatically derived 192.168.222.0/24 network to the production portal. Its approved scope remains 10.20.0.0/24. The Linux agent is also online/ready, reporting 10.96.131.0/24 with approved loopback-only scope. These are current readings after the managed Mac update, not a production portal deployment.
+
+The actual audit log retains Mac connection change 374 at 2026-10-05T19:47:42.062031Z, from 10.20.0.0/24 to 192.168.222.0/24, as well as later discovery-empty/recovery observations. This proves automatic connection reporting and dated change storage across a real Mac network transition; it does not prove scanning the new network or additional VLAN deployments. No scope was expanded and no scan was queued. Private receipt: validation/scanner-network-after-upgrade-20261005.json.
+
 ## Scanner connection freshness — 2026-10-05
 
 Scanner cards now distinguish a live detected connection from the last reported connection while the bridge is offline, and label current connection unavailable after access revocation. Authorized scope is unchanged. Six Node branches cover online, offline with/without prior network, pending detection and both revocation forms. Dashboard/topic and CIS route suites passed 79 tests and seven subtests; JavaScript syntax and diff checks passed. The dashboard asset version is 110. This change is committed locally while the preceding Linux CI run is active; production activation remains pending.
