@@ -341,6 +341,19 @@ controls=card.children.find(n=>n.className==='topic-secondary scanner-controls')
 assert.equal(controls.open,true);
 assert.equal(flatten(controls).find(n=>n.dataset.command==='start_scan').disabled,false);
 controls.open=false;controls.events.toggle();assert.equal(openScannerControls.has(2),false);
+const readiness=c=>c.children.find(n=>n.className==='agent-readiness').textContent;
+card=makeAgentCard({...agent,bridge_online:true,detected_networks:['10.0.0.0/24']},'example.test');
+assert.equal(readiness(card),'NmapUI ready');
+card=makeAgentCard({...agent,status:'offline',bridge_online:false,detected_networks:['10.0.0.0/24']},'example.test');
+assert.equal(readiness(card),'Current NmapUI status unknown · scanner bridge offline');
+assert.ok(card.children.some(n=>String(n.textContent).includes('Last reported connection: 10.0.0.0/24 · current connection unknown while offline')));
+card=makeAgentCard({...agent,bridge_online:true,nmapui_ready:false},'example.test');
+assert.equal(readiness(card),'NmapUI not ready');
+card=makeAgentCard({...agent,bridge_online:true,nmapui_ready:null},'example.test');
+assert.equal(readiness(card),'NmapUI health check pending');
+card=makeAgentCard({...agent,status:'disabled',enabled:false,bridge_online:true},'example.test');
+assert.equal(readiness(card),'Scanner access revoked · current NmapUI status unavailable');
+
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
