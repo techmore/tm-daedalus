@@ -7,6 +7,22 @@ from daedalus.external_checks import (
 
 
 class ExternalResourceInventoryTests(unittest.TestCase):
+    def test_catalog_labels_do_not_alert_or_rewrite_saved_dependencies(self):
+        import copy
+        current = _external_resource_inventory('<script src="https://cdn.tailwindcss.com"></script>', 'https://example.com/', 'example.com')
+        self.assertEqual(current['external_resources'][0]['vendor'], 'Tailwind CSS Play CDN')
+        self.assertEqual(current['external_resources'][0]['category'], 'CDN and libraries')
+        previous = copy.deepcopy(current)
+        previous['external_resources'][0].update(vendor='Unclassified external host', category='Other')
+        saved = copy.deepcopy(previous)
+        self.assertEqual(compare_snapshots(previous, current), [])
+        self.assertEqual(compare_snapshots(current, previous), [])
+        self.assertEqual(previous, saved)
+        changed = _external_resource_inventory('<script src="https://cdn.tailwindcss.com:8443"></script>', 'https://example.com/', 'example.com')
+        self.assertTrue(compare_snapshots(current, changed))
+        lookalike = _external_resource_inventory('<script src="https://cdn.tailwindcss.com.example.net"></script>', 'https://example.com/', 'example.com')
+        self.assertEqual(lookalike['external_resources'][0]['vendor'], 'Unclassified external host')
+
     def test_historical_default_port_aliases_do_not_alert_or_rewrite_evidence(self):
         import copy
         current = _external_resource_inventory('<script src="https://cdn.example.net/a.js"></script><script src="https://cdn.example.net/b.js"></script>', 'https://example.com/', 'example.com')

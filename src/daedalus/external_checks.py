@@ -55,6 +55,7 @@ KNOWN_VENDORS = (
     ("cloudflareinsights.com", "Cloudflare Web Analytics", "Analytics"),
     ("jsdelivr.net", "jsDelivr", "CDN and libraries"),
     ("unpkg.com", "UNPKG", "CDN and libraries"),
+    ("cdn.tailwindcss.com", "Tailwind CSS Play CDN", "CDN and libraries"),
     ("akamai.net", "Akamai", "CDN and infrastructure"),
     ("akamaihd.net", "Akamai", "CDN and infrastructure"),
     ("cloudfront.net", "Amazon CloudFront", "CDN and infrastructure"),
@@ -695,6 +696,11 @@ def _canonical_origin_list(value: Any) -> list[dict[str, Any]] | None:
         if not isinstance(row, dict):
             return None
         item = dict(row)
+        # Provider labels are derived from our classification catalog, not
+        # observed changes to the website's dependencies. Retain them in the
+        # saved snapshot while comparing the actual origin evidence.
+        item.pop("vendor", None)
+        item.pop("category", None)
         host, scheme, port = item.get("host"), item.get("scheme"), item.get("port")
         if not isinstance(host, str) or not isinstance(scheme, str) or scheme not in {"http", "https"} or "port" not in item:
             return None
