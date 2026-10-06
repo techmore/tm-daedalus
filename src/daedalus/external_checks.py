@@ -900,6 +900,14 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
             continue
         old = old_values.get(path)
         new = new_values.get(path)
+        if path == "registration_observations.events":
+            from .registration_checks import canonical_registration_events
+            try:
+                if canonical_registration_events(old) == canonical_registration_events(new):
+                    continue
+            except (ValueError, OverflowError):
+                # Unreadable dates cannot establish a registration change.
+                continue
         if old != new or (path not in old_values) != (path not in new_values):
             changes.append((path, old, new))
     if previous.get("domain") == current.get("domain") and isinstance(current.get("domain"), str):

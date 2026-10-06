@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import http.client
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from .domain_verification import normalize_domain
@@ -11,6 +11,24 @@ from .external_checks import _PinnedHTTPSConnection, _public_addresses
 
 BOOTSTRAP_URL = "https://data.iana.org/rdap/dns.json"
 MAX_JSON_BYTES = 512 * 1024
+
+
+def canonical_registration_events(events: list) -> list:
+    """Compare event instants without changing retained provider evidence."""
+    if not isinstance(events, list) or len(events) > 100:
+        raise ValueError("Invalid registration events")
+    values = set()
+    for event in events:
+        if not isinstance(event, dict) or event.get("action") not in {"registration", "expiration", "last changed"}:
+            raise ValueError("Invalid registration event")
+        value = event.get("date")
+        if not isinstance(value, str) or len(value) > 64:
+            raise ValueError("Invalid registration event date")
+        instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if instant.tzinfo is None:
+            raise ValueError("Registration event requires a timezone")
+        values.add((event["action"], instant.astimezone(timezone.utc).isoformat()))
+    return [{"action": action, "date": date} for action, date in sorted(values)]
 
 
 def _https_url(value: str) -> str:

@@ -91,6 +91,21 @@ class RegistrationChecksTests(unittest.TestCase):
             connection.close.assert_called_once()
 
 class RegistrationComparisonTests(unittest.TestCase):
+    def test_event_comparison_uses_instants_and_preserves_saved_values(self):
+        from copy import deepcopy
+        from daedalus.external_checks import compare_snapshots
+        previous = self.snapshot()
+        previous["registration_observations"]["events"] = [{"action": "expiration", "date": "2027-01-01T00:00:00Z"}]
+        current = deepcopy(previous)
+        current["registration_observations"]["events"] = [{"action": "expiration", "date": "2026-12-31T19:00:00-05:00"}] * 2
+        self.assertEqual(compare_snapshots(previous, current), [])
+        self.assertEqual(previous["registration_observations"]["events"][0]["date"], "2027-01-01T00:00:00Z")
+        current["registration_observations"]["events"] = [{"action": "expiration", "date": "2027-01-02T00:00:00Z"}]
+        self.assertEqual(compare_snapshots(previous, current)[0][0], "registration_observations.events")
+        for date in ("invalid", "2027-01-01T00:00:00"):
+            current["registration_observations"]["events"][0]["date"] = date
+            self.assertEqual(compare_snapshots(previous, current), [])
+
     def snapshot(self, registrar="First"):
         return {"domain": "example.org", "records": {}, "registration_observations": {
             "domain": "example.org", "protocol": "rdap", "state": "observed", "collection_partial": False,
