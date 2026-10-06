@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Open-dashboard override expiry — 2026-10-06
+
+Periodic dashboard refresh now disables restricted enrollment, new-scan, network-scope, active website audit and membership controls when workspace access closes. It shows one inline status notice and preserves scanner edits. Permission refresh continues while a confirmation is open; the backend still authorizes every action. Cancellation controls remain available. Enrollment completion and scanner action feedback no longer re-enable restricted controls after access closes. Granting/renewing an override and successful domain verification already reload the dashboard.
+
+Dashboard, route and auth/workspace checks passed 110 tests and 26 subtests. After the final scanner feedback guard, dashboard/refresh checks passed 61 tests and two subtests. This is source/API-fixture validation; a live browser expiry/recovery review and production activation remain pending. No probation record or production override was changed.
+
 ## Shared-domain role and history isolation — 2026-10-06
 
 An integration check now exercises one user who administers CSP and requests regular-user access to a second reserved test domain. It creates that workspace through the API, rejects selection while access is pending, grants a logged probation override through the second owner, approves membership, switches domains repeatedly and revokes access. Each selection retains its own role, scanners and scan events; another domain's scanner history returns 404. Regular users cannot enroll scanners or read admin audit logs. Each owner's audit log contains only its domain's private fixture history. Revoked access returns 403, while the first domain's admin access remains valid.

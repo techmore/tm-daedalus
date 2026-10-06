@@ -1031,9 +1031,27 @@
     return row;
   }
 
+  function pauseRestrictedWorkspaceControls() {
+    if (controlsEnabled) return;
+    document.querySelectorAll('#add-scanner, [data-open-enrollment], #issue-scanner-enrollment, [data-command="start_scan"], [data-save-scanner-scope], [data-run-active-exposure], #run-nikto, [data-membership-decision], [data-membership-role]').forEach(function (button) {
+      button.disabled = true;
+    });
+  }
+
+  function updateWorkspaceControls(organization) {
+    var controlsJustClosed = controlsEnabled && organization.controls_enabled !== true;
+    controlsEnabled = organization.controls_enabled === true;
+    var controlsNotice = document.getElementById("workspace-controls-notice");
+    if (controlsNotice && controlsJustClosed) {
+      controlsNotice.textContent = "Temporary workspace access has closed. Scanner enrollment, new scans and active website audits are paused. Review domain verification or renew the 14-day override in Overview. Saved results remain available.";
+      controlsNotice.classList.remove("hidden");
+    } else if (controlsNotice && controlsEnabled) controlsNotice.classList.add("hidden");
+    pauseRestrictedWorkspaceControls();
+  }
+
   function render(data) {
     verificationStatus = data.organization.verification_status;
-    controlsEnabled = data.organization.controls_enabled;
+    updateWorkspaceControls(data.organization);
     if (shell) shell.dataset.verificationStatus = verificationStatus;
     if (shell) shell.dataset.controlsEnabled = String(controlsEnabled);
     text(document.getElementById("stat-domain-status"), verificationStatus.charAt(0).toUpperCase() + verificationStatus.slice(1));
@@ -1086,6 +1104,7 @@
       }
     }
     text(document.getElementById("event-count"), data.events.length + " recent");
+    pauseRestrictedWorkspaceControls();
   }
 
   function workspaceAssessmentSummary(areas) {
@@ -1166,6 +1185,7 @@
         var response = await fetch("/api/dashboard", { credentials: "same-origin" });
         if (!response.ok) return;
         var data = await response.json();
+        updateWorkspaceControls(data.organization);
         if (!force && document.querySelector(".inline-confirmation")) return;
         render(data);
         if (activeTab === "overview") await loadWorkspacePosture();
@@ -1202,13 +1222,13 @@
       await refresh(true);
       window.setTimeout(function () {
         button.textContent = original;
-        button.disabled = false;
+        button.disabled = action === "start_scan" && !controlsEnabled;
       }, 1800);
     } catch (error) {
       button.textContent = error.message;
       window.setTimeout(function () {
         button.textContent = original;
-        button.disabled = false;
+        button.disabled = action === "start_scan" && !controlsEnabled;
       }, 2800);
       throw error;
     }
@@ -1257,7 +1277,7 @@
       scannerScopeFeedback.set(agentId, error.message);
       if (feedback) feedback.textContent = error.message;
     } finally {
-      button.disabled = false;
+      button.disabled = !controlsEnabled;
     }
   }
 
@@ -1346,7 +1366,7 @@
       } catch (error) {
         text(codeOutput, error.message);
       } finally {
-        issueScannerEnrollment.disabled = false;
+        issueScannerEnrollment.disabled = !controlsEnabled;
       }
     });
   }

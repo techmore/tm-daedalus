@@ -49,6 +49,27 @@ assert.equal(all(makeAuditTable('DNS','Scope',[{type:'TXT',name:'record',value:'
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_expired_workspace_controls_disable_actions_without_replacing_edits(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function pauseRestrictedWorkspaceControls('):source.index('  function updateWorkspaceControls(organization)')]
+        script = """const assert=require('node:assert/strict');
+let controlsEnabled=true, queries=0;
+const buttons=[{disabled:false},{disabled:true}];
+const document={querySelectorAll:selector=>{queries++;assert.ok(selector.includes('[data-command="start_scan"]'));assert.ok(!selector.includes('cancel_scan'));return buttons;}};
+""" + helper + """
+pauseRestrictedWorkspaceControls();assert.equal(queries,0);
+controlsEnabled=false;pauseRestrictedWorkspaceControls();assert.ok(buttons.every(b=>b.disabled));
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        render = source[source.index('  function render(data)'):source.index('  function workspaceAssessmentSummary(')]
+        self.assertIn('updateWorkspaceControls(data.organization);', render)
+        refresh = source[source.index('  function refresh(force)'):source.index('  async function sendCommand(')]
+        self.assertLess(refresh.index('updateWorkspaceControls(data.organization);'), refresh.index('document.querySelector(".inline-confirmation")'))
+        self.assertIn('pauseRestrictedWorkspaceControls();', render)
+        self.assertIn('issueScannerEnrollment.disabled = !controlsEnabled;', source)
+
     def test_empty_change_history_does_not_imply_only_one_assessment(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         self.assertIn('No confirmed changes are recorded in the saved assessment history.', source)

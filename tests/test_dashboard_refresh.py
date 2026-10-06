@@ -295,6 +295,8 @@ assert.equal(emailAuthenticationMetrics(null)[0].value, 'Not assessed');
 let dashboardRefreshPromise = null, calls = 0, rendered = [], release, inlineConfirmationOpen = false;
 let fetch = () => { calls++; return new Promise(resolve => { release = resolve; }); };
 let render = value => rendered.push(value);
+let controlUpdates = 0;
+function updateWorkspaceControls() { controlUpdates++; }
 let document = {querySelector(selector) { assert.equal(selector, '.inline-confirmation'); return inlineConfirmationOpen ? {} : null; }};
 ''' + function + '''
 (async () => {
@@ -315,6 +317,7 @@ let document = {querySelector(selector) { assert.equal(selector, '.inline-confir
   fetch = async () => ({ok: true, json: async () => ({status: 'newer'})});
   await refresh();
   assert.equal(rendered.length, 2, 'passive refresh must leave an open confirmation in place');
+  assert.equal(controlUpdates, 3, 'permission updates continue while a confirmation is open');
   await refresh(true);
   assert.deepEqual(rendered.at(-1), {status: 'newer'}, 'confirmed actions can force the dashboard update');
 })().catch(error => { console.error(error); process.exitCode = 1; });
