@@ -9,6 +9,14 @@ from scripts.build_nmapui_source_bundle import _source_worktree_paths
 
 
 class NmapUISourceProvenanceTests(unittest.TestCase):
+    def test_packaged_browser_template_declares_device_viewport(self):
+        archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
+        with zipfile.ZipFile(archive) as bundle:
+            template = bundle.read('daedalus-nmapui-source/templates/index.html').decode()
+        self.assertIn('name="viewport" content="width=device-width, initial-scale=1"', template)
+        self.assertIn('id="scan-command-center"', template)
+        self.assertIn('id="scanner-header"', template)
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_packaged_partial_initial_message_preserves_discovered_network(self):
         archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
