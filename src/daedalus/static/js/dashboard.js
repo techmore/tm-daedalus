@@ -3492,7 +3492,7 @@
         row.append(main, time);
         changeList.append(row);
       });
-      if (!(body.changes || []).length) appendEmpty(changeList, "No changes have been detected yet; the first successful run is the baseline.");
+      if (!(body.changes || []).length) appendEmpty(changeList, "No confirmed changes are recorded in the saved assessment history. The first successful assessment establishes the baseline; unavailable checks cannot establish changes.");
     }
     var olderChangesButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="changes"]');
     if (olderChangesButton) {

@@ -6,6 +6,12 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    def test_empty_change_history_does_not_imply_only_one_assessment(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        self.assertIn('No confirmed changes are recorded in the saved assessment history.', source)
+        self.assertIn('unavailable checks cannot establish changes.', source)
+        self.assertNotIn('No changes have been detected yet; the first successful run is the baseline.', source)
+
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_mail_route_summary_distinguishes_unknown_and_null_mx(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
