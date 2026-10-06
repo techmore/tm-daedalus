@@ -1552,3 +1552,10 @@ Original repository history after the candidate includes August 22 changes for N
 The internal-network empty state now directs members to their workspace admin rather than a hidden Add scanner control. The online metric explicitly describes a current bridge heartbeat, separately from NmapUI readiness. A real local browser reload retained #scanners and showed member guidance in both the assessment and scanner list with no admin enrollment control. Sixty-three topic/CIS route tests and seven subtests passed after the final change.
 
 Additional executed JavaScript renderer assertions prove that stale ready telemetry is not shown as current while the bridge is offline; retained CIDRs are labeled last reported and current connection unknown. Online not-ready, pending health and revoked access have distinct labels. The focused topic suite passed 37 tests and two subtests. This covers rendered state semantics, not a new physical scanner deployment or fleet soak. Backend CI 37416713105 at bce732f succeeded; Linux run 37416713205 remains active. Pending local commits have not been deployed.
+
+
+## Current installed Mac status and full validation — October 6, 2026
+
+The installed scanner's readiness endpoint returned ready with Nmap 7.991 and interface en0. Runtime status reported zero active jobs. The running native indicator's fresh observation reported NmapUI running, Daedalus bridge connected, scan activity idle and five retained completed runs. This is current local/native telemetry, not a fresh visual inspection of production or additional subnet coverage. No scan or PDF generation was requested. Receipt: validation/mac-scanner-current-status-20261006.json.
+
+The complete suite at 082b832 passed 708 tests and 224 subtests in 42.39 seconds, with one Linux-only skip and two dependency warnings. Linux CI 37416713205 remains active; pending commits are retained locally until that run reaches a terminal state. Production and standardized report assets remain unchanged.
