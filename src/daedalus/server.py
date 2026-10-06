@@ -974,7 +974,7 @@ def record_probation_override_notification(
     expires_at: datetime,
 ) -> bool:
     """Persist a workspace-wide notice when temporary access controls change."""
-    if action not in {"granted", "revoked"}:
+    if action not in {"granted", "revoked", "expired"}:
         return False
     source_type = f"probation_override_{action}"
     if db.scalar(select(WorkspaceNotification.id).where(
@@ -990,6 +990,9 @@ def record_probation_override_notification(
         summary = (
             f"{actor} granted a temporary 14-day probation override through {expires_at.isoformat()}Z."
         )
+    elif action == "expired":
+        title = "Temporary probation override expired"
+        summary = f"The temporary override ended at {expires_at.isoformat()}Z. Verification or a new audited override is required for unverified-domain controls."
     else:
         title = "Temporary probation override revoked"
         summary = (
@@ -1010,6 +1013,25 @@ def record_probation_override_notification(
         return True
     except IntegrityError:
         return False
+
+
+
+def record_expired_probation_overrides() -> list[dict[str, int]]:
+    now = utcnow()
+    notices = []
+    with SessionLocal() as db:
+        expired = db.scalars(select(ProbationOverride).outerjoin(
+            WorkspaceNotification,
+            (WorkspaceNotification.organization_id == ProbationOverride.organization_id)
+            & (WorkspaceNotification.source_type == "probation_override_expired")
+            & (WorkspaceNotification.source_id == ProbationOverride.id),
+        ).where(ProbationOverride.expires_at <= now, ProbationOverride.revoked_at.is_(None), WorkspaceNotification.id.is_(None)).order_by(ProbationOverride.id).limit(100)).all()
+        for item in expired:
+            if record_probation_override_notification(db, organization_id=item.organization_id, override_id=item.id, action="expired", actor_name="", detected_at=now, expires_at=item.expires_at):
+                audit(db, item.organization_id, None, "probation_override.expired", {"override_id": item.id, "expires_at": iso_utc(item.expires_at), "observed_at": iso_utc(now)})
+                notices.append({"organization_id": item.organization_id, "override_id": item.id})
+        db.commit()
+    return notices
 
 
 def record_cis_report_notification(
@@ -2003,6 +2025,9 @@ async def publish_external_check_result(
 async def external_check_scheduler() -> None:
     while True:
         try:
+            expired_overrides = await run_in_threadpool(record_expired_probation_overrides)
+            for item in expired_overrides:
+                await live_hub.publish(item["organization_id"], {"type": "workspace_notification_created", "source_type": "probation_override_expired", "source_id": item["override_id"]})
             await run_in_threadpool(expire_scanner_commands)
             due_schedules = await run_in_threadpool(claim_due_external_check_schedules)
             for schedule in due_schedules:
@@ -3338,7 +3363,7 @@ def list_workspace_notifications(
                     else "cis" if notification.source_type == "cis_report"
                     else "scanners" if notification.source_type == "scanner_comparison"
                     else "members" if notification.source_type in {
-                        "probation_override_granted", "probation_override_revoked"
+                        "probation_override_granted", "probation_override_revoked", "probation_override_expired"
                     }
                     else "dns" if notification.title.startswith("DNS and email")
                     else "web"

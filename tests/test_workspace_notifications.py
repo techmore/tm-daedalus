@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from daedalus.db import Base
 from daedalus import server
 from daedalus.models import (
-    Membership, Organization, User, WorkspaceNotification, WorkspaceNotificationRead, ExternalCheckRun, ReportJob,
+    AuditLog, ProbationOverride, Membership, Organization, User, WorkspaceNotification, WorkspaceNotificationRead, ExternalCheckRun, ReportJob,
 )
 try:
     from . import test_cis_pdf_flow as fixtures
@@ -34,6 +34,25 @@ class WorkspaceNotificationTests(unittest.TestCase):
         org_id, user_id = self.workspace()
         with patch.object(server, "run_website_check", return_value=snapshot):
             return server.execute_external_check(org_id, user_id, "web")
+
+    def test_override_expiry_is_logged_and_notified_once(self):
+        from unittest.mock import patch
+        org_id, user_id = self.workspace()
+        now = server.utcnow()
+        with self.session_factory() as db:
+            for expired, revoked in [(True, False), (False, False), (True, True)]:
+                db.add(ProbationOverride(organization_id=org_id, granted_by_user_id=user_id, reason='Fixture approval', starts_at=now-server.timedelta(days=14), expires_at=now+server.timedelta(seconds=-1 if expired else 60), created_at=now-server.timedelta(days=14), revoked_at=now if revoked else None))
+            db.commit()
+        with patch.object(server, 'SessionLocal', self.session_factory):
+            self.assertEqual(len(server.record_expired_probation_overrides()), 1)
+            self.assertEqual(server.record_expired_probation_overrides(), [])
+        with self.session_factory() as db:
+            notices = db.scalars(select(WorkspaceNotification).where(WorkspaceNotification.source_type == 'probation_override_expired')).all()
+            audits = db.scalars(select(AuditLog).where(AuditLog.action == 'probation_override.expired')).all()
+            self.assertEqual(len(notices), 1)
+            self.assertEqual(len(audits), 1)
+            self.assertEqual(audits[0].details['override_id'], notices[0].source_id)
+            self.assertIsNone(audits[0].actor_user_id)
 
     def test_interrupted_audit_creates_one_persistent_notice_and_preserves_history(self):
         org_id, user_id = self.workspace()
