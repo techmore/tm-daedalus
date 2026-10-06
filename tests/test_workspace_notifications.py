@@ -179,12 +179,14 @@ class WorkspaceNotificationTests(unittest.TestCase):
 
     def test_baseline_is_quiet_while_changes_and_failed_runs_create_notices(self):
         baseline = {"domain": "cybersecuritypilot.org", "records": {"A": ["192.0.2.1"]}, "resolver_errors": {}}
-        self.run_dns(baseline)
+        first = self.run_dns(baseline)
+        self.assertTrue(first["initial_baseline"])
         with self.session_factory() as db:
             self.assertEqual(db.scalar(select(WorkspaceNotification.id)), None)
         changed = {"domain": "cybersecuritypilot.org", "records": {"A": ["192.0.2.2"]}, "resolver_errors": {}}
         run = self.run_dns(changed)
         self.assertEqual(run["change_count"], 1)
+        self.assertFalse(run["initial_baseline"])
         with self.session_factory() as db:
             notices = db.scalars(select(WorkspaceNotification)).all()
             self.assertEqual(len(notices), 1)
@@ -197,6 +199,7 @@ class WorkspaceNotificationTests(unittest.TestCase):
         with patch.object(server, "run_dns_check", side_effect=RuntimeError("offline")):
             failed = server.execute_external_check(org_id, user_id, "dns")
         self.assertEqual(failed["status"], "failed")
+        self.assertFalse(failed["initial_baseline"])
         with self.session_factory() as db:
             notices = db.scalars(select(WorkspaceNotification).order_by(WorkspaceNotification.id)).all()
             self.assertEqual(len(notices), 2)

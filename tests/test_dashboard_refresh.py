@@ -256,6 +256,12 @@ notifyExternalCheck({run_id:34, check_type:'web', domain:'example.org', status:'
 assert.match(content, /completed .* with no detected changes/);
 notifyExternalCheck({run_id:35, check_type:'dns', domain:'example.org', status:'failed', change_count:0});
 assert.match(content, /check failed/);
+notifyExternalCheck({run_id:36,check_type:'web',domain:'example.org',status:'completed',change_count:0,initial_baseline:true});
+assert.match(content,/baseline saved/);
+assert.doesNotMatch(content,/no detected changes/);
+notifyExternalCheck({run_id:37,check_type:'dns',domain:'example.org',status:'completed_with_warnings',change_count:0,initial_baseline:true});
+assert.match(content,/no previous assessment/);
+assert.match(content,/Some checks may be unknown/);
 """
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -3914,8 +3914,10 @@
       textMessage = moduleName + " check failed for " + message.domain + ". Open its tab to review the recorded error.";
     } else if (message.status === "completed_with_warnings") {
       textMessage = moduleName + " check completed with warnings for " + message.domain + ". " +
-        (message.change_count ? message.change_count + " change(s) were detected." : "No confirmed changes were detected.") +
+        (message.initial_baseline === true ? "Initial baseline saved; no previous assessment was available for comparison." : message.change_count ? message.change_count + " change(s) were detected." : "No confirmed changes were detected.") +
         " Some checks may be unknown; review the latest run.";
+    } else if (message.initial_baseline === true) {
+      textMessage = moduleName + " baseline saved for " + message.domain + ". Future checks can compare against this assessment.";
     } else if (message.change_count) {
       textMessage = moduleName + " check found " + message.change_count + " change(s) for " + message.domain + ". Review the change history.";
     } else {
@@ -3954,6 +3956,7 @@
           domain: run.domain,
           status: run.status,
           change_count: run.change_count,
+          initial_baseline: run.initial_baseline,
           fields: run.changed_fields,
           actor: run.actor,
           completed_at: run.completed_at

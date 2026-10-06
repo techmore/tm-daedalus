@@ -1578,6 +1578,7 @@ def _execute_external_check(
             else "completed"
         )
         changes: list[tuple[str, Any, Any]] = []
+        initial_baseline = False
         if run.status in {"completed", "completed_with_warnings"}:
             prior = db.scalar(
                 select(ExternalCheckRun)
@@ -1589,6 +1590,7 @@ def _execute_external_check(
                 )
                 .order_by(ExternalCheckRun.id.desc())
             )
+            initial_baseline = check_type in {"dns", "web"} and not (prior and prior.snapshot)
             if prior and prior.snapshot:
                 if check_type in {"web-active", "web-nikto"}:
                     previous_snapshot = prior.snapshot
@@ -1717,6 +1719,7 @@ def _execute_external_check(
         db.refresh(run)
         actor = db.get(User, user_id) if user_id is not None else None
         result = serialize_external_run(run, actor)
+        result["initial_baseline"] = initial_baseline
         result["changed_fields"] = [change[0] for change in changes]
         result["notice_suppressed"] = repeated_failure or (repeated_warning and not bool(changes))
         return result
@@ -1973,6 +1976,7 @@ async def publish_external_check_result(
             "domain": result["domain"],
             "status": result["status"],
             "change_count": result["change_count"],
+            "initial_baseline": result.get("initial_baseline", False),
             "fields": result.get("changed_fields", []),
             "actor": result.get("actor") or "Scheduled check",
             "source": result.get("source", "manual"),
