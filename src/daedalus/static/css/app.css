@@ -898,3 +898,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Personal account controls share the portal palette and readable form rhythm. */
+.access-keys-page .login-card { width: min(100%, 520px); }
+.access-keys-back { display: inline-block; margin-bottom: 18px; color: var(--olive-800); }
+#create-key, #token-login { display: grid; gap: 16px; margin-top: 22px; }
+#create-key label, #token-login label { display: grid; gap: 7px; font-size: 13px; font-weight: 600; }
+#create-key input, #token-login input { min-width: 0; width: 100%; padding: 11px 12px; border: 1px solid var(--card-line); border-radius: 8px; color: var(--ink); background: var(--cream-50); }
+#create-key input:focus-visible, #token-login input:focus-visible { outline: 2px solid var(--olive-600); outline-offset: 2px; }
+.access-key-row { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--card-line); border-radius: 10px; background: var(--card-surface); overflow-wrap: anywhere; }
+.access-key-row span { font-size: 12px; color: var(--muted); }
+.access-key-row button { justify-self: start; }
+#new-key { white-space: pre-wrap; overflow-wrap: anywhere; }

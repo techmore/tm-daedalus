@@ -15,14 +15,26 @@ if (login) login.addEventListener("submit", async event => {
   } catch (error) { feedback.textContent = error.message; }
 });
 const create = document.getElementById("create-key");
+function keyDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString(undefined, {
+    year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short"
+  });
+}
 async function loadKeys() {
   const data = await keyRequest("/api/user-keys");
   const list = document.getElementById("key-list"); list.replaceChildren();
   for (const key of data.keys) {
     const row = document.createElement("p");
-    row.textContent = `${key.name} · expires ${key.expires_at} ${key.revoked_at ? "· revoked" : ""} `;
+    row.className = "access-key-row";
+    const name = document.createElement("strong"); name.textContent = key.name;
+    const detail = document.createElement("span");
+    detail.textContent = key.revoked_at ? `Revoked ${keyDate(key.revoked_at)}` : `Expires ${keyDate(key.expires_at)}`;
+    row.append(name, detail);
     if (!key.revoked_at) {
       const button = document.createElement("button"); button.textContent = "Revoke";
+      button.className = "button button-secondary";
+      button.setAttribute("aria-label", `Revoke ${key.name}`);
       button.addEventListener("click", async () => {
         try { await keyRequest(`/api/user-keys/${key.id}`, {method: "DELETE"}); await loadKeys(); }
         catch (error) { feedback.textContent = error.message; }

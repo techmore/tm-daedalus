@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from datetime import timedelta
 from sqlalchemy import select
 from daedalus import server
@@ -7,6 +8,16 @@ import test_active_website_flows as fixtures
 
 
 class UserKeyTests(unittest.TestCase):
+    def test_account_controls_use_readable_dates_and_scoped_form_layout(self):
+        root = Path(__file__).parents[1] / 'src/daedalus'
+        script = (root / 'static/js/user_keys.js').read_text()
+        css = (root / 'static/css/app.css').read_text()
+        self.assertIn('keyDate(key.revoked_at)', script)
+        self.assertIn('keyDate(key.expires_at)', script)
+        self.assertIn('button.setAttribute("aria-label", `Revoke ${key.name}`)', script)
+        self.assertIn('#create-key, #token-login { display: grid;', css)
+        self.assertIn('#new-key { white-space: pre-wrap; overflow-wrap: anywhere; }', css)
+
     setUp = fixtures.ActiveWebsiteFlowsTests.setUp
     tearDown = fixtures.ActiveWebsiteFlowsTests.tearDown
     context = fixtures.ActiveWebsiteFlowsTests.context
