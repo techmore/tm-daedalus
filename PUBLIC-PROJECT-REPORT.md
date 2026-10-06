@@ -1610,3 +1610,10 @@ Saved website audits now collect exact stable npm versions declared in supported
 Successful comparable root-page runs save provider/date/package/advisory evidence. Incomplete pages are not queried. Provider unavailability preserves website evidence and produces completed_with_warnings plus a dated notice. Comparison ignores collector rollout and timestamps, and does not infer advisory removals from an outage. The dashboard distinguishes matched IDs, no matches returned, unavailable, partial and unassessed states and binds results to the exact package/version pair. These matches describe URL declarations, not proven installed bytes, execution or exploitability. Broader CDN support, detailed advisory review, populated browser validation and production activation remain unfinished.
 
 The full suite passed 731 tests and 232 subtests in 43.37 seconds, with one Linux-only skip and two dependency warnings. Focused dashboard state checks passed 38 tests and two subtests. Backend 37417916690 and all three Linux scenarios in 37417916702 at preceding published source 7dcc335 succeeded. Current implementation is committed locally; PDF assets and production are unchanged.
+
+
+## Advisory pagination and dated match notices — October 6, 2026
+
+Malformed OSV pagination values are rejected as unavailable evidence rather than implying a complete lookup. Five new token fixtures cover non-string values and excessive length. The full suite collected at d66a997 passed 736 tests and 232 subtests in 38.84 seconds, with one Linux-only skip and two dependency warnings.
+
+A separate executed API/history regression at a1abd5d proves that a new returned advisory ID creates a dated notice tied to its saved run, with human-readable dependency advisory labels in both notification and change history. All 28 notification tests passed. These fixtures do not establish a vulnerability on CSP or completed browser acceptance. Current source remains local beyond published 48044bd while its backend/Linux CI runs. Production and standardized PDF assets are unchanged.
