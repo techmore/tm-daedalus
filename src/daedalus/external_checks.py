@@ -177,6 +177,8 @@ def _external_resource_inventory(
             parsed = urlparse(urljoin(resource_base, candidate))
             host = (parsed.hostname or "").rstrip(".").casefold()
             port = parsed.port
+            if port == {"http": 80, "https": 443}.get(parsed.scheme.casefold()):
+                port = None
         except ValueError:
             continue
         if parsed.scheme.casefold() not in {"http", "https"} or not host:
@@ -684,9 +686,58 @@ def flatten_snapshot(value: Any, prefix: str = "") -> dict[str, Any]:
     return flattened
 
 
+def _canonical_origin_list(value: Any) -> list[dict[str, Any]] | None:
+    """Normalize historical default-port aliases without rewriting saved evidence."""
+    if not isinstance(value, list):
+        return None
+    grouped = {}
+    for row in value:
+        if not isinstance(row, dict):
+            return None
+        item = dict(row)
+        host, scheme, port = item.get("host"), item.get("scheme"), item.get("port")
+        if not isinstance(host, str) or not isinstance(scheme, str) or scheme not in {"http", "https"} or "port" not in item:
+            return None
+        if port is not None and (type(port) is not int or not 1 <= port <= 65535):
+            return None
+        if port == {"http": 80, "https": 443}[scheme]:
+            item["port"] = port = None
+        key = (host, scheme, port)
+        if key not in grouped:
+            grouped[key] = item
+            continue
+        existing = grouped[key]
+        if existing.keys() != item.keys():
+            return None
+        for field, entry in item.items():
+            if field.endswith("_count"):
+                if any(type(count) is not int or count < 0 for count in (existing[field], entry)):
+                    return None
+                existing[field] += entry
+            elif field == "resource_types":
+                if not all(isinstance(types, list) and all(isinstance(t, str) for t in types)
+                           for types in (existing[field], entry)):
+                    return None
+                existing[field] = sorted(set(existing[field] + entry))
+            elif existing[field] != entry:
+                return None
+    return sorted(grouped.values(), key=lambda row: (row["host"], row["scheme"], row["port"] or 0))
+
+
 def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list[tuple[str, Any, Any]]:
     old_values = flatten_snapshot(previous)
     new_values = flatten_snapshot(current)
+    for values, snapshot in ((old_values, previous), (new_values, current)):
+        resources = _canonical_origin_list(snapshot.get("external_resources"))
+        if resources is not None:
+            values["external_resources"] = resources
+            if snapshot.get("external_resources_truncated") is False:
+                values["external_origin_count"] = len(resources)
+        block = snapshot.get("dependency_origin_observations")
+        if isinstance(block, dict):
+            origins = _canonical_origin_list(block.get("origins"))
+            if origins is not None:
+                values["dependency_origin_observations.origins"] = origins
     # Resolver diagnostics are useful evidence in each saved snapshot, but the
     # exact exception text is transient (for example SERVFAIL vs timeout) and
     # should not be presented as a DNS configuration change. Compare whether

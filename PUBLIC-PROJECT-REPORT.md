@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## Linked dependency default-port accuracy — 2026-10-05
+
+The original JS dependency scanner uses example vulnerability mappings and URL-based version guesses; those were reviewed but not ported as verified security findings. Current inventory remains observed root-HTML dependency evidence, not an automated provider-security verdict.
+
+The collector now groups explicit HTTP :80 / HTTPS :443 with the same origin when its default port is omitted. Comparison canonicalizes historical aliases and sums their observation counts without modifying saved snapshots, preventing a collector correction from appearing as a site configuration change. Nondefault ports remain distinct. Twenty-three focused tests and eight subtests passed; the full suite passed 651 tests and 162 subtests, with two dependency deprecation warnings.
+
+A live passive root-page check of cybersecuritypilot.org returned HTTP 200 and four distinct external origins with no inventory truncation. Origin uniqueness and default-port invariants passed on the retained receipt. No production saved run or PDF was created, and no report template changed. This correction is committed locally while the preceding Linux CI is active. Private receipt: validation/website-origin-live-20261005.json.
+
 ## Linux CI after Mac network-display fix — 2026-10-05
 
 Run 37392903810 at f70c88c passed managed lifecycle, packaged bridge interruption and repeat comparison. All three downloaded PDF hashes and byte counts match their receipts. The repeat receipt has distinct run IDs, exact comparable 127.0.0.1/32 coverage and zero host/port changes. Its normal five-minute cooldown was preserved. Backend run 37392903968 also passed. These results precede the locally validated connection-freshness UI change and do not resolve the standardized PDF baseline. Private evidence: validation/ci-linux-f70c88c/.

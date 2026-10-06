@@ -7,6 +7,48 @@ from daedalus.external_checks import (
 
 
 class ExternalResourceInventoryTests(unittest.TestCase):
+    def test_historical_default_port_aliases_do_not_alert_or_rewrite_evidence(self):
+        import copy
+        current = _external_resource_inventory('<script src="https://cdn.example.net/a.js"></script><script src="https://cdn.example.net/b.js"></script>', 'https://example.com/', 'example.com')
+        previous = copy.deepcopy(current)
+        previous['external_origin_count'] = 2
+        resource = previous['external_resources'][0]
+        resource['reference_count'] = 1
+        previous['external_resources'].append(dict(resource, port=443))
+        origin = previous['dependency_origin_observations']['origins'][0]
+        origin['script_reference_count'] = origin['integrity_missing_reference_count'] = 1
+        previous['dependency_origin_observations']['origins'].append(dict(origin, port=443))
+        saved = copy.deepcopy(previous)
+        self.assertEqual(compare_snapshots(previous, current), [])
+        self.assertEqual(compare_snapshots(current, previous), [])
+        self.assertEqual(previous, saved)
+        changed = _external_resource_inventory('<script src="https://cdn.example.net:8443/a.js"></script><script src="https://cdn.example.net/b.js"></script>', 'https://example.com/', 'example.com')
+        self.assertTrue(compare_snapshots(current, changed))
+
+    def test_malformed_origin_keys_do_not_break_comparison(self):
+        from daedalus.external_checks import _canonical_origin_list
+        for row in ({'host':'cdn.example.net','scheme':[],'port':None},
+                    {'host':'cdn.example.net','scheme':'https'},
+                    {'host':'cdn.example.net','scheme':'https','port':True}):
+            with self.subTest(row=row):
+                self.assertIsNone(_canonical_origin_list([row]))
+
+    def test_explicit_default_ports_share_one_origin_without_changing_attributes(self):
+        for scheme, port in (("https", 443), ("http", 80)):
+            with self.subTest(scheme=scheme):
+                html = f'<script src="{scheme}://cdn.example.net/a.js"></script><script src="{scheme}://cdn.example.net:{port}/b.js" integrity="declared"></script>'
+                result = _external_resource_inventory(html, 'https://example.com/', 'example.com')
+                self.assertEqual(result['external_origin_count'], 1)
+                origin = result['external_resources'][0]
+                self.assertIsNone(origin['port'])
+                self.assertEqual(origin['reference_count'], 2)
+                evidence = result['dependency_origin_observations']['origins'][0]
+                self.assertEqual(evidence['script_reference_count'], 2)
+                self.assertEqual(evidence['integrity_declared_reference_count'], 1)
+                self.assertEqual(evidence['integrity_missing_reference_count'], 1)
+                alternate = _external_resource_inventory(html.replace(f':{port}', ''), 'https://example.com/', 'example.com')
+                self.assertEqual(compare_snapshots(result, alternate), [])
+
     def test_per_origin_attributes_identify_dependencies_without_urls_or_hashes(self):
         html = '<script src="https://cdn.example.net/a.js?private=token" integrity="secret-hash"></script><script src="https://cdn.example.net/b.js"></script><link rel="stylesheet" href="http://style.example.net/a.css"><img src="http://style.example.net/a.png">'
         inventory = _external_resource_inventory(html, 'https://example.com/', 'example.com')
