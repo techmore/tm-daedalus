@@ -1123,6 +1123,78 @@
     return {counts: counts, areas: ordered.map(function (entry) { return entry.area; })};
   }
 
+  function renderStatusBoard(areas) {
+    var host = document.getElementById("workspace-priorities");
+    if (!host) return;
+    host.replaceChildren();
+    var STALE_MS = 48 * 3600 * 1000;
+    var rows = [];
+    function ago(value) {
+      var ms = Date.now() - new Date(value).getTime();
+      if (!isFinite(ms) || ms < 0) return "";
+      var h = Math.floor(ms / 3600000);
+      return h < 1 ? "just now" : h < 48 ? h + "h ago" : Math.floor(h / 24) + "d ago";
+    }
+    function stale(value) { var t = new Date(value).getTime(); return isFinite(t) && Date.now() - t > STALE_MS; }
+    areas.forEach(function (area) {
+      var level = "ok", verdict = "OK";
+      if (area.state === "unavailable") { level = "bad"; verdict = "Last check failed"; }
+      else if (area.state === "attention") { level = "warn"; verdict = "Needs a look"; }
+      else if (area.state === "not_assessed") { level = "idle"; verdict = "Not checked yet"; }
+      else if (area.state === "running") { level = "idle"; verdict = "Checking now"; }
+      else if (area.updated_at && stale(area.updated_at)) { level = "warn"; verdict = "Out of date"; }
+      var action = null;
+      var sched = area.schedule;
+      if (sched && !sched.enabled) {
+        if (level === "ok") { level = "warn"; verdict = "OK, but not rechecked"; }
+        action = {label: role === "admin" ? "Turn on daily check" : "Daily check is off", key: area.key, enable: role === "admin"};
+      }
+      rows.push({area: area, level: level, verdict: verdict, action: action, when: area.updated_at ? ago(area.updated_at) : ""});
+    });
+    var order = {bad: 0, warn: 1, idle: 2, ok: 3};
+    rows.sort(function (x, y) { return order[x.level] - order[y.level]; });
+    var bad = rows.filter(function (r) { return r.level === "bad"; }).length;
+    var warn = rows.filter(function (r) { return r.level === "warn"; }).length;
+    var idle = rows.filter(function (r) { return r.level === "idle"; }).length;
+    var banner = document.createElement("div");
+    banner.className = "status-banner is-" + (bad ? "bad" : warn ? "warn" : idle ? "idle" : "ok");
+    var headline = document.createElement("strong");
+    headline.textContent = bad || warn ? (bad + warn) + (bad + warn === 1 ? " thing needs" : " things need") + " attention"
+      : idle ? "Everything checked is OK" : "All good";
+    var sub = document.createElement("span");
+    var newest = rows.map(function (r) { return r.area.updated_at; }).filter(Boolean).sort().pop();
+    sub.textContent = newest ? "Latest check " + ago(newest) : "No checks have run yet";
+    banner.append(headline, sub);
+    host.append(banner);
+    var list = document.createElement("ul"); list.className = "status-list";
+    rows.forEach(function (r) {
+      var li = document.createElement("li"); li.className = "status-row is-" + r.level;
+      var dot = document.createElement("span"); dot.className = "status-dot"; dot.setAttribute("aria-hidden", "true");
+      var name = document.createElement("button"); name.type = "button"; name.className = "status-name"; name.textContent = r.area.title;
+      name.addEventListener("click", function () { activateTab(r.area.key, true); });
+      var verdict = document.createElement("span"); verdict.className = "status-verdict"; verdict.textContent = r.verdict;
+      var when = document.createElement("span"); when.className = "status-when"; when.textContent = r.when;
+      li.append(dot, name, verdict, when);
+      if (r.action) {
+        var act = document.createElement(r.action.enable ? "button" : "span");
+        act.className = r.action.enable ? "button button-primary status-action" : "status-when";
+        act.textContent = r.action.label;
+        if (r.action.enable) act.addEventListener("click", async function () {
+          act.disabled = true; act.textContent = "Turning on…";
+          try {
+            var resp = await fetch("/api/external-checks/" + r.action.key + "/schedule", {method: "PUT", credentials: "same-origin",
+              headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: 24})});
+            if (!resp.ok) throw new Error();
+            await loadWorkspacePosture();
+          } catch (_e) { act.disabled = false; act.textContent = "Could not turn on — retry"; }
+        });
+        li.append(act);
+      }
+      list.append(li);
+    });
+    host.append(list);
+  }
+
   async function loadWorkspacePosture() {
     var host = document.getElementById("workspace-posture");
     if (!host || !orgId) return;
@@ -1136,20 +1208,7 @@
       host.replaceChildren();
       var labels = {recorded:"Evidence saved", attention:"Review evidence", not_assessed:"Not assessed", running:"Check running", unavailable:"Latest attempt failed"};
       var assessment = workspaceAssessmentSummary(body.areas);
-      var priorities = document.getElementById("workspace-priorities");
-      if (priorities) {
-        priorities.replaceChildren();
-        var metrics = document.createElement("div"); metrics.className = "audit-metric-grid";
-        metrics.append(
-          makeAuditMetric("Areas to review", String(assessment.counts.attention), "Saved observations requiring review", assessment.counts.attention ? "attention" : "neutral"),
-          makeAuditMetric("Failed collections", String(assessment.counts.unavailable), "Latest attempt unavailable; review prior evidence", assessment.counts.unavailable ? "attention" : "neutral"),
-          makeAuditMetric("Unassessed areas", String(assessment.counts.not_assessed + assessment.counts.unknown), "Missing or unknown assessment evidence", "neutral")
-        );
-        priorities.append(metrics);
-        var note = document.createElement("p"); note.className = "check-scope-note";
-        note.textContent = "Review areas below in priority order. Saved evidence and active checks do not establish that an area is secure.";
-        priorities.append(note);
-      }
+      renderStatusBoard(body.areas);
       assessment.areas.forEach(function (area) {
         var card = document.createElement("button"); card.type = "button"; card.className = "posture-card"; card.dataset.postureKey = area.key;
         var heading = document.createElement("strong"); heading.textContent = area.title;

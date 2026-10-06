@@ -943,3 +943,24 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .audit-advisory-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
 .audit-advisory-links a { color: var(--olive-900); text-decoration: underline; text-underline-offset: 3px; }
+
+/* At-a-glance status board */
+.status-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 22px 26px; border-radius: 16px; border: 1px solid var(--card-line); background: var(--olive-100); }
+.status-banner strong { font-size: 26px; color: var(--brown-900); }
+.status-banner span { color: var(--muted); font-size: 14px; }
+.status-banner.is-warn { background: #f4e8c4; }
+.status-banner.is-bad { background: #f2d6cf; }
+.status-banner.is-idle { background: var(--cream-50); }
+.status-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.status-row { display: grid; grid-template-columns: 14px minmax(120px, 1.2fr) minmax(120px, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 16px; border: 1px solid var(--card-line); border-radius: 12px; background: var(--cream-50); }
+.status-dot { width: 12px; height: 12px; border-radius: 50%; background: #747b50; }
+.status-row.is-warn .status-dot { background: #c9962c; }
+.status-row.is-bad .status-dot { background: #b5483a; }
+.status-row.is-idle .status-dot { background: #9a937f; }
+.status-name { text-align: left; background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--brown-900); cursor: pointer; }
+.status-name:hover, .status-name:focus-visible { text-decoration: underline; }
+.status-verdict { font-size: 15px; }
+.status-when { color: var(--muted); font-size: 13px; }
+.status-action { padding: 6px 12px; font-size: 13px; }
+@media (max-width: 640px) { .status-row { grid-template-columns: 14px 1fr auto; } .status-verdict { grid-column: 2; } .status-when, .status-action { grid-column: 2 / -1; } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-119">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-120">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -127,9 +127,10 @@
         {% endif %}
         {% endif %}
         {% endif %}
-        <section class="topic-priority" aria-labelledby="overview-assessment-title"><p class="eyebrow">WORKSPACE ASSESSMENT</p><h3 id="overview-assessment-title">Where to start</h3><div id="workspace-priorities" aria-live="polite"><p class="muted">Loading assessment coverage…</p></div></section>
-        <div class="section-heading"><div><p class="eyebrow">CURRENT EVIDENCE</p><h2>Security areas</h2><p class="muted">Latest saved results and check-in state. Missing evidence remains unassessed.</p></div></div>
+        <section class="status-board" aria-labelledby="overview-assessment-title"><h2 id="overview-assessment-title" class="visually-hidden">Workspace status</h2><div id="workspace-priorities" aria-live="polite"><p class="muted">Checking status…</p></div></section>
+        <details class="topic-secondary"><summary>Full evidence details</summary>
         <div class="posture-grid" id="workspace-posture" aria-live="polite"><p class="muted">Loading workspace assessments…</p></div>
+        </details>
         <details class="topic-secondary"><summary>Scanner activity counters</summary>
         <div class="stat-grid">
           <article class="stat-card"><span>Scanner nodes</span><strong id="stat-agents">{{ agents|length }}</strong><small>Mac or Ubuntu NmapUI instances</small></article>
@@ -525,6 +526,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261006-136" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261006-137" defer></script>
 </body>
 </html>

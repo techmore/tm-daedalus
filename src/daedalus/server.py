@@ -5460,9 +5460,12 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
             if certificate_review or absent or not headers or http_status is None or not (200 <= http_status < 400): state = "attention"
         if latest and latest.status in {"queued", "running", "failed"}:
             state = "running" if latest.status in {"queued", "running"} else "unavailable"
+        schedule = db.scalar(select(ExternalCheckSchedule).where(
+            ExternalCheckSchedule.organization_id == org.id, ExternalCheckSchedule.check_type == kind))
         areas.append({"key":kind, "title":title, "state":state, "summary":summary,
             "updated_at":iso_utc(saved.completed_at) if saved else None,
-            "latest_attempt_status":latest.status if latest else None})
+            "latest_attempt_status":latest.status if latest else None,
+            "schedule":serialize_external_schedule(schedule, kind)})
     nikto = db.scalar(select(ExternalCheckRun).where(
         ExternalCheckRun.organization_id == org.id, ExternalCheckRun.check_type == "web-nikto",
         ExternalCheckRun.status.in_(("completed", "completed_with_warnings"))

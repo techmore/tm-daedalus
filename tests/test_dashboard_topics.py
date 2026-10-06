@@ -786,12 +786,12 @@ assert.match(flatten(host),/No completed deeper audit/);
 let focused=null;
 class Node { constructor(){this.children=[];this.textContent='';this.dataset={};this.events={};}
 replaceChildren(){this.children=[];} append(...items){this.children.push(...items);}
-contains(node){return this.children.includes(node);} addEventListener(name,cb){this.events[name]=cb;}
+contains(node){return this.children.includes(node);} addEventListener(name,cb){this.events[name]=cb;} setAttribute(){}
 querySelector(){return this.children.find(n=>n.dataset.postureKey==='dns');}
 focus(){focused=this.dataset.postureKey;document.activeElement=this;}}
 const host=new Node(), priorities=new Node(); const document={activeElement:null,getElementById:id=>id==='workspace-posture'?host:priorities,createElement:()=>new Node()};
 function makeAuditMetric(label,value,detail,tone){const n=new Node();n.textContent=label+':'+value;n.tone=tone;return n;}
-let postureRequestSequence=0; const orgId='1'; const requests=[];
+let postureRequestSequence=0; const orgId='1'; const role='admin'; const requests=[];
 const fetch=()=>new Promise(resolve=>requests.push(resolve));
 function dateLabel(value){return value;} function appendEmpty(node,value){node.textContent=value;}
 let opened=null; function activateTab(key){opened=key;}
@@ -806,7 +806,8 @@ requests[0](response('Stale evidence'));await old;
 assert.equal(host.children[0].children[2].textContent,'<script>new evidence</script>');
 assert.equal(host.children[0].children[1].textContent,'Not assessed');
 assert.equal(focused,'dns');
-assert.equal(priorities.children[0].children[2].textContent,'Unassessed areas:1');
+assert.equal(priorities.children[0].children[0].textContent,'Everything checked is OK');
+assert.equal(priorities.children[1].children[0].children[3].textContent,'');
 host.children[0].events.click();assert.equal(opened,'dns');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 '''
