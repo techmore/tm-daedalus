@@ -2960,6 +2960,9 @@
       if (advisory && (advisory.state === "unavailable" || advisory.state === "partial")) {
         finding("Dependency advisory coverage", "The saved OSV lookup is " + advisory.state + ". Missing matches remain unknown; inspect package evidence below.");
       }
+      if (advisory && advisory.state === "not_assessed") {
+        finding("Dependency versions need review", "No advisory assessment was completed for this saved page. Supported exact version declarations were unavailable or incomplete; linked libraries remain unassessed. Inspect the saved dependency inventory below.");
+      }
       var matchedPackages = advisory && Array.isArray(advisory.packages) ? advisory.packages.filter(function (item) {
         return item && Array.isArray(item.advisory_ids) && item.advisory_ids.length > 0;
       }) : [];

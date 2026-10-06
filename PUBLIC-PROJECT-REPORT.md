@@ -29,6 +29,12 @@
 
 The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
 
+## Fresh local website and DNS evidence — 2026-10-06
+
+A fresh isolated instance at da8c756 saved two live cybersecuritypilot.org website runs through authenticated APIs. Both returned HTTP 200; the second retained zero changes and no notifications. Four linked origins were recorded. Supported exact package versions were absent, so OSV coverage stayed not assessed. The primary assessment now explicitly surfaces this unassessed coverage; 64 focused dashboard/report-flow tests and seven subtests passed. Visual acceptance remains pending because the existing browser space is user-owned.
+
+A live DNS run in the same fresh database completed with warnings in 6.2 seconds. Three www queries returned SERVFAIL and remain unavailable evidence. Saved SPF requests soft fail; saved DMARC requests reject with strict alignment. These policy observations do not prove message delivery or authentication outcomes. DNS comparison, collector and email-policy tests passed 34 tests and 42 subtests. Private receipts: validation/website-live-repeat-20261006/ and validation/dns-fresh-local-20261006.json. No production release or PDF template changed.
+
 ## Recovered CIS visual review and compact summary — 2026-10-05
 
 Selecting the existing agent-owned QA space 8 in the native Ego workspace selector, then resetting page zoom, restored its screenshot capture. No new TaskSpace or ownership takeover was used. Reviewed the production CIS page at 1154 pixels and a temporary preview of the two-property dashboard CSS correction. The original metric grid occupied a tall narrow column beside empty space; the preview places summary text above five wrapping metric tiles, bringing assessment coverage into the first desktop screen. The matching source CSS and asset cache version are updated locally; 59 dashboard/CIS route tests and seven subtests passed, as did diff checks.

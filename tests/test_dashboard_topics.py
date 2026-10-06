@@ -691,6 +691,11 @@ renderTopicPriorities('web',{http_status:200,tls:{valid_until:'2100-01-01'},secu
 assert.match(flatten(nodes['web-priorities']),/Missing matches remain unknown/);
 assert.doesNotMatch(flatten(nodes['web-priorities']),/Saved website evidence recorded/);
 
+renderTopicPriorities('web',{http_status:200,tls:{valid_until:'2100-01-01'},security_headers:{hsts:'set'},dependency_advisory_observations:{state:'not_assessed',packages:[]}});
+assert.match(flatten(nodes['web-priorities']),/Dependency versions need review/);
+assert.match(flatten(nodes['web-priorities']),/linked libraries remain unassessed/);
+assert.doesNotMatch(flatten(nodes['web-priorities']),/Saved website evidence recorded/);
+
 renderWebsiteAuditOutcome('audit','Audit',{status:'completed_with_warnings',snapshot:{findings:[],coverage_complete:false}});
 assert.match(nodes.audit.textContent,/absence does not establish resolution/);
 renderWebsiteAuditOutcome('audit','Audit',{status:'failed'});
