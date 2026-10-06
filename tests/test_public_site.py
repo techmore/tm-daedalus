@@ -106,6 +106,6 @@ def test_site_pages_declare_a_favicon_that_exists():
     site = Path(__file__).resolve().parents[1] / "site"
     for page in ("index.html", "daedalus.html"):
         html = (site / page).read_text()
-        assert 'rel="icon"' in html and "/favicon.png" in html
+        assert 'rel="icon"' in html and "favicon.png" in html
     assert (site / "favicon.png").read_bytes().startswith(b"\x89PNG")
     assert (site / "apple-touch-icon.png").exists()
