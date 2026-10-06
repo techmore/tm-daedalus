@@ -1,0 +1,126 @@
+"""Passive crt.sh observations; no live certificate or log-proof validation."""
+from __future__ import annotations
+
+import http.client
+import json
+import re
+from datetime import datetime, timezone
+from urllib.parse import urlencode
+
+from .domain_verification import normalize_domain
+from .external_checks import _PinnedHTTPSConnection, _public_addresses
+
+MAX_RESPONSE_BYTES = 512 * 1024
+MAX_SOURCE_ROWS = 1000
+MAX_SAVED_ENTRIES = 100
+
+
+class PartialTransparencyFailure(RuntimeError):
+    def __init__(self, rows: list, error_type: str):
+        super().__init__("Subdomain transparency query unavailable")
+        self.rows = rows
+        self.error_type = error_type
+
+
+def _fetch_query(query: str, address: str) -> list:
+    connection = _PinnedHTTPSConnection("crt.sh", address, timeout=8)
+    try:
+        connection.request("GET", "/?" + urlencode({"q": query, "output": "json"}), headers={
+            "Accept": "application/json", "User-Agent": "Daedalus-Passive-Health-Check/1.0", "Connection": "close"})
+        response = connection.getresponse()
+        if response.status != 200:
+            raise ValueError("Certificate transparency provider unavailable")
+        body = response.read(MAX_RESPONSE_BYTES + 1)
+        if len(body) > MAX_RESPONSE_BYTES:
+            raise ValueError("Certificate transparency response exceeds evidence limit")
+        result = json.loads(body)
+        if not isinstance(result, list):
+            raise ValueError("Certificate transparency response is not a list")
+        return result
+    finally:
+        connection.close()
+
+
+def fetch_entries(domain: str) -> list:
+    domain = normalize_domain(domain)
+    addresses = _public_addresses("crt.sh")
+    # Preserve root coverage as well as the legacy wildcard subdomain query.
+    root_rows = _fetch_query(domain, addresses[0])
+    try:
+        subdomain_rows = _fetch_query("%." + domain, addresses[0])
+    except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
+        raise PartialTransparencyFailure(root_rows, type(exc).__name__) from exc
+    return root_rows + subdomain_rows
+
+
+def _date(value: object) -> str:
+    if not isinstance(value, str) or len(value) > 64:
+        raise ValueError("Invalid certificate date")
+    date = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    # crt.sh's SQL timestamps are represented in UTC without a suffix.
+    if date.tzinfo is None:
+        date = date.replace(tzinfo=timezone.utc)
+    return date.astimezone(timezone.utc).isoformat()
+
+
+def transparency_evidence(domain: str, rows: list) -> dict:
+    domain = normalize_domain(domain)
+    if not isinstance(rows, list):
+        raise ValueError("Invalid certificate transparency collection")
+    partial = len(rows) > MAX_SOURCE_ROWS
+    entries = {}
+    for row in rows[:MAX_SOURCE_ROWS]:
+        try:
+            if not isinstance(row, dict):
+                raise ValueError("Invalid certificate observation")
+            entry_id, issuer_id = row.get("id"), row.get("issuer_ca_id")
+            if any(type(value) is not int or not 0 < value < 2**63 for value in (entry_id, issuer_id)):
+                raise ValueError("Invalid certificate observation identity")
+            serial, issuer, name_value = row.get("serial_number"), row.get("issuer_name"), row.get("name_value")
+            if not isinstance(serial, str) or not re.fullmatch(r"[0-9a-fA-F]{1,128}", serial):
+                raise ValueError("Invalid certificate serial")
+            if not isinstance(issuer, str) or not issuer or len(issuer) > 256 or not isinstance(name_value, str) or len(name_value) > 8192:
+                raise ValueError("Invalid certificate metadata")
+            names = set()
+            for name in name_value.splitlines():
+                wildcard = name.startswith("*.")
+                normalized = normalize_domain(name.removeprefix("*."))
+                if normalized == domain or normalized.endswith("." + domain):
+                    names.add(("*." if wildcard else "") + normalized)
+            if not names:
+                raise ValueError("Certificate observation is outside the requested domain")
+            entry = {"id": entry_id, "issuer_ca_id": issuer_id, "issuer": issuer,
+                     "serial_number": serial.lower(), "dns_names": sorted(names),
+                     "not_before": _date(row.get("not_before")), "not_after": _date(row.get("not_after"))}
+            if entry["not_after"] < entry["not_before"]:
+                raise ValueError("Invalid certificate validity interval")
+        except (ValueError, TypeError):
+            partial = True
+            continue
+        if entry_id in entries and entries[entry_id] != entry:
+            raise ValueError("Conflicting certificate observation identities")
+        entries[entry_id] = entry
+    ordered = sorted(entries.values(), key=lambda item: (item["not_before"], item["id"]), reverse=True)
+    partial = partial or len(ordered) > MAX_SAVED_ENTRIES
+    return {"domain": domain, "state": "observed", "provider": "crt.sh", "scope": "domain_and_subdomains",
+            "collection_partial": partial, "source_row_count": len(rows),
+            "entries": ordered[:MAX_SAVED_ENTRIES], "log_proofs_verified": False,
+            "live_certificate_verified": False}
+
+
+def run_transparency_check(domain: str) -> dict:
+    domain = normalize_domain(domain)
+    try:
+        return transparency_evidence(domain, fetch_entries(domain))
+    except PartialTransparencyFailure as exc:
+        try:
+            result = transparency_evidence(domain, exc.rows)
+        except ValueError:
+            return {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
+                    "error_type": "ValueError", "log_proofs_verified": False, "live_certificate_verified": False}
+        result["collection_partial"] = True
+        result["subdomain_query_error_type"] = exc.error_type
+        return result
+    except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
+        return {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
+                "error_type": type(exc).__name__, "log_proofs_verified": False, "live_certificate_verified": False}
