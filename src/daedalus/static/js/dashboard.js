@@ -462,7 +462,15 @@
     var authorizedNetworks = Array.isArray(agent.authorized_networks) ? agent.authorized_networks : [];
     var detectedNetworks = Array.isArray(agent.detected_networks) ? agent.detected_networks : [];
     var detectedSummary = document.createElement("p");
-    detectedSummary.textContent = detectedNetworks.length ? "Detected connection: " + detectedNetworks.join(", ") : "Waiting for the client to detect its connected network.";
+    detectedSummary.textContent = agent.enabled === false || agent.status === "disabled"
+      ? "Scanner access revoked · current connection unavailable"
+      : agent.bridge_online !== true
+        ? (detectedNetworks.length
+          ? "Last reported connection: " + detectedNetworks.join(", ") + " · current connection unknown while offline"
+          : "Current connection unknown · scanner bridge offline")
+        : (detectedNetworks.length
+          ? "Detected connection: " + detectedNetworks.join(", ")
+          : "Waiting for the client to detect its connected network.");
     card.append(detectedSummary);
     var scopeSummary = document.createElement("p");
     scopeSummary.className = "scanner-scope-summary";

@@ -1,5 +1,11 @@
 # Daedalus project report
 
+## Scanner connection freshness — 2026-10-05
+
+Scanner cards now distinguish a live detected connection from the last reported connection while the bridge is offline, and label current connection unavailable after access revocation. Authorized scope is unchanged. Six Node branches cover online, offline with/without prior network, pending detection and both revocation forms. Dashboard/topic and CIS route suites passed 79 tests and seven subtests; JavaScript syntax and diff checks passed. The dashboard asset version is 110. This change is committed locally while the preceding Linux CI run is active; production activation remains pending.
+
+The existing agent-owned browser space 8 remains signed in at dashboard#cis. Screenshot capture timed out both normally and after bringing the same page to the foreground, despite a complete visible document. No visual acceptance is claimed. Private failure receipt: validation/dashboard-visual-capture-20261005.json. No extra browser session or handoff prompt was created.
+
 ## Email evidence integrity and Linux validation — 2026-10-05
 
 Malformed saved SPF, root TXT or DMARC evidence now returns a neutral unknown-policy assessment, instead of treating non-string values as absent records or silently retaining only the valid-looking portion of a mixed list. Legacy single-string evidence and genuine empty record lists remain supported. Seventeen targeted policy/comparison tests and 23 subtests passed. The full local suite passed 647 tests and 157 subtests, with two dependency deprecation warnings. No scanner report template changed; this correction is pending production activation.

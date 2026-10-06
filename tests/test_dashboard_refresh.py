@@ -402,6 +402,22 @@ assert.equal(entry.childNodes[2].textContent, 'Some update details were omitted 
         self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
+    def test_scanner_connection_distinguishes_current_from_last_reported(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        start = source.index('    detectedSummary.textContent =')
+        branch = source[start:source.index('    card.append(detectedSummary);', start)]
+        script = "const assert=require('node:assert/strict');function label(agent){const detectedSummary={}; const detectedNetworks=agent.detected_networks||[];" + branch + "return detectedSummary.textContent;}" + """
+assert.equal(label({bridge_online:true,detected_networks:['10.0.0.0/24']}), 'Detected connection: 10.0.0.0/24');
+assert.equal(label({bridge_online:false,detected_networks:['10.0.0.0/24']}), 'Last reported connection: 10.0.0.0/24 · current connection unknown while offline');
+assert.equal(label({bridge_online:false}), 'Current connection unknown · scanner bridge offline');
+assert.equal(label({bridge_online:true}), 'Waiting for the client to detect its connected network.');
+assert.equal(label({enabled:false,bridge_online:true,detected_networks:['10.0.0.0/24']}), 'Scanner access revoked · current connection unavailable');
+assert.equal(label({status:'disabled'}), 'Scanner access revoked · current connection unavailable');
+"""
+        result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_scanner_readiness_does_not_present_old_heartbeat_as_current(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         start = source.index('    readiness.textContent = agent.enabled')
