@@ -506,8 +506,11 @@ function emailAuthenticationMetrics(){return [{label:'SPF',value:'Unknown',detai
 function makeAuditTable(title,note,rows){return {title,note,rows};}
 """ + helper + """
 renderDnsSnapshot({domain:'example.org',records:{A:['192.0.2.1'],AAAA:[],CNAME:[],MX:['mail.example.org'],SPF:[],DMARC:[],DKIM:{}},resolver_errors:{'www A':'SERVFAIL'},dnssec_observations:{assessment:'lookup_incomplete'}});
-assert.equal(grid.children.length,3);
-const [resolution,email,diagnostics]=grid.children;
+assert.equal(grid.children.length,4);
+const [resolution,email,registration,diagnostics]=grid.children;
+assert.equal(registration.attributes['aria-labelledby'],'dns-registration-group');
+assert.equal(registration.children[1].children[0].value,'Not assessed');
+assert.equal(registration.children[2].children[0].textContent,'Registration evidence');
 assert.equal(resolution.attributes['aria-labelledby'],'dns-resolution-group');
 assert.equal(email.attributes['aria-labelledby'],'dns-email-group');
 assert.equal(resolution.children[2].tag,'details');assert.equal(email.children[2].tag,'details');

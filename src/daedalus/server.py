@@ -1443,6 +1443,8 @@ def external_check_change_group(check_type: str, field_path: str) -> str:
         return "DNS lookup status"
     if field_path.startswith("email_authentication_assessment."):
         return "email authentication policy"
+    if field_path.startswith("registration_observations."):
+        return "domain registration"
     return "DNS and email configuration"
 
 
@@ -1453,6 +1455,12 @@ def external_check_warning_reasons(check_type: str, snapshot: dict[str, Any]) ->
         errors = snapshot.get("resolver_errors")
         if isinstance(errors, dict) and errors:
             reasons.append(f"{len(errors)} DNS lookup(s) could not be confirmed")
+        registration = snapshot.get("registration_observations")
+        if isinstance(registration, dict):
+            if registration.get("state") != "observed":
+                reasons.append("Domain registration lookup was unavailable")
+            elif registration.get("collection_partial") is True:
+                reasons.append("Domain registration evidence was partial")
     elif check_type == "web":
         status = snapshot.get("http_status")
         if type(status) is int and not 200 <= status < 300:
@@ -1587,7 +1595,7 @@ def _execute_external_check(
                     raise PermissionError("Active website authorization expired before collection")
             snapshot = run_nikto_check(domain) if check_type == "web-nikto" else run_active_website_check(domain)
         else:
-            snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS) if check_type == "dns" else run_website_check(domain)
+            snapshot = run_dns_check(domain, nameservers=AUDIT_DNS_NAMESERVERS, include_registration=True) if check_type == "dns" else run_website_check(domain)
         failure = ("Active website collection could not validate a public target." if snapshot.get("error_code") else None) if check_type in {"web-active", "web-nikto"} else None
         if check_type == "web-nikto" and snapshot.get("error_code"):
             failure = "Nikto runtime is unavailable on this server." if snapshot["error_code"] == "nikto_runtime_unavailable" else "Nikto collection failed; check the recorded coverage state."
@@ -1610,7 +1618,7 @@ def _execute_external_check(
         run.error_summary = failure[:500] if failure else None
         run.status = "failed" if failure else (
             "completed_with_warnings"
-            if (check_type == "dns" and snapshot.get("resolver_errors")) or (check_type in {"web-active", "web-nikto"} and snapshot.get("coverage_complete") is not True)
+            if (check_type == "dns" and external_check_warning_reasons(check_type, snapshot)) or (check_type in {"web-active", "web-nikto"} and snapshot.get("coverage_complete") is not True)
             else "completed"
         )
         changes: list[tuple[str, Any, Any]] = []

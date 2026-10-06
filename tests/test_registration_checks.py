@@ -65,3 +65,37 @@ class RegistrationChecksTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     fetch_json("https://registry.example/")
             connection.close.assert_called_once()
+
+class RegistrationComparisonTests(unittest.TestCase):
+    def snapshot(self, registrar="First"):
+        return {"domain": "example.org", "records": {}, "registration_observations": {
+            "domain": "example.org", "protocol": "rdap", "state": "observed", "collection_partial": False,
+            "source_url": "https://registry.example/domain/example.org", "registrars": [registrar], "nameservers": [], "events": []}}
+
+    def test_complete_same_provider_registration_changes_are_compared(self):
+        from daedalus.external_checks import compare_snapshots
+        self.assertEqual(compare_snapshots(self.snapshot(), self.snapshot("Second")),
+                         [("registration_observations.registrars", ["First"], ["Second"])])
+
+    def test_unavailable_partial_foreign_and_different_provider_do_not_claim_registration_removal(self):
+        from copy import deepcopy
+        from daedalus.external_checks import compare_snapshots
+        baseline = self.snapshot()
+        for change in [{"state": "unavailable", "registrars": []}, {"collection_partial": True, "registrars": []},
+                       {"domain": "other.org", "registrars": []}, {"source_url": "https://other.example/domain/example.org", "registrars": []}]:
+            current = deepcopy(baseline)
+            current["registration_observations"].update(change)
+            with self.subTest(change=change):
+                paths = [path for path, _, _ in compare_snapshots(baseline, current)]
+                self.assertNotIn("registration_observations.registrars", paths)
+                self.assertNotIn("registration_observations.source_url", paths)
+
+    def test_dns_registration_collection_is_explicit_and_stored_in_snapshot(self):
+        from daedalus.external_checks import run_dns_check
+        from test_dns_collector_observations import FixtureResolver
+        with patch("daedalus.external_checks.dns.resolver.Resolver", return_value=FixtureResolver()), patch(
+            "daedalus.registration_checks.run_registration_check", return_value=self.snapshot()["registration_observations"]
+        ) as registration:
+            snapshot = run_dns_check("example.org", include_registration=True)
+        registration.assert_called_once_with("example.org")
+        self.assertEqual(snapshot["registration_observations"]["registrars"], ["First"])

@@ -3075,6 +3075,27 @@
       evidenceGroup("dns-email-group", mailHeading, summary, "Email record evidence",
         makeAuditTable("Email routing and authentication", "MX, SPF, DMARC, and the common DKIM selectors checked by Daedalus. Names are relative to the domain.", authRows))
     );
+    var registration = snapshot.registration_observations;
+    var registrationHeading = document.createElement("h3");
+    registrationHeading.className = "topic-group-heading";
+    registrationHeading.textContent = "Domain registration";
+    var registrationMetrics = document.createElement("div");
+    registrationMetrics.className = "audit-metric-grid dns-audit-metrics";
+    var observedRegistration = registration && registration.state === "observed";
+    registrationMetrics.append(makeAuditMetric("Registry lookup",
+      !registration ? "Not assessed" : observedRegistration ? (registration.collection_partial ? "Partial evidence" : "Evidence saved") : "Unavailable",
+      "Public RDAP evidence does not verify domain ownership", observedRegistration ? "neutral" : registration ? "attention" : "neutral"));
+    var registrationRows = [];
+    if (observedRegistration) {
+      ["registrars", "nameservers"].forEach(function (key) {
+        registrationRows.push({type: key === "registrars" ? "Registrar" : "Nameservers", name: "RDAP", value: (registration[key] || []).join(", ") || "Not supplied by provider", present: Boolean((registration[key] || []).length), statusTone: "is-neutral", statusText: (registration[key] || []).length ? "Observed" : "Unknown"});
+      });
+      (registration.events || []).forEach(function (event) {
+        registrationRows.push({type: event.action, name: "RDAP", value: dateLabel(event.date), present: true, statusTone: "is-neutral", statusText: "Observed"});
+      });
+    }
+    grid.append(evidenceGroup("dns-registration-group", registrationHeading, registrationMetrics, "Registration evidence",
+      makeAuditTable("Registry observations", "Saved provider metadata; unavailable fields remain unknown. Registration dates are not ownership approval.", registrationRows, "observations")));
     var diagnostics = document.createElement("details");
     diagnostics.className = "topic-secondary";
     var diagnosticHeading = document.createElement("summary"); diagnosticHeading.textContent = "Resolver diagnostics & lookup coverage";

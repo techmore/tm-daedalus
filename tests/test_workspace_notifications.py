@@ -261,6 +261,30 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(message['source'], 'schedule')
         self.assertTrue(message['notice_suppressed'])
 
+    def test_registration_changes_and_provider_outages_have_scoped_dated_notices(self):
+        from copy import deepcopy
+        baseline = {"domain": "cybersecuritypilot.org", "records": {}, "resolver_errors": {},
+            "registration_observations": {"domain": "cybersecuritypilot.org", "protocol": "rdap", "state": "observed",
+                "collection_partial": False, "source_url": "https://registry.example/domain/cybersecuritypilot.org",
+                "registrars": ["First registrar"], "nameservers": [], "events": []}}
+        self.run_dns(baseline)
+        changed = deepcopy(baseline)
+        changed["registration_observations"]["registrars"] = ["Second registrar"]
+        run = self.run_dns(changed)
+        notice = self.client.get("/api/notifications").json()["notifications"][0]
+        self.assertEqual(notice["source_id"], run["id"])
+        self.assertIn("domain registration", notice["summary"])
+        self.assertTrue(notice["detected_at"])
+        unavailable = deepcopy(changed)
+        unavailable["registration_observations"] = {"domain": "cybersecuritypilot.org", "protocol": "rdap", "state": "unavailable", "error_type": "TimeoutError"}
+        first_outage = self.run_dns(unavailable)
+        self.assertEqual(first_outage["status"], "completed_with_warnings")
+        repeated = self.run_dns(unavailable)
+        self.assertTrue(repeated["notice_suppressed"])
+        notices = self.client.get("/api/notifications").json()["notifications"]
+        self.assertEqual(len(notices), 2)
+        self.assertIn("registration lookup was unavailable", notices[0]["summary"])
+
     def test_warning_only_notice_keeps_unknown_checks_distinct_from_confirmed_changes(self):
         warning = {
             "domain": "cybersecuritypilot.org", "records": {"A": ["192.0.2.1"]},

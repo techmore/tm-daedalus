@@ -277,7 +277,7 @@ def _resolver_error_label(exc: dns.exception.DNSException) -> str:
     return type(exc).__name__
 
 
-def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = ()) -> dict[str, Any]:
+def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = (), include_registration: bool = False) -> dict[str, Any]:
     explicit = parse_audit_nameservers(" ".join(nameservers))
     resolver = dns.resolver.Resolver(configure=True)
     if explicit:
@@ -364,7 +364,7 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = ()) -> dict[str
         "lookup_incomplete" if ds_present is None or dnskey_present is None else
         "records_observed" if ds_present or dnskey_present else "no_records_observed"
     )
-    return {
+    snapshot = {
         "domain": domain, "records": records, "resolver_errors": errors,
         "email_authentication_assessment": email_authentication_assessment,
         "query_observations": observations,
@@ -377,6 +377,10 @@ def run_dns_check(domain: str, *, nameservers: tuple[str, ...] = ()) -> dict[str
             "local_chain_validation_performed": False,
         },
     }
+    if include_registration:
+        from .registration_checks import run_registration_check
+        snapshot["registration_observations"] = run_registration_check(domain)
+    return snapshot
 
 
 def _public_addresses(host: str) -> list[str]:
@@ -830,6 +834,22 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     )
     changes = []
     for path in sorted(paths | error_paths):
+        if path.startswith("registration_observations."):
+            field = path.removeprefix("registration_observations.")
+            if field not in {"state", "collection_partial", "registrars", "nameservers", "events"}:
+                continue
+            blocks = [snapshot.get("registration_observations") for snapshot in (previous, current)]
+            if not all(isinstance(block, dict) and block.get("protocol") == "rdap"
+                       and block.get("domain") == snapshot.get("domain")
+                       for block, snapshot in zip(blocks, (previous, current))):
+                continue
+            if previous.get("domain") != current.get("domain"):
+                continue
+            if field not in {"state", "collection_partial"} and not (
+                all(block.get("state") == "observed" and block.get("collection_partial") is False for block in blocks)
+                and blocks[0].get("source_url") == blocks[1].get("source_url")
+            ):
+                continue
         if cookies_incomplete and path.startswith("cookie_observations.") and path not in {
             "cookie_observations.analysis_partial", "cookie_observations.unparsed_header_count",
         }:
