@@ -42,6 +42,8 @@ from daedalus.config import (
     APP_ENV,
     AUDIT_DNS_NAMESERVERS,
     PLATFORM_ADMIN_EMAILS,
+    SCHEDULE_HOUR,
+    SCHEDULE_TIMEZONE,
     ALLOWED_HOSTS,
     BASE_URL,
     BACKGROUND_WORKERS_ENABLED,
@@ -1945,7 +1947,7 @@ def claim_due_external_check_schedules(limit: int = 25) -> list[dict[str, Any]]:
         ).all()
         for schedule, organization in candidates:
             scheduled_for = schedule.next_run_at
-            next_run_at = now + timedelta(hours=schedule.interval_hours)
+            next_run_at = next_scheduled_run(now, schedule.interval_hours, schedule.organization_id, schedule.check_type)
             result = db.execute(
                 update(ExternalCheckSchedule)
                 .where(
@@ -1984,6 +1986,26 @@ def claim_due_external_check_schedules(limit: int = 25) -> list[dict[str, Any]]:
     return claimed
 
 
+def next_scheduled_run(after: datetime, interval_hours: int, organization_id: int, check_type: str) -> datetime:
+    """Next overnight slot (naive UTC) at least one interval away, staggered per workspace.
+
+    Daily schedules take the next SCHEDULE_HOUR in SCHEDULE_TIMEZONE; weekly ones
+    skip ahead six days first. A per-workspace offset keeps audits from all
+    starting in the same minute.
+    """
+    from zoneinfo import ZoneInfo
+    from datetime import time as clock
+    zone = ZoneInfo(SCHEDULE_TIMEZONE)
+    earliest = after + timedelta(hours=max(0, interval_hours - 24))
+    local = earliest.replace(tzinfo=UTC).astimezone(zone)
+    minute = (organization_id * 7 + (3 if check_type == "web" else 0)) % 50
+    day = local.date()
+    candidate = datetime.combine(day, clock(SCHEDULE_HOUR, minute), tzinfo=zone)
+    if candidate <= local:
+        candidate = datetime.combine(day + timedelta(days=1), clock(SCHEDULE_HOUR, minute), tzinfo=zone)
+    return candidate.astimezone(UTC).replace(tzinfo=None)
+
+
 def ensure_default_external_schedules() -> int:
     """Audits should happen without anyone remembering to turn them on.
 
@@ -1991,6 +2013,7 @@ def ensure_default_external_schedules() -> int:
     has no schedule row. An existing row, enabled or not, is an explicit choice
     and is never changed.
     """
+    from zoneinfo import ZoneInfo
     created = 0
     now = utcnow()
     with SessionLocal() as db:
@@ -2008,6 +2031,16 @@ def ensure_default_external_schedules() -> int:
                 audit(db, organization.id, None, "external_check.schedule_defaulted",
                       {"check_type": check_type, "interval_hours": 24})
                 created += 1
+        # Move already-scheduled audits that are not due soon into the overnight window.
+        zone = ZoneInfo(SCHEDULE_TIMEZONE)
+        for row in db.scalars(select(ExternalCheckSchedule).where(ExternalCheckSchedule.enabled.is_(True))).all():
+            if row.next_run_at is None or row.next_run_at - now < timedelta(hours=3):
+                continue
+            if row.next_run_at.replace(tzinfo=UTC).astimezone(zone).hour == SCHEDULE_HOUR:
+                continue
+            row.next_run_at = next_scheduled_run(now, row.interval_hours, row.organization_id, row.check_type)
+            audit(db, row.organization_id, None, "external_check.schedule_realigned",
+                  {"check_type": row.check_type, "next_run_at": iso_utc(row.next_run_at)})
         db.commit()
     return created
 
@@ -5296,7 +5329,7 @@ async def update_external_check_schedule(
             check_type=check_type,
             enabled=payload.enabled,
             interval_hours=payload.interval_hours,
-            next_run_at=now + timedelta(hours=payload.interval_hours) if payload.enabled else None,
+            next_run_at=next_scheduled_run(now, payload.interval_hours, organization.id, check_type) if payload.enabled else None,
             updated_by_user_id=user.id,
             updated_at=now,
         )
@@ -5305,7 +5338,7 @@ async def update_external_check_schedule(
         schedule.enabled = payload.enabled
         schedule.interval_hours = payload.interval_hours
         schedule.next_run_at = (
-            now + timedelta(hours=payload.interval_hours) if payload.enabled else None
+            next_scheduled_run(now, payload.interval_hours, organization.id, check_type) if payload.enabled else None
         )
         schedule.updated_by_user_id = user.id
         schedule.updated_at = now

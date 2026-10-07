@@ -1102,6 +1102,42 @@ class CISReportPDFFlowTests(unittest.TestCase):
             self.assertEqual([area["key"] for area in workspace["areas"]][:2], ["dns", "web"])
             self.assertTrue(all("state" in area for area in workspace["areas"]))
 
+    def test_scheduled_audits_run_overnight_staggered_and_realign_daytime_rows(self):
+        from datetime import datetime, timedelta, UTC
+        from zoneinfo import ZoneInfo
+        zone = ZoneInfo("America/New_York")
+        def local(value): return value.replace(tzinfo=UTC).astimezone(zone)
+        morning = datetime(2026, 10, 7, 11, 38)  # 07:38 Eastern
+        dns = server.next_scheduled_run(morning, 24, 1, "dns")
+        web = server.next_scheduled_run(morning, 24, 1, "web")
+        self.assertEqual((local(dns).hour, local(dns).day), (1, 8))
+        self.assertNotEqual(dns, web)
+        self.assertGreater(server.next_scheduled_run(morning, 24, 2, "dns"), dns - timedelta(hours=1))
+        self.assertNotEqual(server.next_scheduled_run(morning, 24, 2, "dns"), dns)
+        # Before 1 AM, the same night's slot is still ahead.
+        late = datetime(2026, 10, 7, 4, 0)  # 00:00 Eastern
+        self.assertEqual(local(server.next_scheduled_run(late, 24, 1, "dns")).day, 7)
+        # Weekly schedules wait about a week; the daylight-saving change keeps the local hour.
+        weekly = server.next_scheduled_run(datetime(2026, 10, 28, 12, 0), 168, 1, "dns")
+        self.assertEqual(local(weekly).hour, 1)
+        self.assertGreaterEqual(weekly - datetime(2026, 10, 28, 12, 0), timedelta(days=6))
+        # A daytime schedule created before this rule moves into the window; a near-term baseline does not.
+        with self.session_factory() as db:
+            for row in db.scalars(select(ExternalCheckSchedule)).all():
+                db.delete(row)
+            db.commit()
+        server.ensure_default_external_schedules()
+        with self.session_factory() as db:
+            row = db.scalars(select(ExternalCheckSchedule).where(ExternalCheckSchedule.check_type == "dns")).first()
+            baseline = row.next_run_at
+            row.next_run_at = server.utcnow() + timedelta(hours=9)
+            db.commit()
+        server.ensure_default_external_schedules()
+        with self.session_factory() as db:
+            realigned = db.scalars(select(ExternalCheckSchedule).where(ExternalCheckSchedule.check_type == "dns")).first().next_run_at
+        self.assertEqual(local(realigned).hour, 1)
+        self.assertIsNotNone(baseline)
+
     def test_workspaces_get_daily_schedules_by_default_without_overriding_choices(self):
         with self.session_factory() as db:
             for row in db.scalars(select(ExternalCheckSchedule)).all():

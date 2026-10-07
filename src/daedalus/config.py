@@ -20,6 +20,9 @@ def env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+# Scheduled audits run overnight, in this timezone, starting at this local hour.
+SCHEDULE_TIMEZONE = os.environ.get("DAEDALUS_SCHEDULE_TIMEZONE", "America/New_York").strip() or "America/New_York"
+SCHEDULE_HOUR = min(23, max(0, int(os.environ.get("DAEDALUS_SCHEDULE_HOUR", "1") or 1)))
 # Platform owners are made admins of every workspace created through Daedalus.
 PLATFORM_ADMIN_EMAILS = tuple(sorted({
     email.strip().lower() for email in os.environ.get("DAEDALUS_PLATFORM_ADMIN_EMAILS", "").split(",") if "@" in email
