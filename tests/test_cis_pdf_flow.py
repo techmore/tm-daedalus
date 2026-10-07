@@ -193,7 +193,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261006-145", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261007-147", response.text)
         self.assertIn('data-load-older-checks="dns"', response.text)
         self.assertIn('data-load-older-checks="web"', response.text)
         self.assertIn('data-load-older-active="changes"', response.text)
@@ -1090,6 +1090,17 @@ class CISReportPDFFlowTests(unittest.TestCase):
             self.assertTrue(all(row.enabled for row in schedules))
         again = self.client.post("/api/customers", json={"name": "Deep Run", "domains": ["deeprunshop.com"]})
         self.assertEqual(again.json()["results"][0]["status"], "exists")
+
+    def test_portfolio_lists_every_workspace_with_current_area_states_and_nothing_secret(self):
+        response = self.client.get("/api/portfolio")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        workspaces = response.json()["workspaces"]
+        self.assertGreaterEqual(len(workspaces), 1)
+        for workspace in workspaces:
+            self.assertEqual({"id", "name", "domain", "role", "verification_status", "areas"}, set(workspace))
+            self.assertEqual([area["key"] for area in workspace["areas"]][:2], ["dns", "web"])
+            self.assertTrue(all("state" in area for area in workspace["areas"]))
 
     def test_workspaces_get_daily_schedules_by_default_without_overriding_choices(self):
         with self.session_factory() as db:

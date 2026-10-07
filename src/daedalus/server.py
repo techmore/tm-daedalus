@@ -5563,10 +5563,7 @@ def save_vendor_review(payload: VendorReviewInput, request: Request, db: Session
     return {"review": _serialize_vendor_review(row), "created": True}
 
 
-@app.get("/api/workspace-posture")
-def workspace_posture(request: Request, db: Session = Depends(get_db)):
-    """Summarize saved workspace evidence without exposing raw results or credentials."""
-    _, org, _ = get_org_context(request, db)
+def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[str, Any]]:
     areas = []
     for kind, title in (("dns", "DNS & email"), ("web", "Website")):
         conditions = (ExternalCheckRun.organization_id == org.id, ExternalCheckRun.check_type == kind)
@@ -5678,7 +5675,36 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
         "summary":f"{review if review is not None else 'Unknown'} review observations · {unavailable if unavailable is not None else 'unknown'} controls unavailable · {totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} assigned devices" if meraki else "No completed network report yet.",
         "latest_attempt_status":meraki_attempt.status if meraki_attempt else None,
         "updated_at":iso_utc(meraki.completed_at) if meraki else None})
+    return areas
+
+
+@app.get("/api/workspace-posture")
+def workspace_posture(request: Request, db: Session = Depends(get_db)):
+    """Summarize saved workspace evidence without exposing raw results or credentials."""
+    _, org, _ = get_org_context(request, db)
+    areas = build_workspace_posture_areas(db, org)
     return JSONResponse({"domain":org.domain, "areas":areas, "assessed_at":iso_utc(utcnow())}, headers={"Cache-Control":"no-store"})
+
+
+
+
+@app.get("/api/portfolio")
+def workspace_portfolio(request: Request, db: Session = Depends(get_db)):
+    """Every workspace the signed-in user belongs to, with its current evidence states."""
+    user = get_session_user(request, db)
+    rows = db.execute(
+        select(Membership, Organization)
+        .join(Organization, Organization.id == Membership.organization_id)
+        .where(Membership.user_id == user.id, Membership.status == "approved")
+        .order_by(Organization.name)
+    ).all()
+    workspaces = []
+    for membership, organization in rows:
+        areas = build_workspace_posture_areas(db, organization)
+        workspaces.append({"id": organization.id, "name": organization.name, "domain": organization.domain,
+                           "role": membership.role, "verification_status": organization.verification_status,
+                           "areas": areas})
+    return JSONResponse({"workspaces": workspaces, "assessed_at": iso_utc(utcnow())}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/dashboard")

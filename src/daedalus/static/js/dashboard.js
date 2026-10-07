@@ -62,6 +62,7 @@
   var scannerComparisonCache = new Map();
   var titleMap = {
     overview: "Workspace overview",
+    portfolio: "All customers",
     scanners: "Internal network",
     meraki: "Meraki security report",
     dns: "DNS & email health",
@@ -173,6 +174,7 @@
     if (activeTab === name) return;
     activeTab = name;
     if (name === "overview") loadWorkspacePosture();
+    if (name === "portfolio") loadPortfolio();
     if (name === "meraki") loadMeraki();
     if (name === "cis") { loadCIS(); loadReports(); }
     if (name === "dns" || name === "web") loadExternalCheck(name);
@@ -1128,6 +1130,63 @@
       return a - b || left.index - right.index;
     });
     return {counts: counts, areas: ordered.map(function (entry) { return entry.area; })};
+  }
+
+  function areaLevel(area) {
+    if (area.state === "unavailable") return "bad";
+    if (area.state === "attention") return "warn";
+    if (area.state === "not_assessed" || area.state === "running") return "idle";
+    var t = new Date(area.updated_at).getTime();
+    if (isFinite(t) && Date.now() - t > 48 * 3600 * 1000) return "warn";
+    if (area.schedule && !area.schedule.enabled) return "warn";
+    return "ok";
+  }
+
+  async function loadPortfolio() {
+    var host = document.getElementById("portfolio-board");
+    if (!host) return;
+    try {
+      var response = await fetch("/api/portfolio", { credentials: "same-origin" });
+      var body = await response.json();
+      if (!response.ok || !Array.isArray(body.workspaces)) throw new Error("Customers could not be loaded.");
+      var order = {bad: 0, warn: 1, idle: 2, ok: 3};
+      var rows = body.workspaces.map(function (workspace) {
+        var levels = workspace.areas.map(areaLevel);
+        var worst = levels.reduce(function (acc, level) { return order[level] < order[acc] ? level : acc; }, "ok");
+        var issues = levels.filter(function (level) { return level === "bad" || level === "warn"; }).length;
+        var newest = workspace.areas.map(function (area) { return area.updated_at; }).filter(Boolean).sort().pop();
+        return {workspace: workspace, levels: levels, worst: worst, issues: issues, newest: newest};
+      });
+      rows.sort(function (x, y) { return order[x.worst] - order[y.worst] || x.workspace.name.localeCompare(y.workspace.name); });
+      var needing = rows.filter(function (row) { return row.worst === "bad" || row.worst === "warn"; }).length;
+      host.replaceChildren();
+      var banner = document.createElement("div");
+      banner.className = "status-banner is-" + (rows.some(function (r) { return r.worst === "bad"; }) ? "bad" : needing ? "warn" : "ok");
+      var headline = document.createElement("strong");
+      headline.textContent = needing ? needing + " of " + rows.length + " customers need attention" : "All " + rows.length + " customers look good";
+      banner.append(headline);
+      host.append(banner);
+      var list = document.createElement("ul"); list.className = "status-list";
+      rows.forEach(function (row) {
+        var li = document.createElement("li"); li.className = "status-row portfolio-row is-" + row.worst;
+        var dot = document.createElement("span"); dot.className = "status-dot"; dot.setAttribute("aria-hidden", "true");
+        var name = document.createElement("button"); name.type = "button"; name.className = "status-name";
+        name.textContent = row.workspace.name; name.dataset.selectWorkspace = row.workspace.id;
+        var domain = document.createElement("span"); domain.className = "status-when portfolio-domain"; domain.textContent = row.workspace.domain;
+        var chips = document.createElement("span"); chips.className = "portfolio-chips";
+        row.workspace.areas.forEach(function (area, index) {
+          if (row.levels[index] === "idle" && area.key !== "dns" && area.key !== "web") return;
+          var chip = document.createElement("span"); chip.className = "portfolio-chip is-" + row.levels[index];
+          chip.textContent = area.title; chip.title = area.title + ": " + area.summary;
+          chips.append(chip);
+        });
+        var verdict = document.createElement("span"); verdict.className = "status-verdict";
+        verdict.textContent = row.worst === "ok" ? "All good" : row.issues ? row.issues + (row.issues === 1 ? " thing to look at" : " things to look at") : "Waiting for first check";
+        li.append(dot, name, domain, verdict, chips);
+        list.append(li);
+      });
+      host.append(list);
+    } catch (error) { host.replaceChildren(); appendEmpty(host, error.message); }
   }
 
   function renderStatusBoard(areas) {

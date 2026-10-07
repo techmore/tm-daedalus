@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261006-128">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261007-130">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -35,6 +35,8 @@
       <button class="sidebar-add-workspace" type="button" data-open-workspace-dialog>＋ Add or join workspace</button>
       <div class="nav-label">WORKSPACE</div>
       <nav class="main-nav" aria-label="Workspace">
+        {% if workspaces|length > 1 %}<button class="nav-item" data-tab="portfolio"><span>◩</span>All customers</button>
+        {% endif %}
         <button class="nav-item active" data-tab="overview"><span>◫</span>Overview</button>
         <button class="nav-item" data-tab="scanners"><span>⌘</span>Internal network</button>
         <button class="nav-item" data-tab="meraki"><span>◈</span>Meraki security</button>
@@ -140,6 +142,12 @@
         </div>
         </details>
 
+      </section>
+
+      <section class="tab-panel" id="tab-portfolio">
+        <section class="status-board" aria-labelledby="portfolio-title"><h2 id="portfolio-title" class="visually-hidden">All customers</h2>
+          <div id="portfolio-board" aria-live="polite"><p class="muted">Checking every customer…</p></div>
+        </section>
       </section>
 
       <section class="tab-panel" id="tab-scanners">
@@ -526,6 +534,6 @@
     </div>
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261006-145" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261007-147" defer></script>
 </body>
 </html>
