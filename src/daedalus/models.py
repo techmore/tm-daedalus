@@ -511,3 +511,27 @@ class WorkspaceIcon(Base):
     content_type: Mapped[str] = mapped_column(String(32), nullable=False)
     data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class DriveConnection(Base):
+    """A workspace's Google Drive folder for saved report PDFs (drive.file scope)."""
+    __tablename__ = "drive_connections"
+
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    connected_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    folder_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    folder_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    auto_upload: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    connected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_upload_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class DriveUpload(Base):
+    __tablename__ = "drive_uploads"
+
+    report_id: Mapped[int] = mapped_column(ForeignKey("report_jobs.id", ondelete="CASCADE"), primary_key=True)
+    drive_file_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    web_view_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

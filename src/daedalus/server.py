@@ -84,6 +84,8 @@ from daedalus.models import (
     ExternalCheckRun,
     ExternalCheckSchedule,
     WorkspaceIcon,
+    DriveConnection,
+    DriveUpload,
     MerakiCredential,
     MerakiOrganizationGrant,
     Membership,
@@ -138,6 +140,13 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         client_secret=GOOGLE_CLIENT_SECRET,
         server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
         client_kwargs={"scope": "openid profile email"},
+    )
+    oauth.register(
+        name="drive",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "https://www.googleapis.com/auth/drive.file"},
     )
 
 
@@ -795,6 +804,7 @@ def serialize_report_job(job: ReportJob, actor: User | None = None) -> dict[str,
         )} if comparison and job.status == "completed" else None,
         "meraki_changes_url": f"/api/meraki/reports/{job.id}/changes" if comparison and job.status == "completed" else None,
         "meraki_snapshot_url": f"/api/meraki/reports/{job.id}/snapshot" if job.report_type == "meraki_security" and job.status == "completed" else None,
+        "drive_link": getattr(job, "_drive_link", None),
     }
 
 
@@ -1355,6 +1365,7 @@ def generate_report_job(report_job_id: int) -> None:
                     detected_at=job.completed_at,
                 )
             db.commit()
+        auto_save_report_to_drive(organization_id, report_job_id)
         if report_type == "meraki_security":
             try:
                 from_thread.run(live_hub.publish, organization_id, {
@@ -4964,6 +4975,10 @@ def list_reports(request: Request, db: Session = Depends(get_db)):
         .order_by(ReportJob.id.desc())
         .limit(50)
     ).all()
+    uploads = {row.report_id: row.web_view_link or "" for row in db.scalars(
+        select(DriveUpload).where(DriveUpload.report_id.in_([job.id for job, _ in rows])))} if rows else {}
+    for job, _actor in rows:
+        job._drive_link = uploads.get(job.id)
     return {"reports": [serialize_report_job(job, actor) for job, actor in rows]}
 
 
@@ -5228,6 +5243,142 @@ def create_external_posture_report(
     db.refresh(job)
     background_tasks.add_task(generate_report_job, job.id)
     return serialize_report_job(job, user)
+
+
+def save_report_to_drive(organization_id: int, report_id: int) -> dict[str, Any]:
+    """Upload one finished report to the workspace's Drive folder. Raises HTTPException."""
+    from daedalus import drive as drive_api
+    with SessionLocal() as db:
+        connection = db.get(DriveConnection, organization_id)
+        job = db.scalar(select(ReportJob).where(ReportJob.id == report_id, ReportJob.organization_id == organization_id))
+        if connection is None:
+            raise HTTPException(status_code=409, detail="Google Drive is not connected for this workspace.")
+        if job is None or job.status != "completed" or not job.artifact_path:
+            raise HTTPException(status_code=409, detail="The report PDF is not ready yet.")
+        existing = db.get(DriveUpload, report_id)
+        if existing is not None:
+            return {"id": existing.drive_file_id, "web_view_link": existing.web_view_link, "already_saved": True}
+        try:
+            data = report_artifact(REPORTS_DIR, organization_id, job.file_name).read_bytes()
+            access = drive_api.refresh_access_token(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, decrypt_secret(connection.encrypted_refresh_token))
+            saved = drive_api.upload_pdf(access, connection.folder_id, job.file_name, data)
+        except (drive_api.DriveError, CredentialEncryptionError, OSError, ValueError) as exc:
+            connection.last_error = str(exc)[:300]
+            db.commit()
+            raise HTTPException(status_code=502, detail=str(exc)[:300]) from exc
+        now = utcnow()
+        db.add(DriveUpload(report_id=report_id, drive_file_id=saved["id"], web_view_link=saved.get("web_view_link"), uploaded_at=now))
+        connection.last_upload_at, connection.last_error = now, None
+        audit(db, organization_id, None, "report.saved_to_drive", {"report_id": report_id, "drive_file_id": saved["id"]})
+        db.commit()
+        return {**saved, "already_saved": False}
+
+
+def auto_save_report_to_drive(organization_id: int, report_id: int) -> None:
+    """Best effort after a report completes; never affects the report itself."""
+    try:
+        with SessionLocal() as db:
+            connection = db.get(DriveConnection, organization_id)
+            if connection is None or not connection.auto_upload:
+                return
+        save_report_to_drive(organization_id, report_id)
+    except Exception:  # noqa: BLE001 - the failure is recorded on the connection
+        logger.warning("Automatic Drive save failed for report %s", report_id)
+
+
+@app.get("/api/drive")
+def drive_status(request: Request, db: Session = Depends(get_db)):
+    _, organization, membership = get_org_context(request, db)
+    connection = db.get(DriveConnection, organization.id)
+    return {"configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET), "connected": connection is not None,
+            "is_admin": membership.role == "admin",
+            "folder_name": connection.folder_name if connection else None,
+            "auto_upload": connection.auto_upload if connection else None,
+            "last_upload_at": iso_utc(connection.last_upload_at) if connection else None,
+            "last_error": connection.last_error if connection else None}
+
+
+@app.get("/auth/drive/connect")
+async def drive_connect(request: Request, db: Session = Depends(get_db)):
+    _, organization, _ = get_org_context(request, db, admin=True)
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
+    request.session["drive_organization_id"] = organization.id
+    drive_client = oauth.create_client("drive")
+    return await drive_client.authorize_redirect(
+        request, BASE_URL + "/auth/drive/callback", access_type="offline", prompt="consent")
+
+
+@app.get("/auth/drive/callback")
+async def drive_callback(request: Request, db: Session = Depends(get_db)):
+    from daedalus import drive as drive_api
+    user, organization, _ = get_org_context(request, db, admin=True)
+    if request.session.pop("drive_organization_id", None) != organization.id:
+        raise HTTPException(status_code=400, detail="Start Google Drive connection from the Reports page.")
+    drive_client = oauth.create_client("drive")
+    try:
+        token = await drive_client.authorize_access_token(request)
+    except Exception as exc:  # noqa: BLE001 - user denied consent or the code expired
+        raise HTTPException(status_code=400, detail="Google Drive was not connected.") from exc
+    refresh_token, access_token = token.get("refresh_token"), token.get("access_token")
+    if not refresh_token or not access_token:
+        raise HTTPException(status_code=400, detail="Google did not grant offline access. Try connecting again.")
+    folder_name = f"Daedalus Reports - {organization.name}"
+    try:
+        folder_id = await run_in_threadpool(drive_api.create_folder, access_token, folder_name)
+    except drive_api.DriveError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)[:300]) from exc
+    now = utcnow()
+    connection = db.get(DriveConnection, organization.id)
+    if connection is None:
+        db.add(DriveConnection(organization_id=organization.id, connected_by_user_id=user.id,
+                               encrypted_refresh_token=encrypt_secret(refresh_token), folder_id=folder_id,
+                               folder_name=folder_name, auto_upload=True, connected_at=now))
+    else:
+        connection.connected_by_user_id, connection.encrypted_refresh_token = user.id, encrypt_secret(refresh_token)
+        connection.folder_id, connection.folder_name, connection.connected_at, connection.last_error = folder_id, folder_name, now, None
+    audit(db, organization.id, user.id, "drive.connected", {"folder_name": folder_name})
+    db.commit()
+    return RedirectResponse("/dashboard#reports", status_code=303)
+
+
+class DriveSettingsRequest(BaseModel):
+    auto_upload: bool
+
+
+@app.post("/api/drive/settings")
+def drive_settings(payload: DriveSettingsRequest, request: Request, db: Session = Depends(get_db)):
+    user, organization, _ = get_org_context(request, db, admin=True)
+    connection = db.get(DriveConnection, organization.id)
+    if connection is None:
+        raise HTTPException(status_code=409, detail="Google Drive is not connected for this workspace.")
+    connection.auto_upload = payload.auto_upload
+    audit(db, organization.id, user.id, "drive.settings_changed", {"auto_upload": payload.auto_upload})
+    db.commit()
+    return {"auto_upload": connection.auto_upload}
+
+
+@app.delete("/api/drive")
+def drive_disconnect(request: Request, db: Session = Depends(get_db)):
+    from daedalus import drive as drive_api
+    user, organization, _ = get_org_context(request, db, admin=True)
+    connection = db.get(DriveConnection, organization.id)
+    if connection is None:
+        return {"connected": False}
+    try:
+        drive_api.revoke(decrypt_secret(connection.encrypted_refresh_token))
+    except CredentialEncryptionError:
+        pass
+    db.delete(connection)
+    audit(db, organization.id, user.id, "drive.disconnected", {})
+    db.commit()
+    return {"connected": False}
+
+
+@app.post("/api/reports/{report_id}/drive")
+async def save_report_to_drive_endpoint(report_id: int, request: Request, db: Session = Depends(get_db)):
+    _, organization, _ = get_org_context(request, db, admin=True)
+    return await run_in_threadpool(save_report_to_drive, organization.id, report_id)
 
 
 @app.get("/api/reports/{report_id}/download")

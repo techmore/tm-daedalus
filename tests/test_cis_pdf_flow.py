@@ -193,7 +193,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261007-147", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261007-148", response.text)
         self.assertIn('data-load-older-checks="dns"', response.text)
         self.assertIn('data-load-older-checks="web"', response.text)
         self.assertIn('data-load-older-active="changes"', response.text)
@@ -1137,6 +1137,67 @@ class CISReportPDFFlowTests(unittest.TestCase):
             realigned = db.scalars(select(ExternalCheckSchedule).where(ExternalCheckSchedule.check_type == "dns")).first().next_run_at
         self.assertEqual(local(realigned).hour, 1)
         self.assertIsNotNone(baseline)
+
+    def test_google_drive_saves_reports_manually_and_automatically_and_disconnects(self):
+        import os
+        from daedalus import credential_store
+        from daedalus.models import DriveConnection, DriveUpload
+        key_path = self.root / "keys" / "development.key"
+        old = (os.environ.get("DAEDALUS_DEV_ENCRYPTION_KEY_FILE"), credential_store.ENCRYPTION_KEY, credential_store.APP_ENV)
+        os.environ["DAEDALUS_DEV_ENCRYPTION_KEY_FILE"] = str(key_path)
+        credential_store.ENCRYPTION_KEY, credential_store.APP_ENV = "", "development"
+        credential_store._fernet.cache_clear()
+        self.addCleanup(credential_store._fernet.cache_clear)
+        self.addCleanup(lambda: (os.environ.__setitem__("DAEDALUS_DEV_ENCRYPTION_KEY_FILE", old[0]) if old[0] else os.environ.pop("DAEDALUS_DEV_ENCRYPTION_KEY_FILE", None),
+                                 setattr(credential_store, "ENCRYPTION_KEY", old[1]), setattr(credential_store, "APP_ENV", old[2])))
+        with patch.object(server, "GOOGLE_CLIENT_ID", "cid"), patch.object(server, "GOOGLE_CLIENT_SECRET", "secret"):
+            status = self.client.get("/api/drive").json()
+            self.assertEqual((status["configured"], status["connected"]), (True, False))
+            self.assertEqual(self.client.post("/api/reports/1/drive").status_code, 409)
+            with self.session_factory() as db:
+                org = db.scalar(select(Organization)); now = server.utcnow()
+                db.add(DriveConnection(organization_id=org.id, connected_by_user_id=None,
+                    encrypted_refresh_token=credential_store.encrypt_secret("refresh-secret"), folder_id="FOLDER",
+                    folder_name="Daedalus Reports - CSP", auto_upload=True, connected_at=now))
+                job = ReportJob(organization_id=org.id, report_type="external_posture", domain=org.domain, status="completed",
+                    progress=100, stage="PDF ready", file_name="drive-test.pdf", artifact_path="x", size_bytes=9,
+                    report_snapshot={}, created_at=now, updated_at=now, completed_at=now)
+                db.add(job); db.commit(); org_id, report_id = org.id, job.id
+            directory = self.root / "reports" / str(org_id); directory.mkdir(parents=True, exist_ok=True)
+            (directory / "drive-test.pdf").write_bytes(b"%PDF-drive")
+            calls = []
+            def fake_upload(access, folder, name, data):
+                calls.append((access, folder, name, data)); return {"id": "FILE1", "name": name, "web_view_link": "https://drive.example/f1"}
+            with patch("daedalus.drive.refresh_access_token", return_value="access-1") as refresh, \
+                 patch("daedalus.drive.upload_pdf", side_effect=fake_upload), patch("daedalus.drive.revoke") as revoke:
+                saved = self.client.post(f"/api/reports/{report_id}/drive")
+                self.assertEqual(saved.status_code, 200, saved.text)
+                self.assertEqual(calls, [("access-1", "FOLDER", "drive-test.pdf", b"%PDF-drive")])
+                self.assertEqual(refresh.call_args.args[2], "refresh-secret")
+                self.assertNotIn("refresh-secret", self.client.get("/api/drive").text)
+                # Saving twice never uploads a duplicate; the report list links to the saved copy.
+                self.assertTrue(self.client.post(f"/api/reports/{report_id}/drive").json()["already_saved"])
+                self.assertEqual(len(calls), 1)
+                listed = [r for r in self.client.get("/api/reports").json()["reports"] if r["id"] == report_id][0]
+                self.assertEqual(listed["drive_link"], "https://drive.example/f1")
+                # Automatic saving uploads a new completed report and swallows failures.
+                with self.session_factory() as db:
+                    org = db.scalar(select(Organization)); now = server.utcnow()
+                    second = ReportJob(organization_id=org.id, report_type="external_posture", domain=org.domain, status="completed",
+                        progress=100, stage="PDF ready", file_name="auto-test.pdf", artifact_path="x", size_bytes=9,
+                        report_snapshot={}, created_at=now, updated_at=now, completed_at=now)
+                    db.add(second); db.commit(); second_id = second.id
+                (directory / "auto-test.pdf").write_bytes(b"%PDF-auto")
+                server.auto_save_report_to_drive(org_id, second_id)
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(self.client.post("/api/drive/settings", json={"auto_upload": False}).status_code, 200)
+                server.auto_save_report_to_drive(org_id, report_id + 99)  # unknown report: no exception, no upload
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(self.client.delete("/api/drive").json(), {"connected": False})
+                revoke.assert_called_once_with("refresh-secret")
+            with self.session_factory() as db:
+                self.assertIsNone(db.get(DriveConnection, org_id))
+                self.assertIsNotNone(db.get(DriveUpload, report_id))
 
     def test_workspaces_get_daily_schedules_by_default_without_overriding_choices(self):
         with self.session_factory() as db:

@@ -999,3 +999,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 760px) { .portfolio-row { grid-template-columns: 14px 1fr; } .portfolio-row > :not(.status-dot):not(.status-name) { grid-column: 2; text-align: left; } .portfolio-chips { justify-content: flex-start; } }
 .portfolio-chips { flex-wrap: nowrap; }
 @media (max-width: 760px) { .portfolio-chips { flex-wrap: wrap; } }
+
+.drive-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; padding: 16px 18px; border: 1px solid var(--card-line); border-radius: 12px; background: var(--cream-50); }
+.drive-card.hidden { display: none; }
+.drive-copy { flex: 1 1 320px; line-height: 1.5; }
+.drive-actions { display: flex; flex-wrap: wrap; gap: 8px; }

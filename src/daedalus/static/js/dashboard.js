@@ -1987,6 +1987,23 @@
         download.download = job.file_name || "daedalus-report.pdf";
         download.textContent = "Download PDF";
         actions.append(download);
+        if (driveState && driveState.connected) {
+          if (job.drive_link) {
+            var openDrive = document.createElement("a");
+            openDrive.className = "button button-small button-quiet"; openDrive.href = job.drive_link;
+            openDrive.target = "_blank"; openDrive.rel = "noopener noreferrer"; openDrive.textContent = "In Drive ↗";
+            actions.append(openDrive);
+          } else if (driveState.is_admin) {
+            var saveDrive = document.createElement("button");
+            saveDrive.type = "button"; saveDrive.className = "button button-small button-quiet"; saveDrive.textContent = "Save to Drive";
+            saveDrive.addEventListener("click", async function () {
+              saveDrive.disabled = true; saveDrive.textContent = "Saving…";
+              try { await postJson("/api/reports/" + job.id + "/drive"); } catch (error) { saveDrive.textContent = "Retry"; saveDrive.title = error.message; saveDrive.disabled = false; return; }
+              await loadReports();
+            });
+            actions.append(saveDrive);
+          }
+        }
       }
       if (job.meraki_changes_url) {
         var changes = document.createElement("a");
@@ -2041,9 +2058,49 @@
     return (size / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  var driveState = null;
+
+  async function loadDriveStatus() {
+    var card = document.getElementById("drive-card");
+    if (!card) return;
+    try {
+      var response = await fetch("/api/drive", { credentials: "same-origin" });
+      driveState = response.ok ? await response.json() : null;
+    } catch (_error) { driveState = null; }
+    card.replaceChildren();
+    if (!driveState || !driveState.configured) { card.classList.add("hidden"); return; }
+    card.classList.remove("hidden");
+    var title = document.createElement("strong"); var detail = document.createElement("span"); detail.className = "muted";
+    var actions = document.createElement("span"); actions.className = "drive-actions";
+    if (!driveState.connected) {
+      title.textContent = "Keep every report in Google Drive";
+      detail.textContent = "Connect once and new report PDFs are saved to a folder in your Drive. Daedalus can only see files it creates.";
+      if (driveState.is_admin) {
+        var connect = document.createElement("a"); connect.className = "button button-primary"; connect.href = "/auth/drive/connect"; connect.textContent = "Connect Google Drive";
+        actions.append(connect);
+      } else { detail.textContent += " A workspace admin can connect it."; }
+    } else {
+      title.textContent = "Saving reports to Google Drive";
+      detail.textContent = "Folder: " + driveState.folder_name + (driveState.last_upload_at ? " · last saved " + dateLabel(driveState.last_upload_at) : "") + (driveState.auto_upload ? " · new reports save automatically" : " · automatic saving is off");
+      if (driveState.last_error) { var problem = document.createElement("small"); problem.className = "status-failed"; problem.textContent = "Last problem: " + driveState.last_error; detail.append(document.createElement("br"), problem); }
+      if (driveState.is_admin) {
+        var toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "button button-quiet";
+        toggle.textContent = driveState.auto_upload ? "Turn off automatic saving" : "Turn on automatic saving";
+        toggle.addEventListener("click", async function () { toggle.disabled = true; try { await postJson("/api/drive/settings", { auto_upload: !driveState.auto_upload }); } catch (_e) { /* status reload shows state */ } await loadDriveStatus(); });
+        var disconnect = document.createElement("button"); disconnect.type = "button"; disconnect.className = "button button-quiet";
+        disconnect.textContent = "Disconnect";
+        disconnect.addEventListener("click", async function () { disconnect.disabled = true; await fetch("/api/drive", { method: "DELETE", credentials: "same-origin" }); await loadDriveStatus(); await loadReports(); });
+        actions.append(toggle, disconnect);
+      }
+    }
+    var copy = document.createElement("span"); copy.className = "drive-copy"; copy.append(title, document.createElement("br"), detail);
+    card.append(copy, actions);
+  }
+
   async function loadReports() {
     if (!orgId) return;
     window.clearTimeout(reportPollTimer);
+    if (!driveState) await loadDriveStatus();
     try {
       var response = await fetch("/api/reports", { credentials: "same-origin" });
       var body = await response.json();
