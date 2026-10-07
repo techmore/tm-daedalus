@@ -35,10 +35,18 @@ def _call(request: urllib.request.Request) -> dict:
     except urllib.error.HTTPError as exc:
         detail = ""
         try:
-            detail = json.loads(exc.read(4096) or b"{}").get("error_description") or ""
+            body = json.loads(exc.read(8192) or b"{}")
+            error = body.get("error")
+            if isinstance(error, dict):
+                detail = str(error.get("message") or "")
+                reasons = [str(item.get("reason")) for item in error.get("errors") or [] if isinstance(item, dict) and item.get("reason")]
+                if reasons:
+                    detail += f" ({', '.join(reasons[:3])})"
+            else:
+                detail = str(body.get("error_description") or error or "")
         except (ValueError, AttributeError):
             pass
-        raise DriveError(f"Google Drive returned HTTP {exc.code}. {detail}".strip()) from exc
+        raise DriveError(f"Google Drive returned HTTP {exc.code}. {detail}"[:290].strip()) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise DriveError("Google Drive could not be reached.") from exc
     if len(raw) > MAX_RESPONSE_BYTES:

@@ -38,3 +38,15 @@ def test_failures_become_safe_messages_and_oversize_is_refused():
             drive.refresh_access_token("id", "secret", "refresh")
     with pytest.raises(drive.DriveError, match="too large"):
         drive.upload_pdf("tok", "F", "r.pdf", b"x" * (drive.MAX_UPLOAD_BYTES + 1))
+
+
+def test_google_error_reason_is_shown_to_the_admin():
+    import urllib.error
+    body = json.dumps({"error": {"code": 403, "message": "Google Drive API has not been used in project 123 before or it is disabled.",
+                                 "errors": [{"reason": "accessNotConfigured"}]}}).encode()
+    def forbidden(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(body))
+    with patch.object(drive.urllib.request, "urlopen", forbidden):
+        with pytest.raises(drive.DriveError) as caught:
+            drive.create_folder("tok", "Daedalus Reports")
+    assert "HTTP 403" in str(caught.value) and "accessNotConfigured" in str(caught.value) and "disabled" in str(caught.value)
