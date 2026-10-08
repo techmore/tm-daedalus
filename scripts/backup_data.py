@@ -101,6 +101,13 @@ def main() -> int:
             manifest.extend(archive_tree(archive, REPORTS, "reports"))
             artifacts = DATA_DIR / "scanner-artifacts"
             manifest.extend(archive_tree(archive, artifacts, "scanner-artifacts", pattern="*.json"))
+            client_release = DATA_DIR / "cis-client-release"
+            if client_release.is_symlink():
+                raise ValueError("CIS release storage must not be a symbolic link.")
+            for filename in ("manifest.json", "CSP-CIS_Audit-macOS-notarized.zip"):
+                path = client_release / filename
+                if path.exists() or path.is_symlink():
+                    manifest.append(archive_file(archive, path, "cis-client-release/" + filename))
             encoded = json.dumps({"version": 1, "created_at": stamp, "files": manifest}, sort_keys=True, indent=2).encode()
             entry = tarfile.TarInfo("manifest.json")
             entry.size = len(encoded)

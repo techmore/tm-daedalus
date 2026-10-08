@@ -31,8 +31,12 @@ def _safe_name(name: str) -> str:
         not name or len(name) > 512 or "\\" in name or "\x00" in name
         or path.is_absolute() or any(part in {".", ".."} for part in name.split("/"))
         or name.rstrip("/") != normalized
-        or path.parts[0] not in {"daedalus.db", "manifest.json", "reports", "scanner-artifacts"}
+        or path.parts[0] not in {"daedalus.db", "manifest.json", "reports", "scanner-artifacts", "cis-client-release"}
         or (path.parts[0] in {"daedalus.db", "manifest.json"} and len(path.parts) != 1)
+        or (path.parts[0] == "cis-client-release" and normalized not in {
+            "cis-client-release", "cis-client-release/manifest.json",
+            "cis-client-release/CSP-CIS_Audit-macOS-notarized.zip",
+        })
     ):
         raise RestoreError("The archive contains an unsupported or unsafe path.")
     return normalized
@@ -52,7 +56,7 @@ def _manifest_files(contents: bytes) -> dict[str, tuple[int, str]]:
         name = _safe_name(row["path"])
         size, digest = row.get("size_bytes"), row.get("sha256")
         if (
-            name in expected or name == "manifest.json" or name in {"reports", "scanner-artifacts"}
+            name in expected or name == "manifest.json" or name in {"reports", "scanner-artifacts", "cis-client-release"}
             or type(size) is not int or size < 0
             or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
         ):

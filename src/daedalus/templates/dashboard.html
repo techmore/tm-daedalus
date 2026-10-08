@@ -318,6 +318,15 @@
             <div><h3>Mac demo client</h3><p class="muted">Apple Silicon download, unsigned and not notarized. Import your workspace configuration before running an audit. macOS 26 profiles run only on macOS 26; this package has passed fixture tests, not a live Tahoe audit.</p></div>
             <a class="button button-secondary" href="/api/cis/client-package/download">Download Mac demo client</a>
           </div>
+          {% elif cis_client_release.available %}
+          <div class="cis-key-card">
+            <div><h3>Mac CIS client</h3><p class="muted">Signed and notarized release for {{ cis_client_release.architectures | join(' and ') }}. Import your workspace configuration after installing. macOS 26 profiles require macOS 26.</p></div>
+            <a class="button button-secondary" href="/api/cis/client-package/download">Download Mac client</a>
+          </div>
+          {% else %}
+          <div class="cis-key-card">
+            <div><h3>Mac CIS client</h3><p class="muted">{% if cis_client_release.reason == 'integrity_failed' %}The client download is temporarily unavailable because its release failed integrity checks.{% else %}A signed and notarized client release has not been published yet.{% endif %} Your existing clients can continue to check in; workspace configurations and profiles are available above.</p></div>
+          </div>
           {% endif %}
           <div class="cis-section-toolbar"><div><p class="eyebrow">PUBLISHED PROFILES</p><h3>Workspace profile library</h3><p class="muted">Published versions are immutable. Clients can retrieve workspace profiles using the key in the configuration file.</p></div>
             {% if membership.role == 'admin' %}<div class="cis-profile-install-actions"><button class="button button-secondary" type="button" id="cis-install-macos26">Install macOS 26 Level 1 + 2 profiles</button><button class="button button-quiet" type="button" id="cis-install-starter">Install CSP starter profile</button></div>{% endif %}

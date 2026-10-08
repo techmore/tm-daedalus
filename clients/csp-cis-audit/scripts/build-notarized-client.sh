@@ -8,12 +8,18 @@ csp_project="$csp_repo_dir/CSP-CIS_Audit.xcodeproj"
 csp_scheme="CSP-CIS_Audit"
 csp_notary_profile="${CSP_CIS_NOTARY_PROFILE:-daedalus-cis-notary}"
 
-for csp_tool in xcodebuild codesign security xcrun ditto shasum spctl; do
+for csp_tool in xcodebuild codesign security xcrun ditto shasum spctl git python3 lipo; do
     if ! command -v "$csp_tool" >/dev/null 2>&1; then
         echo "Required macOS tool not found: $csp_tool" >&2
         exit 1
     fi
 done
+
+if [[ -n "$(git -C "$csp_repo_dir" status --porcelain --untracked-files=all -- .)" ]]; then
+    echo "Commit client source before building a publishable release." >&2
+    exit 2
+fi
+csp_source_commit="$(git -C "$csp_repo_dir" rev-parse HEAD)"
 
 if [[ -e "$csp_output_dir" ]]; then
     echo "Output directory already exists; choose a new path: $csp_output_dir" >&2
@@ -94,6 +100,25 @@ spctl --assess --type execute --verbose=2 "$csp_app_path"
 
 csp_release_zip="$csp_output_dir/CSP-CIS_Audit-macOS-notarized.zip"
 ditto -c -k --sequesterRsrc --keepParent "$csp_app_path" "$csp_release_zip"
+csp_executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$csp_app_path/Contents/Info.plist")"
+csp_architectures="$(lipo -archs "$csp_app_path/Contents/MacOS/$csp_executable")"
+python3 - "$csp_release_zip" "$csp_team_id" "$csp_architectures" "$csp_source_commit" "$csp_repo_dir/../../src" <<'PY'
+import hashlib, json, pathlib, sys
+archive = pathlib.Path(sys.argv[1])
+architectures = sorted(sys.argv[3].split())
+if not architectures or not set(architectures).issubset({'arm64', 'x86_64'}):
+    raise SystemExit('Unsupported release architecture')
+manifest = {'schema': 1, 'filename': archive.name,
+            'sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+            'signing': 'developer-id-notarized', 'team_id': sys.argv[2],
+            'architectures': architectures, 'source_commit': sys.argv[4],
+            'verification': {'codesign': True, 'stapler': True, 'gatekeeper': True}}
+(archive.parent / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+# Use the same bounded integrity/credential checks as the production download.
+sys.path.insert(0, sys.argv[5])
+from daedalus.cis_client_release import load_release
+load_release(archive.parent)
+PY
 (cd "$csp_output_dir" && shasum -a 256 "$(basename "$csp_release_zip")" > SHA256SUMS)
 rm -f "$csp_submission"
 

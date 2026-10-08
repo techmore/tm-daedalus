@@ -97,6 +97,49 @@ class CISReportPDFFlowTests(unittest.TestCase):
         with self.session_factory() as db:
             self.assertIsNone(db.scalar(select(AuditLog).where(AuditLog.action == "cis.client_package.downloaded")))
 
+    def test_production_client_release_download_status_and_audit(self):
+        directory = self.root / "data" / "cis-client-release"
+        directory.mkdir(parents=True)
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as archive:
+            archive.writestr("CSP-CIS_Audit.app/Contents/Info.plist", "integrity fixture, not Apple verification")
+        contents = stream.getvalue()
+        filename = "CSP-CIS_Audit-macOS-notarized.zip"
+        manifest = {"schema": 1, "filename": filename, "sha256": hashlib.sha256(contents).hexdigest(),
+                    "signing": "developer-id-notarized", "team_id": "ABCDEFGHIJ", "architectures": ["arm64"],
+                    "source_commit": "a" * 40,
+                    "verification": {"codesign": True, "stapler": True, "gatekeeper": True}}
+        (directory / filename).write_bytes(contents)
+        (directory / "manifest.json").write_text(json.dumps(manifest))
+        with patch.object(server, "APP_ENV", "production"), patch.object(server, "DEMO_MODE", False):
+            response = self.client.get("/api/cis/client-package/download")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, contents)
+            self.assertEqual(response.headers["x-content-sha256"], manifest["sha256"])
+            self.assertEqual(response.headers["cache-control"], "no-store")
+            self.assertTrue(self.client.get("/api/cis/client-package/status").json()["available"])
+            dashboard = self.client.get("/dashboard")
+            self.assertIn("Download Mac client", dashboard.text)
+            self.assertNotIn("Download Mac demo client", dashboard.text)
+            (directory / filename).write_bytes(b"changed")
+            self.assertEqual(self.client.get("/api/cis/client-package/download").status_code, 503)
+            self.assertEqual(self.client.get("/api/cis/client-package/status").json()["reason"], "integrity_failed")
+        with self.session_factory() as db:
+            downloads = db.scalars(select(AuditLog).where(AuditLog.action == "cis.client_package.downloaded")).all()
+            self.assertEqual(len(downloads), 1)
+        self.client.cookies.clear()
+        self.assertEqual(self.client.get("/api/cis/client-package/download").status_code, 401)
+        self.assertEqual(self.client.get("/api/cis/client-package/status").status_code, 401)
+
+    def test_production_client_release_unpublished_is_visible_without_broken_download(self):
+        with patch.object(server, "APP_ENV", "production"), patch.object(server, "DEMO_MODE", False):
+            self.assertEqual(self.client.get("/api/cis/client-package/download").status_code, 404)
+            self.assertEqual(self.client.get("/api/cis/client-package/status").json(),
+                             {"available": False, "reason": "not_published"})
+            dashboard = self.client.get("/dashboard")
+            self.assertIn("A signed and notarized client release has not been published yet", dashboard.text)
+            self.assertNotIn("Download Mac client", dashboard.text)
+
     def test_extracted_scanner_kit_imports_its_runtime_dependencies(self):
         with tempfile.TemporaryDirectory(prefix="daedalus-kit-import-") as directory:
             root = Path(directory)

@@ -38,6 +38,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from anyio import from_thread
 
 from daedalus import __version__
+from daedalus.cis_client_release import load_release, release_status, ReleaseInvalid
 from daedalus.config import (
     APP_ENV,
     AUDIT_DNS_NAMESERVERS,
@@ -4070,7 +4071,22 @@ def list_cis_profiles(request: Request, db: Session = Depends(get_db)):
 def download_cis_demo_client(request: Request, db: Session = Depends(get_db)):
     user, organization, _ = get_org_context(request, db)
     if not DEMO_MODE or APP_ENV == "production":
-        raise HTTPException(status_code=404, detail="No distributable CIS client package is available.")
+        try:
+            manifest, contents = load_release(DATA_DIR / "cis-client-release")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="No notarized CIS client release has been published.")
+        except ReleaseInvalid:
+            raise HTTPException(status_code=503, detail="The CIS client release failed integrity checks.")
+        audit(db, organization.id, user.id, "cis.client_package.downloaded", {
+            "sha256": manifest["sha256"], "architectures": manifest["architectures"],
+            "signing": manifest["signing"], "source_commit": manifest["source_commit"],
+        })
+        db.commit()
+        return Response(contents, media_type="application/zip", headers={
+            "Content-Disposition": f'attachment; filename="{manifest["filename"]}"',
+            "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+            "X-Content-SHA256": manifest["sha256"],
+        })
     directory = PACKAGE_DIR / "client_bundle"
     filename = "CSP-CIS_Audit-local-unsigned.zip"
     try:
@@ -4097,6 +4113,12 @@ def download_cis_demo_client(request: Request, db: Session = Depends(get_db)):
         "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
         "X-Content-SHA256": checksum,
     })
+
+
+@app.get("/api/cis/client-package/status")
+def cis_client_package_status(request: Request, db: Session = Depends(get_db)):
+    get_org_context(request, db)
+    return release_status(DATA_DIR / "cis-client-release")
 
 
 @app.get("/api/cis/profiles/{profile_id}/download")
@@ -5765,6 +5787,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "workspaces": user_memberships,
             "platform_admin": user.email.lower() in PLATFORM_ADMIN_EMAILS and scoped_key is None,
             "demo_mode": DEMO_MODE,
+            "cis_client_release": release_status(DATA_DIR / "cis-client-release"),
             "workspace_controls_enabled": (
                 workspace_controls_available(db, organization)
             ),
