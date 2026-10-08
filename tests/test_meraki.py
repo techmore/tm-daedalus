@@ -112,6 +112,9 @@ class MerakiClientTests(unittest.TestCase):
     def test_collects_read_only_inventory_and_flags_disabled_protection(self):
         def respond(request):
             path = request.url.path
+            if path.endswith("/appliance/uplinks/usageHistory"):
+                self.assertEqual(request.url.params.get("timespan"), "604800")
+                self.assertEqual(request.url.params.get("resolution"), "3600")
             responses = {
                 "/api/v1/organizations": [{"id": "org-1", "name": "Pilot Org"}],
                 "/api/v1/organizations/org-1/networks": [
@@ -126,6 +129,7 @@ class MerakiClientTests(unittest.TestCase):
                 "/api/v1/organizations/org-1/appliance/uplink/statuses": [
                     {"serial": "Q2XX-TEST", "networkId": "N_1", "uplinks": [{"interface": "wan1", "status": "active", "publicIp": "never-store-this"}]}
                 ],
+                "/api/v1/networks/N_1/appliance/uplinks/usageHistory": [{"startTime": "2026-10-08T00:00:00Z", "endTime": "2026-10-08T01:00:00Z", "byInterface": [{"interface": "wan1", "sent": 450000000, "received": 0}]}],
                 "/api/v1/networks/N_1/appliance/firewall/l3FirewallRules": {"rules": []},
                 "/api/v1/networks/N_1/appliance/firewall/l7FirewallRules": {"rules": []},
                 "/api/v1/networks/N_1/appliance/security/intrusion": {"mode": "disabled"},
@@ -149,7 +153,9 @@ class MerakiClientTests(unittest.TestCase):
         self.assertTrue(any("Intrusion protection is disabled" in row["title"] for row in result["findings"]))
         self.assertEqual(result["summary"]["security_controls_unavailable"], 0)
         self.assertNotIn("never-store-this", str(result))
-        self.assertEqual(len(result["security_controls"]), 10)
+        self.assertEqual(len(result["security_controls"]), 11)
+        self.assertEqual(result["wan_usage"][0]["status"], "complete")
+        self.assertEqual(result["wan_usage"][0]["data"]["interfaces"][0]["directions"]["sent"]["average_mbps"], 1)
         self.assertEqual(result["wan_uplinks"]["data"]["state_counts"], {"active": 1})
         self.assertEqual(result["wan_uplinks"]["data"]["rows"][0]["device_name"], "Gateway")
         self.assertEqual(result["wan_uplinks"]["data"]["rows"][0]["network_name"], "HQ")

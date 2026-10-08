@@ -241,6 +241,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
                 "nodes": [{"device_serial": "private-serial"}], "links": [{"link_count": 2}],
                 "omitted_node_count": 4, "omitted_link_count": 3, "reported_error_count": 1,
                 "scope": "Managed devices only."}}]}
+        from daedalus.meraki_wan import summarize_wan_usage
+        second_snapshot["wan_usage"] = [{"network_name": "CSP office", "status": "complete", "data": summarize_wan_usage([
+            {"startTime": "2026-10-08T00:00:00Z", "endTime": "2026-10-08T01:00:00Z", "byInterface": [{"interface": "wan1", "sent": 450000000, "received": 0}]}])}]
         with (
             patch.object(server, "MerakiClient") as client_class,
             patch.object(server, "REPORTS_DIR", self.root / "reports"),
@@ -269,7 +272,8 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(notice["source_id"], second_id)
         self.assertEqual(notice["reason"], "changes_and_coverage")
         self.assertEqual(notice["tab"], "meraki")
-        self.assertIn("security-control change", notice["summary"])
+        self.assertIn("network evidence change", notice["summary"])
+        self.assertNotIn("security-control change", notice["summary"])
         self.assertIn("inventory change", notice["summary"])
         self.assertIn("coverage changed", notice["summary"])
         self.assertEqual(row["status"], "completed")
@@ -287,6 +291,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         details = details_response.json()
         self.assertEqual(details["summary"]["device_count"], 1)
         self.assertEqual(details["unifi_plan"], snapshot.json()["unifi_plan"])
+        self.assertEqual(details["wan_usage"][0]["data"]["interfaces"], second_snapshot["wan_usage"][0]["data"]["interfaces"])
+        self.assertNotIn("intervals", details["wan_usage"][0]["data"])
+        self.assertEqual(len(snapshot.json()["meraki"]["wan_usage"][0]["data"]["intervals"]), 1)
         self.assertEqual(details["unifi_plan"]["price_observed_on"], "2026-10-07")
         self.assertEqual(len(details["unifi_plan"]["scenarios"]), 2)
         self.assertEqual(details["networks"][0]["name"], "CSP office")

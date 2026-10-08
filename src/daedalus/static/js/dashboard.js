@@ -1823,6 +1823,35 @@
     container.append(section);
   }
 
+  function renderMerakiWanUsage(container, observations) {
+    (observations || []).forEach(function (observation) {
+      var data = observation.data || {}, section = document.createElement("section"); section.className = "meraki-detail-section";
+      var heading = document.createElement("h4"); heading.textContent = "WAN usage · " + (observation.network_name || "Network");
+      var note = document.createElement("p"); note.className = "muted";
+      note.textContent = "Collection: " + (observation.status || "unknown") + ". Prior seven-day request at hourly resolution. Rates cover measured seconds only; the highest interval average is not an instantaneous peak or subscribed circuit capacity.";
+      section.append(heading, note);
+      if (observation.status === "complete") {
+        var coverage = document.createElement("p"); coverage.textContent = (data.interval_count ?? "—") + " intervals reported · " + (data.first_interval_start || "start unavailable") + " to " + (data.last_interval_end || "end unavailable"); section.append(coverage);
+        if (!(data.interfaces || []).length) {var empty = document.createElement("p"); empty.textContent = "No interface counters reported. Usage remains unavailable."; section.append(empty);}
+        else {
+          var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("aria-label", "WAN usage measurements");
+          var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Saved WAN usage by interface and direction"; table.append(caption);
+          var head = document.createElement("thead"), tr = document.createElement("tr");
+          ["Interface", "Direction", "Observed GiB", "Measured hours", "Measured intervals", "Average Mbps", "Highest interval average Mbps"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+          var body = document.createElement("tbody");
+          var format = function (value, scale) {return typeof value === "number" && Number.isFinite(value) && value >= 0 ? (value / (scale || 1)).toLocaleString("en-US", {maximumFractionDigits: 3}) : "Unavailable";};
+          (data.interfaces || []).forEach(function (iface) {[["sent", "Upload"], ["received", "Download"]].forEach(function (direction) {
+            var measured = (iface.directions || {})[direction[0]] || {}, tr = document.createElement("tr");
+            var count = Number.isSafeInteger(measured.measured_interval_count) && measured.measured_interval_count >= 0 ? measured.measured_interval_count + "/" + iface.reported_interval_count : "Unavailable";
+            [iface.interface, direction[1], format(measured.observed_bytes, 1073741824), format(measured.observed_seconds, 3600), count, format(measured.average_mbps), format(measured.peak_interval_average_mbps)].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);
+          });}); table.append(body); scroll.append(table); section.append(scroll);
+        }
+      }
+      if (data.additional_interfaces) {var more = document.createElement("p"); more.textContent = data.additional_interfaces + " more interfaces in complete saved evidence."; section.append(more);}
+      container.append(section);
+    });
+  }
+
   function renderMerakiWanuplinks(container, evidence) {
     if (!evidence || !evidence.status) return;
     var data = evidence.data || {}, section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -1954,6 +1983,8 @@
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
 
     renderMerakiWanuplinks(container, details.wan_uplinks);
+    renderMerakiWanUsage(container, details.wan_usage);
+    if (details.wan_usage_additional_networks) {var moreWan = document.createElement("p"); moreWan.textContent = details.wan_usage_additional_networks + " more WAN networks in complete saved evidence."; container.append(moreWan);}
     renderMerakiChannelUtilization(container, details.channel_utilization);
     renderMerakiWirelessConnections(container, details.wireless_connections || []);
 
@@ -2025,6 +2056,37 @@
     return cached;
   }
 
+  function renderMerakiWanOverview(container, details) {
+    var state = details.wan_uplinks || {}, usage = Array.isArray(details.wan_usage) ? details.wan_usage : [];
+    if (!state.status && !usage.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h3"); heading.textContent = "WAN / Internet observations";
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Saved link states and prior seven-day usage request. Rates average measured intervals; they do not establish subscribed capacity, instantaneous peaks or service availability.";
+    section.append(heading, note);
+    if (state.status) {var line = document.createElement("p"), data = state.data || {};
+      line.textContent = "Link-state collection: " + state.status;
+      if (state.status === "complete") line.textContent += " · " + (data.reported_device_count ?? "—") + "/" + (data.expected_device_count ?? "—") + " assigned appliances reported · " + (data.state_counts?.active ?? 0) + " active interfaces · " + (data.missing_device_count ?? "—") + " appliances missing";
+      section.append(line);
+    }
+    var grid = document.createElement("div"); grid.className = "audit-metric-grid"; var shown = 0, total = 0;
+    var format = function (value) {return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value.toLocaleString("en-US", {maximumFractionDigits: 3}) : "Unavailable";};
+    usage.forEach(function (observation) {var interfaces = (observation.data || {}).interfaces || [];total += Math.max(1, interfaces.length);
+      if (shown >= 3) return;
+      if (!interfaces.length) {var empty = document.createElement("article"); empty.className = "audit-policy-card"; var title = document.createElement("strong"); title.textContent = observation.network_name || "Network";var status = document.createElement("p"); status.textContent = "Usage unavailable · collection " + (observation.status || "unknown");empty.append(title, status);grid.append(empty);shown++;return;}
+      interfaces.forEach(function (iface) {if (shown >= 3) return;var card = document.createElement("article");card.className = "audit-policy-card";
+        var title = document.createElement("strong");title.textContent = (observation.network_name || "Network") + " / " + iface.interface;card.append(title);
+        [["received", "Download"], ["sent", "Upload"]].forEach(function (direction) {var measured = (iface.directions || {})[direction[0]] || {}, line = document.createElement("p");
+          line.textContent = direction[1] + " average: " + format(measured.average_mbps) + " Mbps · highest interval average: " + format(measured.peak_interval_average_mbps) + " Mbps · measured " + format(typeof measured.observed_seconds === "number" ? measured.observed_seconds / 3600 : null) + " hours";card.append(line);});
+        grid.append(card);shown++;
+      });
+    });section.append(grid);
+    var remaining = Math.max(0, total - shown) + (details.wan_usage_additional_networks || 0);
+    if (remaining) {var more = document.createElement("p");more.textContent = "Additional WAN evidence is available in saved report details.";section.append(more);}
+    var action = document.createElement("button");action.type = "button";action.className = "button button-small button-quiet";action.textContent = "Review WAN evidence";
+    action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return;var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]');if (!saved) return;saved.open = true;var summary = saved.querySelector("summary");if (summary) {summary.focus();summary.scrollIntoView({block:"center",behavior:"smooth"});}});section.append(action);container.append(section);
+  }
+
   function renderMerakiPlanningOverview(container, details) {
     var plan = details.unifi_plan;
     if (!plan || plan.schema_version !== 1 || plan.currency !== "USD" || !Array.isArray(plan.scenarios)) return;
@@ -2064,12 +2126,14 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
         return;
       }
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
         return;
       }
@@ -2082,6 +2146,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiWanOverview(container, details);
       renderMerakiPlanningOverview(container, details);
     } catch (error) {
       merakiDashboardDetailCache.delete(reportId);

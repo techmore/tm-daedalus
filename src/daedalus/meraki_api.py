@@ -11,6 +11,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .meraki_wan import summarize_wan_usage, WAN_USAGE_TIMESPAN, WAN_USAGE_RESOLUTION
+
 
 MERAKI_API_BASE = "https://api.meraki.com/api/v1"
 MERAKI_API_HOST = "api.meraki.com"
@@ -764,6 +766,11 @@ class MerakiClient:
                 row["device_name"] = device_name[:200] if isinstance(device_name, str) and device_name else row["device_serial"]
                 row["network_name"] = network_name[:200] if isinstance(network_name, str) and network_name else row["network_id"]
 
+        wan_usage = [collect_observation(
+            f"/networks/{network['id']}/appliance/uplinks/usageHistory", "WAN usage history", network,
+            summarize_wan_usage, params={"timespan": WAN_USAGE_TIMESPAN, "resolution": WAN_USAGE_RESOLUTION})
+            for network in appliance_networks]
+
         client_usage = collect_observation(f"/organizations/{organization_id}/clients/overview", "Aggregate client usage", {"id": "", "name": organization["name"]}, _aggregate_client_usage, params={"timespan": CLIENT_USAGE_TIMESPAN})
         for index, network in enumerate(networks, start=1):
             if progress:
@@ -857,6 +864,7 @@ class MerakiClient:
             "client_usage": {"status": client_usage["status"], "data": client_usage["data"]},
             "channel_utilization": channel_utilization,
             "wan_uplinks": wan_uplinks,
+            "wan_usage": wan_usage,
             "wireless_connections": [row for row in observational if row["control"] == "Wireless connection outcomes"],
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
             "switch_power": switch_power,
@@ -893,7 +901,7 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
     def index(snapshot: dict[str, Any]) -> dict[tuple[str, str, str], dict[str, Any]]:
         indexed = {}
         for row in snapshot.get("security_controls", []):
-            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless connection outcomes", "Wireless channel utilization", "WAN uplink states"}:
+            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless connection outcomes", "Wireless channel utilization", "WAN uplink states", "WAN usage history"}:
                 continue
             key = (str(row.get("network_id") or ""), str(row.get("device_serial") or ""), str(row.get("control") or ""))
             if key in indexed:

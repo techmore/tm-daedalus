@@ -1190,6 +1190,37 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         if len(rows) > 1:
             story.append(_table(rows, [1.4 * inch, 1.7 * inch, .7 * inch, 1.1 * inch, 2 * inch]))
 
+    usage = meraki.get("wan_usage")
+    if isinstance(usage, list) and usage:
+        story.append(PageBreak())
+        story.append(Paragraph("WAN usage history", styles["MerakiSection"]))
+        story.append(_paragraph("Prior seven-day request at hourly resolution. Rates cover measured seconds only. "
+            "Highest interval average is not an instantaneous peak or subscribed circuit capacity. Missing counters "
+            "remain unavailable; complete full-window coverage is not inferred.", styles["MerakiBody"]))
+        for observation in usage:
+            data = observation.get("data") if isinstance(observation.get("data"), dict) else {}
+            story.append(_paragraph(f"{observation.get('network_name', 'Network')} - collection: {observation.get('status')}; "
+                f"intervals reported: {data.get('interval_count', 'Unavailable')}", styles["MerakiBody"]))
+            story.append(_paragraph(f"Reported period: {data.get('first_interval_start') or 'Unavailable'} to "
+                f"{data.get('last_interval_end') or 'Unavailable'}", styles["MerakiBody"]))
+            rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in
+                ("Interface", "Direction", "Observed GiB", "Measured hours", "Measured intervals", "Average Mbps", "Highest interval avg Mbps")]]
+            for iface in data.get("interfaces", []):
+                for field, label in (("sent", "Upload"), ("received", "Download")):
+                    measured = iface.get("directions", {}).get(field, {})
+                    def amount(key, scale=1):
+                        value = measured.get(key)
+                        return f"{value / scale:,.3f}" if type(value) in (int, float) and math.isfinite(value) and value >= 0 else "Unavailable"
+                    count = measured.get("measured_interval_count")
+                    interval_count = f"{count}/{iface.get('reported_interval_count')}" if type(count) is int else "Unavailable"
+                    values = (iface.get("interface"), label, amount("observed_bytes", 1073741824), amount("observed_seconds", 3600),
+                        interval_count, amount("average_mbps"), amount("peak_interval_average_mbps"))
+                    rows.append([_paragraph(value, styles["MerakiCell"]) for value in values])
+            if len(rows) > 1:
+                story.append(_table(rows, [.7 * inch, .75 * inch, .9 * inch, .9 * inch, 1 * inch, .95 * inch, 1.7 * inch]))
+            elif observation.get("status") == "complete":
+                story.append(_paragraph("No interface counters reported. Usage remains unavailable.", styles["MerakiBody"]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

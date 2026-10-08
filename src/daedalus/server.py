@@ -120,6 +120,7 @@ from daedalus.email_policy import analyze_email_auth
 from daedalus.credential_store import CredentialEncryptionError, decrypt_secret, encrypt_secret
 from daedalus.meraki_api import MerakiAPIError, MerakiClient, compare_meraki_snapshots
 from daedalus.meraki_history import compare_meraki_inventory
+from daedalus.meraki_wan import project_wan_usage
 from daedalus.meraki_planning import build_unifi_plan, project_unifi_plan
 from daedalus.reports import (
     build_cis_endpoint_pdf,
@@ -948,7 +949,7 @@ def record_meraki_report_notification(
     if has_changes:
         changes = []
         if changed_controls:
-            changes.append(count_label(changed_controls, "security-control change"))
+            changes.append(count_label(changed_controls, "network evidence change"))
         if changed_inventory:
             changes.append(count_label(changed_inventory, "inventory change"))
         parts.append("Observed " + " and ".join(changes) + ".")
@@ -5151,6 +5152,10 @@ def meraki_report_details(
         "collected_at": text_field(snapshot, "collected_at", 80),
         "channel_utilization": channel_preview,
         "wan_uplinks": wan_preview,
+        "wan_usage": [{"network_name": text_field(row, "network_name"), "status": text_field(row, "status", 40),
+            "data": project_wan_usage(row.get("data"))}
+            for row in (snapshot.get("wan_usage") or [])[:100] if isinstance(row, dict)],
+        "wan_usage_additional_networks": max(0, len(snapshot.get("wan_usage") or []) - 100) if isinstance(snapshot.get("wan_usage"), list) else 0,
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
         "wireless_connections": [{"network_name": text_field(row, "network_name"),
             "status": text_field(row, "status", 40),

@@ -487,6 +487,22 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertIn("partial", notice["summary"])
         self.assertIn("No confirmed changes", notice["summary"])
 
+    def test_meraki_observation_notice_uses_neutral_wording_and_preserves_saved_notice(self):
+        org_id, _ = self.workspace()
+        detected_at = server.utcnow()
+        with self.session_factory() as db:
+            self.assertTrue(server.record_meraki_report_notification(db, organization_id=org_id,
+                report_id=86, domain="cybersecuritypilot.org", comparison={"changed_control_count": 1}, detected_at=detected_at))
+            db.commit()
+        original = self.client.get("/api/notifications").json()["notifications"][0]
+        self.assertIn("1 network evidence change", original["summary"])
+        self.assertNotIn("security-control", original["summary"])
+        with self.session_factory() as db:
+            self.assertFalse(server.record_meraki_report_notification(db, organization_id=org_id,
+                report_id=86, domain="cybersecuritypilot.org", comparison={"changed_control_count": 2}, detected_at=server.utcnow()))
+            db.commit()
+        self.assertEqual(self.client.get("/api/notifications").json()["notifications"][0], original)
+
     def test_meraki_coverage_only_notice_is_durable_truthful_and_deduplicated(self):
         org_id, _user_id = self.workspace()
         detected_at = server.utcnow()
