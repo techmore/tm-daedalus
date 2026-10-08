@@ -242,6 +242,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
                 "omitted_node_count": 4, "omitted_link_count": 3, "reported_error_count": 1,
                 "scope": "Managed devices only."}}]}
         from daedalus.meraki_wan import summarize_wan_usage
+        from daedalus.meraki_clients import summarize_wireless_clients
+        second_snapshot["wireless_clients"] = [{"network_name": "CSP office", "status": "complete", "data": summarize_wireless_clients([
+            {"id": "private-client", "mac": "private-client-mac", "recentDeviceConnection": "Wireless", "ssid": "Guest", "os": "iOS", "vlan": "10", "status": "Online"}])}]
         second_snapshot["wan_usage"] = [{"network_name": "CSP office", "status": "complete", "data": summarize_wan_usage([
             {"startTime": "2026-10-08T00:00:00Z", "endTime": "2026-10-08T01:00:00Z", "byInterface": [{"interface": "wan1", "sent": 450000000, "received": 0}]}])}]
         with (
@@ -304,6 +307,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(details["warnings"], ["One endpoint was unavailable."])
         self.assertEqual(details["client_usage"]["clients_with_usage_count"], 7)
         self.assertEqual(details["client_usage"]["usage"]["downstream"], 900)
+        self.assertEqual(details["wireless_clients"][0]["data"]["wireless_client_count"], 1)
+        self.assertEqual(details["wireless_clients"][0]["data"]["distributions"]["ssid"]["rows"], [{"label": "Guest", "count": 1}])
+        self.assertNotIn("private-client", str(details["wireless_clients"]))
         self.assertEqual(details["topology"][0]["node_count"], 1)
         self.assertEqual(details["topology"][0]["omitted_node_count"], 4)
         self.assertNotIn("nodes", details["topology"][0])

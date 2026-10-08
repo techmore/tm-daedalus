@@ -1003,6 +1003,12 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 observed = {key: data.get(key) for key in ("requested_timespan_seconds", "requested_resolution_seconds",
                     "interval_count", "interface_count", "first_interval_start", "last_interval_end")}
                 observed["supporting_evidence"] = "See WAN usage history appendix; complete intervals remain in saved JSON evidence."
+            if (control.get("control") == "Wireless client distributions" and isinstance(data, dict)
+                    and type(control.get("pdf_evidence_summary_version")) is int
+                    and control["pdf_evidence_summary_version"] == 1):
+                observed = {key: data.get(key) for key in ("requested_timespan_seconds",
+                    "wireless_client_count", "excluded_connection_count", "returned_record_count")}
+                observed["supporting_evidence"] = "See wireless client analysis appendix; complete distributions remain in saved JSON."
             # Large arrays (switch ports, SSIDs, firewall rules) need separate
             # table rows. A single multi-page cell cannot be split by ReportLab.
             records = observed if isinstance(observed, list) else [observed]
@@ -1316,6 +1322,32 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             ]
             story.append(KeepTogether(section))
         story.append(Paragraph('<link href="https://www.cisecurity.org/controls/cis-controls-navigator/v8" color="#464a34">CIS Controls v8 reference</link>', styles["MerakiSmall"]))
+
+    from daedalus.meraki_clients import project_wireless_clients
+    wireless_clients = meraki.get("wireless_clients")
+    if isinstance(wireless_clients, list) and wireless_clients:
+        story.append(PageBreak())
+        story.append(Paragraph("Wireless client analysis", styles["MerakiSection"]))
+        for observation in wireless_clients[:500]:
+            if not isinstance(observation, dict):
+                continue
+            story.append(_paragraph(observation.get("network_name") or "Network", styles["MerakiSubsection"]))
+            data = project_wireless_clients(observation.get("data"), limit=50_000) if observation.get("status") == "complete" else None
+            if data is None:
+                story.append(_paragraph("Collection: " + str(observation.get("status") or "unknown") + "; client distributions unavailable.", styles["MerakiBody"]))
+                continue
+            story.append(_paragraph(data["scope"], styles["MerakiBody"]))
+            story.append(_paragraph(f"Wireless records: {data['wireless_client_count']}; returned records: {data['returned_record_count']}; excluded non-explicit-Wireless records: {data['excluded_connection_count']}. RSSI: not provided.", styles["MerakiBody"]))
+            for key, title in (("ssid", "SSID"), ("os", "OS / device-type prediction"), ("vlan", "VLAN"), ("status", "Reported status")):
+                distribution = data["distributions"][key]
+                story.append(_paragraph(title, styles["MerakiSubsection"]))
+                if distribution["status"] != "complete":
+                    story.append(_paragraph("Distribution evidence invalid or unavailable.", styles["MerakiBody"]))
+                    continue
+                rows = [[_paragraph("Group", styles["MerakiTableHeader"]), _paragraph("Wireless records", styles["MerakiTableHeader"])]]
+                rows.extend([_paragraph(row["label"], styles["MerakiCell"]), str(row["count"])] for row in distribution["rows"])
+                rows.append(["Missing/unsupported labels", str(distribution["unknown_count"])])
+                story.append(_table(rows, [5.4 * inch, 1.5 * inch]))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()

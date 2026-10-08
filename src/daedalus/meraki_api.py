@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .meraki_switch import summarize_switch_ports
+from .meraki_clients import summarize_wireless_clients, TIMESPAN as WIRELESS_CLIENT_TIMESPAN
 from .meraki_wan import summarize_wan_usage, WAN_USAGE_TIMESPAN, WAN_USAGE_RESOLUTION
 
 
@@ -730,8 +731,9 @@ class MerakiClient:
                 continue
             collect_object(f"/devices/{serial}/wireless/radio/settings", "Wireless RF assignment", network, RF_ASSIGNMENT_FIELDS, serial=serial)
 
-        # The organization aggregate endpoint avoids fetching individual client
-        # records, MACs, IPs, names and user identities even transiently.
+        # Organization-wide usage and grouped wireless-client observations.
+        # Individual records from the documented network clients endpoint are
+        # transformed immediately and never enter the saved report snapshot.
         observational: list[dict[str, Any]] = []
         def collect_observation(path: str, title: str, network: dict[str, Any], transform: Callable[[Any], dict[str, Any]], *, params: dict[str, Any] | None = None, collection: bool = False) -> dict[str, Any]:
             try:
@@ -789,6 +791,18 @@ class MerakiClient:
             observation["pdf_evidence_summary_version"] = 1
 
         client_usage = collect_observation(f"/organizations/{organization_id}/clients/overview", "Aggregate client usage", {"id": "", "name": organization["name"]}, _aggregate_client_usage, params={"timespan": CLIENT_USAGE_TIMESPAN})
+        def wireless_client_distribution(raw: Any) -> dict:
+            try:
+                return summarize_wireless_clients(raw)
+            except ValueError as exc:
+                raise MerakiAPIError("Wireless client distribution returned invalid evidence.") from exc
+        wireless_clients = [collect_observation(
+            f"/networks/{network['id']}/clients", "Wireless client distributions", network,
+            wireless_client_distribution, params={"timespan": WIRELESS_CLIENT_TIMESPAN,
+                "recentDeviceConnections[]": ["Wireless"]}, collection=True)
+            for network in wireless_networks]
+        for observation in wireless_clients:
+            observation["pdf_evidence_summary_version"] = 1
         for index, network in enumerate(networks, start=1):
             if progress:
                 progress(86 + int(index / max(1, len(networks))), f"Reading managed topology {index}/{len(networks)}: {network['name']}")
@@ -879,6 +893,7 @@ class MerakiClient:
             "security_controls": security,
             "licensing": {"status": licensing["status"], "data": licensing["data"], "endpoint": "licenses/overview"},
             "client_usage": {"status": client_usage["status"], "data": client_usage["data"]},
+            "wireless_clients": wireless_clients,
             "channel_utilization": channel_utilization,
             "wan_uplinks": wan_uplinks,
             "wan_usage": wan_usage,
@@ -920,7 +935,7 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
     def index(snapshot: dict[str, Any]) -> dict[tuple[str, str, str], dict[str, Any]]:
         indexed = {}
         for row in snapshot.get("security_controls", []):
-            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless connection outcomes", "Wireless channel utilization", "WAN uplink states", "WAN usage history"}:
+            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless client distributions", "Wireless connection outcomes", "Wireless channel utilization", "WAN uplink states", "WAN usage history"}:
                 continue
             key = (str(row.get("network_id") or ""), str(row.get("device_serial") or ""), str(row.get("control") or ""))
             if key in indexed:

@@ -189,7 +189,8 @@ class MerakiClientTests(unittest.TestCase):
             result = client.collect_security_report("org-1")
         self.assertEqual(result["summary"]["switch_device_count"], 1)
         self.assertEqual(result["summary"]["wireless_network_count"], 1)
-        self.assertEqual(result["summary"]["security_controls_unsupported"], 6)
+        self.assertEqual(result["summary"]["security_controls_unsupported"], 7)
+        self.assertEqual(result["wireless_clients"][0]["status"], "unsupported")
         self.assertEqual(result["summary"]["security_controls_unavailable"], 1)
         self.assertEqual(result["summary"]["security_controls_collected"], 2)
         self.assertTrue(any("Open SSID" in row["title"] for row in result["findings"]))
@@ -223,6 +224,11 @@ class MerakiClientTests(unittest.TestCase):
             return httpx.Response(200, json=responses[request.url.path.removeprefix("/api/v1")])
         # Organization collections legitimately use pagination parameters.
         def paginated_respond(request):
+            if request.url.path.endswith("/clients"):
+                self.assertEqual(request.url.params.get("timespan"), "3600")
+                self.assertEqual(request.url.params.get("recentDeviceConnections[]"), "Wireless")
+                return httpx.Response(200, json=[{"id": "never-store-client-id", "mac": "never-store-mac",
+                    "user": "never-store-user", "recentDeviceConnection": "Wireless", "ssid": "Guest", "os": "iOS", "vlan": "10", "status": "Online"}])
             if "/organizations" in request.url.path and not request.url.path.endswith("overview"):
                 return httpx.Response(200, json=responses[request.url.path.removeprefix("/api/v1")])
             return respond(request)
@@ -230,6 +236,7 @@ class MerakiClientTests(unittest.TestCase):
             result = client.collect_security_report("org-1")
         self.assertEqual(result["wireless_connections"][0]["data"]["observed_counter_totals"]["success"], 43)
         self.assertEqual(result["client_usage"]["data"]["clients_with_usage_count"], 3)
+        self.assertEqual(result["wireless_clients"][0]["data"]["wireless_client_count"], 1)
         self.assertEqual(result["topology_detail_version"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_node_count"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_link_count"], 1)

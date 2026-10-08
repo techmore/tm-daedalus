@@ -1823,6 +1823,32 @@
     container.append(section);
   }
 
+  function renderMerakiClientDistributions(container, observations, additionalNetworks) {
+    if (!Array.isArray(observations) || !observations.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Wireless client analysis"; section.append(heading);
+    observations.forEach(function (observation) {
+      var group = document.createElement("details"), summary = document.createElement("summary"), data = observation.data;
+      summary.textContent = (observation.network_name || "Network") + " · " + (observation.status || "unknown") + " · " + (data && Number.isSafeInteger(data.wireless_client_count) ? data.wireless_client_count + " wireless records" : "Count unavailable"); group.append(summary);
+      if (!data) {var unavailable = document.createElement("p"); unavailable.textContent = "Wireless client distributions unavailable for this saved collection."; group.append(unavailable); section.append(group); return;}
+      var scope = document.createElement("p"); scope.className = "muted"; scope.textContent = data.scope; group.append(scope);
+      var excluded = document.createElement("p"); excluded.textContent = (data.excluded_connection_count ?? "Unknown") + " returned records excluded because their recent connection was not explicitly Wireless. RSSI: not provided by this endpoint."; group.append(excluded);
+      [["ssid", "SSID"], ["os", "OS / device-type prediction"], ["vlan", "VLAN"], ["status", "Reported status"]].forEach(function (dimension) {
+        var distribution = (data.distributions || {})[dimension[0]] || {};
+        var title = document.createElement("h5"); title.textContent = dimension[1]; group.append(title);
+        if (distribution.status !== "complete") {var invalid = document.createElement("p"); invalid.textContent = "Distribution evidence unavailable or invalid."; group.append(invalid); return;}
+        var table = document.createElement("table"); table.className = "data-table";
+        var caption = document.createElement("caption"); caption.textContent = "Wireless records by " + dimension[1]; table.append(caption);
+        var header = document.createElement("thead"), headerRow = document.createElement("tr");
+        ["Group", "Record count"].forEach(function (label) {var th = document.createElement("th"); th.scope = "col"; th.textContent = label; headerRow.append(th);}); header.append(headerRow); table.append(header);
+        var body = document.createElement("tbody"); (distribution.rows || []).forEach(function (row) {var tr = document.createElement("tr"); [row.label, row.count].forEach(function (value) {var td = document.createElement("td"); td.textContent = String(value); tr.append(td);}); body.append(tr);}); table.append(body);
+        var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", caption.textContent); scroll.append(table); group.append(scroll);
+        var note = document.createElement("p"); note.className = "muted"; note.textContent = distribution.unknown_count + " records with missing/unsupported labels · " + distribution.additional_group_count + " additional groups (" + distribution.additional_client_count + " records) in complete JSON evidence."; group.append(note);
+      }); section.append(group);
+    });
+    if (additionalNetworks) {var more = document.createElement("p"); more.textContent = additionalNetworks + " more networks in complete saved evidence."; section.append(more);} container.append(section);
+  }
+
   function renderMerakiCis8(container, evidence) {
     if (!evidence || evidence.schema_version !== 1 || !Array.isArray(evidence.rows)) return;
     var section = document.createElement("section");section.className = "meraki-detail-section";
@@ -2077,6 +2103,7 @@
       container.append(planning);
     }
 
+    renderMerakiClientDistributions(container, details.wireless_clients, details.wireless_clients_additional_networks);
     renderMerakiCis8(container, details.cis8_assessment);
     renderMerakiTopology(container, details.topology_graph);
     renderMerakiRefreshPlan(container, details.unifi_plan && details.unifi_plan.refresh_plan);
@@ -2155,6 +2182,17 @@
       merakiDashboardDetailCache.set(reportId, cached);
     }
     return cached;
+  }
+
+  function renderMerakiClientOverview(container, details) {
+    var observations = details.wireless_clients;
+    if (!Array.isArray(observations) || !observations.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h3"); heading.textContent = "Wireless client observations"; section.append(heading);
+    observations.slice(0, 5).forEach(function (row) {var p = document.createElement("p"); var n = row.data && row.data.wireless_client_count; p.textContent = (row.network_name || "Network") + ": " + (Number.isSafeInteger(n) ? n + " wireless records" : "count unavailable") + " · collection " + (row.status || "unknown"); section.append(p);});
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = "Prior one-hour request; last-reported SSID, OS/device type and VLAN distributions. Counts do not establish concurrent clients or distinct people. RSSI unavailable."; section.append(note);
+    var action = document.createElement("button"); action.type = "button"; action.className = "button button-small button-quiet"; action.textContent = "Review wireless client distributions";
+    action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return;var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]'); if (!saved) return;saved.open = true;var summary = saved.querySelector("summary");if (summary) {summary.focus();summary.scrollIntoView({block: "center", behavior: "smooth"});}}); section.append(action); container.append(section);
   }
 
   function renderMerakiCis8Overview(container, details) {
@@ -2259,6 +2297,7 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
         renderMerakiSwitchOverview(container, details);
@@ -2269,6 +2308,7 @@
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
         renderMerakiSwitchOverview(container, details);
@@ -2285,6 +2325,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiClientOverview(container, details);
       renderMerakiCis8Overview(container, details);
       renderMerakiTopologyOverview(container, details);
       renderMerakiSwitchOverview(container, details);

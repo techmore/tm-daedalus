@@ -120,6 +120,7 @@ from daedalus.email_policy import analyze_email_auth
 from daedalus.credential_store import CredentialEncryptionError, decrypt_secret, encrypt_secret
 from daedalus.meraki_api import MerakiAPIError, MerakiClient, compare_meraki_snapshots
 from daedalus.meraki_cis8 import build_cis8_assessment, project_cis8_assessment
+from daedalus.meraki_clients import project_wireless_clients
 from daedalus.meraki_history import compare_meraki_inventory
 from daedalus.meraki_topology import project_topology
 from daedalus.meraki_switch import project_switch_ports
@@ -5074,6 +5075,7 @@ def meraki_report_details(
     controls, more_controls = bounded_rows("security_controls", 200)
     topology, more_topology = bounded_rows("topology", 100)
     switch_power, more_switch_power = bounded_rows("switch_power", 100)
+    wireless_clients, more_wireless_clients = bounded_rows("wireless_clients", 100)
     findings, more_findings = bounded_rows("findings", 100)
     warnings, more_warnings = bounded_rows("warnings", 100)
 
@@ -5159,6 +5161,10 @@ def meraki_report_details(
             "data": project_wan_usage(row.get("data"))}
             for row in (snapshot.get("wan_usage") or [])[:100] if isinstance(row, dict)],
         "cis8_assessment": project_cis8_assessment((job.report_snapshot or {}).get("meraki_cis8")),
+        "wireless_clients": [{"network_name": text_field(row, "network_name"),
+            "status": text_field(row, "status", 40), "data": project_wireless_clients(row.get("data")) if row.get("status") == "complete" else None}
+            for row in wireless_clients if isinstance(row, dict)],
+        "wireless_clients_additional_networks": more_wireless_clients,
         "topology_graph": project_topology(snapshot) if type(snapshot.get("topology_detail_version")) is int and snapshot["topology_detail_version"] == 1 else None,
         "switch_ports": project_switch_ports(snapshot.get("switch_ports")),
         "wan_usage_additional_networks": max(0, len(snapshot.get("wan_usage") or []) - 100) if isinstance(snapshot.get("wan_usage"), list) else 0,
