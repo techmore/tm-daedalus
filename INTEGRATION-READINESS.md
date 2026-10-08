@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — whole-run host comparisons deployed
+
+SER8 Incus runs application 7534a83471273236c2f560bb402caf69276794c3. Verified 79-file release SHA-256 bb2c65e854b6a3900b0dbb787352c097dc2ee81925e1040bf91e13dc8d19e67a; verified off-host backup daedalus-data-20261008T043956Z.tar.gz preceded activation. Internal/public health passed. Full suite: 851 passed, one skipped, 308 subtests; final focused comparison checks: 24 passed and two subtests.
+
+Selection version 2 considers all bounded detailed result events, retains each host's latest port snapshot and records the contributing IDs. A saved-ID anchor allows a late earlier-time host upload to create new immutable history; duplicate delivery retains the same row. Event, byte, host and port bounds reject partial comparisons. API fixtures prove earlier-host state changes, port replacement, late upload/history/isolation and selection of 201 host events beyond the former 200 cap. See [whole-run scanner comparisons](docs/SCANNER-COMPARISONS.md).
+
+The normal authenticated production API returned HTTP 200/version 2 for the two saved physical Mac runs. Each contains one detailed event, so this is installed production path validation, not a real multi-host scan. The result remains non-comparable, with one unconfirmed port difference and zero confirmed removals. Before/after historical comparison hashes were identical. Private receipt: /data/codex-whole-run-comparison-20261008.json. Explicit local-run target/port coverage and physical multi-VLAN/fleet validation remain open. Existing scanner bundles, PDF assets, domain approvals and scopes were unchanged. Prior print-release Linux CI 37727677005 completed successfully in all three scenarios; comparison-source CI is not claimed passed yet.
+
+
 ## October 8, 2026 — production print review and full-scope census
 
 Application 73d72da404d3f796d12ccaca9c0b07d02371b608 is active on SER8 Incus. The verified 79-file release digest is 25ff6fce1a18d5fd0ff13cbc96585db7861feab3987438b00a11734f2010f217; verified off-host backup daedalus-data-20261008T042849Z.tar.gz preceded activation. Internal/public readiness passed. Full suite: 845 passed, one skipped, 306 subtests; subsequent focused scanner/report suite: 64 passed including the added real Chromium PDF test. New scanner jobs freeze print layout v1/hash; old snapshots are unchanged. Source, assets and original report body preservation are covered by regression checks.
