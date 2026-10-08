@@ -7050,8 +7050,11 @@ def trusted_single_ip_scan_scope(db: Session, agent: Agent, summary: dict[str, A
     return str(network)
 
 
+MAX_SCANNER_COMPARISON_EVENTS = 10000
+
+
 def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID, previous_run_id: UUID) -> dict[str, Any]:
-    from daedalus.scanner_comparison import normalize_snapshot, compare_snapshots
+    from daedalus.scanner_comparison import normalize_snapshot, compare_snapshots, MAX_HOSTS, MAX_PORTS
     summaries = [scanner_run_summary(db, agent, str(job_id)) for job_id in (previous_run_id, source_job_id)]
     selected = []
     selection_complete = True
@@ -7059,29 +7062,61 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
     for summary in summaries:
         candidates = db.scalars(select(ScanEvent).options(defer(ScanEvent.payload)).where(
             ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
-            ScanEvent.source_job_id == summary["source_job_id"], ScanEvent.event_name == "deep_scan_results")
+            ScanEvent.source_job_id == summary["source_job_id"], ScanEvent.event_name == "deep_scan_results",
+            ScanEvent.id <= summary["snapshot_event_id"])
             .order_by(func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at).desc(), ScanEvent.id.desc())
-            .limit(201)).all()
+            .limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
         examined_bytes = 0
         skipped = []
         snapshot = None
-        for event in candidates[:200]:
-            if event.artifact_size_bytes and examined_bytes + event.artifact_size_bytes > 64 * 1024 * 1024:
-                selection_limits.append("Saved result search reached the 64 MiB evidence limit.")
-                selection_complete = False
-                break
-            payload = load_scanner_event_payload(event)
-            examined_bytes += len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-            if examined_bytes > 64 * 1024 * 1024:
-                selection_limits.append("Saved result search reached the 64 MiB evidence limit.")
-                selection_complete = False
-                break
-            try:
-                snapshot = normalize_snapshot(payload)
-            except (TypeError, ValueError):
-                skipped.append(event.id)
-                selection_complete = False
-                continue
+        selected_events = []
+        summary["selection_mode"] = "latest_observation_per_host_in_run"
+        summary["selection_version"] = 2
+        summary["comparison_evidence_event_id"] = max((event.id for event in candidates), default=None)
+        if len(candidates) > MAX_SCANNER_COMPARISON_EVENTS:
+            selection_limits.append(f"Whole-run detailed results exceed the {MAX_SCANNER_COMPARISON_EVENTS}-event limit; no partial comparison was generated.")
+            selection_complete = False
+        else:
+            # NmapUI emits one result per host, not a final fleet snapshot.
+            # Keep every observed host, replacing its earlier ports wholesale.
+            # Never union old ports into a later observation of that host.
+            aggregate = {"hosts": {}, "covered_targets": []}
+            aggregate_ports = 0
+            for event in reversed(candidates):
+                if event.artifact_size_bytes and examined_bytes + event.artifact_size_bytes > 64 * 1024 * 1024:
+                    selection_limits.append("Whole-run detailed results exceed the 64 MiB limit; no partial comparison was generated.")
+                    selection_complete = False
+                    break
+                payload = load_scanner_event_payload(event)
+                examined_bytes += len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+                if examined_bytes > 64 * 1024 * 1024:
+                    selection_limits.append("Whole-run detailed results exceed the 64 MiB limit; no partial comparison was generated.")
+                    selection_complete = False
+                    break
+                try:
+                    observed = normalize_snapshot(payload)
+                except (TypeError, ValueError):
+                    skipped.append(event.id)
+                    selection_complete = False
+                    continue
+                for address, host in observed["hosts"].items():
+                    aggregate_ports -= len(aggregate["hosts"].get(address, {}).get("ports", {}))
+                    aggregate["hosts"][address] = host
+                    aggregate_ports += len(host["ports"])
+                if len(aggregate["hosts"]) > MAX_HOSTS or aggregate_ports > MAX_PORTS:
+                    selection_limits.append("Whole-run detailed results exceed host/port limits; no partial comparison was generated.")
+                    selection_complete = False
+                    break
+                if observed["covered_targets"] is None:
+                    aggregate["covered_targets"] = None
+                elif aggregate["covered_targets"] is not None:
+                    targets = sorted(set(aggregate["covered_targets"]) | set(observed["covered_targets"]))
+                    aggregate["covered_targets"] = targets if len(targets) <= 256 else None
+                selected_events.append(event)
+            else:
+                if selected_events:
+                    snapshot = aggregate
+        if snapshot is not None:
             inferred_scope = trusted_single_ip_scan_scope(db, agent, summary)
             if (
                 snapshot["covered_targets"] is None
@@ -7090,14 +7125,12 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
             ):
                 snapshot["covered_targets"] = [inferred_scope]
                 summary["covered_targets_source"] = "successful_daedalus_single_ip_command"
+            event = selected_events[-1]
             summary["selected_result_event_id"] = event.id
             summary["selected_result_artifact_sha256"] = event.artifact_sha256
             summary["selected_result_occurred_at"] = iso_utc(event.occurred_at or event.created_at)
-            break
-        if snapshot is None and len(candidates) > 200:
-            selection_limits.append("Saved result search reached the 200-event selection limit.")
-            selection_complete = False
         summary.setdefault("selected_result_event_id", None)
+        summary["selected_result_event_ids"] = [event.id for event in selected_events]
         summary["skipped_invalid_result_event_ids"] = skipped
         selected.append(snapshot)
     context = {"previous_run": summaries[0], "current_run": summaries[1]}
@@ -7106,6 +7139,7 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
                 "limitations": selection_limits + ["No empty snapshot or completion was inferred."]}
     result = compare_snapshots(selected[0], selected[1], previous_status=summaries[0]["status"],
                                current_status=summaries[1]["status"], selection_complete=selection_complete)
+    result["limitations"][0] = "All bounded deep-result events in each run are considered in occurrence order; the latest observation replaces each host's earlier port snapshot. Hosts observed in earlier phases remain observations from that run."
     result["limitations"].extend(selection_limits)
     return {**context, **result}
 
@@ -7157,10 +7191,12 @@ def record_scanner_run_comparison(db: Session, agent: Agent, event: ScanEvent) -
     comparison = build_scanner_run_comparison(db, agent, UUID(event.source_job_id), UUID(previous))
     if not comparison.get("available"):
         return None
+    # Anchor to the greatest saved result ID, including late uploads with an
+    # earlier occurrence time. Each immutable evidence set gets its own row.
     identity = {"agent_id": agent.id, "current_run_id": event.source_job_id,
                 "previous_run_id": previous,
-                "current_result_event_id": comparison["current_run"]["selected_result_event_id"],
-                "previous_result_event_id": comparison["previous_run"]["selected_result_event_id"]}
+                "current_result_event_id": comparison["current_run"]["comparison_evidence_event_id"],
+                "previous_result_event_id": comparison["previous_run"]["comparison_evidence_event_id"]}
     if db.scalar(select(ScannerRunComparison.id).filter_by(**identity)) is not None:
         return None
     counts = comparison["counts"]

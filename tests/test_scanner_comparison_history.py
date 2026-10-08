@@ -355,3 +355,105 @@ class ScannerComparisonHistoryTests(unittest.TestCase):
         self.assertEqual(body["truncation_reasons"], ["response_byte_limit"])
         self.assertFalse(body["comparisons"][0]["comparison_truncated"])
         self.assertIn("fixture_full_evidence", body["comparisons"][0]["comparison"])
+
+    def test_whole_run_compares_earlier_host_and_replaces_ports_not_union(self):
+        self.setup_scanner()
+        baseline = self.job_id
+        def host(address, ports):
+            return [{"ip": address, "ports": [{"port": p, "protocol": "tcp", "state": state} for p, state in ports]}]
+        self.send(self.event("deep_scan_results", host("192.168.1.1", [(22, "open"), (443, "open")]), 1))
+        self.send(self.event("deep_scan_results", host("192.168.1.2", [(80, "open")]), 2))
+        self.send(self.event("job_status", {"status": "completed", "job_type": "scan"}, 3))
+        self.job_id = str(uuid4())
+        self.send(self.event("deep_scan_results", host("192.168.1.1", [(22, "open"), (443, "open")]), 4))
+        replacement = self.send(self.event("deep_scan_results", host("192.168.1.1", [(22, "closed")]), 5)).json()["event_id"]
+        latest = self.send(self.event("deep_scan_results", host("192.168.1.2", [(80, "open")]), 6)).json()["event_id"]
+        self.send(self.event("job_status", {"status": "completed", "job_type": "scan"}, 7))
+        row = self.history().json()["comparisons"][0]
+        comparison = row["comparison"]
+        self.assertEqual(row["previous_run_id"], baseline)
+        self.assertEqual(comparison["hosts_added"], [])
+        self.assertEqual(comparison["hosts_not_observed"], [])
+        self.assertEqual(comparison["counts"]["reported_port_changes"], 1)
+        changes = {x["port"]: x for x in comparison["port_changes"]}
+        self.assertEqual(changes[22]["host"], "192.168.1.1")
+        self.assertEqual(changes[22]["after"]["state"], "closed")
+        self.assertEqual(changes[443]["change"], "not_observed")
+        self.assertFalse(changes[443]["confirmed"])
+        self.assertIn(replacement, comparison["current_run"]["selected_result_event_ids"])
+        self.assertEqual(comparison["current_run"]["selected_result_event_id"], latest)
+
+    def test_late_earlier_host_creates_new_evidence_anchor_without_rewriting_history(self):
+        self.setup_scanner()
+        def host(address, state):
+            return [{"ip": address, "ports": [{"port": 22, "protocol": "tcp", "state": state}]}]
+        self.send(self.event("deep_scan_results", host("192.168.1.1", "open"), 1))
+        self.send(self.event("deep_scan_results", host("192.168.1.2", "open"), 2))
+        self.send(self.event("job_status", {"status": "completed", "job_type": "scan"}, 3))
+        self.job_id = str(uuid4())
+        latest = self.send(self.event("deep_scan_results", host("192.168.1.1", "open"), 5)).json()["event_id"]
+        self.send(self.event("job_status", {"status": "completed", "job_type": "scan"}, 6))
+        original = self.history().json()["comparisons"][0]
+        late = self.event("deep_scan_results", host("192.168.1.2", "closed"), 4)
+        receipt = self.send(late)
+        self.assertTrue(self.send(late).json()["duplicate"])
+        rows = self.history().json()["comparisons"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1], original)
+        current = rows[0]
+        self.assertEqual(current["current_result_event_id"], receipt.json()["event_id"])
+        self.assertEqual(current["comparison"]["current_run"]["selected_result_event_id"], latest)
+        self.assertEqual(current["comparison"]["counts"]["reported_port_changes"], 1)
+        self.assertEqual(current["comparison"]["hosts_not_observed"], [])
+        self.assertEqual(self.client.get("/api/notifications").json()["unread_count"], 1)
+
+    def test_whole_run_byte_bound_does_not_compare_a_partial_host_set(self):
+        baseline = self.baseline()
+        receipt = self.send(self.event("deep_scan_results", [{"ip": "192.168.1.2"}], 3))
+        with self.session_factory() as db:
+            event = db.get(ScanEvent, receipt.json()["event_id"])
+            event.artifact_size_bytes = 65 * 1024 * 1024
+            db.commit()
+        response = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}/comparison",
+            params={"previous_run_id": baseline}).json()
+        self.assertFalse(response["available"])
+        self.assertTrue(any("64 MiB" in text for text in response["limitations"]))
+        self.assertNotIn("counts", response)
+
+    def test_whole_run_event_bound_never_silently_uses_latest_host_only(self):
+        baseline = self.baseline()
+        with self.session_factory() as db:
+            agent = db.get(server.Agent, self.agent)
+            now = server.utcnow()
+            for index in range(201):
+                db.add(ScanEvent(organization_id=agent.organization_id, agent_id=agent.id,
+                    source_job_id=self.job_id, source_job_type="scan", event_name="deep_scan_results",
+                    occurred_at=now, created_at=now, payload=[{"ip": f"192.168.1.{index + 1}"}]))
+            db.commit()
+        with patch.object(server, "MAX_SCANNER_COMPARISON_EVENTS", 200):
+            response = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}/comparison",
+                params={"previous_run_id": baseline}).json()
+        self.assertFalse(response["available"])
+        self.assertTrue(any("200-event" in text for text in response["limitations"]))
+        self.assertNotIn("counts", response)
+
+        whole_run_response = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}/comparison",
+            params={"previous_run_id": baseline}).json()
+        self.assertTrue(whole_run_response["available"])
+        self.assertEqual(len(whole_run_response["current_run"]["selected_result_event_ids"]), 201)
+        self.assertEqual(whole_run_response["counts"]["hosts_added"], 200)
+        self.assertEqual(whole_run_response["hosts_not_observed"], [])
+
+    def test_whole_run_host_and_port_bounds_reject_partial_comparison(self):
+        baseline = self.baseline()
+        for index, address in enumerate(("192.168.1.2", "192.168.1.3"), start=3):
+            self.send(self.event("deep_scan_results", [{"ip": address,
+                "ports": [{"port": 22, "protocol": "tcp", "state": "open"}]}], index))
+        import daedalus.scanner_comparison as comparison_module
+        for limit in ("MAX_HOSTS", "MAX_PORTS"):
+            with self.subTest(limit=limit), patch.object(comparison_module, limit, 1):
+                response = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}/comparison",
+                    params={"previous_run_id": baseline}).json()
+                self.assertFalse(response["available"])
+                self.assertTrue(any("host/port limits" in text for text in response["limitations"]))
+                self.assertNotIn("counts", response)

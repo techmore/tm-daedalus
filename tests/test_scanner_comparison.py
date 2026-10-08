@@ -80,7 +80,7 @@ class ScannerComparisonAPITests(unittest.TestCase):
     def compare(self, previous):
         return self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}/comparison", params={"previous_run_id": previous})
 
-    def test_latest_valid_artifact_only_no_phase_mix_scope_and_missing_results(self):
+    def test_artifact_selection_unknown_coverage_scope_and_missing_results(self):
         self.setup_scanner()
         previous = self.job_id
         self.send(self.envelope("deep_scan_results", payload(ports=[{"protocol": "tcp", "port": 443, "state": "open", "service": "https"}])))
