@@ -1445,6 +1445,52 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         if neighbors['additional_switches']:
             story.append(_paragraph(f"{neighbors['additional_switches']} additional switches remain in saved JSON.", styles["MerakiSmall"]))
 
+    from daedalus.meraki_paths import project_path_analysis
+    paths = project_path_analysis(report_snapshot.get("meraki_path_analysis"), meraki, complete=True)
+    if paths is not None:
+        story.append(PageBreak())
+        story.append(Paragraph("Network traffic and connection review", styles["MerakiSection"]))
+        story.append(_paragraph(paths['scope'], styles["MerakiBody"]))
+        def path_value(value):
+            return (f'{value:,.3f}' if type(value) is float else str(value)) if value is not None else 'Unavailable'
+        def path_aps(aps, title):
+            if not aps: return
+            rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in (f"AP - {title}", "Local switch port / link", "Channel percentages", "Connection outcomes")]]
+            for ap in aps:
+                link = ap.get('port_evidence') or {}
+                link_text = f"Port {ap['local_port']}; {link.get('state') or 'state unavailable'}; {link.get('speed') or 'speed unavailable'}; {link.get('duplex') or 'duplex unavailable'}" if 'local_port' in ap else 'No unique switch mapping'
+                bands = '; '.join(f"{row['band']} GHz: total {path_value(row['percentages']['total'])} / WiFi {path_value(row['percentages']['wifi'])} / non-WiFi {path_value(row['percentages']['nonWifi'])}%" for row in ap['bands']) or 'Unavailable'
+                counters = '; '.join(f"{label}: {path_value(ap['connection_counters'][key])}" for key,label in (('success','Success'),('assoc','Assoc'),('auth','Auth'),('dhcp','DHCP'),('dns','DNS')))
+                values = (f"{ap['name']} / {ap['model']} / {ap['status']}", link_text, bands, counters)
+                rows.append([_paragraph(value, styles["MerakiSmall"]) for value in values])
+            story.append(_table(rows, [2.1 * inch, 1.3 * inch, 1.7 * inch, 1.8 * inch]))
+        if paths['status'] != 'available':
+            story.append(_paragraph('Saved layer-review evidence is invalid or unavailable.', styles["MerakiBody"]))
+        for network in paths['networks']:
+            counts = network['summary']
+            story.append(_paragraph(network['name'], styles["MerakiSubsection"]))
+            story.append(_paragraph(f"Assigned APs: {counts['assigned_ap_count']}; uniquely mapped: {counts['mapped_ap_count']}; unmapped: {counts['unmapped_ap_count']}; ambiguous: {counts['ambiguous_ap_count']}. RF bands meeting review thresholds: {counts['review_band_count']}; APs with incomplete telemetry: {counts['ap_telemetry_unavailable_count']}. Wireless client records: {path_value(network['wireless_client_count'])}; requested window {path_value(network['wireless_client_timespan_seconds'])} seconds. Collected RF profiles: {network['rf_profile_count']}.", styles["MerakiBody"]))
+            story.append(_paragraph('Connection counters: success, association, authentication, DHCP and DNS observations; no combined failure rate is inferred. Channel total review threshold is 50%; non-WiFi threshold is 20%. Requested wireless windows appear below.', styles["MerakiSmall"]))
+            if not network['edges']:
+                story.append(_paragraph('No assigned WAN appliance in this network; Internet reachability remains unverified.', styles["MerakiBody"]))
+            for edge in network['edges']:
+                interfaces = '; '.join(f"{row['interface']}: {row['state']}" for row in edge['interfaces']) or 'Interface states unavailable'
+                story.append(_paragraph(f"WAN appliance: {edge['name']} / {edge['model']} / {edge['status']}; {interfaces}.", styles["MerakiBody"]))
+            for row in network['wan_usage']:
+                story.append(_paragraph(f"{row['interface']} measured-window averages: download {path_value(row['download']['average_mbps'])} Mbps; upload {path_value(row['upload']['average_mbps'])} Mbps. Highest interval averages: download {path_value(row['download']['peak_interval_average_mbps'])} Mbps; upload {path_value(row['upload']['peak_interval_average_mbps'])} Mbps. These do not establish instantaneous peaks or circuit capacity.", styles["MerakiSmall"]))
+            for switch in network['switches']:
+                power = switch['power']
+                story.append(_paragraph(f"Switch: {switch['name']} / {switch['model']} / {switch['status']}", styles["MerakiSubsection"]))
+                story.append(_paragraph(f"Ports: {path_value(switch['connected_port_count'])}/{path_value(switch['reported_port_count'])} connected; {path_value(switch['review_port_count'])} with review prompts; collection {switch['port_status']}; discovery {switch['discovery_status']}. Measured average PoE: {path_value(power['measured_average_watts'])} W; coverage {power['energy_coverage']}; requested window {path_value(power['requested_timespan_seconds'])} seconds. Partial average readings do not establish capacity headroom.", styles["MerakiBody"]))
+                if switch['aps']:
+                    windows = sorted({(ap['channel_timespan_seconds'],ap['connection_timespan_seconds']) for ap in switch['aps']},key=str)
+                    story.append(_paragraph('Requested AP channel/connection windows (seconds): ' + '; '.join(f"{path_value(a)} / {path_value(b)}" for a,b in windows), styles["MerakiSmall"]))
+                else:
+                    story.append(_paragraph('No AP with a unique saved mapping to this switch.', styles["MerakiSmall"]))
+                path_aps(switch['aps'], switch['name'])
+            path_aps(network['unmapped_aps'], network['name'] + ' - unmapped')
+            path_aps(network['ambiguous_aps'], network['name'] + ' - ambiguous mappings')
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

@@ -123,6 +123,7 @@ from daedalus.meraki_cis8 import build_cis8_assessment, project_cis8_assessment
 from daedalus.meraki_clients import project_wireless_clients
 from daedalus.meraki_actions import build_action_plan, project_action_plan
 from daedalus.meraki_history import compare_meraki_inventory
+from daedalus.meraki_paths import build_path_analysis, project_path_analysis
 from daedalus.meraki_neighbors import project_neighbors
 from daedalus.meraki_topology import project_topology
 from daedalus.meraki_switch import project_switch_ports
@@ -1296,6 +1297,7 @@ def generate_report_job(report_job_id: int) -> None:
             snapshot = {**snapshot, "meraki": meraki_snapshot, "meraki_comparison": comparison,
                         "unifi_plan": build_unifi_plan(meraki_snapshot), "meraki_cis8": build_cis8_assessment(meraki_snapshot)}
             snapshot["meraki_action_plan"] = build_action_plan(meraki_snapshot, snapshot["unifi_plan"])
+            snapshot["meraki_path_analysis"] = build_path_analysis(meraki_snapshot)
             with SessionLocal() as db:
                 job = db.get(ReportJob, report_job_id)
                 if job is not None:
@@ -5172,6 +5174,7 @@ def meraki_report_details(
         "topology_graph": project_topology(snapshot) if type(snapshot.get("topology_detail_version")) is int and snapshot["topology_detail_version"] == 1 else None,
         "switch_ports": project_switch_ports(snapshot.get("switch_ports")),
         "switch_neighbors": project_neighbors(snapshot) if "switch_neighbors" in snapshot else None,
+        "path_analysis": project_path_analysis((job.report_snapshot or {}).get("meraki_path_analysis"), snapshot),
         "wan_usage_additional_networks": max(0, len(snapshot.get("wan_usage") or []) - 100) if isinstance(snapshot.get("wan_usage"), list) else 0,
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
         "wireless_connections": [{"network_name": text_field(row, "network_name"),

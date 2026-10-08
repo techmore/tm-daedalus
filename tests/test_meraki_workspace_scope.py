@@ -243,9 +243,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
                 "scope": "Managed devices only."}}]}
         from daedalus.meraki_wan import summarize_wan_usage
         from daedalus.meraki_clients import summarize_wireless_clients
-        second_snapshot["wireless_clients"] = [{"network_name": "CSP office", "status": "complete", "data": summarize_wireless_clients([
+        second_snapshot["wireless_clients"] = [{"network_id": "n1", "network_name": "CSP office", "status": "complete", "data": summarize_wireless_clients([
             {"id": "private-client", "mac": "private-client-mac", "recentDeviceConnection": "Wireless", "ssid": "Guest", "os": "iOS", "vlan": "10", "status": "Online"}])}]
-        second_snapshot["wan_usage"] = [{"network_name": "CSP office", "status": "complete", "data": summarize_wan_usage([
+        second_snapshot["wan_usage"] = [{"network_id": "n1", "network_name": "CSP office", "status": "complete", "data": summarize_wan_usage([
             {"startTime": "2026-10-08T00:00:00Z", "endTime": "2026-10-08T01:00:00Z", "byInterface": [{"interface": "wan1", "sent": 450000000, "received": 0}]}])}]
         with (
             patch.object(server, "MerakiClient") as client_class,
@@ -309,6 +309,11 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(details["warnings"], ["One endpoint was unavailable."])
         self.assertEqual(details["client_usage"]["clients_with_usage_count"], 7)
         self.assertEqual(details["client_usage"]["usage"]["downstream"], 900)
+        from daedalus.meraki_paths import build_path_analysis, project_path_analysis
+        saved_meraki = self.client.get(f"/api/meraki/reports/{second_id}/snapshot").json()
+        self.assertEqual(saved_meraki["meraki_path_analysis"], build_path_analysis(saved_meraki["meraki"]))
+        self.assertEqual(details["path_analysis"], project_path_analysis(saved_meraki["meraki_path_analysis"], saved_meraki["meraki"]))
+        self.assertEqual(details["path_analysis"]["status"], "available")
         self.assertEqual(details["wireless_clients"][0]["data"]["wireless_client_count"], 1)
         self.assertEqual(details["wireless_clients"][0]["data"]["distributions"]["ssid"]["rows"], [{"label": "Guest", "count": 1}])
         self.assertNotIn("private-client", str(details["wireless_clients"]))

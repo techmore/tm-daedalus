@@ -1933,6 +1933,60 @@
     container.append(section);
   }
 
+  function renderMerakiPaths(container, evidence, overview) {
+    if (!evidence) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement(overview ? "h3" : "h4"); heading.textContent = "Network traffic and connection review";
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = evidence.scope;
+    section.append(heading, note);
+    if (evidence.status !== "available" || !evidence.summary) {
+      var unavailable = document.createElement("p"); unavailable.textContent = "Saved layer-review evidence is invalid or unavailable."; section.append(unavailable); container.append(section); return;
+    }
+    var number = function (value) {return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value.toLocaleString("en-US", {maximumFractionDigits: 3}) : "Unavailable";};
+    var summary = evidence.summary, counts = document.createElement("p");
+    counts.textContent = summary.mapped_ap_count + "/" + summary.assigned_ap_count + " APs uniquely mapped · " + summary.unmapped_ap_count + " unmapped · " + summary.ambiguous_ap_count + " ambiguous · " + summary.review_band_count + " RF bands meeting review thresholds · " + summary.ap_telemetry_unavailable_count + " APs with incomplete telemetry";
+    section.append(counts);
+    if (overview) {container.append(section); return;}
+    var apTable = function (parent, aps, title) {
+      if (!aps.length) return;
+      var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", "AP evidence for " + title);
+      var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Assigned APs · " + title; table.append(caption);
+      var head = document.createElement("thead"), tr = document.createElement("tr");
+      ["AP / model / state", "Local switch port / link", "Channel percentages", "Connection outcomes"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+      var body = document.createElement("tbody");
+      aps.forEach(function (ap) {
+        var tr = document.createElement("tr"), link = ap.port_evidence || {};
+        var bands = ap.bands.map(function (band) {return band.band + " GHz: total " + number(band.percentages.total) + "% / WiFi " + number(band.percentages.wifi) + "% / non-WiFi " + number(band.percentages.nonWifi) + "%";}).join("; ") || "Unavailable";
+        var counters = [["success", "Success"], ["assoc", "Assoc"], ["auth", "Auth"], ["dhcp", "DHCP"], ["dns", "DNS"]].map(function (field) {return field[1] + ": " + number(ap.connection_counters[field[0]]);}).join(" · ");
+        var local = ap.local_port ? "Port " + ap.local_port + " · " + (link.state || "state unavailable") + " · " + (link.speed || "speed unavailable") + " · " + (link.duplex || "duplex unavailable") : "No unique switch mapping";
+        [ap.name + " / " + ap.model + " / " + ap.status, local, bands + " · collection " + ap.channel_status + " · requested " + number(ap.channel_timespan_seconds) + " seconds", counters + " · collection " + ap.connection_status + " · requested " + number(ap.connection_timespan_seconds) + " seconds"].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);
+      }); table.append(body); scroll.append(table); parent.append(scroll);
+    };
+    evidence.networks.forEach(function (network, index) {
+      var group = document.createElement("details"), title = document.createElement("summary"); group.open = index === 0;
+      title.textContent = network.name + " · " + network.summary.mapped_ap_count + "/" + network.summary.assigned_ap_count + " APs mapped · " + network.summary.review_band_count + " RF review bands"; group.append(title);
+      var records = document.createElement("p"); records.textContent = "Wireless client records: " + number(network.wireless_client_count) + " · requested " + number(network.wireless_client_timespan_seconds) + " seconds · " + network.rf_profile_count + " collected RF profiles. RF thresholds: total ≥50%, non-WiFi ≥20%; review observations require investigation. No combined connection failure rate is inferred."; group.append(records);
+      var edgeHeading = document.createElement("h5"); edgeHeading.textContent = "WAN / edge"; group.append(edgeHeading);
+      if (!network.edges.length) {var noEdge = document.createElement("p"); noEdge.textContent = "No assigned WAN appliance in this network; Internet reachability remains unverified."; group.append(noEdge);}
+      network.edges.forEach(function (edge) {var row = document.createElement("p"); row.textContent = edge.name + " / " + edge.model + " / " + edge.status + " · " + (edge.interfaces.map(function (iface) {return iface.interface + ": " + iface.state;}).join(" · ") || "Interface states unavailable"); group.append(row);});
+      network.wan_usage.forEach(function (iface) {var row = document.createElement("p"); row.textContent = iface.interface + " measured-window averages: " + number(iface.download.average_mbps) + " Mbps down / " + number(iface.upload.average_mbps) + " Mbps up · highest interval averages: " + number(iface.download.peak_interval_average_mbps) + " Mbps down / " + number(iface.upload.peak_interval_average_mbps) + " Mbps up. These do not establish instantaneous peaks or circuit capacity."; group.append(row);});
+      var switchesHeading = document.createElement("h5"); switchesHeading.textContent = "Switches and mapped APs"; group.append(switchesHeading);
+      network.switches.forEach(function (sw) {
+        var switchGroup = document.createElement("details"), switchTitle = document.createElement("summary"); switchTitle.textContent = sw.name + " / " + sw.model + " / " + sw.status + " · " + sw.aps.length + " shown mapped APs · " + number(sw.review_port_count) + " ports for review"; switchGroup.append(switchTitle);
+        var metrics = document.createElement("p"); metrics.textContent = number(sw.connected_port_count) + "/" + number(sw.reported_port_count) + " connected ports · collection " + sw.port_status + " · discovery " + sw.discovery_status + " · measured average PoE " + number(sw.power.measured_average_watts) + " W · coverage " + sw.power.energy_coverage + " · requested " + number(sw.power.requested_timespan_seconds) + " seconds. Partial averages do not establish capacity headroom."; switchGroup.append(metrics);
+        if (!sw.aps.length) {var empty = document.createElement("p"); empty.textContent = "No AP with a unique saved mapping to this switch."; switchGroup.append(empty);}
+        apTable(switchGroup, sw.aps, sw.name);
+        if (sw.additional_aps) {var more = document.createElement("p"); more.textContent = sw.additional_aps + " more APs in complete saved JSON evidence."; switchGroup.append(more);}
+        group.append(switchGroup);
+      });
+      apTable(group, network.unmapped_aps, network.name + " · unmapped APs"); apTable(group, network.ambiguous_aps, network.name + " · ambiguous mappings");
+      [["edges", "WAN appliances"], ["switches", "switches"], ["unmapped_aps", "unmapped APs"], ["ambiguous_aps", "APs with ambiguous mappings"]].forEach(function (field) {if (network["additional_" + field[0]]) {var more = document.createElement("p"); more.textContent = network["additional_" + field[0]] + " more " + field[1] + " in complete saved JSON evidence."; group.append(more);}});
+      section.append(group);
+    });
+    if (evidence.additional_networks) {var more = document.createElement("p"); more.textContent = evidence.additional_networks + " more networks in complete saved JSON evidence."; section.append(more);}
+    container.append(section);
+  }
+
   function renderMerakiNeighbors(container, evidence) {
     if (!evidence || !Array.isArray(evidence.switches) || !evidence.switches.length) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2133,6 +2187,7 @@
       cell.append(label, value); metricGrid.append(cell);
     });
     container.append(metricGrid);
+    if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, false);
 
     var plan = details.unifi_plan;
     if (plan && Array.isArray(plan.scenarios)) {
@@ -2379,6 +2434,7 @@
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
+        if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
@@ -2391,6 +2447,7 @@
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
+        if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
@@ -2409,6 +2466,7 @@
       renderMerakiClientOverview(container, details);
       renderMerakiCis8Overview(container, details);
       renderMerakiTopologyOverview(container, details);
+      if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
       renderMerakiSwitchOverview(container, details);
       renderMerakiWanOverview(container, details);
       renderMerakiPlanningOverview(container, details);
