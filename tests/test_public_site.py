@@ -50,6 +50,15 @@ class PublicSiteTests(unittest.TestCase):
         self.assertIn("Live Tahoe validation and trusted client distribution remain in progress", overview)
         self.assertNotIn("ongoing alignment work for current macOS releases", overview)
 
+    def test_meraki_purchase_planning_is_described_without_customer_data(self):
+        overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
+        for detail in ("configuration evidence", "changes over time", "dated UniFi purchase scenarios", "equipment quantities and official product links", "Unpriced models and design review needs", "exclude tax, shipping and implementation"):
+            with self.subTest(detail=detail):
+                self.assertIn(detail, overview)
+        self.assertNotIn("bfs.org", overview.lower())
+        self.assertNotIn("11,356", overview)
+        self.assertNotIn("12,940", overview)
+
     def test_overview_describes_independent_domain_roles_and_override_duration(self):
         overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
         for detail in ("a separate role in each", "30-day probation window", "14-day administrator overrides", "requires its administrator's approval", "Approved collaborators start with the user role", "Project status: active pilot"):
