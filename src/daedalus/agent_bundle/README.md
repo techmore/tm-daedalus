@@ -373,6 +373,10 @@ only `static/js/scan_banners.js` and its manifest changed. All other files,
 including report styles and fonts, are identical. Saved scan labels use local
 calendar days, with invalid or future dates shown as unknown rather than today.
 Node fixtures cover midnight, daylight saving time and invalid/future input.
-The existing Mac scanner has not been switched to this source bundle; its
-installed bridge source does not match the retained upgrade kits and provenance
-needs resolution before cutover.
+The Mac scanner was switched to this source bundle using a private reviewed kit.
+Its installed bridge code matches committed source (`bd9ca59` for agent.py and
+unchanged package initialization/command journal); the upgrade preserved those
+three files byte for byte and matched its declared dependencies and launcher.
+Enrollment, data/log paths, local port and authentication were preserved. Native
+UI and hosted status confirm readiness, five retained runs and five PDF entries.
+Private receipt: validation/mac-calendar-upgrade-result-20261007.json.
