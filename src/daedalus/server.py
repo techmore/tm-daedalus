@@ -120,6 +120,7 @@ from daedalus.email_policy import analyze_email_auth
 from daedalus.credential_store import CredentialEncryptionError, decrypt_secret, encrypt_secret
 from daedalus.meraki_api import MerakiAPIError, MerakiClient, compare_meraki_snapshots
 from daedalus.meraki_history import compare_meraki_inventory
+from daedalus.meraki_planning import build_unifi_plan, project_unifi_plan
 from daedalus.reports import (
     build_cis_endpoint_pdf,
     build_external_posture_pdf,
@@ -1285,7 +1286,8 @@ def generate_report_job(report_job_id: int) -> None:
                 })
                 comparison.update({"baseline": not bool(previous_meraki), "previous_report_id": previous.id if previous_meraki else None,
                                    "coverage_change_count": len(comparison["coverage_changes"])})
-            snapshot = {**snapshot, "meraki": meraki_snapshot, "meraki_comparison": comparison}
+            snapshot = {**snapshot, "meraki": meraki_snapshot, "meraki_comparison": comparison,
+                        "unifi_plan": build_unifi_plan(meraki_snapshot)}
             with SessionLocal() as db:
                 job = db.get(ReportJob, report_job_id)
                 if job is not None:
@@ -5093,6 +5095,7 @@ def meraki_report_details(
             "name": text_field(snapshot.get("organization", {}) if isinstance(snapshot.get("organization"), dict) else {}, "name"),
         },
         "collected_at": text_field(snapshot, "collected_at", 80),
+        "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
         "summary": {key: summary.get(key) for key in summary_fields if key in summary},
         "networks": [{
             "name": text_field(item, "name"),

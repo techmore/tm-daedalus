@@ -1771,6 +1771,41 @@
     });
     container.append(metricGrid);
 
+    var plan = details.unifi_plan;
+    if (plan && Array.isArray(plan.scenarios)) {
+      var planning = document.createElement("section"); planning.className = "meraki-detail-section";
+      var planningHeading = document.createElement("h4"); planningHeading.textContent = "UniFi purchase planning";
+      var dated = document.createElement("p"); dated.textContent = "USD · Prices and availability observed " + plan.price_observed_on;
+      planning.append(planningHeading, dated);
+      (plan.assumptions || []).forEach(function (note) {
+        var paragraph = document.createElement("p"); paragraph.className = "muted"; paragraph.textContent = note; planning.append(paragraph);
+      });
+      var money = function (cents) { return new Intl.NumberFormat("en-US", {style: "currency", currency: "USD"}).format(cents / 100); };
+      plan.scenarios.forEach(function (scenario) {
+        var group = document.createElement("details");
+        var title = document.createElement("summary");
+        title.textContent = scenario.name + " · " + money(scenario.hardware_subtotal_cents) + " hardware subtotal" + (scenario.complete_inventory_pricing ? "" : " · Partial inventory pricing");
+        group.append(title);
+        (scenario.rows || []).forEach(function (row) {
+          var line = document.createElement("p");
+          line.textContent = row.quantity + " × " + row.meraki_model + " → " + row.candidate_model + " · " + money(row.unit_with_surcharge_cents) + " each including surcharge · " + money(row.subtotal_cents) + " · " + row.availability_observed + ". ";
+          if (/^https:\/\/store\.ui\.com\/us\/en\/products\/[a-z0-9-]+$/.test(row.purchase_url || "")) {
+            var link = document.createElement("a"); link.href = row.purchase_url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = "View product"; link.setAttribute("aria-label", "View " + row.candidate_model + " (opens in a new tab)"); line.append(link);
+          }
+          var review = document.createElement("p"); review.className = "muted"; review.textContent = row.review;
+          group.append(line, review);
+        });
+        (scenario.unmatched || []).forEach(function (row) {
+          var missing = document.createElement("p"); missing.textContent = row.quantity + " × " + row.meraki_model + ": candidate and price need review."; group.append(missing);
+        });
+        if (scenario.additional_unmatched_models) {
+          var more = document.createElement("p"); more.textContent = scenario.additional_unmatched_models + " more unpriced models. Download complete JSON evidence for the full list."; group.append(more);
+        }
+        planning.append(group);
+      });
+      container.append(planning);
+    }
+
     var clientUsage = details.client_usage || {};
     addMerakiDetailList(container, "Aggregate client usage", [clientUsage], function (usage) {
       var totals = usage.usage || {};
