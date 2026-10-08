@@ -106,9 +106,21 @@ def validate_loopback_comparison_coverage(comparison):
             raise RuntimeError("Comparison is missing successful single-IP command provenance")
 
 
-def validate_listener_change(comparison, listener_port):
+def validate_listener_change(comparison, listener_port, *, multi_host=False):
     """Require the one controlled observation change and exact XML port coverage."""
-    validate_loopback_comparison_coverage(comparison)
+    if multi_host:
+        coverage = comparison.get("coverage", {})
+        expected_targets = [f"127.0.0.{i}/32" for i in range(4)]
+        if coverage.get("comparable") is not True or coverage.get("reasons") or any(
+                coverage.get(field) != expected_targets for field in ("previous_targets", "current_targets")):
+            raise RuntimeError("Multi-host comparison lacks exact four-host XML coverage")
+        for field in ("previous_run", "current_run"):
+            run = comparison.get(field, {})
+            if run.get("selection_version") != 3 or len(run.get("selected_result_event_ids", [])) != 4 or {
+                    row.get("host") for row in run.get("xml_coverage", [])} != {f"127.0.0.{i}" for i in range(4)}:
+                raise RuntimeError("Multi-host comparison omitted a host result or XML proof")
+    else:
+        validate_loopback_comparison_coverage(comparison)
     expected = {"hosts_added": 0, "hosts_removed": 0, "hosts_not_observed": 0,
                 "port_changes": 1, "newly_observed_ports": 0,
                 "reported_port_changes": 1, "confirmed_removed_ports": 0}
@@ -120,6 +132,33 @@ def validate_listener_change(comparison, listener_port):
             or rows[0].get("change") != "state_service_changed" or rows[0].get("confirmed") is not True
             or rows[0].get("before", {}).get("state") != "open" or rows[0].get("after", {}).get("state") != "closed"):
         raise RuntimeError("Controlled comparison changed another observation")
+
+
+def multi_host_run_results(detail):
+    from daedalus.scanner_comparison import normalize_snapshot
+    rows = [e for e in detail["events"] if e.get("event_name") == "deep_scan_results"]
+    if len(rows) != 4:
+        raise RuntimeError("Multi-host run must save four separate detailed results")
+    hosts = {}
+    for row in rows:
+        normalized = normalize_snapshot(row["payload"])["hosts"]
+        if len(normalized) != 1 or set(normalized) & set(hosts):
+            raise RuntimeError("Multi-host run has duplicate or ambiguous host evidence")
+        hosts.update({ip: (row, evidence) for ip, evidence in normalized.items()})
+    if set(hosts) != {f"127.0.0.{i}" for i in range(4)}:
+        raise RuntimeError("Multi-host run includes an unexpected target")
+    return hosts
+
+
+def validate_unchanged_last_host(comparison, previous_detail, current_detail):
+    previous, current = multi_host_run_results(previous_detail), multi_host_run_results(current_detail)
+    last_hosts = []
+    for key, hosts in (("previous_run", previous), ("current_run", current)):
+        last_id = comparison[key].get("selected_result_event_id")
+        last_hosts.append(next((ip for ip, (event, _) in hosts.items() if event["id"] == last_id), None))
+    if last_hosts[0] is None or last_hosts[0] != last_hosts[1] or last_hosts[0] == "127.0.0.1" or previous[last_hosts[0]][1] != current[last_hosts[1]][1]:
+        raise RuntimeError("Multi-host fixture did not retain an unchanged final host")
+    return {"observed_hosts_per_run": 4, "unchanged_last_host": last_hosts[0], "changed_earlier_host": "127.0.0.1"}
 
 
 def validate_closed_listener_xml(xml, listener_port):
@@ -209,7 +248,10 @@ def validate_recovery_evidence(pending, history, run_id, invocations, listener_p
     return {'pending_events_recovered': len(pending), 'original_event_ids': [event['client_event_id'] for event in pending], 'original_occurred_at': [event['occurred_at'] for event in pending], 'source_job_id': run_id, 'deep_nmap_invocations': 1, 'event_identity_unchanged': True}
 
 
-def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True, managed_linux: bool = False, close_listener: bool = False) -> dict:
+def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True, managed_linux: bool = False, close_listener: bool = False, multi_host: bool = False) -> dict:
+    if multi_host and (not sys.platform.startswith("linux") or not repeat_scan or not close_listener or interrupt_bridge or managed_linux):
+        raise RuntimeError("Multi-host validation requires Linux repeated listener-change mode")
+    scan_target = "127.0.0.0/30" if multi_host else "127.0.0.1"
     if close_listener and (not repeat_scan or interrupt_bridge or managed_linux):
         raise RuntimeError("Listener-change validation requires the ordinary repeated loopback workflow")
     nmap = shutil.which("nmap")
@@ -309,13 +351,15 @@ if "-oX" in normalized:
         or parent.stat().st_uid != os.getuid() or xml_destination.exists() or xml_destination.is_symlink()):
         raise SystemExit("Loopback harness rejected unexpected XML destination")
     del normalized[index:index+2]
-if not normalized or normalized[-1] != "127.0.0.1" or normalized[:-1] not in (["-sn", "-Pn"], ["-T3", "-sV", "-Pn"]):
+allowed_targets = [{scan_target!r}] if "-sn" in normalized else ({[f"127.0.0.{i}" for i in range(4)]!r} if {multi_host!r} else ["127.0.0.1"])
+if not normalized or normalized[-1] not in allowed_targets or normalized[:-1] not in (["-sn", "-Pn"], ["-T3", "-sV", "-Pn"]):
     raise SystemExit("Loopback harness rejected unexpected scanner arguments")
+output_prefix = Path({str(root)!r}) / ("actual-scan-" + normalized[-1] if {multi_host!r} and "-sn" not in normalized else "actual-scan")
 cmd=[{nmap!r}, "-n", "--host-timeout", "15s"]
 if "-sn" in args:
-    cmd += ["-sn", "-Pn", "127.0.0.1"]
+    cmd += ["-sn", "-Pn", {scan_target!r}]
 else:
-    cmd += ["-sT", "-Pn", "-sV", "--version-light", "-p", {str(listener_port)!r}, "-oA", {str(root / 'actual-scan')!r}, "127.0.0.1"]
+    cmd += ["-sT", "-Pn", "-sV", "--version-light", "-p", {str(listener_port)!r}, "-oA", str(output_prefix), normalized[-1]]
 with open({str(root / 'invocations.jsonl')!r}, "a") as out: out.write(json.dumps(cmd)+"\\n")
 child=subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 if {interrupt_bridge!r} and "-sn" not in args:
@@ -328,7 +372,7 @@ except subprocess.TimeoutExpired:
 completed=subprocess.CompletedProcess(cmd,child.returncode,stdout,stderr)
 if xml_destination is not None and completed.returncode == 0:
     with xml_destination.open("xb") as output:
-        output.write(Path({str(root / 'actual-scan.xml')!r}).read_bytes())
+        output.write(Path(str(output_prefix) + ".xml").read_bytes())
 if {interrupt_bridge!r} and "-sn" not in args:
     deadline=time.monotonic()+45
     while not Path({str(root / 'release-deep-result')!r}).exists():
@@ -390,7 +434,7 @@ raise SystemExit(completed.returncode)
                 def online():
                     return next((a for a in client.get("/api/dashboard").json()["agents"] if a["id"] == agent_id and a["status"] == "online" and a["nmapui_ready"] is True and a["command_protocol_version"] >= 2), None)
                 agent = wait_for(online)
-                approved_scope = client.put(f"/api/agents/{agent_id}/network-scope", json={'authorized_networks': ['127.0.0.1/32']})
+                approved_scope = client.put(f"/api/agents/{agent_id}/network-scope", json={'authorized_networks': [scan_target if multi_host else '127.0.0.1/32']})
                 approved_scope.raise_for_status()
                 # Observe real portal websocket broadcasts as well as persisted REST history.
                 import websocket
@@ -402,7 +446,7 @@ raise SystemExit(completed.returncode)
                         except websocket.WebSocketTimeoutException: continue
                         except Exception: return
                 threading.Thread(target=receive, daemon=True).start()
-                queued = client.post(f"/api/agents/{agent_id}/commands", json={"action": "start_scan", "target": "127.0.0.1", "skip_host_discovery": skip_host_discovery})
+                queued = client.post(f"/api/agents/{agent_id}/commands", json={"action": "start_scan", "target": scan_target, "skip_host_discovery": skip_host_discovery})
                 queued.raise_for_status()
                 command_id = queued.json()["id"]
                 recovery_pending = None
@@ -438,7 +482,8 @@ raise SystemExit(completed.returncode)
                 command = wait_for(finished, 90)
                 if command["status"] != "succeeded": raise RuntimeError("Real loopback scan did not succeed: " + command["status"])
                 events = wait_for(lambda: [e for e in client.get("/api/events?limit=200").json()["events"] if e["agent_id"] == agent_id and e["event_name"] == "deep_scan_results"])
-                event = events[0]
+                event = next((e for e in events if any(h.get("ip") == "127.0.0.1" for h in (e["payload"] if isinstance(e["payload"], list) else e["payload"].get("hosts", [])))), None) if multi_host else events[0]
+                if event is None: raise RuntimeError("Multi-host run lost the controlled listener result")
                 payload = event["payload"]
                 if event.get("artifact_download_url"):
                     artifact = client.get(event["artifact_download_url"])
@@ -482,7 +527,7 @@ raise SystemExit(completed.returncode)
                             raise RuntimeError("Isolated scanner service stopped during cooldown")
                         time.sleep(min(30, max(0, cooldown_deadline - time.monotonic())))
                         print(json.dumps({"stage": "product_scan_cooldown", "remaining_seconds": max(0, round(cooldown_deadline - time.monotonic()))}), flush=True)
-                    second = client.post(f"/api/agents/{agent_id}/commands", json={"action": "start_scan", "target": "127.0.0.1", "skip_host_discovery": skip_host_discovery})
+                    second = client.post(f"/api/agents/{agent_id}/commands", json={"action": "start_scan", "target": scan_target, "skip_host_discovery": skip_host_discovery})
                     second.raise_for_status()
                     command_id = second.json()["id"]
                     second_command = wait_for(finished, 90)
@@ -498,7 +543,7 @@ raise SystemExit(completed.returncode)
                         return detail if detail["run"]["status"] == "completed" else None
                     second_detail = wait_for(second_run_detail)
                     second_id = second_detail["run"]["source_job_id"]
-                    second_event = next((e for e in second_detail["events"] if e["event_name"] == "deep_scan_results"), None)
+                    second_event = multi_host_run_results(second_detail)["127.0.0.1"][0] if multi_host else next((e for e in second_detail["events"] if e["event_name"] == "deep_scan_results"), None)
                     if second_event is None:
                         second_event = next((e for e in second_detail["events"] if e["event_name"] == "scan_results"), None)
                     if not second_event:
@@ -509,7 +554,7 @@ raise SystemExit(completed.returncode)
                         if len(hosts) != 1 or hosts[0].get("ip") != "127.0.0.1" or any(
                                 str(p.get("port")) == str(listener_port) and p.get("state") == "open" for p in hosts[0].get("ports", [])):
                             raise RuntimeError("Closed listener remained open or host evidence was lost")
-                        validate_closed_listener_xml((root / "actual-scan.xml").read_bytes(), listener_port)
+                        validate_closed_listener_xml((root / ("actual-scan-127.0.0.1.xml" if multi_host else "actual-scan.xml")).read_bytes(), listener_port)
                     else:
                         validate_host_evidence(second_event["payload"], listener_port)
                     comparison_response = client.get(f"/api/agents/{agent_id}/runs/{second_id}/comparison", params={"previous_run_id": run_id})
@@ -517,9 +562,9 @@ raise SystemExit(completed.returncode)
                     comparison = comparison_response.json()
                     if not close_listener and (not comparison.get("available") or any(comparison.get(key) for key in ("hosts_added", "hosts_removed", "hosts_not_observed", "port_changes"))):
                         raise RuntimeError("Identical repeated loopback observations did not compare cleanly")
-                    validate_loopback_comparison_coverage(comparison)
+                    if not multi_host: validate_loopback_comparison_coverage(comparison)
                     if close_listener:
-                        validate_listener_change(comparison, listener_port)
+                        validate_listener_change(comparison, listener_port, multi_host=multi_host)
                         def saved_change():
                             saved = client.get(f"/api/agents/{agent_id}/run-comparisons").json()["comparisons"]
                             return next((row for row in saved if row["previous_run_id"] == run_id and row["current_run_id"] == second_id and row["comparison"]["counts"].get("reported_port_changes") == 1), None)
@@ -533,7 +578,8 @@ raise SystemExit(completed.returncode)
                         client.get(f"/api/agents/{agent_id}/runs/{second_id}/comparison", params={"previous_run_id": run_id}).raise_for_status()
                         if json.dumps(saved_change(), sort_keys=True) != before or len([n for n in client.get("/api/notifications").json()["notifications"] if n["source_type"] == "scanner_comparison" and n["source_id"] == saved["id"]]) != 1:
                             raise RuntimeError("Comparison read altered history or duplicated its notice")
-                    comparison_proof = {"previous_run_id": run_id, "current_run_id": second_id, "second_run_event_count": second_detail["run"]["event_count"], "counts": comparison["counts"], "coverage_comparable": True, "covered_targets": comparison["coverage"]["current_targets"], "coverage_source": "successful_daedalus_single_ip_command", "coverage_reasons": comparison["coverage"]["reasons"]}
+                    comparison_proof = {"previous_run_id": run_id, "current_run_id": second_id, "second_run_event_count": second_detail["run"]["event_count"], "counts": comparison["counts"], "coverage_comparable": True, "covered_targets": comparison["coverage"]["current_targets"], "coverage_source": "matched_per_host_original_xml" if multi_host else "successful_daedalus_single_ip_command", "coverage_reasons": comparison["coverage"]["reasons"]}
+                    if multi_host: comparison_proof.update(validate_unchanged_last_host(comparison, run_detail, second_detail))
                 socket_live.close()
                 with sqlite3.connect(portal_database) as db:
                     acknowledgements = [json.loads(row[0]).get("status") for row in db.execute("SELECT details FROM audit_logs WHERE action='scanner.command_result_reported'")]
@@ -544,7 +590,7 @@ raise SystemExit(completed.returncode)
                     raise RuntimeError("Expected persisted accepted and succeeded command acknowledgements")
                 if not any(message.get("type") == "scan_event" for message in live):
                     raise RuntimeError("No real portal scan event websocket broadcast was observed")
-                xml = (root / "actual-scan.xml").read_bytes()
+                xml = (root / ("actual-scan-127.0.0.1.xml" if multi_host else "actual-scan.xml")).read_bytes()
                 if close_listener:
                     validate_closed_listener_xml(xml, listener_port)
                     comparison_proof.update(controlled_listener_closed=True, persisted_change_notice=True, notice_deduplicated=True, immutable_history_on_read=True)
@@ -563,7 +609,11 @@ raise SystemExit(completed.returncode)
                     if list((root / 'spool').glob('*.json')) or list((root / 'spool').rglob('*.rejected')) or list((root / 'spool').glob('commands-*/result-*.json')):
                         raise RuntimeError('Recovery queues did not drain cleanly')
                     recovery_proof.update(command_claim_unchanged=True, terminal_acknowledged=True, own_bridge_interruption='SIGKILL', source_process_restarted=False, pending_queues_drained=True, upload_hold='loopback transport shim returned 503', interruption_scope='owned bridge killed while source workflow awaited guarded real Nmap output')
-                receipt = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "target": "127.0.0.1", "scanner_bundle_sha256": hashlib.sha256(bundled).hexdigest(), "source_tree_sha256": json.loads((source / "manifest.json").read_text())["source_tree_sha256"], "bridge_protocol": agent["command_protocol_version"], "product_skip_host_discovery": True, "per_scan_skip_host_discovery": skip_host_discovery, "command_acknowledgement_states": acknowledgements, "command_status": command["status"], "command_completed_at": command["completed_at"], "host_count": len(matched), "open_port_count": len(open_ports), "loopback_listener_port": listener_port, "observed_port_protocol": "tcp", "persisted_json_artifact_downloaded": bool(event.get("artifact_download_url")), "saved_event_names": sorted({e["event_name"] for e in history if e["agent_id"] == agent_id}), "realtime_messages": len(live), "realtime_types": sorted({str(m.get("type", "")) for m in live}), "nmap_invocations": [[Path(v).name if i == 0 else "<isolated-output>" if 'actual-scan' in v else v for i,v in enumerate(argv)] for argv in invocations], "nmap_xml_sha256": hashlib.sha256(xml).hexdigest(), "source_job_id": run_id, "grouped_run_status": run_detail["run"]["status"], "grouped_run_event_count": run_detail["run"]["event_count"], "pdf_scope": "explicit-run-snapshot", "pdf_status": report["status"], "pdf_bytes": len(pdf), "pdf_sha256": hashlib.sha256(pdf).hexdigest(), "limits": ["Single ephemeral loopback listener port; PATHguard executes real Nmap with bounded options", "No default scan coverage, service install, external targets, persistence soak, or production readiness claimed", "Ephemeral credentials/database/logs/spool removed; only sanitized receipt and PDF retained"]}
+                receipt = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "target": scan_target, "scanner_bundle_sha256": hashlib.sha256(bundled).hexdigest(), "source_tree_sha256": json.loads((source / "manifest.json").read_text())["source_tree_sha256"], "bridge_protocol": agent["command_protocol_version"], "product_skip_host_discovery": True, "per_scan_skip_host_discovery": skip_host_discovery, "command_acknowledgement_states": acknowledgements, "command_status": command["status"], "command_completed_at": command["completed_at"], "host_count": len(matched), "open_port_count": len(open_ports), "loopback_listener_port": listener_port, "observed_port_protocol": "tcp", "persisted_json_artifact_downloaded": bool(event.get("artifact_download_url")), "saved_event_names": sorted({e["event_name"] for e in history if e["agent_id"] == agent_id}), "realtime_messages": len(live), "realtime_types": sorted({str(m.get("type", "")) for m in live}), "nmap_invocations": [[Path(v).name if i == 0 else "<isolated-output>" if 'actual-scan' in v else v for i,v in enumerate(argv)] for argv in invocations], "nmap_xml_sha256": hashlib.sha256(xml).hexdigest(), "source_job_id": run_id, "grouped_run_status": run_detail["run"]["status"], "grouped_run_event_count": run_detail["run"]["event_count"], "pdf_scope": "explicit-run-snapshot", "pdf_status": report["status"], "pdf_bytes": len(pdf), "pdf_sha256": hashlib.sha256(pdf).hexdigest(), "limits": ["Single ephemeral loopback listener port; PATHguard executes real Nmap with bounded options", "No default scan coverage, service install, external targets, persistence soak, or production readiness claimed", "Ephemeral credentials/database/logs/spool removed; only sanitized receipt and PDF retained"]}
+                if multi_host:
+                    receipt["kind"] = "real-packaged-multihost-loopback-scanner"
+                    receipt["host_count"] = len(multi_host_run_results(run_detail))
+                    receipt["limits"].append("Four Linux loopback addresses; not four independent machines, VLANs or a production fleet")
                 receipt["external_audit_run_count"] = external_audit_count
                 receipt["background_workers_enabled"] = False
                 if managed_linux:
@@ -707,7 +757,7 @@ raise SystemExit(completed.returncode)
                 receipt_path.with_suffix(".pdf").write_bytes(pdf)
                 return receipt
         except Exception as exc:
-            failure = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "result": "incomplete", "error_type": type(exc).__name__, "target": "127.0.0.1", "realtime_messages": len(live), "own_processes": [{"name": log.name.rsplit("/", 1)[-1], "pid": process.pid, "exit_code_before_cleanup": process.poll()} for process, log in processes], "limits": ["No full scan success claimed; isolated temporary data/credentials removed after own-process cleanup"]}
+            failure = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "result": "incomplete", "error_type": type(exc).__name__, "target": scan_target, "realtime_messages": len(live), "own_processes": [{"name": log.name.rsplit("/", 1)[-1], "pid": process.pid, "exit_code_before_cleanup": process.poll()} for process, log in processes], "limits": ["No full scan success claimed; isolated temporary data/credentials removed after own-process cleanup"]}
             if managed_linux:
                 service_diagnostics = {}
                 for name in ('daedalus-nmapui.service', 'daedalus-scanner-bridge.service'):
@@ -754,6 +804,7 @@ def main():
     parser.add_argument("--run-loopback", action="store_true", help="Explicitly opt into real loopback-only Nmap")
     parser.add_argument("--nmapui-python", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument("--multi-host", action="store_true", help="Linux only: scan four loopback addresses and require an earlier host change with unchanged last host")
     parser.add_argument("--close-listener", action="store_true", help="With --repeat-scan, close the owned listener and validate an exact-port state change, saved history and inbox notice")
     parser.add_argument("--repeat-scan", action="store_true", help="Repeat the bounded scan and validate distinct run IDs and comparison")
     parser.add_argument('--interrupt-bridge', action='store_true', help='Interrupt only the owned bridge during one in-flight loopback job, then validate durable recovery')
@@ -763,6 +814,6 @@ def main():
     if not args.run_loopback: parser.error("--run-loopback is required")
     if args.interrupt_bridge and args.repeat_scan: parser.error('Select either repeat comparison or bridge interruption for one bounded validation')
     if args.close_listener and (not args.repeat_scan or args.interrupt_bridge or args.managed_linux): parser.error("--close-listener requires --repeat-scan without interruption/managed mode")
-    print(json.dumps(validate(args.nmapui_python, args.receipt, args.repeat_scan, args.interrupt_bridge, not args.allow_host_discovery, args.managed_linux, args.close_listener), indent=2))
+    print(json.dumps(validate(args.nmapui_python, args.receipt, args.repeat_scan, args.interrupt_bridge, not args.allow_host_discovery, args.managed_linux, args.close_listener, args.multi_host), indent=2))
 
 if __name__ == "__main__": main()

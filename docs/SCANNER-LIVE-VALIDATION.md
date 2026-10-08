@@ -15,6 +15,17 @@ Use the project Python environment for the harness and a Python environment cont
 
 The listener-change scenario scans its owned listener, closes it, observes the product's normal five-minute scan cooldown, and scans the same single port again. It requires successful completion and exact single-IP/port evidence; an unconfirmed change or another tested port fails validation. The saved comparison must contain exactly one confirmed open-to-closed port observation and one matching workspace inbox notice. Repeated comparison reads must preserve the saved history and avoid another notice. This controlled listener closure is known to the fixture; the product reports an observation change and does not infer its cause for arbitrary networks.
 
+Linux additionally supports a four-address whole-run test:
+
+```sh
+.venv/bin/python scripts/validate_scanner_local.py \
+  --run-loopback --repeat-scan --close-listener --multi-host \
+  --nmapui-python /absolute/path/to/nmapui-runtime/bin/python \
+  --receipt validation/scanner-multi-host.json
+```
+
+This mode authorizes only `127.0.0.0/30` in its isolated workspace, discovers all four loopback addresses, and scans one port per host with separate original XML files. The listener is on `127.0.0.1`; the final detailed host must be unchanged in both runs. The comparison must use four saved results and four compatible XML proofs per run, show exactly one confirmed earlier-host state change, and retain its deduplicated inbox notice. It fails if evidence is missing, another target is included, or the last host changes. Linux is required; the test does not configure loopback aliases on the user's Mac.
+
 Other modes:
 
 | Arguments | Exercised behavior |
@@ -29,4 +40,4 @@ Repeat/change and interrupted modes are separate bounded workflows. Managed mode
 
 ## Evidence limits
 
-This is a physical loopback transport/change-path test. It does not establish default/all-port scan coverage, multiple physical hosts, VLAN routing, fleet scale, production alerts, signed native distribution, long-running persistence or complete UI/accessibility acceptance. It preserves the existing shipped scanner report assets. Linux CI runs all four lifecycle/repeat/change/interruption scenarios independently; results are evidence only after their runs complete successfully.
+This is a physical loopback transport/change-path test. It does not establish default/all-port scan coverage, multiple physical hosts, VLAN routing, fleet scale, production alerts, signed native distribution, long-running persistence or complete UI/accessibility acceptance. It preserves the existing shipped scanner report assets. Linux CI runs lifecycle/repeat/change/interruption/multi-host scenarios independently; results are evidence only after their runs complete successfully.

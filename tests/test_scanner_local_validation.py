@@ -49,6 +49,95 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
             bad = copy.deepcopy(comparison); mutate(bad)
             with self.assertRaises(RuntimeError): validation.validate_listener_change(bad, 12345)
 
+    def multi_fixture(self):
+        previous, current = [], []
+        for i in range(4):
+            for rows, start, state in ((previous, 1, "open" if i == 1 else "closed"),
+                                       (current, 11, "closed")):
+                rows.append({"id": start + i, "event_name": "deep_scan_results", "payload": [{
+                    "ip": f"127.0.0.{i}", "ports": [{"protocol": "tcp", "port": 12345, "state": state}]}]})
+        expected = [f"127.0.0.{i}/32" for i in range(4)]
+        comparison = {"available": True, "coverage": {"comparable": True, "reasons": [],
+                      "previous_targets": expected, "current_targets": expected},
+            "counts": {"hosts_added": 0, "hosts_removed": 0, "hosts_not_observed": 0,
+                       "port_changes": 1, "newly_observed_ports": 0, "reported_port_changes": 1, "confirmed_removed_ports": 0},
+            "port_changes": [{"host": "127.0.0.1", "protocol": "tcp", "port": 12345,
+                "change": "state_service_changed", "confirmed": True, "before": {"state": "open"}, "after": {"state": "closed"}}]}
+        for key, rows in (("previous_run", previous), ("current_run", current)):
+            comparison[key] = {"selection_version": 3, "selected_result_event_ids": [r["id"] for r in rows],
+                "selected_result_event_id": rows[-1]["id"], "xml_coverage": [{"host": f"127.0.0.{i}"} for i in range(4)]}
+        return comparison, {"events": previous}, {"events": current}
+
+    def test_multihost_detects_earlier_change_with_unchanged_last_host(self):
+        comparison, previous, current = self.multi_fixture()
+        validation.validate_listener_change(comparison, 12345, multi_host=True)
+        proof = validation.validate_unchanged_last_host(comparison, previous, current)
+        self.assertEqual(proof, {"observed_hosts_per_run": 4, "unchanged_last_host": "127.0.0.3", "changed_earlier_host": "127.0.0.1"})
+        with self.assertRaises(RuntimeError): validation.validate_listener_change(comparison, 12345)
+
+    def test_multihost_rejects_omitted_results_xml_or_scope(self):
+        import copy
+        comparison, previous, current = self.multi_fixture()
+        for mutate in (lambda c: c["current_run"]["selected_result_event_ids"].pop(),
+                       lambda c: c["previous_run"]["xml_coverage"].pop(),
+                       lambda c: c["coverage"].update(current_targets=["127.0.0.0/30"]),
+                       lambda c: c["current_run"].update(selection_version=2)):
+            bad = copy.deepcopy(comparison); mutate(bad)
+            with self.assertRaises(RuntimeError): validation.validate_listener_change(bad, 12345, multi_host=True)
+        for mutate in (lambda d: d["events"].pop(),
+                       lambda d: d["events"][0]["payload"][0].update(ip="192.168.1.1"),
+                       lambda d: d["events"][0]["payload"][0].update(ip="127.0.0.1")):
+            bad = copy.deepcopy(current); mutate(bad)
+            with self.assertRaises(RuntimeError): validation.validate_unchanged_last_host(comparison, previous, bad)
+
+    def test_multihost_refuses_changed_or_unidentified_final_host(self):
+        import copy
+        comparison, previous, current = self.multi_fixture()
+        bad = copy.deepcopy(current); bad["events"][-1]["payload"][0]["ports"][0]["state"] = "open"
+        with self.assertRaises(RuntimeError): validation.validate_unchanged_last_host(comparison, previous, bad)
+        for last in [12, 999]:
+            bad = copy.deepcopy(comparison); bad["current_run"]["selected_result_event_id"] = last
+            with self.assertRaises(RuntimeError): validation.validate_unchanged_last_host(bad, previous, current)
+
+    def test_multihost_refuses_unsupported_mode_before_side_effects(self):
+        from unittest.mock import patch
+        for platform, options in [("darwin", {"repeat_scan": True, "close_listener": True}), ("linux", {}),
+                                  ("linux", {"repeat_scan": True, "close_listener": True, "managed_linux": True})]:
+            with patch.object(validation.sys, "platform", platform), patch.object(validation.shutil, "which") as lookup:
+                with self.assertRaisesRegex(RuntimeError, "Linux repeated listener-change"):
+                    validation.validate(Path('/unused'), Path('/unused-receipt'), multi_host=True, **options)
+                lookup.assert_not_called()
+
+    def test_multihost_executable_guard_keeps_distinct_xml_and_rejects_other_targets(self):
+        import ast, subprocess, sys, tempfile
+        source = ast.parse(Path(validation.__file__).read_text())
+        template = next(node.args[0] for node in ast.walk(source) if isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute) and node.func.attr == "write_text"
+                        and isinstance(node.func.value, ast.Name) and node.func.value.id == "wrapper")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fake = root / "fake-nmap"
+            fake.write_text("#!" + sys.executable + "\nfrom pathlib import Path\nimport sys\nargs=sys.argv[1:]\nif '-oA' in args: Path(args[args.index('-oA')+1]+'.xml').write_text('<nmaprun target=\"'+args[-1]+'\"/>')\n")
+            fake.chmod(0o700)
+            code = eval(compile(ast.Expression(template), validation.__file__, "eval"), {
+                "nmap_python": Path(sys.executable), "nmap": str(fake), "root": root,
+                "scan_target": "127.0.0.0/30", "multi_host": True, "listener_port": 12345, "interrupt_bridge": False})
+            wrapper = root / "nmap-guard"; wrapper.write_text(code)
+            for ip in ["127.0.0.1", "127.0.0.2"]:
+                with tempfile.TemporaryDirectory(prefix="nmapui-evidence-") as evidence:
+                    destination = Path(evidence) / "scan.xml"
+                    result = subprocess.run([sys.executable, str(wrapper), "-T3", "-sV", "-Pn", "-oX", str(destination), ip], capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(destination.read_text(), '<nmaprun target="'+ip+'"/>')
+            self.assertTrue((root / 'actual-scan-127.0.0.1.xml').is_file())
+            self.assertTrue((root / 'actual-scan-127.0.0.2.xml').is_file())
+            before = (root / 'invocations.jsonl').read_bytes()
+            for args in [["-T3", "-sV", "-Pn", "127.0.0.4"], ["-T3", "-sV", "-Pn", "192.168.1.1"], ["-sn", "-Pn", "127.0.0.0/8"], []]:
+                result = subprocess.run([sys.executable, str(wrapper), *args], capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("rejected unexpected scanner arguments", result.stderr)
+            self.assertEqual((root / 'invocations.jsonl').read_bytes(), before)
+
     def test_closed_xml_requires_exact_single_port_and_success(self):
         prefix = '<nmaprun><scaninfo protocol="tcp" numservices="1" services="12345"/><host><status state="up"/><address addr="127.0.0.1"/><ports>'
         suffix = '</ports></host><runstats><finished exit="success"/></runstats></nmaprun>'
