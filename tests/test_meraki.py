@@ -230,6 +230,7 @@ class MerakiClientTests(unittest.TestCase):
             result = client.collect_security_report("org-1")
         self.assertEqual(result["wireless_connections"][0]["data"]["observed_counter_totals"]["success"], 43)
         self.assertEqual(result["client_usage"]["data"]["clients_with_usage_count"], 3)
+        self.assertEqual(result["topology_detail_version"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_node_count"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_link_count"], 1)
         self.assertEqual(result["summary"]["rf_profile_count"], 1)

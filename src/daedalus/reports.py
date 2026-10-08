@@ -1274,6 +1274,29 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             rows.append([_paragraph(value, styles["MerakiCell"]) for value in values])
         story.append(_table(rows, [2.1 * inch, .9 * inch, 1.2 * inch, 1.1 * inch, 1.6 * inch]))
 
+    if type(meraki.get("topology_detail_version")) is int and meraki["topology_detail_version"] == 1:
+        from daedalus.meraki_topology import project_topology
+        graph = project_topology(meraki, complete=True)
+        if graph["networks"]:
+            story.append(PageBreak())
+            story.append(Paragraph("Observed network relationships", styles["MerakiSection"]))
+            story.append(_paragraph(graph["scope"], styles["MerakiBody"]))
+            for network in graph["networks"]:
+                story.append(_paragraph(f"{network['network_name']} - collection: {network['status']}; assigned nodes: "
+                    f"{network['node_count'] if network['node_count'] is not None else 'Unavailable'}; relationship pairs: "
+                    f"{network['link_count'] if network['link_count'] is not None else 'Unavailable'}", styles["MerakiSubsection"]))
+                if network["status"] != "complete": continue
+                story.append(_paragraph(f"Nodes without observed links: {network['isolated_node_count']}; reported root flags: "
+                    f"{network['root_node_count']}; collection omitted nodes: {network['omitted_node_count']}; "
+                    f"collection omitted links: {network['omitted_link_count']}; API errors: {network['reported_error_count']}", styles["MerakiBody"]))
+                for node in network["nodes"]:
+                    story.append(_paragraph(f"{node['name']} / {node['model']}" + (" - API root flag" if node['reported_root'] is True else ""), styles["MerakiSmall"]))
+                rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in ("Assigned device", "Observed neighbor", "Relationship count")]]
+                for link in network["links"]:
+                    rows.append([_paragraph(value, styles["MerakiCell"]) for value in (*link["endpoint_names"], link["link_count"])])
+                if len(rows) > 1: story.append(_table(rows, [2.8 * inch, 2.8 * inch, 1.3 * inch]))
+                else: story.append(_paragraph("No managed-device relationships reported. Missing links do not establish disconnection.", styles["MerakiBody"]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

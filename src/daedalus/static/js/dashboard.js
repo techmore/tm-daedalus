@@ -1823,6 +1823,32 @@
     container.append(section);
   }
 
+  function renderMerakiTopology(container, evidence) {
+    if (!evidence || !Array.isArray(evidence.networks) || !evidence.networks.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Observed network relationships";
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = evidence.scope || "Saved assigned-device relationships; missing links remain unknown."; section.append(heading, note);
+    var count = function (v) {return Number.isSafeInteger(v) && v >= 0 ? String(v) : "Unavailable";};
+    evidence.networks.forEach(function (network) {
+      var group = document.createElement("details"), summary = document.createElement("summary");
+      summary.textContent = (network.network_name || "Network") + " · " + (network.status || "unknown") + " · " + count(network.node_count) + " observed assigned devices · " + count(network.link_count) + " relationship pairs"; group.append(summary);
+      var coverage = document.createElement("p"); coverage.textContent = count(network.isolated_node_count) + " devices without observed links · " + count(network.root_node_count) + " reported root flags · " + count(network.omitted_node_count) + " nodes and " + count(network.omitted_link_count) + " links omitted at collection · " + count(network.reported_error_count) + " API errors"; group.append(coverage);
+      if (network.status === "complete") {
+        var list = document.createElement("ul"); (network.nodes || []).forEach(function (node) {var item = document.createElement("li"); item.textContent = node.name + " · " + (node.model || "Model unavailable") + (node.reported_root === true ? " · API root flag" : ""); list.append(item);});group.append(list);
+        if ((network.links || []).length) {
+          var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("aria-label", "Observed relationships for " + (network.network_name || "Network"));
+          var table = document.createElement("table"), caption = document.createElement("caption");caption.textContent = "Saved undirected managed-device relationships";table.append(caption);
+          var head = document.createElement("thead"), tr = document.createElement("tr");["Assigned device", "Observed neighbor", "Reported relationship count"].forEach(function (text) {var th = document.createElement("th");th.textContent = text;th.setAttribute("scope", "col");tr.append(th);});head.append(tr);table.append(head);
+          var body = document.createElement("tbody");network.links.forEach(function (link) {var tr = document.createElement("tr");[(link.endpoint_names || [])[0], (link.endpoint_names || [])[1], count(link.link_count)].forEach(function (value) {var td = document.createElement("td");td.textContent = value || "Unavailable";tr.append(td);});body.append(tr);});table.append(body);scroll.append(table);group.append(scroll);
+        } else {var empty = document.createElement("p");empty.textContent = "No relationships shown. Missing links do not establish disconnection; review coverage and complete saved JSON.";group.append(empty);}
+      }
+      if (network.additional_nodes || network.additional_links) {var more = document.createElement("p");more.textContent = count(network.additional_nodes) + " more assigned devices and " + count(network.additional_links) + " more relationship pairs in complete saved JSON.";group.append(more);}
+      section.append(group);
+    });
+    if (evidence.additional_networks) {var more = document.createElement("p");more.textContent = evidence.additional_networks + " more networks in complete saved JSON.";section.append(more);}
+    container.append(section);
+  }
+
   function renderMerakiRefreshPlan(container, plan) {
     if (!plan || plan.schema_version !== 1 || plan.currency !== "USD" || !Array.isArray(plan.scenarios)) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2036,6 +2062,7 @@
       container.append(planning);
     }
 
+    renderMerakiTopology(container, details.topology_graph);
     renderMerakiRefreshPlan(container, details.unifi_plan && details.unifi_plan.refresh_plan);
     renderMerakiSwitchPorts(container, details.switch_ports);
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
@@ -2112,6 +2139,18 @@
       merakiDashboardDetailCache.set(reportId, cached);
     }
     return cached;
+  }
+
+  function renderMerakiTopologyOverview(container, details) {
+    var evidence = details.topology_graph;
+    if (!evidence || !Array.isArray(evidence.networks) || !evidence.networks.length) return;
+    var section = document.createElement("section");section.className = "meraki-detail-section";
+    var title = document.createElement("h3");title.textContent = "Network relationships";section.append(title);
+    evidence.networks.slice(0, 3).forEach(function (network) {var row = document.createElement("p"), count = function (v) {return Number.isSafeInteger(v) && v >= 0 ? String(v) : "Unavailable";};row.textContent = (network.network_name || "Network") + ": " + count(network.node_count) + " observed assigned devices · " + count(network.link_count) + " relationship pairs · collection " + (network.status || "unknown");section.append(row);});
+    if (evidence.networks.length > 3 || evidence.additional_networks) {var more = document.createElement("p");more.textContent = "Additional networks are available in saved report details and complete JSON.";section.append(more);}
+    var note = document.createElement("p");note.className = "muted";note.textContent = "Observed managed-device relationships; missing links do not establish disconnection or a complete network map.";section.append(note);
+    var action = document.createElement("button");action.type = "button";action.className = "button button-small button-quiet";action.textContent = "Review network relationships";
+    action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return;var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]');if (!saved) return;saved.open = true;var summary = saved.querySelector("summary");if (summary) {summary.focus();summary.scrollIntoView({block: "center", behavior: "smooth"});}});section.append(action);container.append(section);
   }
 
   function renderMerakiWanOverview(container, details) {
@@ -2191,6 +2230,7 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiTopologyOverview(container, details);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
@@ -2199,6 +2239,7 @@
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiTopologyOverview(container, details);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
@@ -2213,6 +2254,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiTopologyOverview(container, details);
       renderMerakiSwitchOverview(container, details);
       renderMerakiWanOverview(container, details);
       renderMerakiPlanningOverview(container, details);

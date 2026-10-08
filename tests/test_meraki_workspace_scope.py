@@ -330,6 +330,7 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
                 "status": "complete",
                 "data": {"large_value": "x" * 1_000_000, "many_values": list(range(1000))},
             }] + [{"control": f"Control {index}", "status": "complete", "data": {}} for index in range(200)]
+            oversized_meraki["topology_detail_version"] = 1
             oversized_meraki["topology"] = [{"network_name": f"Network {index}", "status": "complete", "data": {"nodes": [], "links": []}} for index in range(101)]
             oversized_meraki["switch_power"] = [{"device_serial": "SW_1", "network_name": "HQ", "status": "complete", "data": {"measured_energy_wh": 240, "measured_average_watts": 10, "port_count": 24, "energy_coverage": "partial", "private": "never-serialize"}} for _ in range(101)]
             from daedalus.meraki_switch import summarize_switch_ports
@@ -355,6 +356,8 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(len(bounded["warnings"]), 100)
         self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "topology": 1, "switch_power": 1, "findings": 1, "warnings": 1})
         self.assertEqual(len(bounded["topology"]), 100)
+        self.assertEqual(len(bounded["topology_graph"]["networks"]), 20)
+        self.assertEqual(bounded["topology_graph"]["additional_networks"], 81)
         self.assertLessEqual(len(bounded["controls"][0]["evidence_preview"]), 3000)
         self.assertTrue(bounded["controls"][0]["evidence_truncated"])
 

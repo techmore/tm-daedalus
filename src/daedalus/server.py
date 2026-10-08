@@ -120,6 +120,7 @@ from daedalus.email_policy import analyze_email_auth
 from daedalus.credential_store import CredentialEncryptionError, decrypt_secret, encrypt_secret
 from daedalus.meraki_api import MerakiAPIError, MerakiClient, compare_meraki_snapshots
 from daedalus.meraki_history import compare_meraki_inventory
+from daedalus.meraki_topology import project_topology
 from daedalus.meraki_switch import project_switch_ports
 from daedalus.meraki_wan import project_wan_usage
 from daedalus.meraki_planning import build_unifi_plan, project_unifi_plan
@@ -5156,6 +5157,7 @@ def meraki_report_details(
         "wan_usage": [{"network_name": text_field(row, "network_name"), "status": text_field(row, "status", 40),
             "data": project_wan_usage(row.get("data"))}
             for row in (snapshot.get("wan_usage") or [])[:100] if isinstance(row, dict)],
+        "topology_graph": project_topology(snapshot) if type(snapshot.get("topology_detail_version")) is int and snapshot["topology_detail_version"] == 1 else None,
         "switch_ports": project_switch_ports(snapshot.get("switch_ports")),
         "wan_usage_additional_networks": max(0, len(snapshot.get("wan_usage") or []) - 100) if isinstance(snapshot.get("wan_usage"), list) else 0,
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),

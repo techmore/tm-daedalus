@@ -883,6 +883,7 @@ class MerakiClient:
             "wan_uplinks": wan_uplinks,
             "wan_usage": wan_usage,
             "wireless_connections": [row for row in observational if row["control"] == "Wireless connection outcomes"],
+            "topology_detail_version": 1,
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
             "switch_power": switch_power,
             "switch_ports": switch_port_observations,
