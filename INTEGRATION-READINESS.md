@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — scanner summary coverage deployed
+
+SER8 Incus activated source 60897ad787d0f61af3801517d63f595e6bc422cf, verified 80-file release SHA-256 8694cae1085cb5bb9c7879c04732ebb95312887b1e0cf9e399e1096a71e3ef5b. Verified off-host backup daedalus-data-20261008T050949Z.tar.gz preceded activation; internal/public health passed. The final full local suite passed 869 tests and 308 subtests, with one skip.
+
+Latest scanner summaries use the comparison's original-XML coverage rules, retain each host's latest observation, clear incompatible older proof, and bound target/proof previews. A 201-host regression covers the former 200-event summary cap. Production's normal authenticated agent-2 assessment returned recorded, one host, 19 open ports, one host with matching original evidence and 1,000 tested TCP ports. Complete approved-range coverage remains false. Served dashboard JavaScript matches deployed source (SHA-256 8ea03f94bbf34fec779012bccea60e67f907cd32d05a6f569c3e072ea2827fd0). Private receipt: /data/codex-scanner-summary-coverage-20261008.json.
+
+Installed Linux workflow 37729881710 failed at dd92966 because original XML established scope before the independently successful command provenance label was attached. Source 60897ad restores the label only when strict successful-command checks and saved target coverage agree; a regression covers both sources together. The validator was not weakened. Backend 37730983379 passed. Installed Linux 37730983365 has passed lifecycle and interrupted-bridge scenarios; repeat-comparison remains running at this checkpoint. In existing browser space 8, the previously authorized operator key established a normal signed-in session. All nine CSP topics survived reload at 1440px and 390px with the correct panel/title/hash and no page-level horizontal overflow. Mobile Menu and Internal network were operated using keyboard Enter, and desktop DNS navigation also moved focus to the page heading. No modal opened. Private browser receipts: validation/scanner-summary-20261008/. Screenshot capture timed out, so this DOM/refresh/limited keyboard evidence does not establish visual or full accessibility acceptance. The full project remains incomplete.
+
+
 ## October 8, 2026 — exact original-XML host/port coverage deployed
 
 SER8 Incus activated dd92966cf340d147e3fe5c10cfb1be8ab7f2dba9, verified 80-file release SHA-256 96934b7ea12f39aed6f87dcc8e9778516a48c9bd26f835eee8247403b330f4d0. Verified off-host backup daedalus-data-20261008T045619Z.tar.gz preceded activation; internal/public health passed. Final full suite: 866 passed, one skipped, 308 subtests.
