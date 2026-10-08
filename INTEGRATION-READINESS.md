@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 8, 2026 — connection/scope guidance deployed to SER8
+
+SER8 Incus activated source c964cbf3c5c8f344de88da396a1e2efb4d171e08, verified 79-file release SHA-256 c260ef013755b66a3dffb51ba3fa65a67e7fdb58fd5976a1b0b0e9306680deed. Verified off-host backup daedalus-data-20261008T035239Z.tar.gz preceded activation; internal/public health passed. Normal authenticated dashboard HTTP 200 identifies physical Mac agent 2 as connected/ready, detects 192.168.222.0/24, retains approved 10.20.0.0/24 and reports connection_scope outside. Both served assets match deployed source bytes and use revision daedalus-20261008-153. Private receipt: /data/codex-scanner-connection-scope-20261008.json. This is API/asset acceptance; rendered desktop/mobile acceptance and fresh network scan validation remain open. Backend CI 37724785343 and installed Linux CI 37724785335 were in progress at inspection.
+
 ## October 8, 2026 — scanner connection and scope guidance
 
 The dashboard API now compares freshly reported connected subnets with the independently approved scope. IPv4 and IPv6 unions distinguish covered, partial and outside connections; missing, stale, revoked or malformed evidence remains unknown. Adjacent approved CIDRs can jointly cover a connected subnet. This comparison does not establish target reachability or expand permissions. An inline cream/brown/olive notice next to connection and scope details explains routed targets, reconnecting and admin scope review. It adds no popup and preserves scan controls for approved routed targets.
