@@ -106,6 +106,40 @@ def validate_loopback_comparison_coverage(comparison):
             raise RuntimeError("Comparison is missing successful single-IP command provenance")
 
 
+def validate_listener_change(comparison, listener_port):
+    """Require the one controlled observation change and exact XML port coverage."""
+    validate_loopback_comparison_coverage(comparison)
+    expected = {"hosts_added": 0, "hosts_removed": 0, "hosts_not_observed": 0,
+                "port_changes": 1, "newly_observed_ports": 0,
+                "reported_port_changes": 0, "confirmed_removed_ports": 1}
+    if comparison.get("available") is not True or comparison.get("truncated") or comparison.get("counts") != expected:
+        raise RuntimeError("Controlled listener change lacks one confirmed missing port observation")
+    rows = comparison.get("port_changes", [])
+    if (len(rows) != 1 or rows[0].get("host") != "127.0.0.1"
+            or rows[0].get("protocol") != "tcp" or str(rows[0].get("port")) != str(listener_port)
+            or rows[0].get("change") != "removed" or rows[0].get("confirmed") is not True
+            or rows[0].get("before", {}).get("state") != "open" or rows[0].get("after") is not None):
+        raise RuntimeError("Controlled comparison changed another observation")
+
+
+def validate_closed_listener_xml(xml, listener_port):
+    document = ET.fromstring(xml)
+    hosts = document.findall("host")
+    if len(hosts) != 1 or hosts[0].find("status").get("state") != "up" or not any(
+            a.get("addr") == "127.0.0.1" for a in hosts[0].findall("address")):
+        raise RuntimeError("Closed-listener scan lacks exact live loopback host evidence")
+    scaninfo = document.findall("scaninfo")
+    if len(scaninfo) != 1 or scaninfo[0].get("protocol") != "tcp" or scaninfo[0].get("numservices") != "1" or scaninfo[0].get("services") != str(listener_port):
+        raise RuntimeError("Closed-listener XML does not prove the exact tested port")
+    ports = hosts[0].findall("ports/port")
+    extra = hosts[0].findall("ports/extraports")
+    explicit = (len(ports) == 1 and not extra and ports[0].get("portid") == str(listener_port)
+                and ports[0].get("protocol") == "tcp" and ports[0].find("state").get("state") == "closed")
+    aggregate = not ports and len(extra) == 1 and extra[0].get("state") == "closed" and extra[0].get("count") == "1"
+    if not (explicit or aggregate) or document.find("runstats/finished").get("exit") != "success":
+        raise RuntimeError("Controlled closed-listener XML is incomplete or not closed")
+
+
 class FixtureHTTPServer(ThreadingHTTPServer):
     def handle_error(self, request, client_address):
         if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError)):
@@ -175,7 +209,9 @@ def validate_recovery_evidence(pending, history, run_id, invocations, listener_p
     return {'pending_events_recovered': len(pending), 'original_event_ids': [event['client_event_id'] for event in pending], 'original_occurred_at': [event['occurred_at'] for event in pending], 'source_job_id': run_id, 'deep_nmap_invocations': 1, 'event_identity_unchanged': True}
 
 
-def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True, managed_linux: bool = False) -> dict:
+def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True, managed_linux: bool = False, close_listener: bool = False) -> dict:
+    if close_listener and (not repeat_scan or interrupt_bridge or managed_linux):
+        raise RuntimeError("Listener-change validation requires the ordinary repeated loopback workflow")
     nmap = shutil.which("nmap")
     if not nmap:
         raise RuntimeError("nmap is unavailable on PATH")
@@ -432,6 +468,10 @@ raise SystemExit(completed.returncode)
                 pdf = pdf_response.content
                 comparison_proof = None
                 if repeat_scan:
+                    if close_listener:
+                        listener.shutdown()
+                        listener.server_close()
+                        print(json.dumps({"stage": "controlled_loopback_listener_closed"}), flush=True)
                     # Keep the shipped five-minute scanner cooldown intact.
                     # The isolated services stay live; health checks observe them while waiting.
                     print(json.dumps({"stage": "waiting_for_product_scan_cooldown", "seconds": 300}), flush=True)
@@ -464,13 +504,35 @@ raise SystemExit(completed.returncode)
                     if not second_event:
                         raise RuntimeError("Repeated scan has no host-result event for comparison")
                     validate_run_evidence(second_detail, second_event)
-                    validate_host_evidence(second_event["payload"], listener_port)
+                    if close_listener:
+                        hosts = second_event["payload"] if isinstance(second_event["payload"], list) else second_event["payload"].get("hosts", [])
+                        if len(hosts) != 1 or hosts[0].get("ip") != "127.0.0.1" or any(
+                                str(p.get("port")) == str(listener_port) and p.get("state") == "open" for p in hosts[0].get("ports", [])):
+                            raise RuntimeError("Closed listener remained open or host evidence was lost")
+                        validate_closed_listener_xml((root / "actual-scan.xml").read_bytes(), listener_port)
+                    else:
+                        validate_host_evidence(second_event["payload"], listener_port)
                     comparison_response = client.get(f"/api/agents/{agent_id}/runs/{second_id}/comparison", params={"previous_run_id": run_id})
                     comparison_response.raise_for_status()
                     comparison = comparison_response.json()
-                    if not comparison.get("available") or any(comparison.get(key) for key in ("hosts_added", "hosts_removed", "hosts_not_observed", "port_changes")):
+                    if not close_listener and (not comparison.get("available") or any(comparison.get(key) for key in ("hosts_added", "hosts_removed", "hosts_not_observed", "port_changes"))):
                         raise RuntimeError("Identical repeated loopback observations did not compare cleanly")
                     validate_loopback_comparison_coverage(comparison)
+                    if close_listener:
+                        validate_listener_change(comparison, listener_port)
+                        def saved_change():
+                            saved = client.get(f"/api/agents/{agent_id}/run-comparisons").json()["comparisons"]
+                            return next((row for row in saved if row["previous_run_id"] == run_id and row["current_run_id"] == second_id and row["comparison"]["counts"].get("confirmed_removed_ports") == 1), None)
+                        saved = wait_for(saved_change)
+                        notices = client.get("/api/notifications").json()["notifications"]
+                        notices = [n for n in notices if n["source_type"] == "scanner_comparison" and n["source_id"] == saved["id"]]
+                        if len(notices) != 1 or notices[0]["reason"] != "changes" or notices[0]["tab"] != "scanners" or saved["meaningful_change_count"] != 1:
+                            raise RuntimeError("Controlled listener change did not persist one scoped inbox notice")
+                        # Reads must preserve saved evidence and avoid duplicate notices.
+                        before = json.dumps(saved, sort_keys=True)
+                        client.get(f"/api/agents/{agent_id}/runs/{second_id}/comparison", params={"previous_run_id": run_id}).raise_for_status()
+                        if json.dumps(saved_change(), sort_keys=True) != before or len([n for n in client.get("/api/notifications").json()["notifications"] if n["source_type"] == "scanner_comparison" and n["source_id"] == saved["id"]]) != 1:
+                            raise RuntimeError("Comparison read altered history or duplicated its notice")
                     comparison_proof = {"previous_run_id": run_id, "current_run_id": second_id, "second_run_event_count": second_detail["run"]["event_count"], "counts": comparison["counts"], "coverage_comparable": True, "covered_targets": comparison["coverage"]["current_targets"], "coverage_source": "successful_daedalus_single_ip_command", "coverage_reasons": comparison["coverage"]["reasons"]}
                 socket_live.close()
                 with sqlite3.connect(portal_database) as db:
@@ -480,7 +542,11 @@ raise SystemExit(completed.returncode)
                 if not any(message.get("type") == "scan_event" for message in live):
                     raise RuntimeError("No real portal scan event websocket broadcast was observed")
                 xml = (root / "actual-scan.xml").read_bytes()
-                validate_xml_evidence(xml, listener_port)
+                if close_listener:
+                    validate_closed_listener_xml(xml, listener_port)
+                    comparison_proof.update(controlled_listener_closed=True, persisted_change_notice=True, notice_deduplicated=True, immutable_history_on_read=True)
+                else:
+                    validate_xml_evidence(xml, listener_port)
                 history = client.get("/api/events?limit=200").json()["events"]
                 invocations = [json.loads(line) for line in (root / "invocations.jsonl").read_text().splitlines()]
                 recovery_proof = None
@@ -683,6 +749,7 @@ def main():
     parser.add_argument("--run-loopback", action="store_true", help="Explicitly opt into real loopback-only Nmap")
     parser.add_argument("--nmapui-python", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument("--close-listener", action="store_true", help="With --repeat-scan, close the owned listener and validate exact-port absence, saved history and inbox notice")
     parser.add_argument("--repeat-scan", action="store_true", help="Repeat the bounded scan and validate distinct run IDs and comparison")
     parser.add_argument('--interrupt-bridge', action='store_true', help='Interrupt only the owned bridge during one in-flight loopback job, then validate durable recovery')
     parser.add_argument('--allow-host-discovery', action='store_true', help='Use normal host discovery for the loopback target instead of the default per-scan -Pn override')
@@ -690,6 +757,7 @@ def main():
     args = parser.parse_args()
     if not args.run_loopback: parser.error("--run-loopback is required")
     if args.interrupt_bridge and args.repeat_scan: parser.error('Select either repeat comparison or bridge interruption for one bounded validation')
-    print(json.dumps(validate(args.nmapui_python, args.receipt, args.repeat_scan, args.interrupt_bridge, not args.allow_host_discovery, args.managed_linux), indent=2))
+    if args.close_listener and (not args.repeat_scan or args.interrupt_bridge or args.managed_linux): parser.error("--close-listener requires --repeat-scan without interruption/managed mode")
+    print(json.dumps(validate(args.nmapui_python, args.receipt, args.repeat_scan, args.interrupt_bridge, not args.allow_host_discovery, args.managed_linux, args.close_listener), indent=2))
 
 if __name__ == "__main__": main()

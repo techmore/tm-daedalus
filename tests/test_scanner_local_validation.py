@@ -25,6 +25,54 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 validation.validate_loopback_comparison_coverage(bad)
 
+    def test_controlled_listener_change_requires_exact_confirmed_observation(self):
+        import copy
+        comparison = {"available": True, "coverage": {"comparable": True, "reasons": [],
+            "previous_targets": ["127.0.0.1/32"], "current_targets": ["127.0.0.1/32"]},
+            "previous_run": {"covered_targets_source": "successful_daedalus_single_ip_command"},
+            "current_run": {"covered_targets_source": "successful_daedalus_single_ip_command"},
+            "counts": {"hosts_added": 0, "hosts_removed": 0, "hosts_not_observed": 0,
+                       "port_changes": 1, "newly_observed_ports": 0, "reported_port_changes": 0,
+                       "confirmed_removed_ports": 1},
+            "port_changes": [{"host": "127.0.0.1", "protocol": "tcp", "port": 12345,
+                "change": "removed", "confirmed": True, "before": {"state": "open"}, "after": None}]}
+        validation.validate_listener_change(comparison, 12345)
+        for mutate in (lambda c: c.update(available=False), lambda c: c.update(truncated=True),
+                       lambda c: c["counts"].update(confirmed_removed_ports=0),
+                       lambda c: c["port_changes"][0].update(confirmed=False),
+                       lambda c: c["port_changes"][0].update(change="not_observed"),
+                       lambda c: c["port_changes"][0].update(host="192.168.1.1"),
+                       lambda c: c["port_changes"][0].update(port=80),
+                       lambda c: c["port_changes"][0].update(protocol="udp"),
+                       lambda c: c["port_changes"][0].update(after={"state": "open"}),
+                       lambda c: c["port_changes"][0]["before"].update(state="closed")):
+            bad = copy.deepcopy(comparison); mutate(bad)
+            with self.assertRaises(RuntimeError): validation.validate_listener_change(bad, 12345)
+
+    def test_closed_xml_requires_exact_single_port_and_success(self):
+        prefix = '<nmaprun><scaninfo protocol="tcp" numservices="1" services="12345"/><host><status state="up"/><address addr="127.0.0.1"/><ports>'
+        suffix = '</ports></host><runstats><finished exit="success"/></runstats></nmaprun>'
+        explicit = prefix + '<port portid="12345" protocol="tcp"><state state="closed"/></port>' + suffix
+        aggregate = prefix + '<extraports count="1" state="closed"/>' + suffix
+        for xml in (explicit, aggregate):
+            validation.validate_closed_listener_xml(xml.encode(), 12345)
+            for bad in (xml.replace('state="closed"', 'state="open"'), xml.replace('state="up"', 'state="down"'),
+                        xml.replace('exit="success"', 'exit="error"'), xml.replace('127.0.0.1', '192.168.1.1'),
+                        xml.replace('services="12345"', 'services="80"'), xml.replace('numservices="1"', 'numservices="2"'),
+                        xml.replace('protocol="tcp"', 'protocol="udp"')):
+                with self.assertRaises(RuntimeError): validation.validate_closed_listener_xml(bad.encode(), 12345)
+        for bad in (prefix + suffix, aggregate.replace('count="1"', 'count="2"'),
+                    prefix + '<extraports count="1" state="closed"/><port portid="12345" protocol="tcp"><state state="closed"/></port>' + suffix):
+            with self.assertRaises(RuntimeError): validation.validate_closed_listener_xml(bad.encode(), 12345)
+
+    def test_listener_change_rejects_unsupported_modes_before_side_effects(self):
+        from unittest.mock import patch
+        for options in ({}, {"repeat_scan": True, "interrupt_bridge": True}, {"repeat_scan": True, "managed_linux": True}):
+            with patch.object(validation.shutil, "which") as lookup:
+                with self.assertRaisesRegex(RuntimeError, "ordinary repeated"):
+                    validation.validate(Path('/unused'), Path('/unused-receipt'), close_listener=True, **options)
+                lookup.assert_not_called()
+
     def test_readiness_refuses_exited_process_before_accepting_response(self):
         from unittest.mock import Mock, patch
         process = Mock()
