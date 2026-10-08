@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 8, 2026 — latest hosted BFS Meraki acceptance
+
+Application `e3b7d36` is active in SER8 Incus with healthy internal/public readiness after a verified off-host backup. Normal BFS report 53 completed: 27 devices, 220 switch ports, 53 collected controls and zero unavailable controls. All 18 CIS v8 controls now carry explicit saved evidence/review status (seven partial, two review, nine not assessed); this is not a safeguard compliance score. Both UniFi equipment plans remain $11,356 / $12,940 with ten vendor links. Compared with report 52, no control, coverage or inventory changes were recorded. The actual new PDF appendix was visually reviewed, and the frozen prior 129 page streams remain unchanged. Full local suite: 945 passed, one skipped, 342 subtests; backend CI 37769053394 passed. The browser handoff interrupted the final repeated mobile check; earlier hosted DOM, keyboard and desktop refresh evidence is recorded without claiming full visual/accessibility acceptance. Temporary validation credentials were revoked and returned 401. See [the full BFS release receipt and remaining scope](docs/MERAKI-PURCHASE-PLANNING.md). Whole-project completion remains open.
+
 ## October 8, 2026 — additional Level 2 password-policy routines
 
 Source adds bounded read-only numeric-identifier and special-character-predicate routines against pinned NIST mSCP Tahoe procedures. Native fixtures cover explicit match/mismatch, absent/typed/duplicate identifiers, noncanonical counts, compound/negated predicates and failed capture. Static command allowlist fixtures include both `/usr/bin/pwpolicy -getaccountpolicies` paths. Mapping metadata is 104 distinct rule IDs, 88/100 Level 1 and 102/119 Level 2. Mapping counts are not complete benchmark procedure validation. Published JSON, immutable profile versions, installed clients and report templates are unchanged.
