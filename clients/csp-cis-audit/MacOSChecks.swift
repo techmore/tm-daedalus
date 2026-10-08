@@ -233,6 +233,9 @@ struct MacOSChecks {
             return CheckResult(check: check, status: matches ? "pass" : "fail",
                 details: matches ? "Captured login-window preference matches the organization-approved profile message. This is preference evidence, not a live login-screen observation." : "Captured login-window preference differs from the organization-approved profile message. Message text remains local.")
         }
+        if let ruleID = check.ruleID, tahoeAuditFlagRequirements[ruleID] != nil {
+            return checkTahoeAuditFlag(check: check, readControl: readAuditPolicy)
+        }
         if check.ruleID == "audit_retention_configure" {
             return checkTahoeAuditRetention(check: check, readControl: readAuditPolicy)
         }

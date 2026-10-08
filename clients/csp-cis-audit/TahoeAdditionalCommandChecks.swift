@@ -59,7 +59,13 @@ extension MacOSChecks {
         "audit_acls_folders_configure", "audit_control_acls_configure"
     ]
 
-    static let additionalMacOS26PolicyRuleIDs: Set<String> = ["audit_retention_configure"]
+    static let tahoeAuditFlagRequirements = [
+        "audit_flags_aa_configure": "aa", "audit_flags_ad_configure": "ad",
+        "audit_flags_lo_configure": "lo", "audit_flags_ex_configure": "-ex",
+        "audit_flags_fm_failed_configure": "-fm", "audit_flags_fr_configure": "-fr",
+        "audit_flags_fw_configure": "-fw"
+    ]
+    static let additionalMacOS26PolicyRuleIDs: Set<String> = Set(tahoeAuditFlagRequirements.keys).union(["audit_retention_configure"])
 
     static let additionalMacOS26RuleIDs = additionalMacOS26CommandRuleIDs
         .union(additionalMacOS26AuditEvidenceRuleIDs)
@@ -418,6 +424,37 @@ extension MacOSChecks {
         default:
             return result("manual", "No additional bundled command check is available for this rule.")
         }
+    }
+
+    static func checkTahoeAuditFlag(check: CISCheck, readControl: (URL) -> Data? = readAuditControl) -> CheckResult {
+        func result(_ status: String, _ detail: String) -> CheckResult {
+            CheckResult(check: check, status: status, details: "Pinned Tahoe audit flag configuration. " + detail + " This does not verify active kernel auditing or retained events. Raw configuration remains local.")
+        }
+        guard let required = tahoeAuditFlagRequirements[check.ruleID ?? ""],
+              let data = readControl(URL(fileURLWithPath: "/etc/security/audit_control")),
+              data.count <= auditControlMaximumBytes,
+              let text = String(data: data, encoding: .utf8), !text.contains("\0") else {
+            return result("manual", "Required policy evidence is missing, inaccessible or unsupported.")
+        }
+        let lines = text.components(separatedBy: .newlines).map { $0.components(separatedBy: "#")[0].trimmingCharacters(in: .whitespaces) }
+        guard !lines.contains(where: { $0.range(of: "^flags(?:[ \t]|$)", options: .regularExpression) != nil }),
+              let field = MacOSSystemChecks.auditPolicyField("flags", readControl: { _ in data }) else {
+            return result("manual", "The flags field is missing, malformed or duplicated.")
+        }
+        let tokens = field.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        let known: Set<String> = ["no", "fr", "fw", "fa", "fm", "fc", "fd", "cl", "pc", "nt", "ip", "na", "ad", "lo", "aa", "ap", "res", "io", "ex", "ot"]
+        var classes = Set<String>()
+        for token in tokens {
+            let name = token.hasPrefix("-") || token.hasPrefix("+") ? String(token.dropFirst()) : token
+            guard known.contains(name), classes.insert(name).inserted else {
+                return result("manual", "Unknown, duplicate, conflicting or combined selections require review.")
+            }
+        }
+        if tokens.contains(required) { return result("pass", "The exact bundled selection is present.") }
+        if required.hasPrefix("-"), tokens.contains(String(required.dropFirst())) {
+            return result("manual", "A broader event selection is present; the pinned failure-only selection needs review.")
+        }
+        return result("fail", "The required bundled event selection is absent from the captured explicit flags.")
     }
 
     // Shared with the legacy CSP auditing check; never infer success from an error mentioning auditd.

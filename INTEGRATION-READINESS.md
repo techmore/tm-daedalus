@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 7, 2026 — Level 2 audit flag checkers
+
+Added seven bounded read-only Tahoe audit flag checkers using the pinned NIST mSCP rules and existing no-follow audit_control reader. Exact required selections pass; explicit absent selections fail. Missing, malformed, unknown, conflicting and duplicate evidence remains manual, as do broader selections needing review against failure-only checks. Raw configuration stays local; no service or settings are changed. Mappings total 101 distinct rules: 87/100 Level 1 and 99/119 Level 2. Published profile versions and check sets are unchanged. Native xcresult confirms 116 passed, zero failed and one real-Tahoe test skipped locally; focused backend tests passed 60 tests and 18 subtests. No installed client upgrade or new production assessment is claimed for this batch. See [alignment and primary sources](CIS-MACOS26-ALIGNMENT.md).
+
 ## October 7, 2026 — native endpoint assessment context
 
 The CIS menu now leads with assessed/unassessed counts and explains the all-check pass-rate denominator. Empty category percentages say Not assessed; entirely unassessed runs use a neutral icon. Shared presentation helpers reject inconsistent counts instead of showing a percentage. Final native xcresult: 115 passed, zero failed, one real-Tahoe platform test skipped on macOS 27.0.1. This changes the client UI; deployed endpoint binaries require an explicit update. Developer ID signing remains unavailable (only an Apple Development identity exists), so trusted distribution and actual macOS 26 validation remain open.

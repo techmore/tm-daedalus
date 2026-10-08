@@ -5,6 +5,36 @@ import CryptoKit
 @testable import CSP_CIS_Audit
 
 struct TahoeAdditionalCommandChecksTests {
+    @Test func auditFlagRulesRequireExactUnambiguousLocalPolicy() {
+        for (rule, required) in MacOSChecks.tahoeAuditFlagRequirements {
+            let check = CISCheck(id: rule, category: "macos", description: "Audit configuration", ruleID: rule)
+            func evaluate(_ text: String?) -> CheckResult {
+                MacOSChecks.runTahoe(check: check, osMajorVersion: 26, readAuditPolicy: { url in
+                    #expect(url.path == "/etc/security/audit_control")
+                    return text.map { Data($0.utf8) }
+                }, readPreference: { _, _ in nil })
+            }
+            #expect(evaluate("flags: " + required + " # local note\n").status == "pass")
+            #expect(evaluate("flags:no").status == "fail")
+            for invalid in [nil, "", "flags:", "flags:all", "flags:unknown", "flags:" + required + "," + required,
+                            "flags:" + required + "\nflags:no", "flags:" + required + "\nflags :no", "flags:" + required + ",", "flags:" + required + "\0"] {
+                #expect(evaluate(invalid).status == "manual")
+            }
+            if required.hasPrefix("-") {
+                #expect(evaluate("flags:" + required.dropFirst()).status == "manual")
+                #expect(evaluate("flags:+" + required.dropFirst()).status == "fail")
+            } else {
+                #expect(evaluate("flags:-" + required).status == "fail")
+            }
+            #expect(evaluate("flags:" + required + ",+" + required.trimmingCharacters(in: CharacterSet(charactersIn: "-"))).status == "manual")
+            let otherOS = MacOSChecks.runTahoe(check: check, osMajorVersion: 27, readAuditPolicy: { _ in
+                Issue.record("Other OS must not read audit configuration")
+                return Data()
+            }, readPreference: { _, _ in nil })
+            #expect(otherOS.status == "manual")
+        }
+    }
+
     private func run(_ rule: String, _ evidence: MacOSChecks.CommandEvidence) -> String {
         evaluate(rule) { _, _ in evidence }
     }
