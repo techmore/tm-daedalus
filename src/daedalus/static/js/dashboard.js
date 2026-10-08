@@ -1744,6 +1744,62 @@
     container.append(section);
   }
 
+  function renderMerakiPowerUsage(container, rows, additional) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    var validMeasure = function (value) { return typeof value === "number" && Number.isFinite(value) && value >= 0; };
+    var format = function (value, unit) { return validMeasure(value) ? new Intl.NumberFormat("en-US", {maximumFractionDigits: 3}).format(value) + (unit ? " " + unit : "") : "Unavailable"; };
+    var section = document.createElement("section"); section.className = "meraki-detail-section meraki-power-section";
+    var heading = document.createElement("h4"); heading.textContent = "Switch PoE usage";
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Measured energy over the requested prior 24 hours. Missing ports remain unmeasured. Average usage does not establish peak demand or replacement PoE capacity.";
+    section.append(heading, note);
+    var measured = rows.filter(function (row) {
+      var data = row.data || {};
+      return row.status === "complete" && data.requested_timespan_seconds === 86400 && validMeasure(data.measured_energy_wh);
+    });
+    var energy = measured.reduce(function (total, row) { return total + row.data.measured_energy_wh; }, 0);
+    var complete = measured.filter(function (row) { return row.data.energy_coverage === "complete"; }).length;
+    var metrics = document.createElement("dl"); metrics.className = "meraki-detail-metrics";
+    [["Switches shown", rows.length], ["Complete energy coverage", complete + "/" + rows.length],
+     ["Measured energy · shown switches", measured.length ? format(energy, "Wh") : "Unavailable"]].forEach(function (entry) {
+      var cell = document.createElement("div"), label = document.createElement("dt"), value = document.createElement("dd");
+      label.textContent = entry[0]; value.textContent = String(entry[1]); cell.append(label, value); metrics.append(cell);
+    });
+    section.append(metrics);
+    var scroller = document.createElement("div"); scroller.className = "audit-table-scroll meraki-power-scroll";
+    scroller.tabIndex = 0; scroller.setAttribute("role", "region"); scroller.setAttribute("aria-label", "Switch PoE usage table");
+    var table = document.createElement("table"); table.className = "audit-record-table meraki-power-table";
+    var caption = document.createElement("caption"); caption.textContent = "Per-switch measured energy and coverage"; table.append(caption);
+    var labels = ["Switch / network", "Collection / energy coverage", "Ports measured", "Measured energy", "Measured average"];
+    var head = document.createElement("thead"), header = document.createElement("tr");
+    labels.forEach(function (label) { var cell = document.createElement("th"); cell.scope = "col"; cell.textContent = label; header.append(cell); });
+    head.append(header); table.append(head);
+    var body = document.createElement("tbody");
+    rows.forEach(function (row) {
+      var data = row.data || {}, line = document.createElement("tr");
+      var scoped = row.status === "complete" && data.requested_timespan_seconds === 86400;
+      var counts = Number.isInteger(data.measured_port_count) && Number.isInteger(data.port_count) && data.measured_port_count >= 0 && data.port_count >= data.measured_port_count;
+      var values = [(row.device_serial || "Switch") + " / " + (row.network_name || "Network"),
+                    (row.status || "unknown") + " / " + (data.energy_coverage || "unavailable"),
+                    counts ? data.measured_port_count + " / " + data.port_count : "Unavailable",
+                    scoped ? format(data.measured_energy_wh, "Wh") : "Unavailable",
+                    scoped ? format(data.measured_average_watts, "W") : "Unavailable"];
+      values.forEach(function (value, index) {
+        var cell = document.createElement(index === 0 ? "th" : "td");
+        if (index === 0) cell.scope = "row";
+        cell.dataset.label = labels[index]; cell.textContent = value; line.append(cell);
+      });
+      body.append(line);
+    });
+    table.append(body); scroller.append(table); section.append(scroller);
+    if (additional > 0) {
+      var more = document.createElement("p"); more.className = "muted";
+      more.textContent = additional + " more switches in the saved JSON evidence. Summary covers shown switches.";
+      section.append(more);
+    }
+    container.append(section);
+  }
+
   function renderMerakiDashboardDetails(container, details) {
     container.replaceChildren();
     var heading = document.createElement("p");
@@ -1806,25 +1862,7 @@
       container.append(planning);
     }
 
-    if (Array.isArray(details.switch_power) && details.switch_power.length) {
-      addMerakiDetailList(container, "Switch PoE usage", details.switch_power, function (row) {
-        var data = row.data || {};
-        var values = [(row.network_name || "Network") + " · " + (row.device_serial || "Switch"),
-                      "Collection: " + (row.status || "unknown"), "Energy coverage: " + (data.energy_coverage || "unavailable")];
-        if (data.measured_energy_wh !== null && data.measured_energy_wh !== undefined) {
-          values.push(data.measured_energy_wh + " Wh over requested prior 24 hours",
-                      data.measured_average_watts + " W measured average",
-                      data.measured_port_count + "/" + data.port_count + " ports measured");
-        }
-        values.push("Average usage does not establish peak demand or replacement PoE budget.");
-        return values.join(" · ");
-      });
-      if (details.truncated && details.truncated.switch_power) {
-        var morePower = document.createElement("p"); morePower.className = "muted";
-        morePower.textContent = details.truncated.switch_power + " more switches in the saved JSON evidence.";
-        container.append(morePower);
-      }
-    }
+    renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
 
     var clientUsage = details.client_usage || {};
     addMerakiDetailList(container, "Aggregate client usage", [clientUsage], function (usage) {

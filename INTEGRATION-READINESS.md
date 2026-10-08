@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 8, 2026 — Meraki power dashboard hierarchy
+
+The PoE detail section now puts shown-switch count, complete energy coverage and measured energy from the shown switches ahead of a per-switch comparison table. Unknown, failed and unknown-timespan readings stay unavailable; measured zero stays zero. Truncated lists explicitly limit summary scope to shown switches. One shared note explains the 24-hour measurement window, missing ports and the difference between average usage and peak capacity. The table uses column/row headers, a caption and a named keyboard-focusable scroll region with a visible focus indicator. Styling uses existing cream, brown and olive theme variables.
+
+Focused dashboard/report checks passed 74 tests and ten subtests. The final local suite passed 828 tests, one skipped and 293 subtests. The actual JavaScript helper is exercised for partial/complete/unknown coverage, valid zero, missing scope, NaN refusal, truncation, literal text injection safety and header/keyboard semantics. JavaScript syntax and diff checks passed. Browser visual review remains pending: ego-browser space 8 is currently user-owned, confirmed through its read-only ownership metadata; the skill requires stopping browser operations rather than claiming it without a new explicit handoff. No new browser space was created. Source changes do not modify report generation or scanner assets. The prior installed Linux workflow 37721890144 completed successfully in all three scenarios, and backend workflow 37722182260 passed its documentation head.
+
+
 ## October 8, 2026 — original Meraki PoE reporting retained and validated live
 
 Original Meraki-2026_planning energy reporting is now preserved as a separate dated switch observation. One existing port-status request per switch uses an explicit 24-hour timespan, with bounded allowlisted aggregates, measured/missing counts and partial coverage. Changing energy values do not enter configuration-change alerts. The dashboard exposes saved measurements; an appendix follows existing PDF sections. Focused validation passed 110 tests and 24 subtests; the full suite passed 826 tests, one skipped and 293 subtests.

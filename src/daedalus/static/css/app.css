@@ -491,6 +491,14 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .meraki-detail-section h4 { margin: 0 0 8px; font-family: Georgia, serif; font-size: 1.1rem; }
 .meraki-detail-section ul { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
 .meraki-detail-section li { overflow-wrap: anywhere; }
+.meraki-power-section { display: grid; gap: 10px; }
+.meraki-power-section > h4, .meraki-power-section > p { margin: 0; }
+.meraki-power-scroll { max-width: 100%; border: 1px solid var(--card-line); border-radius: 10px; background: var(--cream-50); }
+.meraki-power-scroll:focus-visible { outline: 2px solid var(--olive-600); outline-offset: 3px; }
+.meraki-power-table { min-width: 640px; }
+.meraki-power-table caption { padding: 10px 14px; color: var(--brown-800); text-align: left; font-size: 11px; }
+.meraki-power-table tbody th { width: 210px; border-top: 1px solid var(--card-line); color: var(--brown-900); background: var(--card-surface); text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+.meraki-power-table td:first-child, .meraki-power-table td:nth-child(2) { width: auto; font-family: inherit; }
 .meraki-control-evidence { margin-top: 7px; padding: 8px 10px; border: 1px solid rgba(219, 214, 176, .5); border-radius: 8px; background: rgba(248, 246, 236, .42); }
 .meraki-control-evidence pre { max-width: 100%; max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .78rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .meraki-control-evidence small { display: block; color: var(--muted, #777064); }
