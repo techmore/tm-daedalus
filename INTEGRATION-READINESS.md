@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 7, 2026 — production BFS Meraki and purchase planning
+
+SER8 Incus deployed source `7c26179` with public/internal readiness checks passing. BFS reports **40 and 41** completed against Buckingham Friends School (Cisco organization 296035), collecting 27 devices and 48 controls, with zero unavailable controls and three review observations. The repeat retained report 40 as its comparison baseline and found no control, coverage or inventory changes. Both reports retain dated UniFi purchase scenarios ($11,356 and $12,940), quantities and official vendor links in the dashboard, saved JSON and PDF. This is a candidate equipment budget; tax, shipping, accessories and implementation are excluded.
+
+Normal authenticated API validation confirmed saved plans and report downloads, four request/completion audit records, and cross-workspace isolation. The temporary BFS validation key was revoked and then returned 401. An off-host verified backup was taken after the reports and revocation. The full local suite passed 774 tests, one skipped and 260 subtests. Details: [Meraki purchase planning](docs/MERAKI-PURCHASE-PLANNING.md). Full project readiness, exact standardized scanner PDF acceptance and wider visual review remain open.
+
 ## October 4, 2026 — endpoint PDF coverage summary and visual review
 
 All **12 pages** of actual endpoint PDF 35 were rendered and visually inspected. Its tables were readable, but the Category heading broke across lines and category percentages obscured that browser checks were unassessed. Future PDFs use an Area header, an Assessment summary with explicit assessed coverage, and pass/fail/manual/error counts per area. The pass-rate denominator explains both manual and error results; missing summary metadata is labeled Not reported instead of inventing zeroes.
