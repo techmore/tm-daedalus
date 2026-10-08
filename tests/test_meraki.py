@@ -155,6 +155,7 @@ class MerakiClientTests(unittest.TestCase):
         self.assertNotIn("never-store-this", str(result))
         self.assertEqual(len(result["security_controls"]), 11)
         self.assertEqual(result["wan_usage"][0]["status"], "complete")
+        self.assertEqual(result["wan_usage"][0]["pdf_evidence_summary_version"], 1)
         self.assertEqual(result["wan_usage"][0]["data"]["interfaces"][0]["directions"]["sent"]["average_mbps"], 1)
         self.assertEqual(result["wan_uplinks"]["data"]["state_counts"], {"active": 1})
         self.assertEqual(result["wan_uplinks"]["data"]["rows"][0]["device_name"], "Gateway")

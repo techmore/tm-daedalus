@@ -997,6 +997,12 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         for control in controls:
             data = control.get("data")
             observed = data if data is not None else control.get("status", "Unavailable")
+            if (control.get("control") == "WAN usage history" and isinstance(data, dict)
+                    and type(control.get("pdf_evidence_summary_version")) is int
+                    and control["pdf_evidence_summary_version"] == 1):
+                observed = {key: data.get(key) for key in ("requested_timespan_seconds", "requested_resolution_seconds",
+                    "interval_count", "interface_count", "first_interval_start", "last_interval_end")}
+                observed["supporting_evidence"] = "See WAN usage history appendix; complete intervals remain in saved JSON evidence."
             # Large arrays (switch ports, SSIDs, firewall rules) need separate
             # table rows. A single multi-page cell cannot be split by ReportLab.
             records = observed if isinstance(observed, list) else [observed]

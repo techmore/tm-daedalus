@@ -89,3 +89,25 @@ class MerakiWanUsageTests(unittest.TestCase):
         self.assertEqual(data['interval_count'],168)
         self.assertEqual(data['interfaces'][0]['directions']['sent']['observed_seconds'],604800)
         self.assertEqual(data['interfaces'][0]['directions']['sent']['measured_interval_count'],168)
+
+    def test_pdf_new_summary_marker_keeps_legacy_rendering_and_complete_json(self):
+        from datetime import datetime, timedelta, UTC
+        from copy import deepcopy
+        from io import BytesIO
+        from pypdf import PdfReader
+        from daedalus.reports import build_meraki_security_pdf
+        start=datetime(2026,10,1,tzinfo=UTC)
+        data=summarize_wan_usage([interval((start+timedelta(hours=i)).isoformat(),(start+timedelta(hours=i+1)).isoformat(),sent=100,received=200)for i in range(168)])
+        control={'control':'WAN usage history','status':'complete','network_name':'Fixture','data':data}
+        snapshot={'domain':'example.test','meraki':{'organization':{'name':'Fixture'},'collected_at':'2026-10-08T00:00:00Z',
+            'security_controls':[control],'wan_usage':[deepcopy(control)]}}
+        legacy=PdfReader(BytesIO(build_meraki_security_pdf(snapshot)))
+        bad=deepcopy(snapshot);bad['meraki']['security_controls'][0]['pdf_evidence_summary_version']=True
+        unsupported=PdfReader(BytesIO(build_meraki_security_pdf(bad)))
+        self.assertEqual([page.get_contents().get_data()for page in legacy.pages],[page.get_contents().get_data()for page in unsupported.pages])
+        compact=deepcopy(snapshot);compact['meraki']['security_controls'][0]['pdf_evidence_summary_version']=1
+        rendered=PdfReader(BytesIO(build_meraki_security_pdf(compact)))
+        self.assertLess(len(rendered.pages),len(legacy.pages))
+        self.assertIn('See WAN usage history appendix', '\n'.join(page.extract_text()for page in rendered.pages))
+        self.assertEqual(len(compact['meraki']['security_controls'][0]['data']['intervals']),168)
+        self.assertEqual(snapshot['meraki']['security_controls'][0],control)

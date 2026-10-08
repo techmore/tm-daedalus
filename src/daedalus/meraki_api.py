@@ -770,6 +770,8 @@ class MerakiClient:
             f"/networks/{network['id']}/appliance/uplinks/usageHistory", "WAN usage history", network,
             summarize_wan_usage, params={"timespan": WAN_USAGE_TIMESPAN, "resolution": WAN_USAGE_RESOLUTION})
             for network in appliance_networks]
+        for observation in wan_usage:
+            observation["pdf_evidence_summary_version"] = 1
 
         client_usage = collect_observation(f"/organizations/{organization_id}/clients/overview", "Aggregate client usage", {"id": "", "name": organization["name"]}, _aggregate_client_usage, params={"timespan": CLIENT_USAGE_TIMESPAN})
         for index, network in enumerate(networks, start=1):
