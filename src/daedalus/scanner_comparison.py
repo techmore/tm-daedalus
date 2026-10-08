@@ -81,6 +81,16 @@ def normalize_snapshot(payload: Any) -> dict[str, Any]:
     return {"hosts": observed, "covered_targets": coverage}
 
 
+def port_was_scanned(host, protocol, number):
+    coverage = host.get("scanned_ports")
+    if not isinstance(coverage, dict):
+        return False
+    ranges = coverage.get(protocol)
+    return isinstance(ranges, list) and any(
+        isinstance(row, list) and len(row) == 2 and all(type(x) is int for x in row)
+        and 1 <= row[0] <= number <= row[1] <= 65535 for row in ranges)
+
+
 def compare_snapshots(previous: dict, current: dict, *, previous_status: str, current_status: str,
                       selection_complete: bool = True) -> dict:
     before, after = previous["hosts"], current["hosts"]
@@ -100,9 +110,11 @@ def compare_snapshots(previous: dict, current: dict, *, previous_status: str, cu
     changes = []
     for host in sorted(set(before) & set(after)):
         old, new = before[host]["ports"], after[host]["ports"]
-        complete_ports = comparable and before[host]["ports_complete"] and after[host]["ports_complete"]
+        full_ports = before[host]["ports_complete"] and after[host]["ports_complete"]
         for protocol, number in sorted(set(old) | set(new)):
             identity = (protocol, number)
+            complete_ports = comparable and (full_ports or (port_was_scanned(before[host], protocol, number)
+                                                           and port_was_scanned(after[host], protocol, number)))
             old_value, new_value = old.get(identity), new.get(identity)
             if old_value == new_value:
                 continue

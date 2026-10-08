@@ -7066,12 +7066,35 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
             ScanEvent.id <= summary["snapshot_event_id"])
             .order_by(func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at).desc(), ScanEvent.id.desc())
             .limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
+        from daedalus.scanner_xml_coverage import coverage_from_xml_events, matches_observation
+        xml_rows = db.scalars(select(ScanEvent).options(defer(ScanEvent.payload)).where(
+            ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
+            ScanEvent.source_job_id == summary["source_job_id"], ScanEvent.event_name == "scan_xml_chunk",
+            ScanEvent.id <= summary["snapshot_event_id"]).limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
+        xml_events, xml_bytes = [], 0
+        xml_coverage = {}
+        if len(xml_rows) <= MAX_SCANNER_COMPARISON_EVENTS:
+            try:
+                for row in xml_rows:
+                    if row.artifact_size_bytes and xml_bytes + row.artifact_size_bytes > 64 * 1024 * 1024:
+                        break
+                    payload = load_scanner_event_payload(row)
+                    xml_bytes += len(json.dumps(payload).encode("utf-8"))
+                    if xml_bytes > 64 * 1024 * 1024:
+                        break
+                    xml_events.append({"id": row.id, "event_name": row.event_name, "payload": payload,
+                        "occurred_at": iso_utc(row.occurred_at or row.created_at)})
+                else:
+                    xml_coverage = coverage_from_xml_events(xml_events)
+            except (ValueError, TypeError):
+                pass  # XML coverage remains unknown; result observations remain available.
+        summary["xml_coverage"] = []
         examined_bytes = 0
         skipped = []
         snapshot = None
         selected_events = []
         summary["selection_mode"] = "latest_observation_per_host_in_run"
-        summary["selection_version"] = 2
+        summary["selection_version"] = 3
         summary["comparison_evidence_event_id"] = max((event.id for event in candidates), default=None)
         if len(candidates) > MAX_SCANNER_COMPARISON_EVENTS:
             selection_limits.append(f"Whole-run detailed results exceed the {MAX_SCANNER_COMPARISON_EVENTS}-event limit; no partial comparison was generated.")
@@ -7099,7 +7122,20 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
                     skipped.append(event.id)
                     selection_complete = False
                     continue
+                covered_addresses = []
                 for address, host in observed["hosts"].items():
+                    proof = xml_coverage.get(address)
+                    if proof:
+                        host["ports_complete"] = False
+                    if (proof and proof["latest_xml_occurred_at"]
+                            and proof["latest_xml_occurred_at"] <= iso_utc(event.occurred_at or event.created_at)
+                            and matches_observation(proof, host)):
+                        host["scanned_ports"] = {proof["protocol"]: proof["ranges"]}
+                        covered_addresses.append(proof["target"])
+                        summary["xml_coverage"].append({"host": address, "xml_sha256": proof["xml_sha256"],
+                            "source_event_ids": proof["source_event_ids"], "result_event_id": event.id,
+                            "protocol": proof["protocol"], "scan_type": proof["scan_type"],
+                            "scanned_port_count": proof["scanned_port_count"]})
                     aggregate_ports -= len(aggregate["hosts"].get(address, {}).get("ports", {}))
                     aggregate["hosts"][address] = host
                     aggregate_ports += len(host["ports"])
@@ -7107,6 +7143,8 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
                     selection_limits.append("Whole-run detailed results exceed host/port limits; no partial comparison was generated.")
                     selection_complete = False
                     break
+                if observed["covered_targets"] is None and covered_addresses and len(covered_addresses) == len(observed["hosts"]):
+                    observed["covered_targets"] = sorted(set(covered_addresses))
                 if observed["covered_targets"] is None:
                     aggregate["covered_targets"] = None
                 elif aggregate["covered_targets"] is not None:
@@ -7131,6 +7169,9 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
             summary["selected_result_occurred_at"] = iso_utc(event.occurred_at or event.created_at)
         summary.setdefault("selected_result_event_id", None)
         summary["selected_result_event_ids"] = [event.id for event in selected_events]
+        proof_ids = [event_id for proof in summary["xml_coverage"] for event_id in proof["source_event_ids"]]
+        if proof_ids:
+            summary["comparison_evidence_event_id"] = max(summary["comparison_evidence_event_id"] or 0, *proof_ids)
         summary["skipped_invalid_result_event_ids"] = skipped
         selected.append(snapshot)
     context = {"previous_run": summaries[0], "current_run": summaries[1]}
@@ -7161,7 +7202,7 @@ def serialize_scanner_comparison(row: ScannerRunComparison) -> dict[str, Any]:
 
 
 def record_scanner_run_comparison(db: Session, agent: Agent, event: ScanEvent) -> dict[str, Any] | None:
-    if not event.source_job_id or event.source_job_type != "scan" or event.event_name not in {"job_status", "deep_scan_results"}:
+    if not event.source_job_id or event.source_job_type != "scan" or event.event_name not in {"job_status", "deep_scan_results", "scan_xml_chunk"}:
         return None
     current = scanner_run_summary(db, agent, event.source_job_id)
     if current["status"] != "completed" or current["source_job_type"] != "scan":
@@ -7191,7 +7232,7 @@ def record_scanner_run_comparison(db: Session, agent: Agent, event: ScanEvent) -
     comparison = build_scanner_run_comparison(db, agent, UUID(event.source_job_id), UUID(previous))
     if not comparison.get("available"):
         return None
-    # Anchor to the greatest saved result ID, including late uploads with an
+    # Anchor to the greatest saved result or applied XML proof ID, including uploads with an
     # earlier occurrence time. Each immutable evidence set gets its own row.
     identity = {"agent_id": agent.id, "current_run_id": event.source_job_id,
                 "previous_run_id": previous,
@@ -7228,7 +7269,7 @@ def record_scanner_run_comparison(db: Session, agent: Agent, event: ScanEvent) -
 
 def next_completed_scanner_run(db: Session, agent: Agent, event: ScanEvent) -> ScanEvent | None:
     """Reconcile only the next completed run affected by this late baseline."""
-    if not event.source_job_id or event.source_job_type != "scan" or event.event_name not in {"job_status", "deep_scan_results"}:
+    if not event.source_job_id or event.source_job_type != "scan" or event.event_name not in {"job_status", "deep_scan_results", "scan_xml_chunk"}:
         return None
     summary = scanner_run_summary(db, agent, event.source_job_id)
     if summary["status"] != "completed" or summary["source_job_type"] != "scan":

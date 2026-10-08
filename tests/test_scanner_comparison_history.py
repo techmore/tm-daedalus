@@ -457,3 +457,49 @@ class ScannerComparisonHistoryTests(unittest.TestCase):
                 self.assertFalse(response["available"])
                 self.assertTrue(any("host/port limits" in text for text in response["limitations"]))
                 self.assertNotIn("counts", response)
+
+    def test_original_xml_proves_local_single_ip_and_exact_ports_with_late_upload(self):
+        from test_scanner_xml_coverage import XML, chunks
+        self.setup_scanner()
+        baseline = self.job_id
+        old_xml = self.event("scan_xml_chunk", chunks()[0]["payload"], 1)
+        self.send(old_xml)
+        self.send(self.event("deep_scan_results", [{"ip":"127.0.0.1", "ports":[
+            {"port":22,"protocol":"tcp","state":"open"}]}], 2))
+        self.send(self.event("job_status", {"status":"completed","job_type":"scan"}, 3))
+        self.job_id = str(uuid4())
+        new_xml = self.event("scan_xml_chunk", chunks(XML.replace(b'state="open"', b'state="closed"'))[0]["payload"], 4)
+        self.send(self.event("deep_scan_results", [{"ip":"127.0.0.1","ports":[]}], 5))
+        self.send(self.event("job_status", {"status":"completed","job_type":"scan"}, 6))
+        original = self.history().json()["comparisons"][0]
+        self.assertEqual(original["meaningful_change_count"], 0)
+        receipt = self.send(new_xml)
+        self.assertTrue(self.send(new_xml).json()["duplicate"])
+        rows = self.history().json()["comparisons"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1], original)
+        comparison = rows[0]["comparison"]
+        self.assertEqual(rows[0]["previous_run_id"], baseline)
+        self.assertEqual(comparison["current_run"]["selection_version"], 3)
+        self.assertTrue(comparison["coverage"]["comparable"])
+        self.assertEqual(comparison["counts"]["confirmed_removed_ports"], 1)
+        self.assertEqual(rows[0]["current_result_event_id"], receipt.json()["event_id"])
+        self.assertEqual(self.client.get("/api/notifications").json()["unread_count"], 1)
+
+    def test_later_xml_is_not_associated_with_an_earlier_host_result(self):
+        from test_scanner_xml_coverage import XML, chunks
+        self.setup_scanner()
+        baseline = self.job_id
+        self.send(self.event("scan_xml_chunk", chunks()[0]["payload"], 1))
+        self.send(self.event("deep_scan_results", [{"ip":"127.0.0.1", "ports":[
+            {"port":22,"protocol":"tcp","state":"open"}]}], 2))
+        self.send(self.event("job_status", {"status":"completed","job_type":"scan"}, 3))
+        self.job_id = str(uuid4())
+        self.send(self.event("deep_scan_results", [{"ip":"127.0.0.1","ports":[]}], 4))
+        self.send(self.event("scan_xml_chunk", chunks(XML.replace(b'state="open"', b'state="closed"'))[0]["payload"], 6))
+        self.send(self.event("job_status", {"status":"completed","job_type":"scan"}, 7))
+        response = self.client.get(f"/api/agents/{self.agent}/runs/{self.job_id}/comparison",
+            params={"previous_run_id":baseline}).json()
+        self.assertEqual(response["current_run"]["xml_coverage"], [])
+        self.assertFalse(response["coverage"]["comparable"])
+        self.assertEqual(response["counts"]["confirmed_removed_ports"], 0)
