@@ -1,5 +1,10 @@
 # Integration readiness
 
+## October 8, 2026 — lifecycle coordination deployed to SER8
+
+SER8 Incus activated source 730907aa78b4698ec517391a307924e6312396cc, verified 79-file release SHA-256 05b59862205b34f4b67490ff4470724b4eab0727c3a1b559029b01cd9e99381b. The pre-deploy verified off-host backup is daedalus-data-20261008T030838Z.tar.gz; internal and public readiness passed. The normal authenticated operator download returned HTTP 200 / 1,000,986 bytes. Downloaded bridge, macOS helper and upgrade helper match active production source; the engine archive still matches 48ab8f8166dfc17e107d0a37309c13b2441a0c3bc187be0a15ca175a20821d3e. BFS reports 40/41 remain completed with their original PDF sizes and saved purchase plans. Private receipt: /data/codex-macos-lifecycle-kit-20261008.json. Current-source backend CI 37721302261 and managed Linux CI 37721302129 are still running. No installed scanner engine or bridge was upgraded by this portal deployment.
+
+
 ## October 8, 2026 — macOS scanner lifecycle coordination
 
 The macOS helper now holds a private, owned, nonblocking lifecycle lock throughout upgrade validation, preparation, admission claim, cutover, readiness and rollback. Local restart/uninstall/restore and the updated bridge's remote restart use the same lock path. Overlapping actions defer before service mutations. Status remains read-only. The persistent inode is retained after release; symbolic links, FIFOs, hard links, unexpected ownership/permissions and directories writable by other users are refused. Missing/unsafe remote installation state yields a bounded command failure.
