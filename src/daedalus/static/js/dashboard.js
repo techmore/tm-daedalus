@@ -1806,6 +1806,26 @@
       container.append(planning);
     }
 
+    if (Array.isArray(details.switch_power) && details.switch_power.length) {
+      addMerakiDetailList(container, "Switch PoE usage", details.switch_power, function (row) {
+        var data = row.data || {};
+        var values = [(row.network_name || "Network") + " · " + (row.device_serial || "Switch"),
+                      "Collection: " + (row.status || "unknown"), "Energy coverage: " + (data.energy_coverage || "unavailable")];
+        if (data.measured_energy_wh !== null && data.measured_energy_wh !== undefined) {
+          values.push(data.measured_energy_wh + " Wh over requested prior 24 hours",
+                      data.measured_average_watts + " W measured average",
+                      data.measured_port_count + "/" + data.port_count + " ports measured");
+        }
+        values.push("Average usage does not establish peak demand or replacement PoE budget.");
+        return values.join(" · ");
+      });
+      if (details.truncated && details.truncated.switch_power) {
+        var morePower = document.createElement("p"); morePower.className = "muted";
+        morePower.textContent = details.truncated.switch_power + " more switches in the saved JSON evidence.";
+        container.append(morePower);
+      }
+    }
+
     var clientUsage = details.client_usage || {};
     addMerakiDetailList(container, "Aggregate client usage", [clientUsage], function (usage) {
       var totals = usage.usage || {};

@@ -1113,6 +1113,23 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             for row in scenario.get("unmatched", []):
                 story.append(_paragraph(f"{row.get('quantity')} x {row.get('meraki_model')}: candidate and price need review.", styles["MerakiSmall"]))
 
+    power = meraki.get("switch_power")
+    if isinstance(power, list) and power:
+        story.append(PageBreak())
+        story.append(Paragraph("Switch PoE usage observations", styles["MerakiSection"]))
+        story.append(_paragraph("Energy is measured over the requested prior 24 hours. Missing measurements remain unavailable. "
+                                "The measured average is not peak demand and does not establish replacement switch PoE capacity.", styles["MerakiBody"]))
+        rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in
+                 ("Switch / network", "Collection / energy coverage", "Ports measured", "Energy / average")]]
+        for item in power:
+            data = item.get("data") if isinstance(item.get("data"), dict) else {}
+            measured = data.get("measured_energy_wh")
+            rows.append([_paragraph(f"{item.get('device_serial')} / {item.get('network_name')}", styles["MerakiCell"]),
+                         _paragraph(f"{item.get('status')} / {data.get('energy_coverage') or 'unavailable'}", styles["MerakiCell"]),
+                         _paragraph(f"{data.get('measured_port_count')} / {data.get('port_count')}" if data.get("port_count") is not None else "Unavailable", styles["MerakiCell"]),
+                         _paragraph(f"{measured} Wh / {data.get('measured_average_watts')} W" if measured is not None else "Unavailable", styles["MerakiCell"])])
+        story.append(_table(rows, [2.2 * inch, 1.8 * inch, 1 * inch, 1.9 * inch]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

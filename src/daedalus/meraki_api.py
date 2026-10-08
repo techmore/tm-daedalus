@@ -22,6 +22,7 @@ MAX_ACCESS_POINTS_PER_REPORT = 1000
 MAX_TOPOLOGY_NODES = 5000
 MAX_TOPOLOGY_LINKS = 10000
 CLIENT_USAGE_TIMESPAN = 86400
+SWITCH_POWER_TIMESPAN = 86400
 MAX_COLLECTION_ITEMS = 50_000
 SENSITIVE_KEYS = {
     "access_token",
@@ -45,6 +46,32 @@ class MerakiAPIError(RuntimeError):
     def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.status_code = status_code
+
+
+def summarize_switch_power(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate allowlisted energy, without inferring missing measurements."""
+    identities = set()
+    energy = []
+    allocated = 0
+    for row in rows:
+        identifier = row.get("portId")
+        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identifier) or identifier in identities:
+            raise MerakiAPIError("Switch power observations require unique port identifiers.")
+        identities.add(identifier)
+        value = row.get("powerUsageInWh")
+        if type(value) in (int, float) and 0 <= value <= 1_000_000_000_000 and math.isfinite(value):
+            energy.append(value)
+        poe = row.get("poe")
+        if isinstance(poe, dict) and poe.get("isAllocated") is True:
+            allocated += 1
+    total = round(sum(energy), 3) if energy else None
+    return {"port_count": len(rows), "measured_port_count": len(energy),
+            "unmeasured_port_count": len(rows) - len(energy),
+            "allocated_port_count": allocated,
+            "measured_energy_wh": total,
+            "measured_average_watts": round(total / 24, 3) if total is not None else None,
+            "energy_coverage": "complete" if rows and len(energy) == len(rows) else "partial" if energy else "unavailable",
+            "requested_timespan_seconds": SWITCH_POWER_TIMESPAN}
 
 
 def redact_meraki_data(value: Any) -> Any:
@@ -282,8 +309,8 @@ class MerakiClient:
         except ValueError as exc:
             raise MerakiAPIError("The Meraki API returned an invalid JSON response.") from exc
 
-    def get_json(self, path: str) -> Any:
-        return self._json(self._get(path))
+    def get_json(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
+        return self._json(self._get(path, params=params))
 
     def get_collection(self, path: str, *, params: dict[str, Any] | None = None) -> list[Any]:
         next_url = path
@@ -457,9 +484,11 @@ class MerakiClient:
         # The SSID, switch-port and access-policy endpoints return JSON arrays;
         # unlike organization inventory they do not expose page-token parameters.
         # All reads still use the same protected host, rate limit and retry path.
-        def collect_array(path: str, title: str, network: dict[str, Any], fields: tuple[str, ...], *, serial: str | None = None, schema: dict[str, Any] | None = None) -> None:
+        switch_power = []
+        def collect_array(path: str, title: str, network: dict[str, Any], fields: tuple[str, ...], *, serial: str | None = None, schema: dict[str, Any] | None = None, power: bool = False) -> None:
+            power_data = None
             try:
-                raw = self.get_json(path)
+                raw = self.get_json(path, params={"timespan": SWITCH_POWER_TIMESPAN}) if power else self.get_json(path)
                 if not isinstance(raw, list) or any(not isinstance(row, dict) for row in raw):
                     raise MerakiAPIError("The Meraki API returned an unexpected configuration array.")
                 if title == "Wireless RF profiles" and any(not isinstance(row.get("id"), str) or not row["id"] for row in raw):
@@ -467,6 +496,11 @@ class MerakiClient:
                 if len(raw) > MAX_COLLECTION_ITEMS:
                     raise MerakiAPIError("The Meraki configuration array exceeded the collection limit.")
                 payload = [_known_fields(row, schema) if schema is not None else redact_meraki_data({key: row[key] for key in fields if key in row}) for row in raw]
+                if power:
+                    try:
+                        power_data = summarize_switch_power(raw)
+                    except MerakiAPIError:
+                        power_data = {"energy_coverage": "invalid_evidence", "requested_timespan_seconds": SWITCH_POWER_TIMESPAN}
                 status = "complete"
             except MerakiAPIError as exc:
                 status = "unsupported" if exc.status_code == 404 else "unavailable"
@@ -478,6 +512,9 @@ class MerakiClient:
                 "control": title, "status": status, "data": payload,
                 **({"device_serial": serial} if serial else {}),
             })
+            if power:
+                switch_power.append({"device_serial": serial, "network_name": network["name"],
+                                     "status": status, "data": power_data})
 
         def collect_object(path: str, title: str, network: dict[str, Any], schema: dict[str, Any], *, serial: str | None = None) -> dict[str, Any]:
             try:
@@ -531,7 +568,7 @@ class MerakiClient:
             ), serial=serial)
             collect_array(f"/devices/{serial}/switch/ports/statuses", "Switch port status", network, (
                 "portId", "enabled", "status", "isUplink", "speed", "duplex",
-            ), serial=serial)
+            ), serial=serial, power=True)
 
         access_points = [device for device in devices if device.get("productType") == "wireless" or str(device.get("model", "")).startswith(("MR", "CW"))]
         if len(access_points) > MAX_ACCESS_POINTS_PER_REPORT:
@@ -655,6 +692,7 @@ class MerakiClient:
             "licensing": {"status": licensing["status"], "data": licensing["data"], "endpoint": "licenses/overview"},
             "client_usage": {"status": client_usage["status"], "data": client_usage["data"]},
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
+            "switch_power": switch_power,
             "findings": findings,
             "warnings": warnings,
         }

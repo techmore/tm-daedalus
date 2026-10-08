@@ -5043,6 +5043,7 @@ def meraki_report_details(
     devices, more_devices = bounded_rows("devices", 200)
     controls, more_controls = bounded_rows("security_controls", 200)
     topology, more_topology = bounded_rows("topology", 100)
+    switch_power, more_switch_power = bounded_rows("switch_power", 100)
     findings, more_findings = bounded_rows("findings", 100)
     warnings, more_warnings = bounded_rows("warnings", 100)
 
@@ -5055,6 +5056,15 @@ def meraki_report_details(
 
     def safe_measure(value: Any) -> int | float | None:
         return value if isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1_000_000_000_000 else None
+
+    def power_summary(value: Any) -> dict[str, Any] | None:
+        if not isinstance(value, dict):
+            return None
+        data = {key: safe_count(value.get(key)) for key in (
+            "port_count", "measured_port_count", "unmeasured_port_count", "allocated_port_count", "requested_timespan_seconds")}
+        data.update({key: safe_measure(value.get(key)) for key in ("measured_energy_wh", "measured_average_watts")})
+        data["energy_coverage"] = text_field(value, "energy_coverage", 40)
+        return data
 
     topology_summary = []
     for row in topology:
@@ -5118,6 +5128,12 @@ def meraki_report_details(
             "requested_timespan_seconds": safe_count(client_usage_data.get("requested_timespan_seconds")),
         },
         "topology": topology_summary,
+        "switch_power": [{
+            "device_serial": text_field(row, "device_serial", 128),
+            "network_name": text_field(row, "network_name"),
+            "status": text_field(row, "status", 40),
+            "data": power_summary(row.get("data")),
+        } for row in switch_power if isinstance(row, dict)],
         "controls": serialized_controls,
         "findings": [{
             "title": text_field(item, "title"),
@@ -5130,6 +5146,7 @@ def meraki_report_details(
             "devices": more_devices,
             "controls": more_controls,
             "topology": more_topology,
+            "switch_power": more_switch_power,
             "findings": more_findings,
             "warnings": more_warnings,
         },

@@ -324,18 +324,22 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
                 "data": {"large_value": "x" * 1_000_000, "many_values": list(range(1000))},
             }] + [{"control": f"Control {index}", "status": "complete", "data": {}} for index in range(200)]
             oversized_meraki["topology"] = [{"network_name": f"Network {index}", "status": "complete", "data": {"nodes": [], "links": []}} for index in range(101)]
+            oversized_meraki["switch_power"] = [{"device_serial": "SW_1", "network_name": "HQ", "status": "complete", "data": {"measured_energy_wh": 240, "measured_average_watts": 10, "port_count": 24, "energy_coverage": "partial", "private": "never-serialize"}} for _ in range(101)]
             oversized_meraki["findings"] = [{"title": f"Finding {index}"} for index in range(101)]
             oversized_meraki["warnings"] = [f"Warning {index}" for index in range(101)]
             saved_snapshot["meraki"] = oversized_meraki
             saved_job.report_snapshot = saved_snapshot
             db.commit()
         bounded = self.client.get(f"/api/meraki/reports/{second_id}/details").json()
+        self.assertEqual(len(bounded["switch_power"]), 100)
+        self.assertEqual(bounded["switch_power"][0]["data"]["measured_energy_wh"], 240)
+        self.assertNotIn("private", bounded["switch_power"][0]["data"])
         self.assertEqual(len(bounded["networks"]), 100)
         self.assertEqual(len(bounded["devices"]), 200)
         self.assertEqual(len(bounded["controls"]), 200)
         self.assertEqual(len(bounded["findings"]), 100)
         self.assertEqual(len(bounded["warnings"]), 100)
-        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "topology": 1, "findings": 1, "warnings": 1})
+        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "topology": 1, "switch_power": 1, "findings": 1, "warnings": 1})
         self.assertEqual(len(bounded["topology"]), 100)
         self.assertLessEqual(len(bounded["controls"][0]["evidence_preview"]), 3000)
         self.assertTrue(bounded["controls"][0]["evidence_truncated"])
