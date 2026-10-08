@@ -5132,6 +5132,12 @@ def meraki_report_details(
         },
         "collected_at": text_field(snapshot, "collected_at", 80),
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
+        "wireless_connections": [{"network_name": text_field(row, "network_name"),
+            "status": text_field(row, "status", 40),
+            "data": {key: row["data"].get(key) for key in ("requested_timespan_seconds", "reported_device_count",
+                "expected_device_count", "missing_device_count", "omitted_device_count", "counter_coverage", "observed_counter_totals")}
+                if isinstance(row.get("data"), dict) else None}
+            for row in (snapshot.get("wireless_connections") or [])[:100] if isinstance(row, dict)],
         "summary": {key: summary.get(key) for key in summary_fields if key in summary},
         "networks": [{
             "name": text_field(item, "name"),

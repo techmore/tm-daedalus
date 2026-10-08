@@ -48,6 +48,43 @@ class MerakiAPIError(RuntimeError):
         self.status_code = status_code
 
 
+WIRELESS_CONNECTION_TIMESPAN = 86400
+
+
+def summarize_wireless_connections(raw: Any, managed_serials: set[str]) -> dict[str, Any]:
+    """Retain documented per-AP counters, without inventing a total/success rate."""
+    if not isinstance(raw, list) or len(raw) > MAX_ACCESS_POINTS_PER_REPORT:
+        raise MerakiAPIError("Wireless connection evidence exceeds its supported array shape or limit.")
+    fields = ("assoc", "auth", "dhcp", "dns", "success")
+    seen, rows, omitted = set(), [], 0
+    for item in raw:
+        serial = item.get("serial") if isinstance(item, dict) else None
+        if (not isinstance(serial, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", serial)
+                or serial in seen):
+            raise MerakiAPIError("Wireless connection evidence requires unique device identifiers.")
+        seen.add(serial)
+        if serial not in managed_serials:
+            omitted += 1
+            continue
+        source = item.get("connectionStats")
+        if not isinstance(source, dict):
+            source = {}
+        counters = {key: value for key in fields
+                    if type(value := source.get(key)) is int and 0 <= value <= 1_000_000_000_000}
+        rows.append({"device_serial": serial, "counters": counters,
+                     "counter_coverage": "complete" if len(counters) == len(fields) else "partial"})
+    rows.sort(key=lambda row: row["device_serial"])
+    totals = {key: sum(row["counters"][key] for row in rows if key in row["counters"])
+              for key in fields if any(key in row["counters"] for row in rows)}
+    return {"requested_timespan_seconds": WIRELESS_CONNECTION_TIMESPAN,
+            "devices": rows, "reported_device_count": len(rows),
+            "expected_device_count": len(managed_serials),
+            "missing_device_count": len(managed_serials - seen),
+            "omitted_device_count": omitted, "observed_counter_totals": totals,
+            "counter_coverage": "complete" if rows and managed_serials <= seen
+                and all(row["counter_coverage"] == "complete" for row in rows) else "partial"}
+
+
 def summarize_switch_power(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate allowlisted energy, without inferring missing measurements."""
     identities = set()
@@ -600,6 +637,14 @@ class MerakiClient:
             observational.append(control)
             return control
 
+        for network in wireless_networks:
+            managed_serials = {str(device["serial"]) for device in access_points
+                               if device.get("networkId") == network["id"]}
+            collect_observation(f"/networks/{network['id']}/wireless/devices/connectionStats",
+                "Wireless connection outcomes", network,
+                lambda raw, serials=managed_serials: summarize_wireless_connections(raw, serials),
+                params={"timespan": WIRELESS_CONNECTION_TIMESPAN})
+
         client_usage = collect_observation(f"/organizations/{organization_id}/clients/overview", "Aggregate client usage", {"id": "", "name": organization["name"]}, _aggregate_client_usage, params={"timespan": CLIENT_USAGE_TIMESPAN})
         for index, network in enumerate(networks, start=1):
             if progress:
@@ -691,6 +736,7 @@ class MerakiClient:
             "security_controls": security,
             "licensing": {"status": licensing["status"], "data": licensing["data"], "endpoint": "licenses/overview"},
             "client_usage": {"status": client_usage["status"], "data": client_usage["data"]},
+            "wireless_connections": [row for row in observational if row["control"] == "Wireless connection outcomes"],
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
             "switch_power": switch_power,
             "findings": findings,
@@ -726,7 +772,7 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
     def index(snapshot: dict[str, Any]) -> dict[tuple[str, str, str], dict[str, Any]]:
         indexed = {}
         for row in snapshot.get("security_controls", []):
-            if not isinstance(row, dict) or row.get("control") == "Aggregate client usage":
+            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless connection outcomes"}:
                 continue
             key = (str(row.get("network_id") or ""), str(row.get("device_serial") or ""), str(row.get("control") or ""))
             if key in indexed:

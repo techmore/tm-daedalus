@@ -7,11 +7,30 @@ from pathlib import Path
 import httpx
 
 from daedalus import credential_store
-from daedalus.meraki_api import MerakiAPIError, MerakiClient, _aggregate_client_usage, _managed_topology, compare_meraki_snapshots, redact_meraki_data
+from daedalus.meraki_api import MerakiAPIError, MerakiClient, _aggregate_client_usage, _managed_topology, summarize_wireless_connections, compare_meraki_snapshots, redact_meraki_data
 from daedalus.reports import build_meraki_security_pdf
 
 
 class MerakiClientTests(unittest.TestCase):
+    def test_wireless_outcomes_preserve_missing_counts_and_reject_duplicate_identity(self):
+        raw = [{"serial": "AP1", "connectionStats": {"success": 0, "assoc": True, "auth": -1, "dhcp": 1.5, "dns": 2}, "client": "never-store"},
+               {"serial": "OTHER", "connectionStats": {"success": 100}}]
+        result = summarize_wireless_connections(raw, {"AP1", "AP2"})
+        self.assertEqual(result["observed_counter_totals"], {"dns": 2, "success": 0})
+        self.assertEqual(result["missing_device_count"], 1)
+        self.assertEqual(result["omitted_device_count"], 1)
+        self.assertEqual(result["counter_coverage"], "partial")
+        self.assertNotIn("never-store", str(result))
+        self.assertNotIn("success_rate", result)
+        with self.assertRaises(MerakiAPIError):
+            summarize_wireless_connections([raw[0], raw[0]], {"AP1"})
+        self.assertEqual(summarize_wireless_connections([], {"AP1"})["observed_counter_totals"], {})
+
+    def test_wireless_outcomes_do_not_emit_configuration_changes(self):
+        def snapshot(count):
+            return {"organization": {"id": "org-1"}, "security_controls": [{"network_id": "N_1", "control": "Wireless connection outcomes", "status": "complete", "data": {"success": count}}]}
+        self.assertEqual(compare_meraki_snapshots(snapshot(1), snapshot(100))["changed_control_count"], 0)
+
     def test_uses_api_v1_key_header_and_follows_safe_pagination(self):
         seen = []
 
@@ -156,7 +175,7 @@ class MerakiClientTests(unittest.TestCase):
             result = client.collect_security_report("org-1")
         self.assertEqual(result["summary"]["switch_device_count"], 1)
         self.assertEqual(result["summary"]["wireless_network_count"], 1)
-        self.assertEqual(result["summary"]["security_controls_unsupported"], 5)
+        self.assertEqual(result["summary"]["security_controls_unsupported"], 6)
         self.assertEqual(result["summary"]["security_controls_unavailable"], 1)
         self.assertEqual(result["summary"]["security_controls_collected"], 2)
         self.assertTrue(any("Open SSID" in row["title"] for row in result["findings"]))
@@ -177,11 +196,12 @@ class MerakiClientTests(unittest.TestCase):
             "/networks/N_1/wireless/rfProfiles": [{"id": "rf-1", "name": "Office", "twoFourGhzSettings": {"minPower": 5, "maxPower": 20, "validAutoChannels": [1, 6, 11], "clientIdentifier": "never-store"}, "perSsidSettings": {"0": {"minBitrate": 12, "psk": "never-store"}}, "clientSecret": "never-store"}],
             "/organizations/org-1/clients/overview": {"counts": {"total": 3}, "usage": {"overall": {"total": 30, "downstream": 20, "upstream": 10}}, "mac": "never-store"},
             "/networks/N_1/topology/linkLayer": {"nodes": [{"derivedId": "never-store-managed-id", "root": True, "device": {"serial": "Q2XX-AP01", "name": "never-store-name"}}, {"derivedId": "never-store-client-id", "mac": "never-store-client-mac"}], "links": [{"ends": [{"node": {"derivedId": "never-store-managed-id"}}, {"node": {"derivedId": "never-store-client-id"}}]}]},
+            "/networks/N_1/wireless/devices/connectionStats": [{"serial": "Q2XX-AP01", "connectionStats": {"assoc": 1, "auth": 2, "dhcp": 3, "dns": 4, "success": 43}, "mac": "never-store"}],
             "/devices/Q2XX-AP01/wireless/radio/settings": {"serial": "Q2XX-AP01", "rfProfileId": "rf-1", "twoFourGhzSettings": {"channel": 6, "targetPower": 15, "clientIdentifier": "never-store"}},
         }
         def respond(request):
             self.assertEqual(request.method, "GET")
-            if request.url.path.endswith("/clients/overview"):
+            if request.url.path.endswith(("/clients/overview", "/connectionStats")):
                 self.assertEqual(request.url.params.get("timespan"), "86400")
             else:
                 self.assertFalse(request.url.params)
@@ -193,6 +213,7 @@ class MerakiClientTests(unittest.TestCase):
             return respond(request)
         with MerakiClient("fixture-key", transport=httpx.MockTransport(paginated_respond), request_interval=0) as client:
             result = client.collect_security_report("org-1")
+        self.assertEqual(result["wireless_connections"][0]["data"]["observed_counter_totals"]["success"], 43)
         self.assertEqual(result["client_usage"]["data"]["clients_with_usage_count"], 3)
         self.assertEqual(result["topology"][0]["data"]["omitted_node_count"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_link_count"], 1)

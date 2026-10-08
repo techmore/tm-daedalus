@@ -1130,6 +1130,25 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                          _paragraph(f"{measured} Wh / {data.get('measured_average_watts')} W" if measured is not None else "Unavailable", styles["MerakiCell"])])
         story.append(_table(rows, [2.2 * inch, 1.8 * inch, 1 * inch, 1.9 * inch]))
 
+    wireless = meraki.get("wireless_connections")
+    if isinstance(wireless, list) and wireless:
+        story.append(PageBreak())
+        story.append(Paragraph("Wireless connection outcomes", styles["MerakiSection"]))
+        story.append(_paragraph("Successful connection attempts and failure-stage counters cover the requested prior 24 hours. "
+            "Missing devices and counters remain explicit. These observations are not a combined failure rate or security score, "
+            "and are excluded from configuration change alerts.", styles["MerakiBody"]))
+        for item in wireless:
+            data = item.get("data") if isinstance(item.get("data"), dict) else {}
+            story.append(_paragraph(f"{item.get('network_name')} - collection: {item.get('status')}; "
+                f"counter coverage: {data.get('counter_coverage') or 'unavailable'}; "
+                f"APs reporting: {data.get('reported_device_count', 'Unavailable')} / {data.get('expected_device_count', 'Unavailable')}", styles["MerakiBody"]))
+            totals = data.get("observed_counter_totals") or {}
+            rows = [[_paragraph("Observed counter", styles["MerakiTableHeader"]), _paragraph("Count", styles["MerakiTableHeader"])]]
+            for key, title in (("success", "Successful connections"), ("assoc", "Association failures"),
+                    ("auth", "Authentication failures"), ("dhcp", "DHCP failures"), ("dns", "DNS failures")):
+                rows.append([_paragraph(title, styles["MerakiCell"]), _paragraph(totals.get(key, "Unavailable"), styles["MerakiCell"])])
+            story.append(_table(rows, [4.5 * inch, 2.4 * inch]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

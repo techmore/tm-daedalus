@@ -1823,6 +1823,23 @@
     container.append(section);
   }
 
+  function renderMerakiWirelessConnections(container, rows) {
+    addMerakiDetailList(container, "Wireless connection outcomes", rows, function (row) {
+      var data = row.data || {}, totals = data.observed_counter_totals || {};
+      var values = [row.network_name || "Network", "Collection: " + (row.status || "unknown")];
+      if (row.status === "complete") {
+        values.push("Prior " + Math.round(data.requested_timespan_seconds / 3600) + " hours");
+        values.push((data.reported_device_count ?? "—") + "/" + (data.expected_device_count ?? "—") + " assigned APs reported · " + (data.counter_coverage || "unknown") + " counter coverage");
+        [["success", "Successful connections"], ["assoc", "Association failures"], ["auth", "Authentication failures"], ["dhcp", "DHCP failures"], ["dns", "DNS failures"]].forEach(function (field) {
+          if (Number.isSafeInteger(totals[field[0]]) && totals[field[0]] >= 0) values.push(field[1] + ": " + totals[field[0]].toLocaleString("en-US"));
+        });
+        values.push("Failure-stage counters are observations, not a combined failure rate or security score.");
+      }
+      return values.join(" · ");
+    });
+
+  }
+
   function renderMerakiDashboardDetails(container, details) {
     container.replaceChildren();
     var heading = document.createElement("p");
@@ -1886,6 +1903,8 @@
     }
 
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
+
+    renderMerakiWirelessConnections(container, details.wireless_connections || []);
 
     var clientUsage = details.client_usage || {};
     addMerakiDetailList(container, "Aggregate client usage", [clientUsage], function (usage) {
