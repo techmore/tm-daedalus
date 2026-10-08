@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — visible BFS purchase budgets and browser validation
+
+SER8 Incus activated source 1deb5f4528b5964354ea2577857318ebfe0a4035, verified 80-file release SHA-256 7d471b1217d1a65d991048e7cfb958a535f86dbbc695f1e3791d2e58c0a14397, after verified off-host backup daedalus-data-20261008T053225Z.tar.gz. Internal/public health passed. Full local suite: 877 passed, one skipped, 313 subtests; final renderer/topic suite: 41 passed, two subtests.
+
+The ordinary signed-in BFS browser now shows both dated purchase budgets in the main Meraki assessment after review findings. At 1440px and 390px, keyboard activation opens saved report 45, focuses its summary, retains all 10 official vendor links and 38 channel rows, and leaves the topic hash unchanged. Reload preserves #meraki and both budgets; no page-level horizontal overflow was detected. The first same-URL navigation retained the prior page assets; an explicit reload fetched revision 157 and subsequent checks used that revision. Browser screenshot capture still timed out, so this proves DOM, limited keyboard and refresh behavior, not visual acceptance. Private receipt: validation/meraki-browser-20261008/live-budget-summary.json.
+
+A short-lived BFS browser key used the existing approved administrator membership without changing access grants. It was audited, revoked, and the former browser session then returned 401; the local token file was removed. The review generated no new Meraki scan/report or procurement order. Backend 37732878504 passed current source; installed Linux 37732878407 remains running. Preceding channel backend 37732142973 and installed Linux 37732142854 passed. Full project completion remains unproven.
+
+
 ## October 8, 2026 — live BFS channel utilization deployed
 
 SER8 Incus activated source 51a671c79d4a8035f452fe37e43d51b9386ce1b5, verified 80-file release SHA-256 e3ad0fc6153998a16619867287cde6df9b2c4157dbf14bf877e29cc2d22c896c. The first attempt terminated before deployment because local Tailscale was stopped; the public portal remained ready. Reopening the existing Tailscale application restored the private route and SSH. The fresh deployment saved verified off-host backup daedalus-data-20261008T052505Z.tar.gz before activation; internal/public readiness passed.
