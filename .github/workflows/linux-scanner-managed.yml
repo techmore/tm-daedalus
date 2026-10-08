@@ -81,6 +81,9 @@ jobs:
             -r /home/daedalusqa/project/requirements-production.txt
           sudo runuser -u daedalusqa -- /home/daedalusqa/project/.venv/bin/pip install \
             --no-deps /home/daedalusqa/project
+          # Print evidence validation uses this development-only PDF reader.
+          sudo runuser -u daedalusqa -- /home/daedalusqa/project/.venv/bin/pip install \
+            'pypdf>=6,<7'
           sudo /home/daedalusqa/project/.venv/bin/python -m playwright install-deps chromium
           sudo runuser -u daedalusqa -- /home/daedalusqa/project/.venv/bin/python -m playwright install chromium --only-shell
           scanner_python=/home/daedalusqa/project/.venv/bin/python

@@ -48,8 +48,7 @@ PRINT_LAYOUT_V1_CSS = """@media print {
 }"""
 # Version 1 is frozen: previously saved reports retain its exact style bytes.
 PRINT_LAYOUT_V1_SHA256 = "83528b380a82a1a251add83be177a382b4ae9846d37100cf8b905ece43b4d8a3"
-PRINT_LAYOUT_VERSION = 2
-PRINT_LAYOUT_CSS = PRINT_LAYOUT_V1_CSS + """
+PRINT_LAYOUT_V2_CSS = PRINT_LAYOUT_V1_CSS + """
 @media print {
   /* Keep a short host card together; oversized cards can still paginate. */
   #onlinehosts > .card { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px !important; }
@@ -58,10 +57,42 @@ PRINT_LAYOUT_CSS = PRINT_LAYOUT_V1_CSS + """
   #onlinehosts .collapsible-header, h4 { break-after: avoid; page-break-after: avoid; }
   .overflow-x-auto { overflow: visible !important; }
 }"""
+PRINT_LAYOUT_V2_SHA256 = "149ecc07c5f6a5cc13a1a4ee101c6364d1b2035e3f4c8e549ff3711da1f73bd7"
+PRINT_LAYOUT_VERSION = 3
+PRINT_LAYOUT_CSS = PRINT_LAYOUT_V2_CSS + """
+@media print {
+  /* Long names and IPv6 evidence must fit without dropping table columns. */
+  table { table-layout: fixed !important; }
+  #table-services th:nth-child(1), #table-services td:nth-child(1) { width: 18%; }
+  #table-services th:nth-child(2), #table-services td:nth-child(2) { width: 16%; }
+  #table-services th:nth-child(3), #table-services td:nth-child(3) { width: 5%; }
+  #table-services th:nth-child(4), #table-services td:nth-child(4) { width: 6%; }
+  #table-services th:nth-child(5), #table-services td:nth-child(5) { width: 8%; }
+  #table-services th:nth-child(6), #table-services td:nth-child(6) { width: 12%; }
+  #table-services th:nth-child(7), #table-services td:nth-child(7) { width: 6%; }
+  #table-services th:nth-child(8), #table-services td:nth-child(8) { width: 8%; }
+  #table-services th:nth-child(9), #table-services td:nth-child(9) { width: 5%; }
+  #table-services th:nth-child(10), #table-services td:nth-child(10) { width: 5%; }
+  #table-services th:nth-child(11), #table-services td:nth-child(11) { width: 11%; }
+  #web-services th:nth-child(1), #web-services td:nth-child(1) { width: 18%; }
+  #web-services th:nth-child(2), #web-services td:nth-child(2) { width: 16%; }
+  #web-services th:nth-child(3), #web-services td:nth-child(3) { width: 5%; }
+  #web-services th:nth-child(4), #web-services td:nth-child(4) { width: 9%; }
+  #web-services th:nth-child(5), #web-services td:nth-child(5) { width: 12%; }
+  #web-services th:nth-child(6), #web-services td:nth-child(6) { width: 7%; }
+  #web-services th:nth-child(7), #web-services td:nth-child(7) { width: 6%; }
+  #web-services th:nth-child(8), #web-services td:nth-child(8) { width: 6%; }
+  #web-services th:nth-child(9), #web-services td:nth-child(9) { width: 21%; }
+  th, td { overflow-wrap: anywhere !important; word-break: normal !important; }
+  #onlinehosts .collapsible-header .flex > div { min-width: 0; }
+  #onlinehosts .collapsible-header h3, #onlinehosts li { overflow-wrap: anywhere; }
+  #onlinehosts .collapsible-header .badge { flex-shrink: 0; margin-left: 8px; }
+}"""
 PRINT_LAYOUT_SHA256 = hashlib.sha256(PRINT_LAYOUT_CSS.encode("utf-8")).hexdigest()
 PRINT_LAYOUTS = {
     1: (PRINT_LAYOUT_V1_CSS, PRINT_LAYOUT_V1_SHA256),
-    2: (PRINT_LAYOUT_CSS, PRINT_LAYOUT_SHA256),
+    2: (PRINT_LAYOUT_V2_CSS, PRINT_LAYOUT_V2_SHA256),
+    3: (PRINT_LAYOUT_CSS, PRINT_LAYOUT_SHA256),
 }
 
 
