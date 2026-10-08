@@ -3630,6 +3630,11 @@ def external_check_history(
         "schedule": serialize_external_schedule(schedule, check_type),
         "latest_snapshot": latest_snapshot,
         "latest_snapshot_run_id": latest_snapshot_row[0].id if latest_snapshot_row else None,
+        "latest_snapshot_run": {
+            "id": latest_snapshot_row[0].id,
+            "status": latest_snapshot_row[0].status,
+            "completed_at": iso_utc(latest_snapshot_row[0].completed_at) if latest_snapshot_row[0].completed_at else None,
+        } if latest_snapshot_row else None,
         "runs": recent_runs,
         "runs_has_more": runs_has_more,
         "runs_next_before": run_rows[-1][0].id if runs_has_more and run_rows else None,

@@ -6,6 +6,31 @@ import unittest
 
 
 class DashboardTopicTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_external_evidence_label_distinguishes_saved_evidence_from_latest_attempt(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function externalEvidenceLabel('):source.index('  function renderCheckHistory(')]
+        script = "const assert=require('node:assert/strict'); const dateLabel=value=>value;" + helper + """
+const body={latest_snapshot:{records:{}},latest_snapshot_run_id:7,
+ latest_snapshot_run:{id:7,status:'completed',completed_at:'2026-10-08T10:00:00Z'},runs:[{id:9,status:'failed'}]};
+assert.ok(externalEvidenceLabel(body).includes('2026-10-08T10:00:00Z'));
+assert.ok(externalEvidenceLabel(body).includes('latest attempt failed'));
+assert.ok(externalEvidenceLabel({...body,runs:[{id:9,status:'running'}]}).includes('new check is running'));
+assert.ok(!externalEvidenceLabel({...body,runs:[{id:7,status:'completed'}]}).includes('failed'));
+assert.ok(externalEvidenceLabel({...body,latest_snapshot_run:{...body.latest_snapshot_run,status:'completed_with_warnings'}}).includes('observations may be unknown'));
+for (const metadata of [null,{id:8,status:'completed',completed_at:'2026-10-08T10:00:00Z'},
+ {...body.latest_snapshot_run,completed_at:'invalid'}, {...body.latest_snapshot_run,status:'failed'}]) {
+ assert.ok(externalEvidenceLabel({...body,latest_snapshot_run:metadata}).includes('collection time is unavailable'));
+}
+assert.ok(externalEvidenceLabel({runs:[{status:'running'}]}).includes('no saved findings'));
+assert.ok(externalEvidenceLabel({runs:[{status:'failed'}]}).includes('no saved assessment'));
+assert.ok(externalEvidenceLabel({}).includes('establish a baseline'));
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertLess(template.index('id="{{ key }}-assessment-evidence"'), template.index('id="{{ key }}-priorities"'))
+
     def test_profile_feedback_does_not_replace_client_key_status(self):
         root = Path(__file__).parents[1] / 'src/daedalus'
         source = (root / 'static/js/dashboard.js').read_text()

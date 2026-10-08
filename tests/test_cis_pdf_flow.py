@@ -932,6 +932,29 @@ class CISReportPDFFlowTests(unittest.TestCase):
             report_assessment = report_job.report_snapshot["checks"]["dns"]["run"]["snapshot"]["email_authentication_assessment"]
             self.assertEqual(report_assessment["dmarc"]["policy"], "reject")
 
+    def test_latest_evidence_metadata_survives_failed_run_pagination(self):
+        snapshot = {"domain": "example.org", "records": {}, "resolver_errors": {}}
+        with patch.object(server, "run_dns_check", return_value=snapshot):
+            response = self.client.post("/api/external-checks/dns/run")
+        self.assertEqual(response.status_code, 200, response.text)
+        source_id = response.json()["id"]
+        with self.session_factory() as db:
+            source = db.get(ExternalCheckRun, source_id)
+            completed = server.iso_utc(source.completed_at)
+            for _ in range(20):
+                db.add(ExternalCheckRun(organization_id=source.organization_id, check_type="dns",
+                    domain=source.domain, status="failed", started_at=server.utcnow(),
+                    completed_at=server.utcnow(), error_summary="Fixture collection failed"))
+            db.commit()
+        history = self.client.get("/api/external-checks/dns?runs_limit=1").json()
+        self.assertEqual(history["runs"][0]["status"], "failed")
+        self.assertNotIn(source_id, [run["id"] for run in history["runs"]])
+        self.assertEqual(history["latest_snapshot_run"], {"id": source_id, "status": "completed", "completed_at": completed})
+        self.assertEqual(history["latest_snapshot_run_id"], source_id)
+        self.assertIsNotNone(history["latest_snapshot"])
+        older = self.client.get("/api/external-checks/dns?runs_before=" + str(history["runs"][0]["id"])).json()
+        self.assertEqual(older["latest_snapshot_run"], history["latest_snapshot_run"])
+
     def test_external_check_schedules_are_admin_controlled_and_need_no_verification(self):
         initial = self.client.get("/api/external-checks/dns")
         self.assertEqual(initial.status_code, 200, initial.text)

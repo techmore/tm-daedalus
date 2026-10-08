@@ -4580,7 +4580,31 @@
     return "Current lookup failed (" + errors[matchingKey] + "); this historical value cannot confirm a record addition or removal.";
   }
 
+  function externalEvidenceLabel(body) {
+    var source = body.latest_snapshot_run;
+    var latest = (body.runs || [])[0];
+    if (!body.latest_snapshot) {
+      return latest && latest.status === "running" ? "First assessment running; no saved findings yet."
+        : latest && latest.status === "failed" ? "Latest attempt failed; no saved assessment is available."
+        : "No saved assessment yet. Run a check to establish a baseline.";
+    }
+    var validSource = source && Number.isSafeInteger(source.id) && source.id > 0
+      && source.id === body.latest_snapshot_run_id && ["completed", "completed_with_warnings"].includes(source.status);
+    var dated = validSource && typeof source.completed_at === "string" && Number.isFinite(Date.parse(source.completed_at));
+    var label = dated ? "Findings use saved evidence from " + dateLabel(source.completed_at) + " · run #" + source.id + "."
+      : "Findings use saved evidence; its collection time is unavailable.";
+    if (validSource && source.status === "completed_with_warnings") label += " Collection completed with warnings; some observations may be unknown.";
+    if (latest && (!validSource || latest.id !== source.id)) {
+      if (latest.status === "running") label += " A new check is running; these findings have not been replaced yet.";
+      else if (latest.status === "failed") label += " The latest attempt failed; earlier evidence is retained.";
+    }
+    return label;
+  }
+
   function renderCheckHistory(type, body) {
+    var evidenceNode = document.getElementById(type + "-assessment-evidence");
+    var evidenceLabel = externalEvidenceLabel(body);
+    if (evidenceNode && evidenceNode.textContent !== evidenceLabel) text(evidenceNode, evidenceLabel);
     var status = document.getElementById(type + "-check-status");
     var lastRun = document.getElementById(type + "-check-last-run");
     var runList = document.getElementById(type + "-check-runs");
@@ -4607,7 +4631,7 @@
         text(lastRun, "Run a check to establish the first baseline.");
       } else {
         var when = latestRun.completed_at || latestRun.started_at;
-        text(lastRun, (latestRun.status === "running" ? "Started " : "Last checked ") + dateLabel(when) +
+        text(lastRun, (latestRun.status === "running" ? "Started " : latestRun.status === "failed" ? "Last attempt " : "Last checked ") + dateLabel(when) +
           (latestRun.actor ? " by " + latestRun.actor : "") +
           (latestRun.duration_ms != null ? " · " + (latestRun.duration_ms / 1000).toFixed(1) + " sec" : "") +
           (latestRun.error_summary ? " · " + latestRun.error_summary : ""));
@@ -5082,6 +5106,7 @@
         }
       }
       if (!olderKind) {
+        text(document.getElementById(type + "-assessment-evidence"), "Could not refresh evidence collection time. Previously displayed results may be out of date.");
         var priorities = document.getElementById(type + "-priorities");
         if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Current assessment evidence could not be refreshed. Review is unavailable until the request succeeds."); }
       }

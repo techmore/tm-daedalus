@@ -357,6 +357,7 @@
         <section class="external-check-workspace" data-external-check="{{ key }}">
           <section class="topic-priority" aria-labelledby="{{ key }}-priority-title">
             <p class="eyebrow">CURRENT ASSESSMENT</p><h3 id="{{ key }}-priority-title">What needs attention</h3>
+            <p class="check-scope-note" id="{{ key }}-assessment-evidence" aria-live="polite">Loading evidence collection time…</p>
             <div id="{{ key }}-priorities" aria-live="polite"><p class="muted">Loading saved evidence…</p></div>
             {% if key == 'web' %}<div class="topic-audit-outcomes"><p id="web-exposure-outcome">Exposure assessment: loading saved evidence…</p><p id="web-nikto-outcome">Deeper website assessment: loading saved evidence…</p></div>{% endif %}
           </section>
