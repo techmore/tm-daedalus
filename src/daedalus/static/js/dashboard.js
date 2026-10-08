@@ -1823,6 +1823,50 @@
     container.append(section);
   }
 
+  function renderMerakiSwitchPorts(container, evidence) {
+    if (!evidence || !Array.isArray(evidence.switches) || !evidence.switches.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Switch health and port evidence";
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Reported link states and prior 24-hour counters. Review prompts require investigation; averages do not establish a bottleneck, peak load or replacement capacity.";
+    section.append(heading, note);
+    var value = function (number) { return typeof number === "number" && Number.isFinite(number) && number >= 0 ? number.toLocaleString("en-US", {maximumFractionDigits: 3}) : "Unavailable"; };
+    evidence.switches.forEach(function (sw) {
+      var group = document.createElement("details"), title = document.createElement("summary"), data = sw.data || {};
+      title.textContent = (sw.device_name || sw.device_serial || "Switch") + " · " + (sw.network_name || "Network") + " · " + (sw.status || "unknown") + " · " + value(data.review_port_count) + " ports for review";
+      group.append(title);
+      var coverage = document.createElement("p"); coverage.textContent = "Configuration: " + (sw.configuration_status || "unknown") + " · " + value(data.connected_port_count) + " connected / " + value(data.reported_port_count) + " reported ports · " + value(data.missing_status_port_count) + " configured ports missing status · " + value(data.unknown_state_port_count) + " unknown states · " + value(data.diagnostic_coverage_port_count) + " ports with diagnostic coverage"; group.append(coverage);
+      if (Array.isArray(data.rows) && data.rows.length) {
+        var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("aria-label", "Switch port observations for " + (sw.device_name || sw.device_serial || "Switch"));
+        var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Saved port evidence · review prompts first"; table.append(caption);
+        var head = document.createElement("thead"), tr = document.createElement("tr");
+        ["Port", "State / speed", "Uplink", "Mode / VLAN", "Traffic total Kbps", "Usage total KB", "Energy Wh", "Review prompts"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+        var body = document.createElement("tbody"); data.rows.forEach(function (row) {
+          var tr = document.createElement("tr"), prompts = Array.isArray(row.review_prompts) ? row.review_prompts : [];
+          [row.port_id, (row.state || "Unknown") + " / " + (row.speed || "Unavailable"), row.is_uplink === true ? "Yes" : row.is_uplink === false ? "No" : "Unknown", (row.mode || "Unknown") + " / " + value(row.vlan), value((row.traffic_kbps || {}).total), value((row.usage_kb || {}).total), value(row.power_usage_wh), prompts.length ? prompts.join("; ") : "No captured review prompt"].forEach(function (text) {var td = document.createElement("td"); td.textContent = text; tr.append(td);}); body.append(tr);
+        }); table.append(body); scroll.append(table); group.append(scroll);
+      }
+      if (data.additional_rows) {var more = document.createElement("p"); more.textContent = data.additional_rows + " more ports in complete saved JSON evidence."; group.append(more);}
+      section.append(group);
+    });
+    if (evidence.additional_switches) {var more = document.createElement("p"); more.textContent = evidence.additional_switches + " more switches in complete saved JSON evidence."; section.append(more);}
+    container.append(section);
+  }
+
+  function renderMerakiSwitchOverview(container, details) {
+    var evidence = details.switch_ports || {}, switches = evidence.switches || [];
+    if (!switches.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h3"); heading.textContent = "Switch health";
+    var note = document.createElement("p"); note.textContent = "Saved port evidence for " + switches.length + " shown switches" + (evidence.additional_switches ? "; " + evidence.additional_switches + " additional switches in complete JSON" : "") + ". Review prompts are observations for investigation.";
+    section.append(heading, note);
+    switches.slice(0, 5).forEach(function (sw) {var row = document.createElement("p"), data = sw.data || {}, count = function (v) {return Number.isSafeInteger(v) && v >= 0 ? String(v) : "Unavailable";}; row.textContent = (sw.device_name || sw.device_serial || "Switch") + ": " + count(data.review_port_count) + " ports for review · " + count(data.connected_port_count) + "/" + count(data.reported_port_count) + " connected · collection " + (sw.status || "unknown"); section.append(row);});
+    if (switches.length > 5) {var more = document.createElement("p"); more.textContent = switches.length - 5 + " more shown switches in saved report details."; section.append(more);}
+    var action = document.createElement("button"); action.type = "button"; action.className = "button button-small button-quiet"; action.textContent = "Review switch port evidence";
+    action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return; var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]'); if (!saved) return; saved.open = true; var summary = saved.querySelector("summary"); if (summary) {summary.focus(); summary.scrollIntoView({block: "center", behavior: "smooth"});}});
+    section.append(action); container.append(section);
+  }
+
   function renderMerakiWanUsage(container, observations) {
     (observations || []).forEach(function (observation) {
       var data = observation.data || {}, section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -1980,6 +2024,7 @@
       container.append(planning);
     }
 
+    renderMerakiSwitchPorts(container, details.switch_ports);
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
 
     renderMerakiWanuplinks(container, details.wan_uplinks);
@@ -2126,6 +2171,7 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
         return;
@@ -2133,6 +2179,7 @@
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
         renderMerakiPlanningOverview(container, details);
         return;
@@ -2146,6 +2193,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiSwitchOverview(container, details);
       renderMerakiWanOverview(container, details);
       renderMerakiPlanningOverview(container, details);
     } catch (error) {

@@ -840,6 +840,7 @@ host.children[0].events.click();assert.equal(opened,'dns');
     def test_meraki_summary_observations_are_literal_bounded_and_shared(self):
         source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
         code=source[source.index('  function fetchMerakiDashboardDetails('):source.index('  async function loadMerakiDashboardDetails(')]
+        code=source[source.index('  function renderMerakiSwitchOverview('):source.index('  function renderMerakiWanUsage(')]+code
         script="""const assert=require('node:assert/strict');
 class Node {constructor(){this.children=[];this.textContent='';this.isConnected=true;} replaceChildren(){this.children=[];this.textContent='';} append(...items){this.children.push(...items);}}
 const document={createElement:()=>new Node()};

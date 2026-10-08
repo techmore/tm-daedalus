@@ -72,6 +72,10 @@ def test_collection_uses_same_bounded_request_and_excludes_sensitive_fields():
     assert 'private-neighbor' not in str(result)
     control = next(row for row in result['security_controls'] if row['control'] == 'Switch port status')
     assert 'powerUsageInWh' not in control['data'][0]
+    ports = result['switch_ports'][0]
+    assert ports['status'] == 'complete' and ports['configuration_status'] == 'unsupported'
+    assert ports['data']['rows'][0]['power_usage_wh'] == 48
+    assert ports['data']['missing_status_port_count'] is None
     changed = copy.deepcopy(result)
     changed['switch_power'][0]['data']['measured_energy_wh'] = 120
     assert compare_meraki_snapshots(result, changed)['changed_control_count'] == 0
@@ -79,7 +83,9 @@ def test_collection_uses_same_bounded_request_and_excludes_sensitive_fields():
 
 @pytest.mark.parametrize('status,expected', [(403, 'unavailable'), (404, 'unsupported')])
 def test_failed_collection_preserves_coverage(status, expected):
-    row = collect_power(status=status, payload={})['switch_power'][0]
+    result = collect_power(status=status, payload={})
+    assert result['switch_ports'][0]['status'] == expected and result['switch_ports'][0]['data'] is None
+    row = result['switch_power'][0]
     assert row['status'] == expected
     assert row['data'] is None
 
@@ -87,6 +93,7 @@ def test_failed_collection_preserves_coverage(status, expected):
 def test_invalid_power_identity_does_not_invalidate_saved_status_control():
     result = collect_power(payload=[{'portId': '1'}, {'portId': '1'}])
     assert result['switch_power'][0]['data']['energy_coverage'] == 'invalid_evidence'
+    assert result['switch_ports'][0]['status'] == 'invalid_evidence' and result['switch_ports'][0]['data'] is None
 
 
 def test_pdf_appendix_preserves_existing_pages_and_purchase_links():

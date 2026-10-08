@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .meraki_switch import summarize_switch_ports
 from .meraki_wan import summarize_wan_usage, WAN_USAGE_TIMESPAN, WAN_USAGE_RESOLUTION
 
 
@@ -617,8 +618,11 @@ class MerakiClient:
         # unlike organization inventory they do not expose page-token parameters.
         # All reads still use the same protected host, rate limit and retry path.
         switch_power = []
+        switch_port_observations = []
         def collect_array(path: str, title: str, network: dict[str, Any], fields: tuple[str, ...], *, serial: str | None = None, schema: dict[str, Any] | None = None, power: bool = False) -> None:
             power_data = None
+            port_data = None
+            port_status = None
             try:
                 raw = self.get_json(path, params={"timespan": SWITCH_POWER_TIMESPAN}) if power else self.get_json(path)
                 if not isinstance(raw, list) or any(not isinstance(row, dict) for row in raw):
@@ -629,6 +633,12 @@ class MerakiClient:
                     raise MerakiAPIError("The Meraki configuration array exceeded the collection limit.")
                 payload = [_known_fields(row, schema) if schema is not None else redact_meraki_data({key: row[key] for key in fields if key in row}) for row in raw]
                 if power:
+                    configuration = next((row for row in security if row.get("device_serial") == serial and row["control"] == "Switch port configuration"), {})
+                    try:
+                        port_data = summarize_switch_ports(raw, configuration.get("data") if configuration.get("status") == "complete" else None)
+                        port_status = "complete"
+                    except ValueError:
+                        port_status = "invalid_evidence"
                     try:
                         power_data = summarize_switch_power(raw)
                     except MerakiAPIError:
@@ -645,6 +655,11 @@ class MerakiClient:
                 **({"device_serial": serial} if serial else {}),
             })
             if power:
+                device = next((item for item in switches if item.get("serial") == serial), {})
+                configuration = next((row for row in security if row.get("device_serial") == serial and row["control"] == "Switch port configuration"), {})
+                switch_port_observations.append({"device_serial": serial, "device_name": device.get("name") or device.get("model") or serial,
+                    "network_name": network["name"], "status": port_status or status,
+                    "configuration_status": configuration.get("status", "unavailable"), "data": port_data})
                 switch_power.append({"device_serial": serial, "network_name": network["name"],
                                      "status": status, "data": power_data})
 
@@ -870,6 +885,7 @@ class MerakiClient:
             "wireless_connections": [row for row in observational if row["control"] == "Wireless connection outcomes"],
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
             "switch_power": switch_power,
+            "switch_ports": switch_port_observations,
             "findings": findings,
             "warnings": warnings,
         }

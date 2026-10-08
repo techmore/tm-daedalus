@@ -1227,6 +1227,37 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             elif observation.get("status") == "complete":
                 story.append(_paragraph("No interface counters reported. Usage remains unavailable.", styles["MerakiBody"]))
 
+    switch_ports = meraki.get("switch_ports")
+    if isinstance(switch_ports, list) and switch_ports:
+        for observation in switch_ports:
+            story.append(PageBreak())
+            story.append(Paragraph("Switch health and port evidence", styles["MerakiSection"]))
+            data = observation.get("data") if isinstance(observation.get("data"), dict) else {}
+            story.append(_paragraph(f"{observation.get('device_name') or observation.get('device_serial')} / {observation.get('network_name')}; "
+                f"collection: {observation.get('status')}; configuration: {observation.get('configuration_status')}", styles["MerakiBody"]))
+            story.append(_paragraph("Reported link state and prior 24-hour counters. Review prompts require investigation; "
+                "averages do not establish a bottleneck, peak load or replacement capacity. Unknown fields remain unavailable. "
+                "Client/neighbor identities and diagnostic message text are omitted.", styles["MerakiBody"]))
+            story.append(_paragraph(f"Reported ports: {data.get('reported_port_count', 'Unavailable')}; connected: "
+                f"{data.get('connected_port_count', 'Unavailable')}; review ports: {data.get('review_port_count', 'Unavailable')}; "
+                f"configured ports missing status: {data.get('missing_status_port_count', 'Unavailable')}; "
+                f"diagnostic coverage: {data.get('diagnostic_coverage_port_count', 'Unavailable')}", styles["MerakiBody"]))
+            rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in
+                ("Port", "State / speed", "Uplink", "Mode / VLAN", "Total Kbps", "Energy Wh", "Review prompts")]]
+            def number(value):
+                return f"{value:,.3f}" if type(value) in (int, float) and math.isfinite(value) and value >= 0 else "Unavailable"
+            for row in data.get("rows", []):
+                uplink = "Yes" if row.get("is_uplink") is True else "No" if row.get("is_uplink") is False else "Unknown"
+                values = (row.get("port_id"), f"{row.get('state') or 'Unknown'} / {row.get('speed') or 'Unavailable'}", uplink,
+                    f"{row.get('mode') or 'Unknown'} / {row.get('vlan') if row.get('vlan') is not None else 'Unavailable'}",
+                    number((row.get("traffic_kbps") or {}).get("total")), number(row.get("power_usage_wh")),
+                    "; ".join(row.get("review_prompts") or []) or "No captured review prompt")
+                rows.append([_paragraph(value, styles["MerakiCell"]) for value in values])
+            if len(rows) > 1:
+                story.append(_table(rows, [.45 * inch, 1.15 * inch, .55 * inch, .8 * inch, .8 * inch, .8 * inch, 2.35 * inch]))
+            elif observation.get("status") == "complete":
+                story.append(_paragraph("No ports reported; port health remains unavailable.", styles["MerakiBody"]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

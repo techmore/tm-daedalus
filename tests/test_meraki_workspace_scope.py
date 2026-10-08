@@ -332,12 +332,19 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             }] + [{"control": f"Control {index}", "status": "complete", "data": {}} for index in range(200)]
             oversized_meraki["topology"] = [{"network_name": f"Network {index}", "status": "complete", "data": {"nodes": [], "links": []}} for index in range(101)]
             oversized_meraki["switch_power"] = [{"device_serial": "SW_1", "network_name": "HQ", "status": "complete", "data": {"measured_energy_wh": 240, "measured_average_watts": 10, "port_count": 24, "energy_coverage": "partial", "private": "never-serialize"}} for _ in range(101)]
+            from daedalus.meraki_switch import summarize_switch_ports
+            oversized_meraki["switch_ports"] = [{"device_serial": "SW_1", "status": "complete", "data": summarize_switch_ports([{"portId": str(i)} for i in range(70)])} for _ in range(22)]
             oversized_meraki["findings"] = [{"title": f"Finding {index}"} for index in range(101)]
             oversized_meraki["warnings"] = [f"Warning {index}" for index in range(101)]
             saved_snapshot["meraki"] = oversized_meraki
             saved_job.report_snapshot = saved_snapshot
             db.commit()
         bounded = self.client.get(f"/api/meraki/reports/{second_id}/details").json()
+        self.assertEqual(len(bounded["switch_ports"]["switches"]), 20)
+        self.assertEqual(bounded["switch_ports"]["additional_switches"], 2)
+        self.assertEqual(len(bounded["switch_ports"]["switches"][0]["data"]["rows"]), 50)
+        self.assertEqual(bounded["switch_ports"]["switches"][0]["data"]["additional_rows"], 20)
+        self.assertEqual(len(self.client.get(f"/api/meraki/reports/{second_id}/snapshot").json()["meraki"]["switch_ports"][0]["data"]["rows"]), 70)
         self.assertEqual(len(bounded["switch_power"]), 100)
         self.assertEqual(bounded["switch_power"][0]["data"]["measured_energy_wh"], 240)
         self.assertNotIn("private", bounded["switch_power"][0]["data"])
