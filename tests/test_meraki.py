@@ -189,7 +189,7 @@ class MerakiClientTests(unittest.TestCase):
             result = client.collect_security_report("org-1")
         self.assertEqual(result["summary"]["switch_device_count"], 1)
         self.assertEqual(result["summary"]["wireless_network_count"], 1)
-        self.assertEqual(result["summary"]["security_controls_unsupported"], 7)
+        self.assertEqual(result["summary"]["security_controls_unsupported"], 8)
         self.assertEqual(result["wireless_clients"][0]["status"], "unsupported")
         self.assertEqual(result["summary"]["security_controls_unavailable"], 1)
         self.assertEqual(result["summary"]["security_controls_collected"], 2)

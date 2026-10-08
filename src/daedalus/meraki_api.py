@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .meraki_neighbors import inventory_lookup, summarize_neighbors
 from .meraki_switch import summarize_switch_ports
 from .meraki_clients import summarize_wireless_clients, TIMESPAN as WIRELESS_CLIENT_TIMESPAN
 from .meraki_wan import summarize_wan_usage, WAN_USAGE_TIMESPAN, WAN_USAGE_RESOLUTION
@@ -735,7 +736,7 @@ class MerakiClient:
         # Individual records from the documented network clients endpoint are
         # transformed immediately and never enter the saved report snapshot.
         observational: list[dict[str, Any]] = []
-        def collect_observation(path: str, title: str, network: dict[str, Any], transform: Callable[[Any], dict[str, Any]], *, params: dict[str, Any] | None = None, collection: bool = False) -> dict[str, Any]:
+        def collect_observation(path: str, title: str, network: dict[str, Any], transform: Callable[[Any], dict[str, Any]], *, params: dict[str, Any] | None = None, collection: bool = False, serial: str | None = None) -> dict[str, Any]:
             try:
                 data = transform(self.get_collection(path, params=params) if collection else self._json(self._get(path, params=params)))
                 status = "complete"
@@ -745,9 +746,28 @@ class MerakiClient:
                 if status == "unavailable":
                     warnings.append(f"{network['name']}: {title} could not be read ({exc.status_code or 'response error'}).")
             control = {"network_id": network["id"], "network_name": network["name"], "control": title, "status": status, "data": data, "evidence_type": "observation"}
+            if serial is not None:
+                control["device_serial"] = serial
             security.append(control)
             observational.append(control)
             return control
+
+        switch_neighbors = []
+        for switch in switches:
+            network = network_by_id.get(switch.get("networkId"))
+            if network is None:
+                continue
+            serial = switch["serial"]
+            lookup = inventory_lookup(devices_raw, network["id"])
+            def transform_neighbors(raw, lookup=lookup, serial=serial):
+                try:
+                    return summarize_neighbors(raw, lookup, serial)
+                except ValueError as exc:
+                    raise MerakiAPIError("Switch discovery returned invalid evidence.") from exc
+            observation = collect_observation(f"/devices/{serial}/lldpCdp", "Switch managed neighbors",
+                network, transform_neighbors, serial=serial)
+            observation["pdf_evidence_summary_version"] = 1
+            switch_neighbors.append(observation)
 
         for network in wireless_networks:
             managed_serials = {str(device["serial"]) for device in access_points
@@ -903,6 +923,7 @@ class MerakiClient:
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
             "switch_power": switch_power,
             "switch_ports": switch_port_observations,
+            "switch_neighbors": switch_neighbors,
             "findings": findings,
             "warnings": warnings,
         }

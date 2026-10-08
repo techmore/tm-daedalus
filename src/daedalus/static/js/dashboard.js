@@ -1933,6 +1933,35 @@
     container.append(section);
   }
 
+  function renderMerakiNeighbors(container, evidence) {
+    if (!evidence || !Array.isArray(evidence.switches) || !evidence.switches.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Switch port relationships";
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = evidence.scope;
+    section.append(heading, note);
+    evidence.switches.forEach(function (sw) {
+      var group = document.createElement("details"), title = document.createElement("summary"), data = sw.data;
+      title.textContent = (sw.device_name || "Switch") + " · " + (sw.network_name || "Network") + " · " + (sw.status || "unknown") + (data ? " · " + data.matched_port_count + " matched / " + data.reported_port_count + " reported ports" : " · relationships unavailable"); group.append(title);
+      if (data) {
+        var counts = document.createElement("p"); counts.textContent = data.unmatched_port_count + " unmatched · " + data.ambiguous_port_count + " ambiguous"; group.append(counts);
+        if (data.rows.length) {
+          var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", "Port relationships for " + (sw.device_name || "Switch"));
+          var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Saved LLDP/CDP discovery · assigned inventory only"; table.append(caption);
+          var head = document.createElement("thead"), tr = document.createElement("tr");
+          ["Local port", "Assigned neighbor", "Model", "Remote port", "Evidence"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+          var body = document.createElement("tbody"); data.rows.forEach(function (row) {
+            var tr = document.createElement("tr");
+            [row.local_port, row.status === "matched" ? row.neighbor_name : row.status === "ambiguous" ? "Ambiguous discovery" : "Not matched to assigned inventory", row.neighbor_model || "Unavailable", row.remote_port_conflict ? "Conflicting port IDs" : row.neighbor_port || "Unavailable", row.protocols.length ? row.protocols.join(", ") : row.status].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);
+          }); table.append(body); scroll.append(table); group.append(scroll);
+        } else {var empty = document.createElement("p"); empty.textContent = "No discovery ports returned; this does not establish an empty network."; group.append(empty);}
+        if (data.additional_rows) {var more = document.createElement("p"); more.textContent = data.additional_rows + " more ports in complete saved JSON evidence."; group.append(more);}
+      }
+      section.append(group);
+    });
+    if (evidence.additional_switches) {var more = document.createElement("p"); more.textContent = evidence.additional_switches + " more switches in complete saved JSON evidence."; section.append(more);}
+    container.append(section);
+  }
+
   function renderMerakiSwitchPorts(container, evidence) {
     if (!evidence || !Array.isArray(evidence.switches) || !evidence.switches.length) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -1972,6 +2001,12 @@
     section.append(heading, note);
     switches.slice(0, 5).forEach(function (sw) {var row = document.createElement("p"), data = sw.data || {}, count = function (v) {return Number.isSafeInteger(v) && v >= 0 ? String(v) : "Unavailable";}; row.textContent = (sw.device_name || sw.device_serial || "Switch") + ": " + count(data.review_port_count) + " ports for review · " + count(data.connected_port_count) + "/" + count(data.reported_port_count) + " connected · collection " + (sw.status || "unknown"); section.append(row);});
     if (switches.length > 5) {var more = document.createElement("p"); more.textContent = switches.length - 5 + " more shown switches in saved report details."; section.append(more);}
+    var discovery = details.switch_neighbors;
+    if (discovery && Array.isArray(discovery.switches)) {
+      var mapped = 0, unknown = 0, ambiguous = 0, collected = 0;
+      discovery.switches.forEach(function (sw) {if (sw.data) {collected++; mapped += sw.data.matched_port_count; unknown += sw.data.unmatched_port_count; ambiguous += sw.data.ambiguous_port_count;}});
+      var relationships = document.createElement("p"); relationships.textContent = "Port discovery: " + mapped + " matched to assigned inventory · " + unknown + " unmatched · " + ambiguous + " ambiguous · " + collected + "/" + discovery.switches.length + " shown switches collected" + (discovery.additional_switches ? " · " + discovery.additional_switches + " additional switches in JSON" : ""); section.append(relationships);
+    }
     var action = document.createElement("button"); action.type = "button"; action.className = "button button-small button-quiet"; action.textContent = "Review switch port evidence";
     action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return; var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]'); if (!saved) return; saved.open = true; var summary = saved.querySelector("summary"); if (summary) {summary.focus(); summary.scrollIntoView({block: "center", behavior: "smooth"});}});
     section.append(action); container.append(section);
@@ -2137,6 +2172,7 @@
     renderMerakiActionPlan(container, details.action_plan);
     renderMerakiClientDistributions(container, details.wireless_clients, details.wireless_clients_additional_networks);
     renderMerakiCis8(container, details.cis8_assessment);
+    renderMerakiNeighbors(container, details.switch_neighbors);
     renderMerakiTopology(container, details.topology_graph);
     renderMerakiRefreshPlan(container, details.unifi_plan && details.unifi_plan.refresh_plan);
     renderMerakiSwitchPorts(container, details.switch_ports);

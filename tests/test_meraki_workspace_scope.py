@@ -343,6 +343,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             oversized_meraki["switch_power"] = [{"device_serial": "SW_1", "network_name": "HQ", "status": "complete", "data": {"measured_energy_wh": 240, "measured_average_watts": 10, "port_count": 24, "energy_coverage": "partial", "private": "never-serialize"}} for _ in range(101)]
             from daedalus.meraki_switch import summarize_switch_ports
             oversized_meraki["switch_ports"] = [{"device_serial": "SW_1", "status": "complete", "data": summarize_switch_ports([{"portId": str(i)} for i in range(70)])} for _ in range(22)]
+            from daedalus.meraki_neighbors import summarize_neighbors
+            oversized_meraki["devices"].append({"serial": "DISCOVERY_SWITCH", "model": "MS120", "networkId": "DISCOVERY_NET", "name": "Discovery Switch"})
+            oversized_meraki["switch_neighbors"] = [{"device_serial": "DISCOVERY_SWITCH", "network_id": "DISCOVERY_NET", "network_name": "HQ", "status": "complete", "data": summarize_neighbors({"ports": {str(i): {} for i in range(70)}}, {}, "DISCOVERY_SWITCH")} for _ in range(22)]
             oversized_meraki["findings"] = [{"title": f"Finding {index}"} for index in range(101)]
             oversized_meraki["warnings"] = [f"Warning {index}" for index in range(101)]
             from daedalus.meraki_cis8 import build_cis8_assessment
@@ -352,6 +355,10 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             saved_job.report_snapshot = saved_snapshot
             db.commit()
         bounded = self.client.get(f"/api/meraki/reports/{second_id}/details").json()
+        self.assertEqual(len(bounded["switch_neighbors"]["switches"]), 20)
+        self.assertEqual(bounded["switch_neighbors"]["additional_switches"], 2)
+        self.assertEqual(len(bounded["switch_neighbors"]["switches"][0]["data"]["rows"]), 50)
+        self.assertEqual(bounded["switch_neighbors"]["switches"][0]["data"]["additional_rows"], 20)
         self.assertEqual(len(bounded["switch_ports"]["switches"]), 20)
         self.assertEqual(bounded["switch_ports"]["additional_switches"], 2)
         self.assertEqual(len(bounded["switch_ports"]["switches"][0]["data"]["rows"]), 50)
@@ -365,7 +372,7 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(len(bounded["controls"]), 200)
         self.assertEqual(len(bounded["findings"]), 100)
         self.assertEqual(len(bounded["warnings"]), 100)
-        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "topology": 1, "switch_power": 1, "findings": 1, "warnings": 1})
+        self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 2, "controls": 1, "topology": 1, "switch_power": 1, "findings": 1, "warnings": 1})
         self.assertEqual(len(bounded["topology"]), 100)
         self.assertEqual(len(bounded["cis8_assessment"]["rows"]), 18)
         self.assertEqual(sum(bounded["cis8_assessment"]["summary"].values()), 18)

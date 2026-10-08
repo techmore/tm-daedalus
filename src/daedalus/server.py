@@ -123,6 +123,7 @@ from daedalus.meraki_cis8 import build_cis8_assessment, project_cis8_assessment
 from daedalus.meraki_clients import project_wireless_clients
 from daedalus.meraki_actions import build_action_plan, project_action_plan
 from daedalus.meraki_history import compare_meraki_inventory
+from daedalus.meraki_neighbors import project_neighbors
 from daedalus.meraki_topology import project_topology
 from daedalus.meraki_switch import project_switch_ports
 from daedalus.meraki_wan import project_wan_usage
@@ -5170,6 +5171,7 @@ def meraki_report_details(
         "wireless_clients_additional_networks": more_wireless_clients,
         "topology_graph": project_topology(snapshot) if type(snapshot.get("topology_detail_version")) is int and snapshot["topology_detail_version"] == 1 else None,
         "switch_ports": project_switch_ports(snapshot.get("switch_ports")),
+        "switch_neighbors": project_neighbors(snapshot) if "switch_neighbors" in snapshot else None,
         "wan_usage_additional_networks": max(0, len(snapshot.get("wan_usage") or []) - 100) if isinstance(snapshot.get("wan_usage"), list) else 0,
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
         "wireless_connections": [{"network_name": text_field(row, "network_name"),

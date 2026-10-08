@@ -1009,6 +1009,11 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 observed = {key: data.get(key) for key in ("requested_timespan_seconds",
                     "wireless_client_count", "excluded_connection_count", "returned_record_count")}
                 observed["supporting_evidence"] = "See wireless client analysis appendix; complete distributions remain in saved JSON."
+            if (control.get("control") == "Switch managed neighbors" and isinstance(data, dict)
+                    and type(control.get("pdf_evidence_summary_version")) is int
+                    and control["pdf_evidence_summary_version"] == 1):
+                observed = {key: data.get(key) for key in ("reported_port_count", "matched_port_count", "unmatched_port_count", "ambiguous_port_count")}
+                observed["supporting_evidence"] = "See switch port relationships appendix; complete captured ports remain in saved JSON."
             # Large arrays (switch ports, SSIDs, firewall rules) need separate
             # table rows. A single multi-page cell cannot be split by ReportLab.
             records = observed if isinstance(observed, list) else [observed]
@@ -1413,6 +1418,32 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 story.append(_table(rows, [.5 * inch, 4.4 * inch, 2 * inch]))
         if graph["additional_networks"]:
             story.append(_paragraph(f"{graph['additional_networks']} additional networks are outside the diagram preview. Complete captured relationships remain in the saved JSON and preceding relationship tables.", styles["MerakiSmall"]))
+
+    if isinstance(meraki.get("switch_neighbors"), list) and meraki["switch_neighbors"]:
+        from daedalus.meraki_neighbors import project_neighbors
+        neighbors = project_neighbors(meraki, complete=True)
+        story.append(PageBreak())
+        story.append(Paragraph("Switch port relationships", styles["MerakiSection"]))
+        story.append(_paragraph(neighbors["scope"], styles["MerakiBody"]))
+        for switch in neighbors["switches"]:
+            story.append(_paragraph(f"{switch['device_name'] or 'Switch'} - {switch['network_name'] or 'Network'}", styles["MerakiSubsection"]))
+            data = switch["data"]
+            if data is None:
+                story.append(_paragraph(f"Collection: {switch['status'] or 'unknown'}; port relationships unavailable.", styles["MerakiBody"]))
+                continue
+            story.append(_paragraph(f"Reported ports: {data['reported_port_count']}; matched: {data['matched_port_count']}; unmatched: {data['unmatched_port_count']}; ambiguous: {data['ambiguous_port_count']}.", styles["MerakiBody"]))
+            rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in ("Local port", "Assigned neighbor / model", "Remote port", "Evidence")]]
+            for row in data["rows"]:
+                name = f"{row['neighbor_name']} / {row['neighbor_model']}" if row['status'] == 'matched' else 'Ambiguous discovery' if row['status'] == 'ambiguous' else 'Not matched to assigned inventory'
+                remote = 'Conflicting port IDs' if row['remote_port_conflict'] else row['neighbor_port'] or 'Unavailable'
+                values = (row['local_port'], name, remote, ', '.join(row['protocols']) or row['status'])
+                rows.append([_paragraph(value, styles["MerakiSmall"]) for value in values])
+            if len(rows) > 1:
+                story.append(_table(rows, [.7 * inch, 3.3 * inch, 1.4 * inch, 1.5 * inch]))
+            else:
+                story.append(_paragraph("No discovery ports returned; this does not establish an empty network.", styles["MerakiBody"]))
+        if neighbors['additional_switches']:
+            story.append(_paragraph(f"{neighbors['additional_switches']} additional switches remain in saved JSON.", styles["MerakiSmall"]))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
