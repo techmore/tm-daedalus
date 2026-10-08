@@ -1,5 +1,15 @@
 # Integration readiness
 
+## October 8, 2026 — installed Mac intermediate progress uploaded live
+
+SER8 Incus activated source 9a4041999bf227ba34dc0e20658c5dbd7e40ec24, verified 79-file release SHA-256 1426529ec3016af33dc4bc20a06acabd2ef753d2f8a3fb8523563c3842eda528. Verified off-host backup daedalus-data-20261008T041409Z.tar.gz preceded activation; internal/public health passed. A normal authenticated kit download returned 1,001,822 bytes with engine ZIP 37a8b078deb94704f4cd334c94f695f48e4e828f79c7292ad504e0e7ca24469c. The actual Mac performed the ordinary managed upgrade with its maintenance admission fence; the helper reported retained data, and enrollment bytes were independently verified unchanged. The installed helper matches the candidate exactly.
+
+Fresh physical Mac run 8c5cf11e-2983-419d-9e51-108836e7c155 started after the normal cooldown, using loopback and the existing per-run skip-host-discovery option. While it was still running, production retained source job-status progress 5, 35 and 60 with UTC occurrence and save timestamps. After completion, normal authenticated run-detail API verified the ordered sequence initial/5/35/60/100/completed, consistent run identity, 23 saved events, one host, 19 open TCP ports and original XML. This closes the observed intermediate-upload defect; it is physical scanner/hosted API acceptance, not a new rendered portal review or broad VLAN/fleet acceptance. The Mac remains locked for native post-upgrade visual review.
+
+Automatic comparison 5 retained one unconfirmed port observation difference against the prior loopback scan, zero meaningful changes and zero scanner-comparison notifications. Both local runs lack explicitly reported covered-target scope, so the comparison correctly remains non-comparable and does not assert a confirmed port removal. The print defects found in PDF 43 remain open; this engine helper change preserves all report assets byte-for-byte. Private receipts: validation/scanner-progress-envelope-20261008/ and /data/codex-scanner-progress-live-20261008.json, /data/codex-scanner-progress-final-20261008.json.
+
+Backend CI 37726490791 at source 9a40419 passed. Installed Linux CI 37726490846 is in progress: lifecycle and interrupted-bridge passed; repeated comparison remains running at this checkpoint.
+
 ## October 8, 2026 — grouped intermediate scanner progress source correction
 
 The original event helper now updates the registry and calls its existing grouped status emitter for every phase. Modern bridges continue rejecting raw browser job-status events; stable source UUIDs, UTC occurrence times, run metadata, fan-out, SQLite replay and spool upload remain the existing path. Actual packaged-code regression exercises the shipped helper/broadcaster/database for both scans and reports: 5/35/60/100 progress, completion, browser delivery, bridge envelopes and durable reopen/replay retain identical identities and values.
