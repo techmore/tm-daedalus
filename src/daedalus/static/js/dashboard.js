@@ -506,6 +506,16 @@
       ? "Approved networks: " + authorizedNetworks.join(", ")
       : "No approved network scope. This scanner cannot receive scan commands until an admin assigns a CIDR.";
     card.append(scopeSummary);
+    if (agent.enabled !== false && agent.bridge_online === true &&
+        (agent.connection_scope === "outside" || agent.connection_scope === "partial")) {
+      var connectionNotice = document.createElement("p");
+      connectionNotice.className = "scanner-connection-notice";
+      connectionNotice.textContent = (agent.connection_scope === "outside"
+        ? "Current connection is outside the approved scan scope. "
+        : "Current connection is only partly covered by the approved scan scope. ") +
+        "Confirm a route to the approved target, reconnect to its network, or ask an admin to review scope. Detected networks do not grant scan permission.";
+      card.append(connectionNotice);
+    }
     var savedAssessment = document.createElement("section"); savedAssessment.className = "scanner-saved-assessment";
     savedAssessment.textContent = "Loading saved network observations…";
     card.append(savedAssessment);

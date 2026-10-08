@@ -52,6 +52,25 @@ class ScannerCommandLifecycleTests(unittest.TestCase):
             self.assertEqual(len(changes), 2)
             self.assertEqual(changes[0].details["detected_networks"], ["10.20.0.0/24"])
 
+    def test_dashboard_connection_scope_is_current_and_does_not_expand_permission(self):
+        from daedalus.models import Agent
+        agent_id, _ = self.create_scanner()
+        with self.session_factory() as db:
+            agent = db.get(Agent, agent_id)
+            agent.authorized_networks = ["10.20.0.0/24"]
+            db.commit()
+        self.client.post(f"/api/agents/{agent_id}/heartbeat", headers={"Authorization": "Bearer test-scanner-token"},
+                         json={"detected_networks": ["192.168.222.0/24"]})
+        row = next(a for a in self.client.get('/api/dashboard').json()['agents'] if a['id'] == agent_id)
+        self.assertEqual(row['connection_scope'], 'outside')
+        self.assertEqual(row['authorized_networks'], ["10.20.0.0/24"])
+        with self.session_factory() as db:
+            agent = db.get(Agent, agent_id)
+            agent.last_seen_at = server.utcnow() - timedelta(minutes=2)
+            db.commit()
+        row = next(a for a in self.client.get('/api/dashboard').json()['agents'] if a['id'] == agent_id)
+        self.assertEqual(row['connection_scope'], 'unknown')
+
     def ready(self, protocol=1):
         agent_id, _ = self.create_scanner()
         self.headers = {"Authorization": "Bearer test-scanner-token"}

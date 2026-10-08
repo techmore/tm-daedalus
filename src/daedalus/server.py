@@ -2427,6 +2427,32 @@ def validate_scanner_network_scopes(raw_scopes: list[str]) -> list[str]:
     )
 
 
+def scanner_connection_scope(agent: Agent) -> str:
+    """Compare current connected subnets with approved scope, not target reachability."""
+    if not agent.enabled or not agent_bridge_online(agent):
+        return "unknown"
+    if not agent.authorized_networks:
+        return "unassigned"
+    if not agent.detected_networks:
+        return "unknown"
+    try:
+        detected = [ipaddress.ip_network(value, strict=False) for value in agent.detected_networks]
+        approved = [ipaddress.ip_network(value, strict=False) for value in agent.authorized_networks]
+    except (TypeError, ValueError):
+        return "unknown"
+    merged = []
+    for version in (4, 6):
+        merged.extend(ipaddress.collapse_addresses([network for network in approved if network.version == version]))
+    covered = [any(network.version == scope.version and network.subnet_of(scope) for scope in merged)
+               for network in detected]
+    if all(covered):
+        return "covered"
+    if any(network.version == scope.version and network.overlaps(scope)
+           for network in detected for scope in merged):
+        return "partial"
+    return "outside"
+
+
 def scan_target_within_agent_scope(raw_target: str, authorized_networks: list[str] | None) -> str:
     target = validate_internal_scan_target(raw_target)
     network = ipaddress.ip_network(target, strict=False)
@@ -5955,8 +5981,8 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
                 "nmapui_version": agent.nmapui_version,
                 "nmapui_ready": agent.nmapui_ready,
                 "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
-            "detected_networks": agent.detected_networks or [],
-            "command_protocol_version": agent.command_protocol_version or 0,
+                "command_protocol_version": agent.command_protocol_version or 0,
+                "connection_scope": scanner_connection_scope(agent),
                 "authorized_networks": agent.authorized_networks or [],
                 "detected_networks": agent.detected_networks or [],
             }

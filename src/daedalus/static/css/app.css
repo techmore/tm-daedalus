@@ -155,6 +155,7 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
 .scanner-network-editor { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 7px; width: 100%; }
 .scanner-network-editor label { display: grid; gap: 4px; color: var(--brown-800); font-size: 10px; font-weight: 700; }
 .scanner-scope-summary { margin: 7px 0; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+.scanner-connection-notice { margin: 10px 0; padding: 12px; border-left: 3px solid var(--olive-600); background: var(--cream-100); color: var(--brown-800); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .scanner-scope-feedback { grid-column: 1 / -1; min-height: 1em; color: var(--olive-800); font-size: 10px; }
 .enrollment-heading { display: flex; align-items: start; justify-content: space-between; }
 .enrollment-heading h3 { margin: 0; font-size: 14px; }

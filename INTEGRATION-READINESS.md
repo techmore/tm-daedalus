@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 8, 2026 — scanner connection and scope guidance
+
+The dashboard API now compares freshly reported connected subnets with the independently approved scope. IPv4 and IPv6 unions distinguish covered, partial and outside connections; missing, stale, revoked or malformed evidence remains unknown. Adjacent approved CIDRs can jointly cover a connected subnet. This comparison does not establish target reachability or expand permissions. An inline cream/brown/olive notice next to connection and scope details explains routed targets, reconnecting and admin scope review. It adds no popup and preserves scan controls for approved routed targets.
+
+Focused validation passed 83 tests and 13 subtests before the dashboard API integration regression was added. The final full local suite passed 836 tests and 306 subtests, with one skip; hosted activation remains pending at this source checkpoint. Initial full validation found two obsolete asset-version assertions; these were updated to the new dashboard asset revision. Unit and actual renderer fixtures cover mixed families, partial coverage, unions, stale/revoked evidence, literal text and preservation of the scan permission guard. Scanner engine, PDF assets and installed settings were unchanged. Rendered desktop/mobile acceptance remains open.
+
 ## October 8, 2026 — actual Mac identity and hosted health-command acceptance
 
 The installed private enrollment identifies the physical Mac as agent **2**, cybersecuritypilot.org-mac; agent **3** is the SER8 Linux scanner. A fresh read-only production census confirms both connected and ready. The earlier migration entry's agent-3 heartbeat was Linux evidence and did not establish the Mac's heartbeat. The installed migration/admission observations remain physical Mac evidence.

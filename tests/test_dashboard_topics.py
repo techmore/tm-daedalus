@@ -423,6 +423,18 @@ card=makeAgentCard({...agent,bridge_online:true,nmapui_ready:null},'example.test
 assert.equal(readiness(card),'NmapUI health check pending');
 card=makeAgentCard({...agent,status:'disabled',enabled:false,bridge_online:true},'example.test');
 assert.equal(readiness(card),'Scanner access revoked · current NmapUI status unavailable');
+card=makeAgentCard({...agent,bridge_online:true,authorized_networks:['10.20.0.0/24'],detected_networks:['192.168.222.0/24'],connection_scope:'outside'},'example.test');
+assert.ok(card.children.find(n=>n.className==='scanner-connection-notice').textContent.includes('Confirm a route to the approved target'));
+assert.equal(flatten(card).find(n=>n.dataset.command==='start_scan').disabled,false);
+for(const state of ['covered','unknown','unassigned']) {
+ card=makeAgentCard({...agent,bridge_online:true,connection_scope:state},'example.test');
+ assert.equal(card.children.some(n=>n.className==='scanner-connection-notice'),false);
+}
+card=makeAgentCard({...agent,bridge_online:false,connection_scope:'outside'},'example.test');
+assert.equal(card.children.some(n=>n.className==='scanner-connection-notice'),false);
+card=makeAgentCard({...agent,bridge_online:true,connection_scope:'partial'},'example.test');
+assert.ok(card.children.find(n=>n.className==='scanner-connection-notice').textContent.includes('only partly covered'));
+
 
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
