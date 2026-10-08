@@ -1,5 +1,13 @@
 # Daedalus project report
 
+## October 8, 2026 — Production CIS release delivery support validated
+
+SER8 Incus runs source `8b34571`: authenticated, audited CIS Mac client downloads can now serve an operator-published notarized package. The dashboard displays release availability; missing or invalid releases have an inline status. The signed-release builder records source, architecture, team and checksum after its Apple verification steps. Backup/restore preserves the two published release files. A real notarized package is **not yet published**; Developer ID signing identities are absent on the development Mac.
+
+Local validation passed 1,161 tests, one skipped and 349 subtests. Exact-source backend CI `37826522102` and macOS CI `37826522162` passed; the full native result contains 133 passes and one skip. Actual macOS 26.6.2 collection retains all 119 Level 2 results (10 pass, 22 fail, 87 manual), including manual outcomes for the new application/System directory permission readers. Mapping counts (109 distinct routines; 93/100 L1 and 107/119 L2) are source capabilities, not assessed coverage or certification.
+
+Production health and exact source identity passed; all 66 existing PDFs/snapshots were preserved. Mac/Linux scanners are online/ready. Penn Charter report 64 remains completed alongside BFS history, with purchase plans and links retained. The original scanner template is preserved under immutable print versions; version-4 production report 66 fixes numeric-port wrapping without rewriting earlier reports. **The whole project remains incomplete**: see the [requirement-by-requirement audit](docs/COMPLETION-AUDIT-20261008.md), [CIS client delivery guide](clients/csp-cis-audit/README.md#production-download-publishing), and [scanner report receipts](docs/SCANNER-REPORT-FIDELITY.md).
+
 ## October 8, 2026 — Lewis Dental Group added; onboarding deployed
 
 Release `793a511` is active on SER8 after verified off-host backup and successful internal/public readiness. Lewis Dental Group (`lewisdentalgrp.com`) is workspace 8 under the requested owner with approved admin membership, complimentary onboarding and a November 7, 2026 review deadline. DNS ownership remains pending; onboarding controls are open. The owner’s approved workspace-list projection includes Lewis, daily public schedules are enabled, and public onboarding/dashboard assets match tested source. Full suite: 1,114 passed, one skipped, 342 subtests. Real browser visual review and future renewal acceptance remain open. The Google Admin section is also deployed, but its dedicated credentials and real tenant consent are still pending. [Customer workflow](docs/CUSTOMER-ONBOARDING.md); [hosting inventory](docs/WEBSITE-HOSTING-COSTS.md).
