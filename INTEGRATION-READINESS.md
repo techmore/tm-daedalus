@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — original Meraki PoE reporting retained and validated live
+
+Original Meraki-2026_planning energy reporting is now preserved as a separate dated switch observation. One existing port-status request per switch uses an explicit 24-hour timespan, with bounded allowlisted aggregates, measured/missing counts and partial coverage. Changing energy values do not enter configuration-change alerts. The dashboard exposes saved measurements; an appendix follows existing PDF sections. Focused validation passed 110 tests and 24 subtests; the full suite passed 826 tests, one skipped and 293 subtests.
+
+SER8 Incus runs source 219fc0e8864e1a88b4890f5e39b1d4ded40900f2, verified 79-file release SHA-256 f7721d58f1535bf5bcd99b57cd6a3f768f39352c7f45e2743edda7d4edbead3f, after verified off-host backup daedalus-data-20261008T031553Z.tar.gz. Internal/public readiness passed. Normal authenticated BFS report 42 completed with all seven switch observations, partial energy coverage, matched dashboard/saved evidence, unchanged purchase budgets and zero changes against report 41. Request/completion audits and no change notice were confirmed. The temporary validation key was revoked (401). Actual production PDF appendix was visually reviewed; all 96 earlier page streams match a rendering of the same saved snapshot without the new appendix. Private receipts: validation/meraki-poe-20261008/.
+
+The prior scanner lifecycle implementation passed installed Linux [37721302129](https://github.com/techmore/tm-daedalus/actions/runs/37721302129) in all three scenarios; backend [37721413422](https://github.com/techmore/tm-daedalus/actions/runs/37721413422) passed at its documentation head. Current-source backend 37721890176 and managed Linux 37721890144 are running at this checkpoint. This does not complete broader legacy-report coverage, installed Mac migration, full UI acceptance or the entire project.
+
+
 ## October 8, 2026 — lifecycle coordination deployed to SER8
 
 SER8 Incus activated source 730907aa78b4698ec517391a307924e6312396cc, verified 79-file release SHA-256 05b59862205b34f4b67490ff4470724b4eab0727c3a1b559029b01cd9e99381b. The pre-deploy verified off-host backup is daedalus-data-20261008T030838Z.tar.gz; internal and public readiness passed. The normal authenticated operator download returned HTTP 200 / 1,000,986 bytes. Downloaded bridge, macOS helper and upgrade helper match active production source; the engine archive still matches 48ab8f8166dfc17e107d0a37309c13b2441a0c3bc187be0a15ca175a20821d3e. BFS reports 40/41 remain completed with their original PDF sizes and saved purchase plans. Private receipt: /data/codex-macos-lifecycle-kit-20261008.json. Current-source backend CI 37721302261 and managed Linux CI 37721302129 are still running. No installed scanner engine or bridge was upgraded by this portal deployment.
