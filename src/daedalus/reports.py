@@ -1371,6 +1371,49 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                     _paragraph("Saved evidence references: " + "; ".join(row["evidence_references"]), styles["MerakiSmall"]),
                 ]))
 
+    if type(meraki.get("topology_diagram_version")) is int and meraki["topology_diagram_version"] == 1:
+        from daedalus.meraki_topology import project_topology
+        from reportlab.graphics.shapes import Drawing, Line, Rect, String
+        graph = project_topology(meraki)
+        for network in graph["networks"]:
+            diagram = network.get("diagram")
+            if not diagram or diagram.get("status") != "available":
+                continue
+            from daedalus.meraki_diagram import diagram_sheets
+            for sheet in diagram_sheets(diagram):
+                story.append(PageBreak())
+                story.append(Paragraph("Network diagram", styles["MerakiSection"]))
+                story.append(_paragraph(f"{network['network_name']} - diagram sheet {sheet['sheet']}/{sheet['sheet_count']}", styles["MerakiSubsection"]))
+                story.append(_paragraph(diagram["scope"], styles["MerakiBody"]))
+                drawing = Drawing(sheet["width"], sheet["height"])
+                by_id = {node["device_serial"]: node for node in sheet["nodes"]}
+                for link in sheet["links"]:
+                    a, b = (by_id[key] for key in link["device_serials"])
+                    drawing.add(Line(a["x"] + 90, sheet["height"] - a["y"] - 35,
+                        b["x"] + 90, sheet["height"] - b["y"] - 35, strokeColor=OLIVE_600, strokeWidth=2))
+                for node in sheet["nodes"]:
+                    y = sheet["height"] - node["y"] - node["height"]
+                    drawing.add(Rect(node["x"], y, node["width"], node["height"], rx=8, ry=8,
+                        fillColor=OLIVE_800 if node["reported_root"] is True else OLIVE_050, strokeColor=OLIVE_600))
+                    drawing.add(String(node["x"] + 90, y + 26, "#" + str(node["number"]),
+                        fontName="Helvetica-Bold", fontSize=26, textAnchor="middle",
+                        fillColor=OLIVE_050 if node["reported_root"] is True else INK))
+                scale = 6.9 * inch / sheet["width"]
+                drawing.scale(scale, scale); drawing.width *= scale; drawing.height *= scale
+                story.append(drawing)
+                story.append(_paragraph(f"Full diagram preview: {len(diagram['nodes'])} assigned devices, {len(diagram['links'])} relationship pairs; {diagram['additional_nodes']} additional devices and {diagram['additional_links']} additional pairs outside preview. Complete evidence remains in saved JSON.", styles["MerakiSmall"]))
+                if sheet["cross_sheet_links"]:
+                    story.append(_paragraph("Relationships continuing on other diagram sheets", styles["MerakiSubsection"]))
+                    for link in sheet["cross_sheet_links"]:
+                        story.append(_paragraph(f"Device #{link['local_number']} / device #{link['other_number']} on sheet {link['other_sheet']}: {link['link_count']} reported relationship(s).", styles["MerakiSmall"]))
+                rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in ("Key", "Assigned device", "Model / root observation")]]
+                for node in sorted(sheet["nodes"], key=lambda row: row["number"]):
+                    rows.append([str(node["number"]), _paragraph(node["name"], styles["MerakiCell"]),
+                        _paragraph(node["model"] + (" / API root flag" if node["reported_root"] is True else ""), styles["MerakiCell"])])
+                story.append(_table(rows, [.5 * inch, 4.4 * inch, 2 * inch]))
+        if graph["additional_networks"]:
+            story.append(_paragraph(f"{graph['additional_networks']} additional networks are outside the diagram preview. Complete captured relationships remain in the saved JSON and preceding relationship tables.", styles["MerakiSmall"]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

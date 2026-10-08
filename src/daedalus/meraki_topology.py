@@ -64,6 +64,18 @@ def project_topology(snapshot: dict, *, complete: bool = False) -> dict:
             'excluded_node_count':len(raw_nodes)-len(nodes),'excluded_link_pair_count':len(raw_links)-len(pairs),
             'omitted_node_count':_count(data.get('omitted_node_count')),'omitted_link_count':_count(data.get('omitted_link_count')),
             'reported_error_count':_count(data.get('reported_error_count'))})
+        if type(snapshot.get('topology_diagram_version')) is int and snapshot['topology_diagram_version'] == 1:
+            from .meraki_diagram import layout_network
+            # Layout uses the same bounded node/link projection even when the
+            # surrounding complete report table exposes all captured evidence.
+            diagram_view = dict(view)
+            diagram_view['nodes'] = node_rows[:50]
+            diagram_ids = {row['device_serial'] for row in diagram_view['nodes']}
+            diagram_view['links'] = [{'device_serials': list(pair), 'endpoint_names': [nodes[v]['name'] for v in pair], 'link_count': count}
+                for pair, count in sorted(pairs.items()) if all(v in diagram_ids for v in pair)][:100]
+            view['diagram'] = layout_network(diagram_view)
+            view['diagram']['additional_nodes'] = max(0, len(nodes) - len(diagram_view['nodes']))
+            view['diagram']['additional_links'] = max(0, len(pairs) - len(diagram_view['links']))
         result.append(view)
     return {'networks':result,'additional_networks':max(0,len(observations)-network_limit),
         'scope':'Observed undirected relationships between assigned devices in the same saved network. Root flags are API observations. Link counts count reported relationships, not verified redundant cables. Layout does not establish traffic direction, Internet reachability or a complete topology; devices without observed links are not inferred offline.'}

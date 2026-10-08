@@ -1879,6 +1879,21 @@
     var source = document.createElement("a");source.href = "https://www.cisecurity.org/controls/cis-controls-navigator/v8";source.target = "_blank";source.rel = "noopener noreferrer";source.textContent = "CIS Controls v8 reference (opens in a new tab)";section.append(source);container.append(section);
   }
 
+  function renderMerakiNetworkDiagram(container, network) {
+    var diagram = network.diagram;
+    if (!diagram || diagram.status !== "available" || !Array.isArray(diagram.nodes)) return;
+    var figure = document.createElement("figure"), caption = document.createElement("figcaption");caption.textContent = "Network diagram · " + (network.network_name || "Network");figure.append(caption);
+    var scroll = document.createElement("div");scroll.className = "meraki-topology-canvas";scroll.tabIndex = 0;scroll.setAttribute("role", "region");scroll.setAttribute("aria-label", "Scrollable network diagram for " + (network.network_name || "Network"));
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");svg.setAttribute("viewBox", "0 0 " + diagram.width + " " + diagram.height);svg.setAttribute("width", diagram.width);svg.setAttribute("height", diagram.height);svg.setAttribute("role", "img");svg.setAttribute("aria-label", "Named assigned devices and observed undirected relationships");
+    var title = document.createElementNS("http://www.w3.org/2000/svg", "title");title.textContent = "Observed network relationships for " + (network.network_name || "Network");svg.append(title);
+    var byId = new Map();diagram.nodes.forEach(function (node) {byId.set(node.device_serial, node);});
+    (diagram.links || []).forEach(function (link) {var a = byId.get(link.device_serials[0]), b = byId.get(link.device_serials[1]);if (!a || !b) return;var line = document.createElementNS("http://www.w3.org/2000/svg", "line");line.setAttribute("x1", a.x + a.width / 2);line.setAttribute("y1", a.y + a.height / 2);line.setAttribute("x2", b.x + b.width / 2);line.setAttribute("y2", b.y + b.height / 2);line.setAttribute("stroke", "#8a9269");line.setAttribute("stroke-width", "2");svg.append(line);});
+    diagram.nodes.forEach(function (node) {var group = document.createElementNS("http://www.w3.org/2000/svg", "g"), title = document.createElementNS("http://www.w3.org/2000/svg", "title");title.textContent = node.number + ": " + node.name + " / " + node.model + (node.reported_root === true ? " · API root flag" : "");group.append(title);
+      var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");[["x", node.x], ["y", node.y], ["width", node.width], ["height", node.height], ["rx", 8], ["fill", node.reported_root === true ? "#464a34" : "#f0eee5"], ["stroke", "#6e754b"]].forEach(function (a) {rect.setAttribute(a[0], a[1]);});group.append(rect);
+      ["#" + node.number + " · " + (node.model || "Device"), node.name.slice(0, 26), node.name.slice(26, 52)].forEach(function (value, index) {if (!value) return;var text = document.createElementNS("http://www.w3.org/2000/svg", "text");text.setAttribute("x", node.x + 10);text.setAttribute("y", node.y + 18 + index * 20);text.setAttribute("font-size", "12");text.setAttribute("fill", node.reported_root === true ? "#faf8f1" : "#29271f");text.textContent = value;group.append(text);});svg.append(group);
+    });scroll.append(svg);figure.append(scroll);var note = document.createElement("p");note.className = "muted";note.textContent = diagram.scope + " " + (diagram.additional_nodes || 0) + " additional devices and " + (diagram.additional_links || 0) + " additional relationship pairs are outside the diagram preview.";figure.append(note);container.append(figure);
+  }
+
   function renderMerakiTopology(container, evidence) {
     if (!evidence || !Array.isArray(evidence.networks) || !evidence.networks.length) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -1890,7 +1905,8 @@
       summary.textContent = (network.network_name || "Network") + " · " + (network.status || "unknown") + " · " + count(network.node_count) + " observed assigned devices · " + count(network.link_count) + " relationship pairs"; group.append(summary);
       var coverage = document.createElement("p"); coverage.textContent = count(network.isolated_node_count) + " devices without observed links · " + count(network.root_node_count) + " reported root flags · " + count(network.omitted_node_count) + " nodes and " + count(network.omitted_link_count) + " links omitted at collection · " + count(network.reported_error_count) + " API errors"; group.append(coverage);
       if (network.status === "complete") {
-        var list = document.createElement("ul"); (network.nodes || []).forEach(function (node) {var item = document.createElement("li"); item.textContent = node.name + " · " + (node.model || "Model unavailable") + (node.reported_root === true ? " · API root flag" : ""); list.append(item);});group.append(list);
+        if (network.diagram) renderMerakiNetworkDiagram(group, network);
+        var list = document.createElement("ul"); (network.nodes || []).forEach(function (node, index) {var item = document.createElement("li"); item.textContent = (network.diagram && network.diagram.status === "available" ? "#" + (index + 1) + " · " : "") + node.name + " · " + (node.model || "Model unavailable") + (node.reported_root === true ? " · API root flag" : ""); list.append(item);});group.append(list);
         if ((network.links || []).length) {
           var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("aria-label", "Observed relationships for " + (network.network_name || "Network"));
           var table = document.createElement("table"), caption = document.createElement("caption");caption.textContent = "Saved undirected managed-device relationships";table.append(caption);

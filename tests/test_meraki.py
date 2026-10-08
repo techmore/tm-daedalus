@@ -238,6 +238,7 @@ class MerakiClientTests(unittest.TestCase):
         self.assertEqual(result["client_usage"]["data"]["clients_with_usage_count"], 3)
         self.assertEqual(result["wireless_clients"][0]["data"]["wireless_client_count"], 1)
         self.assertEqual(result["topology_detail_version"], 1)
+        self.assertEqual(result["topology_diagram_version"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_node_count"], 1)
         self.assertEqual(result["topology"][0]["data"]["omitted_link_count"], 1)
         self.assertEqual(result["summary"]["rf_profile_count"], 1)
