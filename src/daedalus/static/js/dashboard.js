@@ -1933,6 +1933,29 @@
     container.append(section);
   }
 
+  function renderMerakiProviderLifecycle(container, evidence, overview) {
+    if (!evidence) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var title = document.createElement("h4"); title.textContent = "Meraki inventory support review"; section.append(title);
+    if (evidence.status !== "available") {var unavailable = document.createElement("p"); unavailable.textContent = "Provider lifecycle evidence unavailable or invalid; dates and support remain unverified."; section.append(unavailable); container.append(section); return;}
+    var counts = evidence.summary || {}, summary = document.createElement("p");
+    summary.textContent = counts.provider_end_of_support + " devices reported end of support · " + counts.provider_near_end_of_support + " reported near end of support · " + counts.unknown_support_date + " unknown support dates · " + counts.date_conflicts + " with differing published dates · " + counts.no_notice_cross_check + " without a published notice cross-check · " + counts.missing_devices + " missing inventory records · As of " + (evidence.as_of || "unknown date"); section.append(summary);
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = evidence.scope; section.append(note);
+    if (!overview) {
+      var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", "Meraki inventory support dates");
+      var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Frozen API milestones and version-1 notice comparison"; table.append(caption);
+      var head = document.createElement("thead"), tr = document.createElement("tr");
+      ["Network / model / quantity", "Provider status", "API sale / support", "Published sale / support", "Review"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+      var body = document.createElement("tbody"), labels = {endOfSupport: "End of support", nearEndOfSupport: "Near end of support", endOfSale: "End of sale", unknown: "Unknown"};
+      (evidence.rows || []).forEach(function (row) {
+        var tr = document.createElement("tr");
+        [row.network_name + " / " + row.model + " × " + row.quantity, labels[row.provider_status] || "Unknown", (row.end_of_sale_date || "Unknown") + " / " + (row.end_of_support_date || "Unknown"), (row.published_end_of_sale_date || "Not in notice catalog") + " / " + (row.published_end_of_support_date || "Not in notice catalog"), (row.reported ? "Assigned inventory record observed. " : "Inventory record missing. ") + ((row.date_conflicts || []).length ? "API and published dates differ; verify with vendor. " : "") + (Number.isInteger(row.days_until_support_date) ? row.days_until_support_date + " days to API support date." : "Support date unverified.")].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);
+      }); table.append(body); scroll.append(table); section.append(scroll);
+      if (evidence.additional_rows) {var more = document.createElement("p"); more.textContent = evidence.additional_rows + " more rows in the evidence download and PDF."; section.append(more);}
+    }
+    var link = document.createElement("a"); link.href = "https://developer.cisco.com/meraki/api-v1/get-organization-inventory-devices/"; link.textContent = "Meraki inventory API documentation"; link.target = "_blank"; link.rel = "noopener noreferrer"; section.append(link); container.append(section);
+  }
+
   function renderMerakiLifecycle(container, evidence, overview) {
     if (!evidence) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2214,6 +2237,7 @@
     container.append(metricGrid);
     if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, false);
 
+    if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, false);
     if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, false);
     var plan = details.unifi_plan;
     if (plan && Array.isArray(plan.scenarios)) {
@@ -2460,7 +2484,8 @@
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
-        if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
+        if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
+    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
         if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
@@ -2474,7 +2499,8 @@
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
-        if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
+        if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
+    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
         if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
@@ -2494,7 +2520,8 @@
       renderMerakiClientOverview(container, details);
       renderMerakiCis8Overview(container, details);
       renderMerakiTopologyOverview(container, details);
-      if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
+      if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
+    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
         if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
       renderMerakiSwitchOverview(container, details);
       renderMerakiWanOverview(container, details);

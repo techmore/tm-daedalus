@@ -1,6 +1,7 @@
 """Dated, inventory-based purchase planning; candidates require design review."""
 from collections import Counter
 from typing import Any
+from .meraki_eox import build_provider_lifecycle, project_provider_lifecycle
 from .meraki_lifecycle import build_lifecycle, project_lifecycle
 
 from .meraki_catalog import OBSERVED_ON as PRICE_DATE, PRICES as CATALOG, CANDIDATES, CATALOG_VERSION, item, sensor_dependencies
@@ -28,7 +29,8 @@ def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                           'priced_device_count': sum(r['quantity'] for r in rows),
                           'complete_inventory_pricing': bool(counts) and not unmatched and bool(dependency_complete)})
     refresh = build_refresh_plan(scenarios)
-    return {'lifecycle': build_lifecycle(snapshot), 'refresh_plan': refresh, 'catalog_version': CATALOG_VERSION, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
+    provider = build_provider_lifecycle(snapshot)
+    return {**({'provider_lifecycle': provider} if provider is not None else {}), 'lifecycle': build_lifecycle(snapshot), 'refresh_plan': refresh, 'catalog_version': CATALOG_VERSION, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
             'inventory_collected_at': snapshot.get('collected_at'), 'scenarios': scenarios,
             'assumptions': [
                 'Planning candidates require design review; model names do not establish feature equivalence.',
@@ -47,6 +49,8 @@ def project_unifi_plan(plan: Any) -> dict[str, Any] | None:
         return None
     result = dict(plan)
     result['scenarios'] = []
+    if 'provider_lifecycle' in plan:
+        result['provider_lifecycle'] = project_provider_lifecycle(plan['provider_lifecycle'])
     if 'lifecycle' in plan:
         result['lifecycle'] = project_lifecycle(plan['lifecycle'])
     if 'refresh_plan' in plan:

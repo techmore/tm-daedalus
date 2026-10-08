@@ -64,7 +64,7 @@ def test_pdf_required_items_present_and_prior_body_preserved():
   assert 'https://store.ui.com/us/en/products/'+slug in links
 
 
-def test_legacy_plan_still_renders_identically():
+def test_legacy_plan_without_dependencies_remains_projectable():
  p=build_unifi_plan({'devices':[{'model':'MR44'}]});p['scenarios'][0].pop('additional_items');p['scenarios'][1].pop('additional_items')
  assert len(project_unifi_plan(p)['scenarios'])==2
 

@@ -153,7 +153,7 @@ class MerakiClientTests(unittest.TestCase):
         self.assertTrue(any("Intrusion protection is disabled" in row["title"] for row in result["findings"]))
         self.assertEqual(result["summary"]["security_controls_unavailable"], 0)
         self.assertNotIn("never-store-this", str(result))
-        self.assertEqual(len(result["security_controls"]), 11)
+        self.assertEqual(len(result["security_controls"]), 12)
         self.assertEqual(result["wan_usage"][0]["status"], "complete")
         self.assertEqual(result["wan_usage"][0]["pdf_evidence_summary_version"], 1)
         self.assertEqual(result["wan_usage"][0]["data"]["interfaces"][0]["directions"]["sent"]["average_mbps"], 1)
@@ -189,7 +189,7 @@ class MerakiClientTests(unittest.TestCase):
             result = client.collect_security_report("org-1")
         self.assertEqual(result["summary"]["switch_device_count"], 1)
         self.assertEqual(result["summary"]["wireless_network_count"], 1)
-        self.assertEqual(result["summary"]["security_controls_unsupported"], 8)
+        self.assertEqual(result["summary"]["security_controls_unsupported"], 9)
         self.assertEqual(result["wireless_clients"][0]["status"], "unsupported")
         self.assertEqual(result["summary"]["security_controls_unavailable"], 1)
         self.assertEqual(result["summary"]["security_controls_collected"], 2)
@@ -202,6 +202,7 @@ class MerakiClientTests(unittest.TestCase):
 
     def test_collects_rf_profiles_assignments_and_license_summary_without_secret_payloads(self):
         responses = {
+            "/organizations/org-1/inventory/devices": [],
             "/organizations": [{"id": "org-1", "name": "Test"}],
             "/organizations/org-1/networks": [{"id": "N_1", "name": "HQ", "productTypes": ["wireless"]}],
             "/organizations/org-1/devices": [{"serial": "Q2XX-AP01", "model": "MR-test", "networkId": "N_1"}],

@@ -1014,6 +1014,11 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                     and control["pdf_evidence_summary_version"] == 1):
                 observed = {key: data.get(key) for key in ("reported_port_count", "matched_port_count", "unmatched_port_count", "ambiguous_port_count")}
                 observed["supporting_evidence"] = "See switch port relationships appendix; complete captured ports remain in saved JSON."
+            if (control.get("control") == "Inventory lifecycle milestones" and isinstance(data, dict)
+                    and type(control.get("pdf_evidence_summary_version")) is int
+                    and control["pdf_evidence_summary_version"] == 1):
+                observed = {key: data.get(key) for key in ("expected_device_count", "reported_device_count", "missing_device_count")}
+                observed["supporting_evidence"] = "See Meraki inventory support review appendix; full assigned lifecycle evidence remains in saved JSON."
             # Large arrays (switch ports, SSIDs, firewall rules) need separate
             # table rows. A single multi-page cell cannot be split by ReportLab.
             records = observed if isinstance(observed, list) else [observed]
@@ -1513,6 +1518,29 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             entry.append(Paragraph('<link href="' + row['source_url'] + '">' + label + '</link>', styles["MerakiSmall"]))
 
             story.append(KeepTogether(entry))
+
+    from daedalus.meraki_eox import project_provider_lifecycle, SOURCE as EOX_SOURCE
+    provider = project_provider_lifecycle((report_snapshot.get("unifi_plan") or {}).get("provider_lifecycle"), complete=True)
+    if provider:
+        story.append(PageBreak())
+        story.append(_paragraph("Meraki inventory support review", styles["MerakiSection"]))
+        story.append(_paragraph(provider['scope'], styles["MerakiBody"]))
+        if provider['status'] != 'available':
+            story.append(_paragraph("Provider lifecycle evidence unavailable or invalid; support dates remain unverified.", styles["MerakiBody"]))
+        else:
+            counts = provider['summary']
+            story.append(_paragraph(f"{counts['provider_end_of_support']} devices reported end of support; {counts['provider_near_end_of_support']} near end of support; {counts['unknown_support_date']} unknown support dates; {counts['date_conflicts']} with differing published dates; {counts['no_notice_cross_check']} without a published notice cross-check; {counts['missing_devices']} missing inventory records. Inventory as of {provider['as_of'] or 'unknown date'}.", styles["MerakiBody"]))
+            labels = {'endOfSupport': 'End of support', 'nearEndOfSupport': 'Near end of support', 'endOfSale': 'End of sale', 'unknown': 'Unknown'}
+            for row in provider['rows']:
+                entry = [_paragraph(f"{row['network_name']} / {row['model']} / {row['quantity']} assigned devices", styles["MerakiSubsection"]),
+                    _paragraph(f"Provider status: {labels[row['provider_status']]}. API sale: {row['end_of_sale_date'] or 'Unknown'}; API support: {row['end_of_support_date'] or 'Unknown'}.", styles["MerakiBody"]),
+                    _paragraph(f"Published sale: {row['published_end_of_sale_date'] or 'Not in notice catalog'}; published support: {row['published_end_of_support_date'] or 'Not in notice catalog'}.", styles["MerakiSmall"])]
+                review = 'Assigned inventory record observed.' if row['reported'] else 'Inventory record missing.'
+                if row['date_conflicts']: review += ' API and published dates differ; verify with vendor.'
+                review += f" {row['days_until_support_date']} days to API support date." if row['days_until_support_date'] is not None else ' Support date unverified.'
+                entry.append(_paragraph(review, styles["MerakiSmall"]))
+                story.append(KeepTogether(entry))
+        story.append(Paragraph('<link href="' + EOX_SOURCE + '">Meraki inventory API documentation</link>', styles["MerakiSmall"]))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()

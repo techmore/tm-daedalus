@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .meraki_eox import assigned_index, summarize_inventory_eox, compare_eox_evidence
 from .meraki_neighbors import inventory_lookup, summarize_neighbors
 from .meraki_switch import summarize_switch_ports
 from .meraki_clients import summarize_wireless_clients, TIMESPAN as WIRELESS_CLIENT_TIMESPAN
@@ -752,6 +753,19 @@ class MerakiClient:
             observational.append(control)
             return control
 
+        # Read the documented organization inventory endpoint, but freeze only
+        # EOX fields joined to exact assigned device/network/model identities.
+        def lifecycle_transform(raw):
+            try:
+                assigned = assigned_index(devices, network_by_id)
+                return summarize_inventory_eox(raw, assigned)
+            except (ValueError, TypeError) as exc:
+                raise MerakiAPIError("Inventory lifecycle evidence failed assigned-identity validation.") from exc
+        inventory_eox = collect_observation(f"/organizations/{organization_id}/inventory/devices",
+            "Inventory lifecycle milestones", {"id": "", "name": organization["name"]},
+            lifecycle_transform, collection=True)
+        inventory_eox["pdf_evidence_summary_version"] = 1
+
         switch_neighbors = []
         for switch in switches:
             network = network_by_id.get(switch.get("networkId"))
@@ -910,6 +924,7 @@ class MerakiClient:
             },
             "networks": networks,
             "devices": devices,
+            "inventory_eox": inventory_eox,
             "security_controls": security,
             "licensing": {"status": licensing["status"], "data": licensing["data"], "endpoint": "licenses/overview"},
             "client_usage": {"status": client_usage["status"], "data": client_usage["data"]},
@@ -988,6 +1003,13 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
             new_status = new.get("status") if new else "not_collected"
             if old_status != new_status:
                 coverage.append({**identity, "previous_status": old_status, "current_status": new_status})
+            continue
+        if key[2] == "Inventory lifecycle milestones":
+            eox_changes, eox_coverage = compare_eox_evidence(old.get("data"), new.get("data"))
+            coverage.extend({**identity, **row} for row in eox_coverage)
+            if eox_changes:
+                changes.append({**identity, "previous": [dict(device_serial=row["device_serial"], **row["previous"]) for row in eox_changes],
+                    "current": [dict(device_serial=row["device_serial"], **row["current"]) for row in eox_changes]})
             continue
         include_ports = True
         if key[2] == "Switch managed neighbors":
