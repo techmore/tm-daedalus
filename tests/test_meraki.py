@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 
 from daedalus import credential_store
-from daedalus.meraki_api import MerakiAPIError, MerakiClient, _aggregate_client_usage, _managed_topology, summarize_wireless_connections, compare_meraki_snapshots, redact_meraki_data
+from daedalus.meraki_api import MerakiAPIError, MerakiClient, _aggregate_client_usage, _managed_topology, summarize_wireless_connections, summarize_channel_utilization, compare_meraki_snapshots, redact_meraki_data
 from daedalus.reports import build_meraki_security_pdf
 
 
@@ -194,6 +194,7 @@ class MerakiClientTests(unittest.TestCase):
             "/organizations/org-1/licenses/overview": {"status": "License Expired", "expirationDate": "2026-09-01", "licensedDeviceCounts": {"MR": 3, "bad": {"licenseKey": "never-store"}}, "states": {"expired": {"count": 3, "licenseKeys": ["never-store"]}}, "licenseKey": "never-store"},
             "/networks/N_1/wireless/ssids": [],
             "/networks/N_1/wireless/rfProfiles": [{"id": "rf-1", "name": "Office", "twoFourGhzSettings": {"minPower": 5, "maxPower": 20, "validAutoChannels": [1, 6, 11], "clientIdentifier": "never-store"}, "perSsidSettings": {"0": {"minBitrate": 12, "psk": "never-store"}}, "clientSecret": "never-store"}],
+            "/organizations/org-1/wireless/devices/channelUtilization/byDevice": [{"serial": "Q2XX-AP01", "network": {"id": "N_1"}, "byBand": [{"band": "5", "total": {"percentage": 60}, "wifi": {"percentage": 50}, "nonWifi": {"percentage": 10}}]}],
             "/organizations/org-1/clients/overview": {"counts": {"total": 3}, "usage": {"overall": {"total": 30, "downstream": 20, "upstream": 10}}, "mac": "never-store"},
             "/networks/N_1/topology/linkLayer": {"nodes": [{"derivedId": "never-store-managed-id", "root": True, "device": {"serial": "Q2XX-AP01", "name": "never-store-name"}}, {"derivedId": "never-store-client-id", "mac": "never-store-client-mac"}], "links": [{"ends": [{"node": {"derivedId": "never-store-managed-id"}}, {"node": {"derivedId": "never-store-client-id"}}]}]},
             "/networks/N_1/wireless/devices/connectionStats": [{"serial": "Q2XX-AP01", "connectionStats": {"assoc": 1, "auth": 2, "dhcp": 3, "dns": 4, "success": 43}, "mac": "never-store"}],

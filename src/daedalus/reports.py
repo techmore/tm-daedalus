@@ -1149,6 +1149,28 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 rows.append([_paragraph(title, styles["MerakiCell"]), _paragraph(totals.get(key, "Unavailable"), styles["MerakiCell"])])
             story.append(_table(rows, [4.5 * inch, 2.4 * inch]))
 
+    channel = meraki.get("channel_utilization")
+    if isinstance(channel, dict):
+        story.append(PageBreak())
+        story.append(Paragraph("Wireless channel utilization", styles["MerakiSection"]))
+        story.append(_paragraph("Prior 24-hour per-band averages. Review prompts are total utilization at least 50% "
+            "or non-Wi-Fi at least 20%. Missing measurements remain unavailable. These observations do not establish "
+            "interference causes, peak load or replacement capacity.", styles["MerakiBody"]))
+        data = channel.get("data") if isinstance(channel.get("data"), dict) else {}
+        story.append(_paragraph(f"Collection: {channel.get('status')}; APs measured: "
+            f"{data.get('reported_device_count', 'Unavailable')} / {data.get('expected_device_count', 'Unavailable')}; "
+            f"bands meeting review threshold: {data.get('review_band_count', 'Unavailable')}", styles["MerakiBody"]))
+        rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in
+                 ("Access point", "GHz", "Wi-Fi", "Non-Wi-Fi", "Total", "Review")]]
+        for row in data.get("rows", []):
+            values = row.get("percentages") or {}
+            cells = [row.get("device_serial"), row.get("band")]
+            cells.extend(f"{values[key]:.2f}%" if key in values else "Unavailable" for key in ("wifi", "nonWifi", "total"))
+            cells.append("Review" if row.get("review_threshold_met") else "No reported threshold met")
+            rows.append([_paragraph(value, styles["MerakiCell"]) for value in cells])
+        if len(rows) > 1:
+            story.append(_table(rows, [1.5 * inch, .4 * inch, .9 * inch, 1 * inch, .9 * inch, 2.2 * inch]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

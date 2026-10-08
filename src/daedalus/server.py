@@ -5110,6 +5110,15 @@ def meraki_report_details(
             "scope": text_field(data, "scope", 240),
         })
 
+    channel = snapshot.get("channel_utilization")
+    channel = channel if isinstance(channel, dict) else {}
+    channel_data = channel.get("data") if isinstance(channel.get("data"), dict) else {}
+    channel_rows = channel_data.get("rows") if isinstance(channel_data.get("rows"), list) else []
+    channel_preview = {"status": text_field(channel, "status", 40),
+        "data": {key: channel_data.get(key) for key in ("requested_timespan_seconds", "reported_device_count",
+            "expected_device_count", "missing_device_count", "measured_band_count", "review_band_count", "review_thresholds_percent")},
+        "rows": channel_rows[:100], "additional_rows": max(0, len(channel_rows) - 100)}
+
     serialized_controls = []
     for control in controls:
         if not isinstance(control, dict):
@@ -5131,6 +5140,7 @@ def meraki_report_details(
             "name": text_field(snapshot.get("organization", {}) if isinstance(snapshot.get("organization"), dict) else {}, "name"),
         },
         "collected_at": text_field(snapshot, "collected_at", 80),
+        "channel_utilization": channel_preview,
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
         "wireless_connections": [{"network_name": text_field(row, "network_name"),
             "status": text_field(row, "status", 40),

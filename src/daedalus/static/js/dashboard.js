@@ -1823,6 +1823,34 @@
     container.append(section);
   }
 
+  function renderMerakiChannelUtilization(container, evidence) {
+    if (!evidence || !evidence.status) return;
+    var data = evidence.data || {};
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Wireless channel utilization";
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Collection: " + evidence.status + ". Prior 24-hour per-band averages; missing measurements stay unavailable. Review prompts: total ≥50% or non-Wi-Fi ≥20%. These readings do not establish interference causes, peak load or replacement capacity.";
+    section.append(heading, note);
+    if (evidence.status === "complete") {
+      var summary = document.createElement("p");
+      summary.textContent = (data.reported_device_count ?? "—") + "/" + (data.expected_device_count ?? "—") + " assigned APs measured · " + (data.measured_band_count ?? "—") + " bands with observations · " + (data.review_band_count ?? "—") + " bands meet a review threshold";
+      section.append(summary);
+      var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("aria-label", "Wireless channel utilization measurements");
+      var table = document.createElement("table"); var caption = document.createElement("caption"); caption.textContent = "Saved channel averages by access point and band"; table.append(caption);
+      var head = document.createElement("thead"), header = document.createElement("tr");
+      ["Access point", "Band (GHz)", "Wi-Fi", "Non-Wi-Fi", "Total", "Review"].forEach(function (label) {var cell = document.createElement("th"); cell.textContent = label; cell.setAttribute("scope", "col"); header.append(cell);}); head.append(header); table.append(head);
+      var body = document.createElement("tbody");
+      var format = function (value) {return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value.toLocaleString("en-US", {maximumFractionDigits: 2}) + "%" : "Unavailable";};
+      (evidence.rows || []).forEach(function (row) {
+        var tr = document.createElement("tr"), values = row.percentages || {};
+        [row.device_serial, row.band, format(values.wifi), format(values.nonWifi), format(values.total), row.review_threshold_met === true ? "Review channel" : "No reported threshold met"].forEach(function (value) {var cell = document.createElement("td"); cell.textContent = value; tr.append(cell);}); body.append(tr);
+      });
+      table.append(body); scroll.append(table); section.append(scroll);
+      if (evidence.additional_rows) {var more = document.createElement("p"); more.textContent = evidence.additional_rows + " more rows in the complete saved evidence."; section.append(more);}
+    }
+    container.append(section);
+  }
+
   function renderMerakiWirelessConnections(container, rows) {
     addMerakiDetailList(container, "Wireless connection outcomes", rows, function (row) {
       var data = row.data || {}, totals = data.observed_counter_totals || {};
@@ -1904,6 +1932,7 @@
 
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
 
+    renderMerakiChannelUtilization(container, details.channel_utilization);
     renderMerakiWirelessConnections(container, details.wireless_connections || []);
 
     var clientUsage = details.client_usage || {};
