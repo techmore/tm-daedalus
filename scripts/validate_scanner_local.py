@@ -524,6 +524,29 @@ raise SystemExit(completed.returncode)
                     retained_paths = (managed_config / 'managed-agent.json', managed_config / 'daedalus-nmapui.env', data / 'settings.json')
                     retained_bytes = {path: path.read_bytes() for path in retained_paths}
                     before_upgrade_pid = service_pid()
+                    protected = (*retained_paths, units / 'daedalus-nmapui.service',
+                                 units / 'daedalus-scanner-bridge.service',
+                                 managed_config / '.daedalus-scanner-services.json')
+                    protected_bytes = {path: path.read_bytes() for path in protected}
+                    maintenance = httpx.post(scanner + '/api/runtime/maintenance', json={},
+                        auth=(scanner_env['NMAPUI_USERNAME'], scanner_env['NMAPUI_PASSWORD']), timeout=3)
+                    maintenance.raise_for_status()
+                    maintenance_token = maintenance.json()['token']
+                    try:
+                        refused = subprocess.run(['/bin/sh', str(kit / 'manage-service-linux.sh'), 'upgrade', str(kit_zip)],
+                                                 env=environment, capture_output=True, text=True, timeout=900)
+                        if (refused.returncode == 0 or 'upgrade deferred' not in refused.stderr
+                                or service_pid() != before_upgrade_pid
+                                or any(path.read_bytes() != contents for path, contents in protected_bytes.items())):
+                            raise RuntimeError('Managed Linux maintenance refusal changed the installed service.')
+                        managed_proof['maintenance_claim_refuses_upgrade_without_service_change'] = True
+                    finally:
+                        released = httpx.request('DELETE', scanner + '/api/runtime/maintenance',
+                                json={'token': maintenance_token},
+                                auth=(scanner_env['NMAPUI_USERNAME'], scanner_env['NMAPUI_PASSWORD']), timeout=3)
+                        released.raise_for_status()
+                        if released.json().get('maintenance_active') is not False:
+                            raise RuntimeError('Managed Linux maintenance release was not confirmed.')
                     upgrade_started_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
                     upgraded = subprocess.run(['/bin/sh', str(kit / 'manage-service-linux.sh'), 'upgrade', str(kit_zip)], env=environment, capture_output=True, text=True, timeout=900)
                     if upgraded.returncode or not json.loads(upgraded.stdout).get('upgraded'):

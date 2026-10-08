@@ -43,6 +43,95 @@ class LinuxUpgradeTests(unittest.TestCase):
         self.states = {name: {'LoadState':'loaded', 'ActiveState':'active', 'MainPID':'123', 'FragmentPath':str(self.unit_dir / name), 'DropInPaths':'', 'UnitFileState':'enabled'} for name in (service.NMAPUI_UNIT, service.BRIDGE_UNIT)}
         self.pid = 123
         self.readiness = []
+        claim_patch = patch.object(upgrade.shared, '_acquire_scanner_maintenance', return_value='a' * 32)
+        self.claim = claim_patch.start()
+        self.addCleanup(claim_patch.stop)
+        release_patch = patch.object(upgrade.shared, '_release_scanner_maintenance')
+        self.release = release_patch.start()
+        self.addCleanup(release_patch.stop)
+
+    def test_busy_or_unsupported_engine_defers_before_stop_or_pending(self):
+        self.claim.side_effect = RuntimeError('Scanner maintenance could not be acquired; upgrade deferred')
+        with self.assertRaisesRegex(ValueError, 'upgrade deferred'):
+            self.operate()
+        self.assertFalse(any(c[2] == 'stop' for c in self.calls))
+        self.assertFalse((self.config / upgrade.PENDING).exists())
+        self.release.assert_not_called()
+        for path, raw in self.original.items():
+            self.assertEqual(path.read_bytes(), raw)
+
+    def test_claim_precedes_stop_and_owner_is_released(self):
+        events = []
+        self.claim.side_effect = lambda *_: events.append('claim') or 'a' * 32
+        self.release.side_effect = lambda *_: events.append('release')
+        def executor(argv, **kwargs):
+            if argv[2] in {'stop', 'start'}:
+                events.append(argv[2])
+            return self.execute(argv, **kwargs)
+        result = self.operate(executor=executor)
+        self.assertEqual(events, ['claim', 'stop', 'stop', 'start', 'start', 'release'])
+        record = json.loads(Path(result['backup_file']).read_text())
+        self.assertEqual(record['maintenance_token'], 'a' * 32)
+        self.assertNotIn('a' * 32, json.dumps(result))
+
+    def test_recovery_reclaims_persisted_owner_before_stopping_active_engine(self):
+        with self.assertRaisesRegex(ValueError, 'rollback is incomplete'):
+            self.operate(wait_ready=lambda *_: False)
+        self.claim.reset_mock()
+        self.operate('upgrade-rollback')
+        self.assertEqual(self.claim.call_args.args[1], 'a' * 32)
+
+    def test_busy_recovery_keeps_pending_and_services_untouched(self):
+        with self.assertRaises(ValueError):
+            self.operate(wait_ready=lambda *_: False)
+        self.calls.clear()
+        self.claim.side_effect = RuntimeError('Scanner is busy; upgrade deferred')
+        with self.assertRaisesRegex(ValueError, 'upgrade deferred'):
+            self.operate('upgrade-rollback')
+        self.assertFalse(any(c[2] in {'stop', 'start'} for c in self.calls))
+        self.assertTrue((self.config / upgrade.PENDING).exists())
+
+    def test_recovery_persists_fresh_owner_before_service_operation(self):
+        with self.assertRaises(ValueError):
+            self.operate(wait_ready=lambda *_: False)
+        self.claim.return_value = 'b' * 32
+        def interrupt_stop(argv, **kwargs):
+            if argv[2] == 'stop':
+                record = json.loads((self.config / upgrade.PENDING).read_text())
+                self.assertEqual(record['maintenance_token'], 'b' * 32)
+                raise OSError('fixture interruption')
+            return self.execute(argv, **kwargs)
+        with self.assertRaisesRegex(ValueError, 'service operation failed'):
+            self.operate('upgrade-rollback', executor=interrupt_stop)
+        self.assertEqual(json.loads((self.config / upgrade.PENDING).read_text())['maintenance_token'], 'b' * 32)
+
+    def test_recovery_of_stopped_engine_does_not_require_http(self):
+        with self.assertRaises(ValueError):
+            self.operate(wait_ready=lambda *_: False)
+        self.states[service.NMAPUI_UNIT].update(ActiveState='inactive', MainPID='0')
+        self.claim.reset_mock()
+        self.operate('upgrade-rollback')
+        self.claim.assert_not_called()
+
+    def test_recovery_rejects_ambiguous_engine_state(self):
+        with self.assertRaises(ValueError):
+            self.operate(wait_ready=lambda *_: False)
+        self.states[service.NMAPUI_UNIT].update(ActiveState='activating', MainPID='0')
+        self.calls.clear()
+        with self.assertRaisesRegex(ValueError, 'activity is unknown'):
+            self.operate('upgrade-rollback')
+        self.assertFalse(any(c[2] == 'stop' for c in self.calls))
+
+    def test_invalid_pending_owner_is_refused_before_service_operations(self):
+        with self.assertRaises(ValueError):
+            self.operate(wait_ready=lambda *_: False)
+        path = self.config / upgrade.PENDING
+        record = json.loads(path.read_text()); record['maintenance_token'] = 'invalid'
+        path.write_text(json.dumps(record))
+        self.calls.clear()
+        with self.assertRaisesRegex(ValueError, 'recovery files changed'):
+            self.operate('upgrade-rollback')
+        self.assertFalse(self.calls)
 
     def prepare(self, files, support):
         nmap_hash = upgrade.digest(files['nmapui-source.zip'])

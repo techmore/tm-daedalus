@@ -13,7 +13,7 @@ import shlex
 import stat
 import subprocess
 import time
-from urllib.request import Request, urlopen
+from urllib.request import Request
 try:
     from . import systemd_service as service, upgrade_service as shared
 except ImportError:
@@ -22,6 +22,7 @@ except ImportError:
 
 PENDING = service.UPGRADE_FILE
 NAMES = (service.NMAPUI_UNIT, service.BRIDGE_UNIT, service.STATE_FILE)
+urlopen = shared.urlopen  # Local credentials must never follow redirects or proxies.
 
 
 def digest(data):
@@ -96,6 +97,10 @@ def read_pending(unit_dir, config_dir):
         record = json.loads(service._private_bytes(config_dir / PENDING))
         if record['format'] != 1 or record['unit_dir'] != str(unit_dir) or record['config_dir'] != str(config_dir):
             raise ValueError()
+        token = record.get('maintenance_token')
+        if token is not None and (not isinstance(token, str) or len(token) != 32
+                or any(c not in '0123456789abcdef' for c in token)):
+            raise ValueError()
         for group in ('old', 'candidate'):
             if set(record[group]) != set(NAMES) or any(not isinstance(value, str) for value in record[group].values()):
                 raise ValueError()
@@ -123,6 +128,7 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
     # Shared lifecycle lock prevents overlap with removal/recovery.
     service._ownership(unit_dir, config_dir)
     lock = os.open(config_dir / service.LOCK_FILE, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+    maintenance_token = maintenance_payload = None
     try:
         info = os.fstat(lock)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
@@ -180,9 +186,27 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
                 validate_current()
                 shared._atomic_plist(path, record[group][name].encode())
         auth = credentials(service._private_bytes(config_dir / service.ENV_FILE))
+        def claim(port, previous_token=None):
+            nonlocal maintenance_payload, maintenance_token
+            maintenance_payload = {'EnvironmentVariables': {**auth, 'NMAPUI_PORT': str(port)}}
+            try:
+                maintenance_token = shared._acquire_scanner_maintenance(maintenance_payload, previous_token)
+            except RuntimeError as exc:
+                raise service.ServiceError(str(exc)) from exc
         if action == 'upgrade-rollback':
             record = read_pending(unit_dir, config_dir)
             port = int(environment_value(record['old'][service.NMAPUI_UNIT].encode(), 'NMAPUI_PORT'))
+            if not 1 <= port <= 65535:
+                raise service.ServiceError('Managed scanner port is invalid.')
+            engine = observe(service.NMAPUI_UNIT)
+            if engine['ActiveState'] == 'active' and engine['MainPID'] != '0':
+                claim(port, record.get('maintenance_token'))
+                # A restarted engine may issue a fresh token. Persist it before
+                # any stop so another interrupted recovery can reassert ownership.
+                record['maintenance_token'] = maintenance_token
+                shared._atomic_plist(pending_path, (json.dumps(record, sort_keys=True, indent=2) + '\n').encode())
+            elif engine['MainPID'] != '0' or engine['ActiveState'] not in {'inactive', 'failed'}:
+                raise service.ServiceError('Scanner activity is unknown; recovery deferred.')
             stop()
             write('old')
             start(port, auth)
@@ -239,7 +263,6 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         if candidate == old:
             return {'upgraded': False, 'already_current': True, 'kit_sha256': kit_digest, 'data_preserved': True}
         record = {'format': 1, 'unit_dir': str(unit_dir), 'config_dir': str(config_dir), 'kit_sha256': kit_digest, 'environment_sha256': digest(environment), 'enrollment_sha256': digest(enrollment), 'old': {key: value.decode() for key, value in old.items()}, 'candidate': {key: value.decode() for key, value in candidate.items()}}
-        record_bytes = (json.dumps(record, sort_keys=True, indent=2) + '\n').encode()
         old_digest = digest(b''.join(old[name] for name in sorted(old)))
         backup_root = support / 'service-upgrades' / kit_digest / old_digest
         for directory in (support / 'service-upgrades', support / 'service-upgrades' / kit_digest, backup_root):
@@ -249,8 +272,17 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
             if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
                 raise service.ServiceError('Upgrade backup directories must be private and owned by this user.')
         backup_file = backup_root / 'transaction.json'
+        claim(port)
+        record['maintenance_token'] = maintenance_token
+        record_bytes = (json.dumps(record, sort_keys=True, indent=2) + '\n').encode()
         if backup_file.exists() or backup_file.is_symlink():
-            if service._private_bytes(backup_file) != record_bytes:
+            # A retry obtains a fresh token; the immutable descriptor backup
+            # may retain its previous token while pending owns the new claim.
+            saved = json.loads(service._private_bytes(backup_file))
+            comparable = dict(record)
+            saved.pop('maintenance_token', None)
+            comparable.pop('maintenance_token', None)
+            if saved != comparable:
                 raise service.ServiceError('Existing upgrade backup does not match this transaction.')
         else:
             service._write_exclusive(backup_file, record_bytes)
@@ -277,6 +309,13 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         pending_path.unlink()
         return {'upgraded': True, 'kit_sha256': kit_digest, 'data_preserved': True, 'backup_file': str(backup_file)}
     finally:
+        if maintenance_token is not None:
+            try:
+                shared._release_scanner_maintenance(maintenance_payload, maintenance_token)
+            except Exception:
+                # A stopped engine drops its gate; restarted engines reject
+                # tokens owned by the old process. Pending recovery stays private.
+                pass
         os.close(lock)
 
 

@@ -75,8 +75,7 @@ expiry, so a stalled upgrader cannot silently reopen admission. The owning
 upgrader releases its opaque token; restarting the idle engine also clears
 the in-memory gate. After a crashed helper or a lost claim response, check
 local runtime status and restart the idle scanner to recover. Tokens are never
-included in public runtime status. Linux upgrade coordination remains a
-separate implementation task. This source change does not update installed
+included in public runtime status. This source change does not update installed
 scanners automatically.
 
 Upgrade is separate from enrollment. It stages versioned NmapUI and bridge
@@ -190,6 +189,13 @@ only the two verified units and their ownership record. NmapUI must become
 ready before the bridge starts. Repeating the same installed kit is a no-op.
 The portal does not install upgrades remotely.
 
+Before stopping either service, the helper must claim the engine's atomic
+maintenance gate. Active work, another owner's gate, an unavailable engine or
+an older engine without the API defers the upgrade without stopping services.
+The owner token is stored only in the private transaction record and is
+excluded from command output and public runtime status. Local HTTP calls do
+not use proxies or follow redirects.
+
 `upgrade-rollback` recovers an interrupted transaction. A successfully completed
 upgrade has no pending transaction to recover; repeating its kit is a no-op.
 
@@ -205,7 +211,14 @@ Changed descriptors, recovery records, enrollment or credentials are refused.
 Removal/restore and another upgrade are blocked until the pending transaction
 is resolved. Runtime releases remain available for rollback; this command
 retains them and does not revoke portal enrollment. Verify the next portal
-heartbeat after upgrading. An explicit service cutover interrupts running work.
+heartbeat after upgrading. Recovery reasserts the saved token on a running
+engine before stopping it; a restarted idle engine can issue a fresh token,
+which is saved before service operations. Busy or ambiguous engine state
+defers recovery while preserving the transaction. A confirmed stopped engine
+can be recovered without HTTP. Helper crashes or a lost claim response can
+leave admission paused; an explicit idle-engine restart clears this in-memory
+gate. Initial migration of engines without the API and installed-host
+acceptance of these changes remain open.
 
 ## Validating a managed Linux scanner
 

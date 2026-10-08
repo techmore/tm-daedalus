@@ -36,6 +36,8 @@ def test_packaged_gate_is_atomic_with_new_job_admission():
             assert token not in str(registry.snapshot())
             assert not registry.start('other', 'report')
             assert not registry.release_maintenance('0' * 32)
+            assert registry.acquire_maintenance(token) == token
+            assert registry.acquire_maintenance('0' * 32) is None
             assert registry.release_maintenance(token)
             assert registry.start('other', 'report')
         else:

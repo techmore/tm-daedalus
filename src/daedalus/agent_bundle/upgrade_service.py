@@ -263,14 +263,14 @@ def _require_scanner_idle(nmapui_payload: dict) -> None:
         raise RuntimeError("Scanner is busy or its activity is unknown; retry the upgrade after scans and reports finish")
 
 
-def _scanner_maintenance(nmapui_payload: dict, token: str | None = None) -> dict:
+def _scanner_maintenance(nmapui_payload: dict, token: str | None = None, *, claim: bool = False) -> dict:
     """Claim/release local admission under the engine's job registry lock."""
     env = nmapui_payload["EnvironmentVariables"]
     request = Request(
         f"http://127.0.0.1:{env['NMAPUI_PORT']}/api/runtime/maintenance",
         data=json.dumps({"token": token} if token is not None else {}).encode(),
         headers={"Content-Type": "application/json"},
-        method="DELETE" if token is not None else "POST",
+        method="POST" if claim or token is None else "DELETE",
     )
     username, password = env.get("NMAPUI_USERNAME", ""), env.get("NMAPUI_PASSWORD", "")
     if username and password:
@@ -286,9 +286,9 @@ def _scanner_maintenance(nmapui_payload: dict, token: str | None = None) -> dict
     return payload
 
 
-def _acquire_scanner_maintenance(nmapui_payload: dict) -> str:
+def _acquire_scanner_maintenance(nmapui_payload: dict, previous_token: str | None = None) -> str:
     try:
-        payload = _scanner_maintenance(nmapui_payload)
+        payload = _scanner_maintenance(nmapui_payload, previous_token, claim=True)
         token = payload.get("token")
         if (payload.get("maintenance_active") is not True or not isinstance(token, str)
                 or len(token) != 32 or any(c not in "0123456789abcdef" for c in token)):
