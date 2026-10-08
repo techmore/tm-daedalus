@@ -1,6 +1,45 @@
 import Cocoa
 import WebKit
 
+struct ScannerRuntimePresentation {
+    let running: Bool
+    let scanning: Bool
+    let working: Bool
+    let maintenance: Bool
+    let activity: String
+    var engine: String { running ? "NmapUI: running" : "NmapUI: unavailable" }
+    var badge: String {
+        if !running { return "Offline" }
+        if maintenance { return "Maintenance" }
+        return scanning ? "Scanning" : (working ? "Working" : "Nmap")
+    }
+    var symbol: String {
+        if !running { return "exclamationmark.shield" }
+        if maintenance { return "wrench.and.screwdriver" }
+        return scanning ? "waveform.path.ecg" : "checkmark.shield"
+    }
+    init(_ data: [String: Any]?) {
+        running = data != nil
+        maintenance = data?["maintenance_active"] as? Bool == true
+        let jobs = data?["active_jobs"] as? [[String: Any]]
+        let coherent = jobs != nil && (data?["has_active_jobs"] as? Bool) == !(jobs?.isEmpty ?? true)
+        working = coherent && !(jobs?.isEmpty ?? true)
+        scanning = coherent && (jobs?.contains { $0["job_type"] as? String == "scan" } ?? false)
+        if maintenance {
+            activity = "Scanner maintenance: new scans and reports are paused"
+        } else if !coherent {
+            activity = "Scan activity: unknown"
+        } else if let job = jobs?.first {
+            let details = job["details"] as? [String: Any] ?? [:]
+            let target = details["target"] as? String ?? ""
+            let progress = (details["progress"] as? NSNumber).map { " · \($0.intValue)%" } ?? ""
+            activity = "Active: \(job["job_type"] as? String ?? "scan") \(target)\(progress)"
+        } else {
+            activity = "Scan activity: idle"
+        }
+    }
+}
+
 final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessionTaskDelegate, WKNavigationDelegate, WKUIDelegate {
     var item: NSStatusItem!
     let menu = NSMenu()
@@ -9,9 +48,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
     var activity = "Scan activity: checking…"
     var recent: [String] = []
     var lastRequest = "Last scan request: checking…"
-    var running = false
-    var scanning = false
-    var working = false
+    var runtimePresentation = ScannerRuntimePresentation(nil)
     var localURL: URL?
     var portalURL: URL?
     var token = ""
@@ -94,17 +131,9 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         if let localURL = localURL {
             get(localURL.appendingPathComponent("api/runtime/status")) { [weak self] data in
                 guard let self = self else { return }
-                self.running = data != nil
-                self.engine = data != nil ? "NmapUI: running" : "NmapUI: unavailable"
-                let jobs = data?["active_jobs"] as? [[String: Any]] ?? []
-                self.working = !jobs.isEmpty
-                self.scanning = jobs.contains { $0["job_type"] as? String == "scan" }
-                if let job = jobs.first {
-                    let details = job["details"] as? [String: Any] ?? [:]
-                    let target = details["target"] as? String ?? ""
-                    let progress = (details["progress"] as? NSNumber).map { " · \($0.intValue)%" } ?? ""
-                    self.activity = "Active: \(job["job_type"] as? String ?? "scan") \(target)\(progress)"
-                } else { self.activity = data != nil ? "Scan activity: idle" : "Scan activity: unknown" }
+                self.runtimePresentation = ScannerRuntimePresentation(data)
+                self.engine = self.runtimePresentation.engine
+                self.activity = self.runtimePresentation.activity
                 self.render()
             }
         } else { engine = "NmapUI: configuration unavailable"; activity = "Scan activity: unknown" }
@@ -143,14 +172,14 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             row.isHidden = index >= values.count
             if index < values.count { row.title = String(values[index].filter { !$0.isNewline }.prefix(180)); row.attributedTitle = NSAttributedString(string: row.title, attributes: [.foregroundColor: NSColor.labelColor]); row.isEnabled = false }
         }
-        let observation: [String: Any] = ["engine": engine, "portal": portal, "activity": activity, "recent": recent, "last_request": lastRequest, "observed_at": ISO8601DateFormatter().string(from: Date()), "scanner_window_open": scannerWindow?.isVisible ?? false, "scanner_page_loaded": scannerPageLoaded, "scanner_page_message": scannerPageMessage]
+        let observation: [String: Any] = ["engine": engine, "portal": portal, "activity": activity, "maintenance_active": runtimePresentation.maintenance, "recent": recent, "last_request": lastRequest, "observed_at": ISO8601DateFormatter().string(from: Date()), "scanner_window_open": scannerWindow?.isVisible ?? false, "scanner_page_loaded": scannerPageLoaded, "scanner_page_message": scannerPageMessage]
         let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Daedalus/scanner-status-observation.json")
         if let data = try? JSONSerialization.data(withJSONObject: observation) {
             try? data.write(to: file, options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         }
-        item.button?.title = scanning ? " Scanning" : (working ? " Working" : " Nmap")
-        item.button?.image = NSImage(systemSymbolName: running ? (scanning ? "waveform.path.ecg" : "checkmark.shield") : "exclamationmark.shield", accessibilityDescription: "Scanner status")
+        item.button?.title = " " + runtimePresentation.badge
+        item.button?.image = NSImage(systemSymbolName: runtimePresentation.symbol, accessibilityDescription: runtimePresentation.activity)
         windowHistory.stringValue = "Managed scan history (Daedalus)\n" + (recent.isEmpty ? "No saved runs reported yet." : recent.joined(separator: "\n"))
         windowStatus.stringValue = "\(engine)   ·   \(portal)\n\(activity)" + (scannerPageMessage.isEmpty ? "" : "\n" + scannerPageMessage)
         item.button?.toolTip = "\(engine)\n\(portal)\n\(activity)"

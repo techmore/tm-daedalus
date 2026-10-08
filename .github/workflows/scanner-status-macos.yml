@@ -1,0 +1,38 @@
+name: Test macOS scanner status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/daedalus/agent_bundle/ScannerStatus.swift'
+      - 'src/daedalus/agent_bundle/install-status-macos.sh'
+      - 'tests/test_scanner_status_native.py'
+      - '.github/workflows/scanner-status-macos.yml'
+  pull_request:
+    paths:
+      - 'src/daedalus/agent_bundle/ScannerStatus.swift'
+      - 'src/daedalus/agent_bundle/install-status-macos.sh'
+      - 'tests/test_scanner_status_native.py'
+      - '.github/workflows/scanner-status-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scanner-status-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-status:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Exercise actual Swift runtime presentation
+        run: python3 -m unittest discover -s tests -p test_scanner_status_native.py -v
+      - name: Compile complete status application and check installer syntax
+        run: |
+          xcrun swiftc src/daedalus/agent_bundle/ScannerStatus.swift -o "$RUNNER_TEMP/DaedalusScannerStatus"
+          sh -n src/daedalus/agent_bundle/install-status-macos.sh
