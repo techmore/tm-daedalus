@@ -109,6 +109,25 @@ struct CheckReport: Codable {
     let summary: ReportSummary
 }
 
+enum CISRunState {
+    case idle, checking, profileUnavailable, profileIncompatible, noChecks
+
+    var label: String {
+        switch self {
+        case .idle: return "Assessment: idle"
+        case .checking: return "Assessment: checking"
+        case .profileUnavailable: return "Assessment skipped: selected profile unavailable"
+        case .profileIncompatible: return "Assessment skipped: profile requires another macOS version"
+        case .noChecks: return "Assessment skipped: no checks available"
+        }
+    }
+
+    var allowsNewRun: Bool {
+        if case .checking = self { return false }
+        return true
+    }
+}
+
 struct ReportSummary: Codable {
     let totalChecks: Int
     let passedChecks: Int

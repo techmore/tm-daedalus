@@ -6,11 +6,45 @@
 //
 
 import Foundation
+import AppKit
 import Testing
 import XCTest
 @testable import CSP_CIS_Audit
 
 struct CSP_CIS_AuditTests {
+    @Test func workspaceAutoProfileSelectionCannotFallBackToBundledChecklist() {
+        #expect(DaedalusProfileClient.requiresPublishedProfile(preferredSlug: "", profilesEndpoint: "https://portal.invalid/api/cis/client/profiles"))
+        #expect(DaedalusProfileClient.requiresPublishedProfile(preferredSlug: "selected", profilesEndpoint: nil))
+        #expect(!DaedalusProfileClient.requiresPublishedProfile(preferredSlug: "", profilesEndpoint: nil))
+        let derived = DaedalusProfileClient.profileEndpoint(configuredEndpoint: "", reportEndpoint: "https://portal.invalid/api/cis/report")
+        #expect(DaedalusProfileClient.requiresPublishedProfile(preferredSlug: "", profilesEndpoint: derived))
+    }
+
+    @Test @MainActor func nativeMenuDisablesRunAndConfigImportDuringAssessment() {
+        let manager = MenuBarManager.shared
+        let run = NSMenuItem(title: "Run", action: NSSelectorFromString("runChecks"), keyEquivalent: "")
+        let importConfig = NSMenuItem(title: "Import", action: NSSelectorFromString("importDaedalusConfig"), keyEquivalent: "")
+        let retry = NSMenuItem(title: "Retry", action: NSSelectorFromString("sendToServer"), keyEquivalent: "")
+        manager.updateRunState(.checking)
+        #expect(!manager.validateMenuItem(run))
+        #expect(!manager.validateMenuItem(importConfig))
+        #expect(manager.validateMenuItem(retry))
+        manager.updateRunState(.profileUnavailable)
+        #expect(manager.validateMenuItem(run))
+        #expect(manager.validateMenuItem(importConfig))
+        manager.updateRunState(.idle)
+    }
+
+    @Test func nativeRunStatesExplainSkippedAssessmentsAndBlockDuplicateRequests() {
+        #expect(!CISRunState.checking.allowsNewRun)
+        #expect(CISRunState.checking.label == "Assessment: checking")
+        #expect(CISRunState.idle.allowsNewRun)
+        #expect(CISRunState.profileUnavailable.allowsNewRun)
+        #expect(CISRunState.profileUnavailable.label.contains("selected profile unavailable"))
+        #expect(CISRunState.profileIncompatible.label.contains("another macOS version"))
+        #expect(CISRunState.noChecks.label.contains("no checks available"))
+    }
+
     @Test func nativeSummaryExplainsAssessmentCoverageAndEmptyPercentages() {
         let category = CategorySummary(total: 0, passed: 0, failed: 0, manual: 0, error: 0, score: 0)
         func summary(_ total: Int, _ passed: Int, _ failed: Int, _ manual: Int, _ error: Int) -> ReportSummary {

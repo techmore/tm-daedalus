@@ -108,18 +108,22 @@ enum DaedalusProfileClient {
         return components.url?.absoluteString
     }
 
+    static func requiresPublishedProfile(preferredSlug: String, profilesEndpoint: String?) -> Bool {
+        !preferredSlug.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || profilesEndpoint != nil
+    }
+
     static func fetch(
         endpoint: String,
         apiKey: String,
         preferredSlug: String = ""
     ) -> DaedalusPublishedProfile? {
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            print("[INFO] No CIS API key is configured; using the bundled checklist.")
+            print("[INFO] No CIS API key is configured; no published profile was loaded.")
             return nil
         }
         guard let url = URL(string: endpoint),
               Config.isAllowedReportingEndpoint(endpoint) else {
-            print("[WARNING] Daedalus profile endpoint is invalid; using the bundled checklist.")
+            print("[WARNING] Daedalus profile endpoint is invalid; no published profile was loaded.")
             return nil
         }
 
@@ -144,16 +148,16 @@ enum DaedalusProfileClient {
         }.resume()
 
         guard semaphore.wait(timeout: .now() + 14) == .success else {
-            print("[WARNING] Daedalus profile fetch timed out; using the bundled checklist.")
+            print("[WARNING] Daedalus profile fetch timed out; no published profile was loaded.")
             return nil
         }
         if requestError != nil {
-            print("[WARNING] Daedalus profile fetch failed; using the bundled checklist.")
+            print("[WARNING] Daedalus profile fetch failed; no published profile was loaded.")
             return nil
         }
         guard responseStatus.map({ (200..<300).contains($0) }) == true,
               let responseData else {
-            print("[WARNING] Daedalus profile endpoint returned HTTP \(responseStatus ?? 0); using the bundled checklist.")
+            print("[WARNING] Daedalus profile endpoint returned HTTP \(responseStatus ?? 0); no published profile was loaded.")
             return nil
         }
 
@@ -162,7 +166,7 @@ enum DaedalusProfileClient {
             print("[INFO] Using Daedalus profile \(profile.name) v\(profile.version) (\(profile.checks.count) checks).")
             return profile
         } catch {
-            print("[WARNING] \(error.localizedDescription) Using the bundled checklist.")
+            print("[WARNING] \(error.localizedDescription) No published profile was loaded.")
             return nil
         }
     }

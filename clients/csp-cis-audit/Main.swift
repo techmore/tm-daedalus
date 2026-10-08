@@ -205,15 +205,23 @@ class CISApp: NSObject, NSApplicationDelegate {
     func runChecks() {
         checkRunLock.lock()
         let mayStart = !checkRunInProgress
-        if mayStart { checkRunInProgress = true }
+        if mayStart {
+            checkRunInProgress = true
+            DispatchQueue.main.async { MenuBarManager.shared.updateRunState(.checking) }
+        }
         checkRunLock.unlock()
         guard mayStart else {
             print("[INFO] A CIS check run is already in progress; skipping this request.")
             return
         }
+        var completionState = CISRunState.idle
         defer {
             checkRunLock.lock()
             checkRunInProgress = false
+            // Queue the terminal state under the same lock as admission, so a
+            // new run's checking state cannot be overwritten by an older run.
+            let finalState = completionState
+            DispatchQueue.main.async { MenuBarManager.shared.updateRunState(finalState) }
             checkRunLock.unlock()
         }
 
@@ -227,8 +235,9 @@ class CISApp: NSObject, NSApplicationDelegate {
         
         let checklistPath = "checklist.yaml"
         
-        // Prefer the workspace's published Daedalus profile. If the portal is
-        // unavailable or no profile is selected, retain the bundled checklist.
+        // A workspace profile selection must not fall back to a different
+        // checklist when its catalog is unavailable. Standalone local runs
+        // without a profile endpoint retain the bundled checklist.
         let profilesEndpoint = DaedalusProfileClient.profileEndpoint(
             configuredEndpoint: config.reporting.profilesEndpoint,
             reportEndpoint: config.reporting.endpoint
@@ -240,7 +249,8 @@ class CISApp: NSObject, NSApplicationDelegate {
                 preferredSlug: config.reporting.profileSlug
             )
         }
-        if !config.reporting.profileSlug.isEmpty && activeProfile == nil {
+        if DaedalusProfileClient.requiresPublishedProfile(preferredSlug: config.reporting.profileSlug, profilesEndpoint: profilesEndpoint) && activeProfile == nil {
+            completionState = .profileUnavailable
             print("[ERROR] The configured Daedalus profile could not be loaded. Skipping this run rather than reporting the bundled CSP checklist under a different profile selection.")
             return
         }
@@ -249,6 +259,7 @@ class CISApp: NSObject, NSApplicationDelegate {
                 for: activeProfile,
                 osMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion
            ) {
+            completionState = .profileIncompatible
             print("[ERROR] \(incompatibility) Skipping this run; no results were collected or uploaded.")
             return
         }
@@ -260,6 +271,12 @@ class CISApp: NSObject, NSApplicationDelegate {
             checks = ChecklistLoader.load(from: checklistPath)
         }
         
+        guard !checks.isEmpty else {
+            completionState = .noChecks
+            print("[ERROR] No checks were available; no assessment was saved or uploaded.")
+            return
+        }
+
         // Count by category
         let macOSChecks = checks.filter { $0.category == "macos" }
         let chromeChecks = checks.filter { $0.category == "chrome" }

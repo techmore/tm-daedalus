@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 7, 2026 — endpoint assessment activity and profile selection
+
+The native menu now exposes assessment activity and explicit skipped-run reasons for unavailable/incompatible profiles and empty check sets. It labels the configured workspace and profile selection, disables duplicate run/config-import actions during collection, and clears displayed previous results after config import without removing stored evidence. Terminal activity is queued under the admission lock so an older run cannot overwrite a newer checking state. A configured published profile, including newest-compatible selection, no longer falls back to the bundled legacy checklist when its fetch fails. Native final xcresult confirms 120 passed, zero failed and one skipped real-Tahoe test on the local macOS 27 host. These are source/native fixture checks; installed clients and rendered-menu acceptance remain separate gates.
+
+Prior source `876caed` passed [client CI 37716494111](https://github.com/techmore/tm-daedalus/actions/runs/37716494111), including native tests, real macOS 26 profile collection, script syntax and credential-free package build. The downloaded 119-check receipt passed local consistency verification. The home-folder outcome was fail on Version 26.6.2 (Build 25G83); this does not establish full benchmark or managed endpoint acceptance.
+
 ## October 7, 2026 — home-folder permissions and real Tahoe receipt
 
 Added the pinned read-only home-folder rule using fixed find/stat arguments and only directory type/mode output. Complete direct-directory metadata passes only modes 0700/0711; explicit mismatches fail, while empty, failed, timed-out, oversized or malformed evidence remains manual. The source Shared/Guest-name exclusions are retained. No directory names or contents are uploaded and no permissions change. Native final xcresult: 117 passed, zero failed and one locally skipped real-Tahoe test; full backend suite: 777 passed, one skipped and 276 subtests. A read-only metadata transport check on this macOS 27 host returned one eligible row with no stderr. Mappings now total 102: 88/100 Level 1 and 100/119 Level 2. Published profile versions remain unchanged.

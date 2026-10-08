@@ -42,6 +42,8 @@ Apple documents the registration and approval model in [SMAppService](https://de
 
 ## Workspace setup
 
+The menu shows the configured workspace/profile and whether an assessment is idle, running or skipped. A selected published profile, including newest compatible, must load successfully; a failed catalog fetch does not switch to the bundled checklist. Only standalone local runs without a published-profile selection use that checklist. Run and config import are disabled while an assessment is active. Importing a new config clears displayed results from the previous workspace/profile; saved report files are retained.
+
 1. In the workspace **CIS profiles** tab, publish the macOS 26 Level 1 and Level 2 profiles or the legacy CSP profile. The Tahoe profiles are derived from the pinned NIST mSCP Revision 3 baseline, but only a limited set of their rules map to local CSP checks. Unsupported rules are marked manual. Their pass rate is not a CIS attestation.
 2. In **Client profile**, select the profile for the deployment, or leave it on the newest compatible macOS profile.
 3. Select **Issue client key and download config**. The one-time YAML download contains a workspace upload key. If rotating the key, replace the config on every deployed client; the previous key stops working.

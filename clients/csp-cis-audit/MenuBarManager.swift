@@ -3,9 +3,10 @@ import AppKit
 import UniformTypeIdentifiers
 import ServiceManagement
 
-class MenuBarManager: NSObject {
+class MenuBarManager: NSObject, NSMenuItemValidation {
     private var statusItem: NSStatusItem?
     private var menu: NSMenu?
+    private var runState: CISRunState = .idle
     private var lastRunDate: Date?
     private var resultsSummary: ReportSummary?
     private var config: Config?
@@ -36,6 +37,18 @@ class MenuBarManager: NSObject {
         updateMenu()
     }
     
+    func updateRunState(_ state: CISRunState) {
+        runState = state
+        updateMenu()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(runChecks) || menuItem.action == #selector(importDaedalusConfig) {
+            return runState.allowsNewRun
+        }
+        return true
+    }
+
     func updateWithResults(summary: ReportSummary, config: Config) {
         self.resultsSummary = summary
         self.lastRunDate = Date()
@@ -56,6 +69,15 @@ class MenuBarManager: NSObject {
         titleItem.target = self
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: runState.label, action: nil, keyEquivalent: ""))
+        if let config {
+            menu.addItem(NSMenuItem(title: "Workspace: " + (config.reporting.domain.isEmpty ? "not configured" : config.reporting.domain), action: nil, keyEquivalent: ""))
+            let profilesEndpoint = DaedalusProfileClient.profileEndpoint(configuredEndpoint: config.reporting.profilesEndpoint, reportEndpoint: config.reporting.endpoint)
+            let selected = config.reporting.profileSlug.isEmpty
+                ? (profilesEndpoint == nil ? "Bundled CSP checklist (local)" : "Newest compatible profile")
+                : config.reporting.profileSlug
+            menu.addItem(NSMenuItem(title: "Profile: " + selected, action: nil, keyEquivalent: ""))
+        }
         if let summary = resultsSummary {
             menu.addItem(NSMenuItem(title: summary.assessmentCoverageLabel, action: nil, keyEquivalent: ""))
             menu.addItem(NSMenuItem(title: "Manual and error results are unassessed; pass rate uses all checks.", action: nil, keyEquivalent: ""))
@@ -265,6 +287,11 @@ class MenuBarManager: NSObject {
         ]
         panel.begin { [weak self] response in
             guard response == .OK, let sourceURL = panel.url else { return }
+            guard self?.runState.allowsNewRun == true else {
+                self?.configMessage = "Wait for the current assessment before importing a config"
+                self?.updateMenu()
+                return
+            }
             let hasScopedAccess = sourceURL.startAccessingSecurityScopedResource()
             defer {
                 if hasScopedAccess {
@@ -291,6 +318,11 @@ class MenuBarManager: NSObject {
 
                 DispatchQueue.main.async {
                     self?.config = importedConfig
+                    self?.runState = .idle
+                    // Results from the prior workspace/profile must not be
+                    // shown under the newly imported configuration.
+                    self?.resultsSummary = nil
+                    self?.lastRunDate = nil
                     self?.configMessage = "Private client config imported"
                     self?.updateMenu()
                 }
