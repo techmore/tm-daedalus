@@ -908,6 +908,10 @@ class CISReportPDFFlowTests(unittest.TestCase):
         history = self.client.get("/api/external-checks/dns")
         self.assertEqual(history.status_code, 200, history.text)
         self.assertEqual(len(history.json()["runs"]), 2)
+        comparison = history.json()["latest_snapshot_run"]
+        self.assertTrue(comparison["comparison_recorded"])
+        self.assertEqual(comparison["previous_snapshot_run_id"], first.json()["id"])
+        self.assertEqual(comparison["change_count"], 1)
         self.assertEqual(history.json()["changes"][0]["previous_value"], ["198.51.100.10"])
         self.assertEqual(history.json()["changes"][0]["current_value"], ["198.51.100.11"])
         assessment = history.json()["latest_snapshot"]["email_authentication_assessment"]
@@ -949,11 +953,18 @@ class CISReportPDFFlowTests(unittest.TestCase):
         history = self.client.get("/api/external-checks/dns?runs_limit=1").json()
         self.assertEqual(history["runs"][0]["status"], "failed")
         self.assertNotIn(source_id, [run["id"] for run in history["runs"]])
-        self.assertEqual(history["latest_snapshot_run"], {"id": source_id, "status": "completed", "completed_at": completed})
+        self.assertEqual(history["latest_snapshot_run"], {"id": source_id, "status": "completed", "completed_at": completed,
+                                                       "change_count": 0, "previous_snapshot_run_id": None, "comparison_recorded": True})
         self.assertEqual(history["latest_snapshot_run_id"], source_id)
         self.assertIsNotNone(history["latest_snapshot"])
         older = self.client.get("/api/external-checks/dns?runs_before=" + str(history["runs"][0]["id"])).json()
         self.assertEqual(older["latest_snapshot_run"], history["latest_snapshot_run"])
+        with self.session_factory() as db:
+            db.get(ExternalCheckRun, source_id).comparison_context = None
+            db.commit()
+        legacy = self.client.get("/api/external-checks/dns").json()["latest_snapshot_run"]
+        self.assertFalse(legacy["comparison_recorded"])
+        self.assertIsNone(legacy["previous_snapshot_run_id"])
 
     def test_external_check_schedules_are_admin_controlled_and_need_no_verification(self):
         initial = self.client.get("/api/external-checks/dns")

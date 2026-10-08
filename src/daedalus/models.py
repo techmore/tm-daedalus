@@ -226,6 +226,7 @@ class ExternalCheckRun(Base):
     snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     change_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    comparison_context: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
 
 class ExternalCheckSchedule(Base):

@@ -362,9 +362,13 @@
             {% if key == 'web' %}<div class="topic-audit-outcomes"><p id="web-exposure-outcome">Exposure assessment: loading saved evidence…</p><p id="web-nikto-outcome">Deeper website assessment: loading saved evidence…</p></div>{% endif %}
           </section>
           <section class="topic-changes" aria-labelledby="{{ key }}-changes-title">
-          <div class="section-heading check-subheading"><div><p class="eyebrow">SINCE THE PREVIOUS ASSESSMENT</p><h3 id="{{ key }}-changes-title">What changed</h3></div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">LATEST SAVED ASSESSMENT</p><h3 id="{{ key }}-changes-title">What changed</h3></div></div>
+          <p class="check-scope-note" id="{{ key }}-comparison-summary">Loading the saved comparison…</p>
+          <div class="check-change-list" id="{{ key }}-latest-changes"></div>
+          <details class="topic-secondary"><summary>Earlier change history</summary>
           <div class="check-change-list" id="{{ key }}-check-changes" aria-live="polite"><div class="empty-events">The first successful run becomes the baseline.</div></div>
           <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="changes">Load older changes</button>
+          </details>
           </section>
 
           <section class="topic-evidence" aria-labelledby="{{ key }}-evidence-title"><div class="section-heading check-subheading"><div><p class="eyebrow">SUPPORTING EVIDENCE</p><h3 id="{{ key }}-evidence-title">{{ 'Domain resolution & email protection' if key == 'dns' else 'Availability & browser protection' }}</h3></div></div>

@@ -4601,6 +4601,19 @@
     return label;
   }
 
+  function externalComparisonLabel(body) {
+    var source = body.latest_snapshot_run;
+    if (!body.latest_snapshot || !source || !Number.isSafeInteger(source.id) || source.id <= 0
+        || source.id !== body.latest_snapshot_run_id || !["completed", "completed_with_warnings"].includes(source.status)) return "No saved comparison is available yet.";
+    if (!Number.isSafeInteger(source.change_count) || source.change_count < 0) return "Saved comparison count is unavailable.";
+    if (source.comparison_recorded !== true) return "Run #" + source.id + " recorded " + source.change_count + " evidence difference(s). Its comparison baseline was not recorded; earlier provenance is unavailable.";
+    if (source.previous_snapshot_run_id === null) return "Run #" + source.id + " establishes the first saved baseline; there is no earlier assessment to compare.";
+    if (!Number.isSafeInteger(source.previous_snapshot_run_id) || source.previous_snapshot_run_id <= 0
+        || source.previous_snapshot_run_id >= source.id) return "Earlier comparison evidence is unavailable.";
+    return "Run #" + source.id + " recorded " + source.change_count + " evidence difference(s) against saved run #"
+      + source.previous_snapshot_run_id + ". Unavailable observations can limit comparison; differences are not security incident verdicts.";
+  }
+
   function renderCheckHistory(type, body) {
     var evidenceNode = document.getElementById(type + "-assessment-evidence");
     var evidenceLabel = externalEvidenceLabel(body);
@@ -4609,6 +4622,9 @@
     var lastRun = document.getElementById(type + "-check-last-run");
     var runList = document.getElementById(type + "-check-runs");
     var changeList = document.getElementById(type + "-check-changes");
+    var latestChanges = document.getElementById(type + "-latest-changes");
+    text(document.getElementById(type + "-comparison-summary"), externalComparisonLabel(body));
+    if (latestChanges) latestChanges.replaceChildren();
     var historyState = externalCheckHistory[type];
     var runs = body.runs || [];
     var latestRun = runs[0];
@@ -4704,9 +4720,18 @@
         time.dateTime = change.detected_at || "";
         time.textContent = dateLabel(change.detected_at);
         row.append(main, time);
-        changeList.append(row);
+        var isLatest = body.latest_snapshot_run && change.run_id === body.latest_snapshot_run_id;
+        if (isLatest && latestChanges) latestChanges.append(row);
+        else changeList.append(row);
       });
-      if (!(body.changes || []).length) appendEmpty(changeList, "No confirmed changes are recorded in the saved assessment history. The first successful assessment establishes the baseline; unavailable checks cannot establish changes.");
+      if (!changeList.children.length) appendEmpty(changeList, "No earlier changes are loaded. The first successful assessment establishes the baseline; unavailable checks cannot establish changes.");
+      if (latestChanges && body.latest_snapshot_run) {
+        var loadedCount = (body.changes || []).filter(function (change) { return change.run_id === body.latest_snapshot_run_id; }).length;
+        var totalCount = body.latest_snapshot_run.change_count;
+        if (Number.isSafeInteger(totalCount) && totalCount > loadedCount) {
+          appendEmpty(latestChanges, "Showing " + loadedCount + " of " + totalCount + " recorded differences. Use Load older changes in Earlier change history to load the remaining saved rows.");
+        }
+      }
     }
     var olderChangesButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="changes"]');
     if (olderChangesButton) {
@@ -5107,6 +5132,9 @@
       }
       if (!olderKind) {
         text(document.getElementById(type + "-assessment-evidence"), "Could not refresh evidence collection time. Previously displayed results may be out of date.");
+        text(document.getElementById(type + "-comparison-summary"), "Could not refresh the latest comparison. Previously displayed results may be out of date.");
+        var latestChanges = document.getElementById(type + "-latest-changes");
+        if (latestChanges) latestChanges.replaceChildren();
         var priorities = document.getElementById(type + "-priorities");
         if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Current assessment evidence could not be refreshed. Review is unavailable until the request succeeds."); }
       }

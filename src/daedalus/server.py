@@ -358,6 +358,8 @@ def ensure_external_check_columns(connection) -> None:
     for column in ("queued_at", "collection_started_at"):
         if column not in existing:
             connection.execute(text(f"ALTER TABLE external_check_runs ADD COLUMN {column} TIMESTAMP"))
+    if "comparison_context" not in existing:
+        connection.execute(text("ALTER TABLE external_check_runs ADD COLUMN comparison_context JSON"))
 
 
 def ensure_cis_presence_columns(connection) -> None:
@@ -1734,6 +1736,7 @@ def _execute_external_check(
                 .order_by(ExternalCheckRun.id.desc())
             )
             initial_baseline = check_type in {"dns", "web"} and not (prior and prior.snapshot)
+            run.comparison_context = {"schema_version": 1, "previous_run_id": prior.id if prior and prior.snapshot else None}
             if prior and prior.snapshot:
                 if check_type in {"web-active", "web-nikto"}:
                     previous_snapshot = prior.snapshot
@@ -3602,6 +3605,13 @@ def external_check_history(
         serialize_external_run(*latest_snapshot_row)["snapshot"]
         if latest_snapshot_row else None
     )
+    comparison_context = latest_snapshot_row[0].comparison_context if latest_snapshot_row else None
+    comparison_recorded = bool(isinstance(comparison_context, dict)
+        and set(comparison_context) == {"schema_version", "previous_run_id"}
+        and type(comparison_context.get("schema_version")) is int and comparison_context["schema_version"] == 1
+        and (comparison_context["previous_run_id"] is None
+             or (type(comparison_context["previous_run_id"]) is int
+                 and 0 < comparison_context["previous_run_id"] < latest_snapshot_row[0].id)))
     schedule = db.scalar(
         select(ExternalCheckSchedule).where(
             ExternalCheckSchedule.organization_id == organization.id,
@@ -3634,6 +3644,9 @@ def external_check_history(
             "id": latest_snapshot_row[0].id,
             "status": latest_snapshot_row[0].status,
             "completed_at": iso_utc(latest_snapshot_row[0].completed_at) if latest_snapshot_row[0].completed_at else None,
+            "change_count": latest_snapshot_row[0].change_count,
+            "previous_snapshot_run_id": comparison_context["previous_run_id"] if comparison_recorded else None,
+            "comparison_recorded": comparison_recorded,
         } if latest_snapshot_row else None,
         "runs": recent_runs,
         "runs_has_more": runs_has_more,

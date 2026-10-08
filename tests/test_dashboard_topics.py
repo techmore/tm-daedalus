@@ -97,9 +97,40 @@ controlsEnabled=false;pauseRestrictedWorkspaceControls();assert.ok(buttons.every
 
     def test_empty_change_history_does_not_imply_only_one_assessment(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
-        self.assertIn('No confirmed changes are recorded in the saved assessment history.', source)
+        self.assertIn('No earlier changes are loaded.', source)
         self.assertIn('unavailable checks cannot establish changes.', source)
         self.assertNotIn('No changes have been detected yet; the first successful run is the baseline.', source)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_latest_comparison_is_distinct_from_older_change_history(self):
+        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
+        helper = source[source.index('  function externalEvidenceLabel('):source.index('  function renderExternalCheckSchedule(')]
+        script = """const assert=require('node:assert/strict');
+class Node {constructor(){this.children=[];this.textContent='';} append(...n){this.children.push(...n);} replaceChildren(){this.children=[];}}
+const ids=Object.fromEntries(['dns-check-changes','dns-latest-changes','dns-comparison-summary','dns-assessment-evidence'].map(id=>[id,new Node()]));
+const document={getElementById:id=>ids[id]||null,createElement:()=>new Node(),querySelector:()=>null};
+const text=(node,value)=>{if(node)node.textContent=String(value);};
+const dateLabel=String, displayCheckValue=String, dnsChangeUncertainty=()=>'', externalCheckHistory={dns:{}};
+const appendEmpty=(node,message)=>{const child=new Node();child.textContent=message;node.append(child);};
+const renderTopicPriorities=()=>{},renderDnsSnapshot=()=>{},renderWebsiteSnapshot=()=>{},renderExternalCheckSchedule=()=>{},loadVendorReviewContext=()=>{};
+""" + helper + """
+const body={latest_snapshot:{records:{}},latest_snapshot_run_id:7,
+ latest_snapshot_run:{id:7,status:'completed',completed_at:'2026-10-08T10:00:00Z',change_count:2,previous_snapshot_run_id:5,comparison_recorded:true},
+ runs:[],changes:[{id:3,run_id:7,field_path:'records.A'},{id:2,run_id:7,field_path:'records.MX'},{id:1,run_id:5,field_path:'records.A'}]};
+renderCheckHistory('dns',body);
+assert.equal(ids['dns-latest-changes'].children.length,2);
+assert.equal(ids['dns-check-changes'].children.length,1);
+assert.ok(ids['dns-comparison-summary'].textContent.includes('2 evidence difference(s)'));
+assert.ok(externalComparisonLabel({...body,latest_snapshot_run:{...body.latest_snapshot_run,change_count:0,previous_snapshot_run_id:null}}).includes('first saved baseline'));
+assert.ok(externalComparisonLabel({...body,latest_snapshot_run:{...body.latest_snapshot_run,change_count:0}}).includes('0 evidence difference(s)'));
+assert.ok(externalComparisonLabel({...body,latest_snapshot_run:{...body.latest_snapshot_run,previous_snapshot_run_id:undefined}}).includes('unavailable'));
+assert.ok(externalComparisonLabel({...body,latest_snapshot_run:{...body.latest_snapshot_run,change_count:-1}}).includes('unavailable'));
+assert.ok(externalComparisonLabel({...body,latest_snapshot_run:{...body.latest_snapshot_run,comparison_recorded:false}}).includes('baseline was not recorded'));
+renderCheckHistory('dns',{...body,changes:body.changes.slice(0,1)});
+assert.ok(ids['dns-latest-changes'].children.at(-1).textContent.includes('Showing 1 of 2'));
+"""
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_mail_route_summary_distinguishes_unknown_and_null_mx(self):

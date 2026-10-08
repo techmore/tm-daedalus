@@ -154,10 +154,11 @@ class NiktoFlowsTests(unittest.TestCase):
                 connection.execute(text("INSERT INTO external_check_runs VALUES (1, 'manual', '2026-01-01', :snapshot)"), {'snapshot':json.dumps({'legacy':True})})
                 server.ensure_external_check_columns(connection)
                 server.ensure_external_check_columns(connection)
-                row=connection.execute(text('SELECT started_at,snapshot,queued_at,collection_started_at FROM external_check_runs')).one()
+                row=connection.execute(text('SELECT started_at,snapshot,queued_at,collection_started_at,comparison_context FROM external_check_runs')).one()
                 self.assertEqual(row[0],'2026-01-01')
                 self.assertEqual(json.loads(row[1]),{'legacy':True})
                 self.assertIsNone(row[2]);self.assertIsNone(row[3])
+                self.assertIsNone(row[4])
         finally:
             engine.dispose()
 
