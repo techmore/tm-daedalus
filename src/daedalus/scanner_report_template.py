@@ -27,8 +27,7 @@ REPORT_ASSET_SHA256 = {
 
 # Print-only enhancement: retain the original stylesheet, body and evidence.
 # Saved jobs without these fields keep the historical rendering behavior.
-PRINT_LAYOUT_VERSION = 1
-PRINT_LAYOUT_CSS = """@media print {
+PRINT_LAYOUT_V1_CSS = """@media print {
   html, body { min-height: 0 !important; height: auto !important; }
   body > div.max-w-7xl { padding-top: 20px !important; padding-bottom: 12px !important; }
   pre, code { white-space: pre-wrap !important; overflow-wrap: anywhere; word-break: break-word; }
@@ -47,7 +46,23 @@ PRINT_LAYOUT_CSS = """@media print {
   .progress-segment[style*="width:0%;"] { display: none !important; }
   footer { margin-top: 12px !important; padding-top: 12px !important; padding-bottom: 12px !important; break-inside: avoid; }
 }"""
+# Version 1 is frozen: previously saved reports retain its exact style bytes.
+PRINT_LAYOUT_V1_SHA256 = "83528b380a82a1a251add83be177a382b4ae9846d37100cf8b905ece43b4d8a3"
+PRINT_LAYOUT_VERSION = 2
+PRINT_LAYOUT_CSS = PRINT_LAYOUT_V1_CSS + """
+@media print {
+  /* Keep a short host card together; oversized cards can still paginate. */
+  #onlinehosts > .card { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px !important; }
+  #onlinehosts > .card > .p-6 { padding: 12px !important; }
+  #onlinehosts > .card .mb-6 { margin-bottom: 12px !important; }
+  #onlinehosts .collapsible-header, h4 { break-after: avoid; page-break-after: avoid; }
+  .overflow-x-auto { overflow: visible !important; }
+}"""
 PRINT_LAYOUT_SHA256 = hashlib.sha256(PRINT_LAYOUT_CSS.encode("utf-8")).hexdigest()
+PRINT_LAYOUTS = {
+    1: (PRINT_LAYOUT_V1_CSS, PRINT_LAYOUT_V1_SHA256),
+    2: (PRINT_LAYOUT_CSS, PRINT_LAYOUT_SHA256),
+}
 
 
 def scanner_print_layout_html(html: str, provenance: dict | None) -> str:
@@ -56,11 +71,12 @@ def scanner_print_layout_html(html: str, provenance: dict | None) -> str:
         raise ValueError("Saved scanner print layout provenance must be an object.")
     if provenance is None or ("print_layout_version" not in provenance and "print_layout_sha256" not in provenance):
         return html
-    if (type(provenance.get("print_layout_version")) is not int
-            or provenance["print_layout_version"] != PRINT_LAYOUT_VERSION
-            or provenance.get("print_layout_sha256") != PRINT_LAYOUT_SHA256):
+    version = provenance.get("print_layout_version")
+    layout = PRINT_LAYOUTS.get(version) if type(version) is int else None
+    if (layout is None or provenance.get("print_layout_sha256") != layout[1]
+            or hashlib.sha256(layout[0].encode("utf-8")).hexdigest() != layout[1]):
         raise ValueError("Saved scanner print layout is unavailable or differs; no replacement layout was generated.")
-    style = '<style id="nmapui-print-layout-v1">' + PRINT_LAYOUT_CSS + '</style>'
+    style = f'<style id="nmapui-print-layout-v{version}">' + layout[0] + '</style>'
     if html.count('</head>') != 1:
         raise ValueError("Scanner report head is unavailable for print enhancement.")
     return html.replace('</head>', style + '</head>', 1)
