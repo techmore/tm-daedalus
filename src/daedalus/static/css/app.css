@@ -1013,3 +1013,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .drive-card.hidden { display: none; }
 .drive-copy { flex: 1 1 320px; line-height: 1.5; }
 .drive-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Saved Meraki measurement tables retain column semantics on narrow screens. */
+.meraki-detail-section { min-width: 0; }
+.meraki-detail-section .table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--card-line); border-radius: 10px; }
+.meraki-detail-section .table-scroll:focus-visible { outline: 2px solid var(--olive-600); outline-offset: 3px; }
+.meraki-detail-section .table-scroll table { width: 100%; min-width: 640px; border-collapse: collapse; }
+.meraki-detail-section .table-scroll caption { padding: 10px 14px; text-align: left; color: var(--brown-800); font-size: 12px; }
+.meraki-detail-section .table-scroll th, .meraki-detail-section .table-scroll td { padding: 10px 14px; text-align: left; vertical-align: top; font-size: 12px; border-bottom: 1px solid var(--card-line); }
+.meraki-detail-section .table-scroll th { color: var(--brown-800); background: var(--cream-50); }

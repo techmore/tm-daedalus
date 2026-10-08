@@ -50,8 +50,10 @@ assert.ok(all(unknown).some(n=>n.tag==='dd'&&n.textContent==='Unavailable'));
         root = Path(__file__).parents[1] / 'src/daedalus'
         style = (root / 'static/css/app.css').read_text()
         self.assertIn('.meraki-power-scroll:focus-visible', style)
+        self.assertIn('.meraki-detail-section .table-scroll { max-width: 100%; overflow-x: auto;', style)
+        self.assertIn('.meraki-detail-section .table-scroll:focus-visible', style)
         self.assertIn('.meraki-power-table { min-width: 640px; }', style)
         self.assertIn('background: var(--card-surface)', style)
         template = (root / 'templates/dashboard.html').read_text()
-        self.assertIn('app.css?v=daedalus-20261008-160', template)
-        self.assertIn('dashboard.js?v=daedalus-20261008-160', template)
+        self.assertIn('app.css?v=daedalus-20261008-161', template)
+        self.assertIn('dashboard.js?v=daedalus-20261008-161', template)
