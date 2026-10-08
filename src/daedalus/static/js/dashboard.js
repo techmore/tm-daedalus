@@ -1823,6 +1823,18 @@
     container.append(section);
   }
 
+  function renderMerakiRefreshPlan(container, plan) {
+    if (!plan || plan.schema_version !== 1 || plan.currency !== "USD" || !Array.isArray(plan.scenarios)) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var title = document.createElement("h4"); title.textContent = "Equipment refresh reserve";
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = plan.scope || "Nominal equipment reserve; replacement cycles are planning assumptions."; section.append(title, note);
+    plan.scenarios.slice(0, 2).forEach(function (row) {
+      var text = document.createElement("p"), amount = Number.isSafeInteger(row.annual_reserve_cents) && row.annual_reserve_cents >= 0 ? new Intl.NumberFormat("en-US", {style: "currency", currency: "USD"}).format(row.annual_reserve_cents / 100) : "Unavailable";
+      text.textContent = (row.name || "Scenario") + ": " + amount + " per year · assumed " + (Number.isSafeInteger(row.replacement_cycle_years) ? row.replacement_cycle_years : "unknown") + "-year cycle · " + (row.complete_inventory_pricing === true ? "All assigned inventory priced" : "Partial pricing; reserve covers priced inventory only") + (Number.isSafeInteger(row.unpriced_device_count) && row.unpriced_device_count > 0 ? " · " + row.unpriced_device_count + " unpriced devices" : ""); section.append(text);
+    });
+    container.append(section);
+  }
+
   function renderMerakiSwitchPorts(container, evidence) {
     if (!evidence || !Array.isArray(evidence.switches) || !evidence.switches.length) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2024,6 +2036,7 @@
       container.append(planning);
     }
 
+    renderMerakiRefreshPlan(container, details.unifi_plan && details.unifi_plan.refresh_plan);
     renderMerakiSwitchPorts(container, details.switch_ports);
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
 
@@ -2148,7 +2161,14 @@
       var amount = document.createElement("p"); amount.textContent = new Intl.NumberFormat("en-US", {style: "currency", currency: "USD", maximumFractionDigits: 2}).format(row.hardware_subtotal_cents / 100);
       var coverage = document.createElement("p"); coverage.className = "muted";
       coverage.textContent = row.complete_inventory_pricing === true ? "All assigned inventory priced" : "Partial inventory pricing; review unpriced models";
-      card.append(name, amount, coverage); grid.append(card);
+      card.append(name, amount, coverage);
+      var refresh = plan.refresh_plan;
+      var reserve = refresh && refresh.schema_version === 1 && refresh.currency === "USD" && Array.isArray(refresh.scenarios) ? refresh.scenarios.find(function (item) {return item.name === row.name;}) : null;
+      if (reserve && Number.isSafeInteger(reserve.annual_reserve_cents) && reserve.annual_reserve_cents >= 0 && Number.isSafeInteger(reserve.replacement_cycle_years)) {
+        var annual = document.createElement("p"); annual.className = "muted";
+        annual.textContent = new Intl.NumberFormat("en-US", {style: "currency", currency: "USD"}).format(reserve.annual_reserve_cents / 100) + "/year nominal equipment reserve · assumed " + reserve.replacement_cycle_years + "-year cycle" + (reserve.complete_inventory_pricing === true ? "" : " · priced inventory only"); card.append(annual);
+      }
+      grid.append(card);
     });
     section.append(title, note, grid);
     var action = document.createElement("button"); action.type = "button"; action.className = "button button-small button-quiet";

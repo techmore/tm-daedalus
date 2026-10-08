@@ -57,3 +57,53 @@ def test_pdf_appends_planning_and_preserves_existing_pages():
     links = [a.get_object()['/A']['/URI'] for page in enhanced.pages for a in page.get('/Annots', []) if a.get_object().get('/A', {}).get('/S') == '/URI']
     assert 'https://store.ui.com/us/en/products/u7-pro' in links
     assert 'https://store.ui.com/us/en/products/u7-pro-max' in links
+
+
+def test_saved_refresh_reserves_follow_eight_year_assumption():
+    devices = [{'model': model} for model, count in [('MX100', 1), ('MS120-24P', 6), ('MS120-48FP', 1), ('MR44', 16), ('MR76', 3)] for _ in range(count)]
+    plan = build_unifi_plan({'devices':devices})
+    standard, higher = plan['refresh_plan']['scenarios']
+    assert standard['annual_reserve_cents'] == 141950
+    assert higher['annual_reserve_cents'] == 161750
+    assert standard['replacement_cycle_years'] == 8 and standard['complete_inventory_pricing']
+    assert standard['unpriced_device_count'] == 0
+
+
+def test_empty_partial_zero_and_rounding_are_distinct():
+    from daedalus.meraki_planning import build_refresh_plan
+    assert build_unifi_plan({})['refresh_plan']['scenarios'][0]['annual_reserve_cents'] is None
+    partial=build_unifi_plan({'devices':[{'model':'MR44'},{'model':'unknown'}]})['refresh_plan']['scenarios'][0]
+    assert partial['annual_reserve_cents'] == 2600 and partial['unpriced_device_count'] == 1
+    assert not partial['complete_inventory_pricing']
+    for amount,expected in [(0,0),(3,0),(4,1),(12,2)]:
+        assert build_refresh_plan([{'hardware_subtotal_cents':amount,'priced_device_count':1}])['scenarios'][0]['annual_reserve_cents']==expected
+    for cycle in [0,31,True,1.5,'8']:
+        import pytest
+        with pytest.raises(ValueError): build_refresh_plan([],cycle)
+
+
+def test_new_reserve_appendix_preserves_historical_plan_rendering():
+    import copy,io
+    from pypdf import PdfReader
+    from daedalus.reports import build_meraki_security_pdf
+    snapshot={'domain':'example.test','meraki':{'organization':{'name':'Fixture'},'collected_at':'2026-10-08T00:00:00Z'}}
+    snapshot['unifi_plan']=build_unifi_plan({'devices':[{'model':'MR44'}]})
+    prior=copy.deepcopy(snapshot);prior['unifi_plan'].pop('refresh_plan')
+    old=PdfReader(io.BytesIO(build_meraki_security_pdf(prior)))
+    new=PdfReader(io.BytesIO(build_meraki_security_pdf(snapshot)))
+    assert len(new.pages)==len(old.pages)+1
+    assert all(a.get_contents().get_data()==b.get_contents().get_data() for a,b in zip(old.pages,new.pages))
+    assert 'Equipment refresh reserve' in new.pages[-1].extract_text()
+    assert '$26.00' in new.pages[-1].extract_text()
+
+
+def test_refresh_projection_bounds_and_drops_private_fields():
+    from daedalus.meraki_planning import project_refresh_plan, project_unifi_plan
+    plan=build_unifi_plan({'devices':[{'model':'MR44'}]})
+    raw=plan['refresh_plan'];raw['private']='secret';raw['scenarios'][0]['private']='secret'
+    raw['scenarios'][0]['name']='x'*1000
+    raw['scenarios'][1]['annual_reserve_cents']=True
+    projected=project_unifi_plan(plan)['refresh_plan']
+    assert 'secret' not in str(projected) and len(projected['scenarios'][0]['name'])==240
+    assert projected['scenarios'][1]['annual_reserve_cents'] is None
+    assert project_refresh_plan({'schema_version':True,'currency':'USD'}) is None

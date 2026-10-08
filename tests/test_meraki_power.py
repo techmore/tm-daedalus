@@ -100,6 +100,8 @@ def test_pdf_appendix_preserves_existing_pages_and_purchase_links():
     snapshot = {'domain': 'fixture.invalid', 'meraki': {'organization': {'id': 'org-1', 'name': 'Fixture'},
                  'collected_at': '2026-10-08T00:00:00Z', 'devices': [{'model': 'MS120-24P'}]}}
     snapshot['unifi_plan'] = build_unifi_plan(snapshot['meraki'])
+    # This preservation fixture represents the historical pre-reserve plan.
+    snapshot['unifi_plan'].pop('refresh_plan')
     original = PdfReader(io.BytesIO(build_meraki_security_pdf(snapshot)))
     snapshot['meraki']['switch_power'] = [{'device_serial': 'SW_1', 'network_name': 'HQ', 'status': 'complete',
         'data': summarize_switch_power([{'portId': '1', 'powerUsageInWh': 240}])}]

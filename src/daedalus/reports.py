@@ -1258,6 +1258,22 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             elif observation.get("status") == "complete":
                 story.append(_paragraph("No ports reported; port health remains unavailable.", styles["MerakiBody"]))
 
+    refresh = plan.get("refresh_plan") if isinstance(plan, dict) else None
+    if isinstance(refresh, dict) and refresh.get("schema_version") == 1 and refresh.get("currency") == "USD":
+        story.append(PageBreak())
+        story.append(Paragraph("Equipment refresh reserve", styles["MerakiSection"]))
+        story.append(_paragraph(refresh.get("scope"), styles["MerakiBody"]))
+        rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in
+            ("Scenario", "Assumed cycle", "Equipment subtotal", "Annual reserve", "Inventory coverage")]]
+        for row in refresh.get("scenarios", [])[:2]:
+            def budget(value):
+                return f"${value / 100:,.2f}" if type(value) is int and 0 <= value <= 10**15 else "Unavailable"
+            values = (row.get("name"), f"{row.get('replacement_cycle_years')} years", budget(row.get("equipment_subtotal_cents")),
+                budget(row.get("annual_reserve_cents")), "All assigned inventory priced" if row.get("complete_inventory_pricing") is True else
+                f"Partial pricing; {row.get('unpriced_device_count', 'Unknown')} unpriced devices")
+            rows.append([_paragraph(value, styles["MerakiCell"]) for value in values])
+        story.append(_table(rows, [2.1 * inch, .9 * inch, 1.2 * inch, 1.1 * inch, 1.6 * inch]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

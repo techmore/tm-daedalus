@@ -45,7 +45,8 @@ def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                           'hardware_subtotal_cents': sum(r['subtotal_cents'] for r in rows),
                           'priced_device_count': sum(r['quantity'] for r in rows),
                           'complete_inventory_pricing': bool(counts) and not unmatched})
-    return {'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
+    refresh = build_refresh_plan(scenarios)
+    return {'refresh_plan': refresh, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
             'inventory_collected_at': snapshot.get('collected_at'), 'scenarios': scenarios,
             'assumptions': [
                 'Planning candidates require design review; model names do not establish feature equivalence.',
@@ -62,6 +63,8 @@ def project_unifi_plan(plan: Any) -> dict[str, Any] | None:
         return None
     result = dict(plan)
     result['scenarios'] = []
+    if 'refresh_plan' in plan:
+        result['refresh_plan'] = project_refresh_plan(plan['refresh_plan'])
     for scenario in plan.get('scenarios', [])[:2]:
         row = dict(scenario)
         unmatched = row.get('unmatched', [])
@@ -71,3 +74,42 @@ def project_unifi_plan(plan: Any) -> dict[str, Any] | None:
         row['rows'] = row.get('rows', [])[:100]
         result['scenarios'].append(row)
     return result
+
+
+def build_refresh_plan(scenarios: list[dict[str, Any]], cycle_years: int = 8) -> dict[str, Any]:
+    """Freeze a nominal equipment reserve; the cycle is a budget assumption."""
+    if type(cycle_years) is not int or not 1 <= cycle_years <= 30:
+        raise ValueError('Replacement cycle must be 1 to 30 whole years')
+    rows = []
+    for scenario in scenarios[:2]:
+        subtotal = scenario.get('hardware_subtotal_cents')
+        count = scenario.get('priced_device_count')
+        measured = type(subtotal) is int and 0 <= subtotal <= 10**15 and type(count) is int and count > 0
+        # Integer half-up rounding avoids float drift and rounds the aggregate,
+        # rather than summing independently rounded per-model reserves.
+        annual = (2 * subtotal + cycle_years) // (2 * cycle_years) if measured else None
+        rows.append({'name': scenario.get('name'), 'replacement_cycle_years': cycle_years,
+            'priced_device_count': count if type(count) is int and count >= 0 else None,
+            'complete_inventory_pricing': scenario.get('complete_inventory_pricing') is True,
+            'equipment_subtotal_cents': subtotal if measured else None,
+            'annual_reserve_cents': annual,
+            'unpriced_device_count': sum(row.get('quantity', 0) for row in scenario.get('unmatched', []) if type(row.get('quantity')) is int and row['quantity'] >= 0)})
+    return {'schema_version': 1, 'currency': 'USD', 'scenarios': rows,
+        'scope': 'Nominal annual equipment reserve using saved dated candidate prices divided by an assumed replacement cycle. This is not a forecast, warranty, equipment lifespan, Meraki renewal quote or savings estimate. Excludes inflation, tax, shipping, accessories, support and implementation. Partial pricing covers priced inventory only.'}
+
+
+def project_refresh_plan(plan: Any) -> dict[str, Any] | None:
+    if not isinstance(plan, dict) or type(plan.get('schema_version')) is not int or plan['schema_version'] != 1 or plan.get('currency') != 'USD':
+        return None
+    rows = plan.get('scenarios') if isinstance(plan.get('scenarios'), list) else []
+    shown = []
+    for row in rows[:2]:
+        if not isinstance(row, dict): continue
+        clean = {'name': row['name'][:240] if isinstance(row.get('name'), str) else '',
+                 'complete_inventory_pricing': row.get('complete_inventory_pricing') is True}
+        for key in ('replacement_cycle_years', 'priced_device_count', 'equipment_subtotal_cents', 'annual_reserve_cents', 'unpriced_device_count'):
+            value = row.get(key)
+            clean[key] = value if type(value) is int and 0 <= value <= 10**15 else None
+        shown.append(clean)
+    return {'schema_version': 1, 'currency': 'USD', 'scenarios': shown,
+            'scope': plan['scope'][:1000] if isinstance(plan.get('scope'), str) else ''}
