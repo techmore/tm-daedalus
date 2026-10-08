@@ -1,6 +1,6 @@
 # Complimentary customer onboarding
 
-Deployed October 8, 2026 as source `793a5116d89cb5518f3546ae3faaddd2be3c2528`. Lewis Dental Group (`lewisdentalgrp.com`, workspace 8) is created under the requested owner with approved admin membership and complimentary onboarding. First review: November 7, 2026 at 16:04:25 UTC (12:04:25 Eastern). DNS ownership remains pending; onboarding controls are active.
+Deployed October 8, 2026 as source `793a5116d89cb5518f3546ae3faaddd2be3c2528`. Lewis Dental Group (`lewisdentalgrp.com`, workspace 8) is created under the requested owner with approved admin membership and complimentary onboarding. First review: November 7, 2026 at 16:04:25 UTC (11:04:25 Eastern). DNS ownership remains pending; onboarding controls are active.
 
 ## Admin workflow
 
