@@ -2003,6 +2003,37 @@
     return cached;
   }
 
+  function renderMerakiPlanningOverview(container, details) {
+    var plan = details.unifi_plan;
+    if (!plan || plan.schema_version !== 1 || plan.currency !== "USD" || !Array.isArray(plan.scenarios)) return;
+    var scenarios = plan.scenarios.slice(0, 2).filter(function (row) { return row && Number.isSafeInteger(row.hardware_subtotal_cents) && row.hardware_subtotal_cents >= 0; });
+    if (!scenarios.length) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var title = document.createElement("h3"); title.textContent = "UniFi replacement planning";
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Saved USD equipment budgets · prices observed " + (plan.price_observed_on || "date unavailable") + ". Includes vendor surcharge; excludes tax, shipping, accessories and installation. Candidates require design review.";
+    var grid = document.createElement("div"); grid.className = "audit-metric-grid";
+    scenarios.forEach(function (row) {
+      var card = document.createElement("article"); card.className = "audit-policy-card";
+      var name = document.createElement("strong"); name.textContent = row.name || "Purchase scenario";
+      var amount = document.createElement("p"); amount.textContent = new Intl.NumberFormat("en-US", {style: "currency", currency: "USD", maximumFractionDigits: 2}).format(row.hardware_subtotal_cents / 100);
+      var coverage = document.createElement("p"); coverage.className = "muted";
+      coverage.textContent = row.complete_inventory_pricing === true ? "All assigned inventory priced" : "Partial inventory pricing; review unpriced models";
+      card.append(name, amount, coverage); grid.append(card);
+    });
+    section.append(title, note, grid);
+    var action = document.createElement("button"); action.type = "button"; action.className = "button button-small button-quiet";
+    action.textContent = "Review quantities and vendor links";
+    action.addEventListener("click", function () {
+      if (!Number.isSafeInteger(details.report_id)) return;
+      var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]');
+      if (!saved) return;
+      saved.open = true; var summary = saved.querySelector("summary");
+      if (summary) { summary.focus(); summary.scrollIntoView({block: "center", behavior: "smooth"}); }
+    });
+    section.append(action); container.append(section);
+  }
+
   async function loadMerakiSummaryObservations(reportId, container) {
     container.textContent = "Loading saved review observations…";
     try {
@@ -2011,11 +2042,13 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiPlanningOverview(container, details);
         return;
       }
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiPlanningOverview(container, details);
         return;
       }
       var heading = document.createElement("h3"); heading.textContent = "Review observations";
@@ -2027,6 +2060,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiPlanningOverview(container, details);
     } catch (error) {
       merakiDashboardDetailCache.delete(reportId);
       if (container.isConnected !== false) container.textContent = "Saved review observations could not be loaded. Open the report details or retry refresh.";
@@ -2187,6 +2221,7 @@
       if (job.meraki_snapshot_url) {
         var details = document.createElement("details");
         details.className = "meraki-report-details";
+        details.dataset.reportId = String(job.id);
         details.open = openMerakiDashboardDetails.has(job.id);
         var summary = document.createElement("summary");
         summary.textContent = "View saved report details";
