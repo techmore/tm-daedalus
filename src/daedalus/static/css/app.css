@@ -123,6 +123,7 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
 .page-intro { align-items: end; }
 .security-note { display: flex; gap: 10px; padding: 12px 14px; margin-bottom: 17px; border: 1px solid #dbe9ef; border-radius: 9px; color: #637781; background: #f1f7fa; font-size: 11px; line-height: 1.5; }
 .security-note > span:first-child { color: #4a8da2; font-size: 15px; }
+.security-note[hidden] { display: none; }
 .agent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .agent-card, .empty-card { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .agent-card-head { display: flex; align-items: center; justify-content: space-between; }
@@ -954,6 +955,25 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .audit-advisory-links a { color: var(--olive-900); text-decoration: underline; text-underline-offset: 3px; }
 
 /* At-a-glance status board */
+.workspace-access-card { margin: 18px 0; padding: 22px 26px; border: 1px solid var(--card-line); border-radius: 16px; background: var(--card-surface); }
+.workspace-access-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.workspace-access-heading h2 { margin: 0; font-size: 26px; }
+.workspace-access-state { padding: 5px 10px; border-radius: 999px; color: var(--olive-900); background: var(--selected-surface); font-size: 12px; font-weight: 600; }
+.workspace-access-state.is-paused { background: var(--cream-100); color: var(--brown-900); }
+.workspace-access-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0 14px; }
+.workspace-access-facts dt { margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+.workspace-access-facts dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.workspace-access-card > .muted, .workspace-access-card > .fine-print { margin-bottom: 8px; font-size: 12px; }
+.workspace-access-details { border-top: 1px solid var(--card-line); margin-top: 16px; padding-top: 16px; }
+.workspace-access-details > summary { cursor: pointer; color: var(--brown-900); font-size: 13px; font-weight: 600; }
+.workspace-access-details[open] > summary { margin-bottom: 16px; }
+.workspace-access-details .verification-card { margin: 0; padding: 0; border: 0; background: transparent; }
+.workspace-access-details .override-form { max-width: 620px; }
+.workspace-access-details .muted { font-size: 12px; }
+.challenge-replacement { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: center; gap: 10px; }
+.challenge-replacement > .fine-print { flex: 1 1 230px; margin: 0; }
+@media (max-width: 1050px) { .workspace-access-facts { grid-template-columns: 1fr; gap: 12px; } }
+@media (max-width: 760px) { .workspace-access-card { padding: 18px; } .workspace-access-details .verification-actions { align-items: stretch; flex-direction: column; } }
 .status-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 22px 26px; border-radius: 16px; border: 1px solid var(--card-line); background: var(--olive-100); }
 .status-banner strong { font-size: 26px; color: var(--brown-900); }
 .status-banner span { color: var(--muted); font-size: 14px; }

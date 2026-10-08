@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import timedelta
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import UserAPIKey, Membership
+from daedalus.models import UserAPIKey, Membership, Organization, DomainChallenge, AuditLog
 import test_active_website_flows as fixtures
 
 
@@ -52,6 +52,27 @@ class UserKeyTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/workspaces/select',json={'organization_id':999}).status_code,403)
         self.client.delete('/api/user-keys/'+str(key['id']))
         self.assertEqual(self.client.get('/api/dashboard').status_code,401)
+
+    def test_workspace_key_cannot_create_customers_with_bearer_or_login_cookie(self):
+        key = self.issue()
+        org_id, _user_id = self.context()
+        def counts():
+            with self.session_factory() as db:
+                return tuple(len(db.scalars(select(model)).all()) for model in (Organization, DomainChallenge, AuditLog))
+        self.client.post('/logout')
+        headers = {'Authorization': 'Bearer ' + key['token']}
+        before = counts()
+        response = self.client.post('/api/customers', headers=headers,
+                                    json={'name': 'Unrelated customer', 'domains': ['bearer-other.example.org']})
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(counts(), before)
+        self.assertEqual(self.client.get('/api/dashboard', headers=headers).json()['organization']['id'], org_id)
+        self.assertEqual(self.client.post('/auth/token', json={'token': key['token']}).status_code, 200)
+        before = counts()
+        response = self.client.post('/api/customers', json={'name': 'Unrelated customer', 'domains': ['cookie-other.example.org']})
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(counts(), before)
+        self.assertEqual(self.client.get('/api/dashboard').json()['organization']['id'], org_id)
 
     def test_expired_and_unapproved_membership(self):
         key=self.issue()

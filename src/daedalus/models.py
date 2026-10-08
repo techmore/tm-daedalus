@@ -115,6 +115,9 @@ class DomainChallenge(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
     token_hash: Mapped[str] = mapped_column(String(64), index=True)
+    # DNS ownership proof is published publicly. Retain its instructions so a
+    # page refresh can redisplay them without replacing the active challenge.
+    record_value: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

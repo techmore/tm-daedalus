@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-177">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-178">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -26,13 +26,13 @@
           <strong>{{ organization.name }}</strong>
           <small>{{ organization.domain }}</small>
         </span>
-        <select id="workspace-select" aria-label="Switch workspace">
+        <select id="workspace-select" aria-label="Switch workspace" {% if workspace_key_session %}disabled{% endif %}>
           {% for member, workspace in workspaces %}
           <option value="{{ workspace.id }}" {% if workspace.id == organization.id %}selected{% endif %}>{{ workspace.name }} · {{ member.role }}</option>
           {% endfor %}
         </select>
       </label>
-      <button class="sidebar-add-workspace" type="button" data-open-workspace-dialog>＋ Add or join workspace</button>
+      {% if not workspace_key_session %}<button class="sidebar-add-workspace" type="button" data-open-workspace-dialog>＋ Add or join workspace</button>{% endif %}
       <div class="nav-label">WORKSPACE</div>
       <nav class="main-nav" aria-label="Workspace">
         {% if workspaces|length > 1 %}<button class="nav-item" data-tab="portfolio"><span>◩</span>All customers</button>
@@ -69,6 +69,12 @@
     <main class="main-content" id="main-content" tabindex="-1">
       <div id="workspace-controls-notice" class="security-note hidden" role="status" aria-live="polite"></div>
       <div id="membership-live-notice" class="security-note hidden" role="status" aria-live="polite"></div>
+      {% if platform_admin %}
+      <div id="onboarding-review-reminder" class="security-note hidden" role="region" aria-label="Customer access reviews">
+        <span id="onboarding-review-status" role="status" aria-live="polite" aria-atomic="true"></span>
+        <button id="onboarding-review-open" class="button button-small button-quiet" type="button" aria-controls="onboarding-review-dialog" aria-haspopup="dialog">Review customer access</button>
+      </div>
+      {% endif %}
       {% if not organization %}
       <div class="empty-workspace">
         <p class="eyebrow">WELCOME TO DAEDALUS</p>
@@ -100,40 +106,57 @@
       </header>
 
       <section class="tab-panel active" id="tab-overview">
-        {% if membership.role == 'admin' and organization.verification_status != 'verified' %}
-        <section class="verification-card" aria-labelledby="verify-domain-title">
-            <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; Nikto and bounded exposure checks require a verified domain or active onboarding/admin approval.</p></div>
-          <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button">Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button">Check DNS now</button></div>
-          <p class="verification-feedback" id="verification-feedback" aria-live="polite"></p>
-          <div class="dns-challenge hidden" id="dns-challenge">
-            <div><small>TXT record name</small><code id="challenge-record-name"></code></div>
-            <div><small>TXT record value</small><code id="challenge-record-value"></code></div>
-            <p class="fine-print" id="challenge-expires"></p>
-          </div>
-        </section>
-        {% if membership.role == 'admin' %}
-        {% if probation_override %}
-        <section class="override-card override-active" id="probation-override-card">
-          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Probation controls are open through <time data-local-time datetime="{{ probation_override.expires_at.isoformat() }}Z">{{ probation_override.expires_at.strftime("%b %d, %Y %H:%M UTC") }}</time></h3><p class="muted">Reason: {{ probation_override.reason }} Revoking closes controls, cancels queued scans, and requests cancellation of an active scan.</p></div>
-          <button class="button button-quiet" type="button" data-revoke-override="{{ probation_override.id }}">Revoke now</button>
-        </section>
-        {% else %}
-        <section class="override-card" id="probation-override-card">
-          <div><p class="eyebrow">TEMPORARY ADMIN OVERRIDE</p><h3>Need active assessment, scanner or sharing controls before verification?</h3><p class="muted">An admin can open those controls for 14 days. Grants, expiry, and revocations are recorded. Grants include the admin and reason.</p></div>
-          <form id="grant-override-form" class="override-form">
-            <label for="override-reason">Reason for the override</label>
-            <input id="override-reason" name="reason" minlength="8" maxlength="500" required placeholder="Why are these controls needed now?">
-            <button class="button button-primary" type="submit">Open controls for 14 days</button>
-          </form>
-          <p id="override-feedback" class="verification-feedback" aria-live="polite"></p>
-        </section>
-        {% endif %}
-        {% endif %}
-        {% endif %}
-        {% if onboarding and onboarding.status == 'onboarding' %}
-        <section class="override-card"><div><p class="eyebrow">COMPLIMENTARY CUSTOMER ONBOARDING</p><h3>{{ '30-day reapproval required' if onboarding.review_required else 'DNS changes can wait during onboarding' }}</h3><p>Review due <time data-local-time datetime="{{ onboarding.review_due_at }}">{{ onboarding.review_due_at }}</time>. {{ 'The onboarding DNS exception has paused. Ask the platform administrator to review access.' if onboarding.review_required else 'Assessment, scanner and sharing controls are available during this approved transition.' }}</p></div></section>
-        {% endif %}
         <section class="status-board" aria-labelledby="overview-assessment-title"><h2 id="overview-assessment-title" class="visually-hidden">Workspace status</h2><div id="workspace-priorities" aria-live="polite"><p class="muted">Checking status…</p></div><div id="pending-approvals" aria-live="polite"></div></section>
+        <section class="workspace-access-card" id="workspace-access" aria-labelledby="workspace-access-title">
+          <div class="workspace-access-heading"><h2 id="workspace-access-title">Workspace access</h2><span id="access-controls-state" class="workspace-access-state{{ ' is-paused' if not workspace_controls_enabled else '' }}">{{ 'Controls available' if workspace_controls_enabled else 'Controls paused' }}</span></div>
+          <dl class="workspace-access-facts">
+            <div><dt>Domain ownership</dt><dd id="access-ownership-state">{{ 'Verified' if organization.verification_status == 'verified' else 'Awaiting TXT verification' }}</dd></div>
+            <div><dt>Active checks, scanners and sharing</dt><dd id="access-capabilities">{{ 'Available to workspace admins' if workspace_controls_enabled else 'Paused pending verification or approval' }}</dd></div>
+            <div><dt>Your role</dt><dd>{{ 'Workspace admin' if membership.role == 'admin' else 'Workspace member' }}</dd></div>
+          </dl>
+          <p id="access-control-explanation" class="muted">{{ 'Domain ownership is verified.' if organization.verification_status == 'verified' else 'Temporary approval provides access while domain ownership is pending.' if workspace_controls_enabled else 'Public DNS and website checks and saved reports remain available.' }}</p>
+          <p id="access-verification-deadline" class="fine-print" {% if organization.verification_status == 'verified' or not organization.verification_expires_at %}hidden{% endif %}>Ownership verification window ends {% if organization.verification_expires_at %}<time data-local-time datetime="{{ organization.verification_expires_at.isoformat() }}Z">{{ organization.verification_expires_at.strftime("%b %d, %Y %H:%M UTC") }}</time>{% endif %}.</p>
+          <p id="access-onboarding-status" class="fine-print" {% if not onboarding or onboarding.status != 'onboarding' %}hidden{% endif %}>{% if onboarding and onboarding.status == 'onboarding' %}{{ 'Onboarding approval is overdue. Review was due' if onboarding.review_required else 'Onboarding review due' }} <time data-local-time datetime="{{ onboarding.review_due_at }}">{{ onboarding.review_due_at }}</time>.{% endif %}</p>
+          <p id="access-override-status" class="fine-print" {% if not probation_override %}hidden{% endif %}>{% if probation_override %}Temporary admin approval ends <time data-local-time datetime="{{ probation_override.expires_at.isoformat() }}Z">{{ probation_override.expires_at.strftime("%b %d, %Y %H:%M UTC") }}</time>.{% endif %}</p>
+          {% if organization.verification_status != 'verified' %}
+          {% if membership.role == 'admin' %}
+          <details class="workspace-access-details" id="domain-verification-details">
+            <summary>Verify {{ organization.domain }} with a DNS TXT record</summary>
+            <section class="verification-card" aria-labelledby="verify-domain-title">
+              <div><h3 id="verify-domain-title">Publish the ownership record</h3><p class="muted">Add this TXT record at your DNS provider, then check it here. Viewing these instructions keeps the current record. Website Nmap remains excluded; active website checks require domain verification or a current approval.</p></div>
+              <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button">Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button">Check DNS now</button></div>
+              <p class="verification-feedback" id="verification-feedback" aria-live="polite"></p>
+              <div class="dns-challenge hidden" id="dns-challenge">
+                <div><small>TXT record name</small><code id="challenge-record-name"></code></div>
+                <div><small>TXT record value</small><code id="challenge-record-value"></code></div>
+                <p class="fine-print" id="challenge-expires"></p>
+              </div>
+              <div class="challenge-replacement" id="challenge-replacement"><button class="button button-quiet" id="replace-domain-challenge" type="button">Replace TXT record</button><p class="fine-print">Replacement invalidates the previous record and requires updating DNS.</p></div>
+            </section>
+          </details>
+          {% else %}
+          <p class="muted">A workspace admin can publish the ownership TXT record or review temporary access.</p>
+          {% endif %}
+          {% endif %}
+          {% if membership.role == 'admin' and (organization.verification_status != 'verified' or probation_override) %}
+          <details class="workspace-access-details" id="probation-override-card" data-override-expires="{{ probation_override.expires_at.isoformat() + 'Z' if probation_override else '' }}">
+            <summary>{{ 'Manage the current 14-day approval' if probation_override else 'Request a temporary 14-day approval' }}</summary>
+            {% if probation_override %}
+            <p class="muted">Reason: {{ probation_override.reason }}. Revocation removes this approval. Controls close and scans are cancelled if no other authorization remains.</p>
+            <button class="button button-quiet" type="button" data-revoke-override="{{ probation_override.id }}">Revoke approval</button>
+            {% else %}
+            <p class="muted">A workspace admin can approve active checks, scanner management and sharing for 14 days. Each grant, expiry and revocation is recorded with its reason.</p>
+            <form id="grant-override-form" class="override-form">
+              <label for="override-reason">Reason for temporary approval</label>
+              <input id="override-reason" name="reason" minlength="8" maxlength="500" required placeholder="Why are these controls needed now?">
+              <button class="button button-primary" type="submit">Approve access for 14 days</button>
+            </form>
+            {% endif %}
+            <p id="override-feedback" class="verification-feedback" aria-live="polite"></p>
+          </details>
+          <p id="access-actions-refresh" hidden><a href="/dashboard#overview">Refresh workspace access to manage the current approval</a></p>
+          {% endif %}
+        </section>
         <details class="topic-secondary"><summary>Full evidence details</summary>
         <div class="posture-grid" id="workspace-posture" aria-live="polite"><p class="muted">Loading workspace assessments…</p></div>
         </details>
@@ -157,8 +180,8 @@
       <section class="tab-panel" id="tab-scanners">
         <div class="page-intro">
           <div><p class="eyebrow">INTERNAL NETWORK</p><h2>Internal network coverage</h2><p class="muted">Each scanner connects outward from its network. Daedalus streams status, scan progress, and results into this workspace.</p></div>
-          {% if membership.role == 'admin' and workspace_controls_enabled %}
-          <button id="add-scanner" class="button button-primary">＋ Add scanner</button>
+          {% if membership.role == 'admin' %}
+          <button id="add-scanner" class="button button-primary" {% if not workspace_controls_enabled %}disabled{% endif %}>＋ Add scanner</button>
           {% endif %}
         </div>
 
@@ -168,7 +191,7 @@
         </section>
         <div class="section-heading"><div><p class="eyebrow">NETWORK LOCATIONS</p><h3>Scanners &amp; saved scan evidence</h3><p class="muted">Approved ranges describe permission to scan. Saved runs show what was actually observed.</p></div></div>
 
-        {% if membership.role == 'admin' and workspace_controls_enabled %}
+        {% if membership.role == 'admin' %}
         <div id="enrollment-card" class="enrollment-card hidden">
           <div class="enrollment-heading"><div><p class="eyebrow">ONE-TIME ENROLLMENT</p><h3>Set up a scanner node</h3></div><button id="close-enrollment" class="icon-button" aria-label="Close">×</button></div>
           <p class="muted">Download and extract the scanner kit in Downloads, then run the copied enrollment command in Terminal. On macOS, the managed installer prepares NmapUI and the bridge as user LaunchAgents so they start at login and restart after a process exit. On Linux with systemd, the managed installer prepares NmapUI and the bridge as user services. Choose the operating system of the scanner machine. The code expires in 15 minutes and can enroll one scanner.</p>
@@ -178,7 +201,7 @@
             <label>Authorized network CIDRs<textarea id="enrollment-network-scopes" rows="2" placeholder="10.20.20.0/24, 10.20.21.0/24" required></textarea></label>
             <small>Only targets inside these private networks can be sent to this scanner. Separate VLANs can use separate named scanners.</small>
           </div>
-          <div class="copy-row"><button class="button button-primary" id="issue-scanner-enrollment" type="button">Create scoped enrollment code</button></div>
+          <div class="copy-row"><button class="button button-primary" id="issue-scanner-enrollment" type="button" {% if not workspace_controls_enabled %}disabled{% endif %}>Create scoped enrollment code</button></div>
           <div class="copy-row"><a class="button button-small button-quiet" href="https://github.com/techmore/TM-NmapUI" target="_blank" rel="noopener noreferrer">NmapUI source</a><a class="button button-small" href="/api/agents/bridge/download">Download NmapUI + Daedalus kit</a></div>
           <div class="copy-row"><code id="enrollment-code">Preparing one-time code…</code><button class="button button-small" id="copy-code" disabled>Copy code</button></div>
           <div class="copy-row"><code id="enrollment-command">Preparing installer command…</code><button class="button button-small button-quiet" id="copy-enrollment" disabled>Copy command</button></div>
@@ -186,9 +209,7 @@
           <p class="fine-print">If NmapUI Basic Authentication is enabled, set <code>NMAPUI_USERNAME</code> and <code>NMAPUI_PASSWORD</code> in Terminal before running the command.</p>
         </div>
         {% endif %}
-        {% if not workspace_controls_enabled %}
-        <div class="security-note"><span>ⓘ</span><span>Scanner enrollment, internal scan commands, and member approval are paused until domain verification, active onboarding approval or an active 14-day admin override.</span></div>
-        {% endif %}
+        <div class="security-note" id="scanner-access-paused" {% if workspace_controls_enabled %}hidden{% endif %}><span>ⓘ</span><span>Scanner enrollment, internal scan commands, and member approval are paused until domain verification, active onboarding approval or an active 14-day admin override.</span></div>
         <div id="agent-list" class="agent-grid">
           {% for agent in agents %}
           <article class="agent-card" data-agent-id="{{ agent.id }}">
@@ -580,6 +601,7 @@
     </main>
   </div>
   <div id="check-toast" class="check-toast hidden" role="status" aria-live="polite"></div>
+  {% if not workspace_key_session %}
   <dialog class="workspace-dialog" id="workspace-dialog" aria-labelledby="workspace-dialog-title">
     <div class="dialog-heading"><div><p class="eyebrow">DAEDALUS WORKSPACES</p><h2 id="workspace-dialog-title">Add a customer or join a workspace</h2></div><button class="icon-button dialog-close" type="button" data-close-workspace-dialog aria-label="Close">×</button></div>
     <p class="muted">Domains have independent workspaces. Matching email addresses do not grant access automatically.</p>
@@ -591,10 +613,10 @@
         {% if platform_admin %}
         <label><input name="onboarding" type="checkbox"> Onboarding — complimentary access for 30 days, without DNS changes</label>
         <label>Onboarding reason<input name="onboarding_reason" minlength="8" maxlength="500" value="Vendor transition: complimentary onboarding"></label>
-        <small>You will be prompted to reapprove every 30 days. The DNS exception pauses if approval expires. Domain ownership stays unverified.</small>
+        <small>Customer access review is due every 30 days. A dashboard reminder shows approvals that need review. The DNS exception pauses if approval expires. Domain ownership stays unverified.</small>
         {% endif %}
         <button class="button button-primary" type="submit">Add customer</button>
-        <small>You can paste full web addresses. Each domain gets its own workspace, and DNS, email and website checks start automatically every day. TXT verification is optional.</small>
+        <small>You can paste full web addresses. Each domain gets its own workspace and daily public DNS, email and website checks. TXT verification or a current approval opens active checks, scanner management and sharing.</small>
       </form>
       <form id="request-access-form" class="workspace-form">
         <h3>Request access</h3>
@@ -605,26 +627,27 @@
     </div>
     <p class="workspace-feedback" id="workspace-feedback" aria-live="polite"></p>
     <div class="created-challenge hidden" id="created-challenge">
-      <strong>Publish this DNS TXT record to verify the new workspace</strong>
-      <small>Record name</small><code id="created-record-name"></code>
-      <small>Record value</small><code id="created-record-value"></code>
+      <strong>Customer workspaces added</strong>
+      <p id="created-record-name" class="muted"></p>
+      <p id="created-record-value" class="muted"></p>
       <p class="fine-print" id="created-probation"></p>
-      <button class="button button-primary" id="open-created-workspace" type="button">Open this workspace</button>
+      <button class="button button-primary" id="open-created-workspace" type="button">Open selected workspace</button>
     </div>
     {% if platform_admin %}
     <section aria-labelledby="onboarding-customers-title"><h3 id="onboarding-customers-title">Customer onboarding</h3><p class="muted">Grant, review or end complimentary onboarding during a vendor transition.</p><div id="onboarding-customers"></div><p id="onboarding-feedback" aria-live="polite"></p></section>
     {% endif %}
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
+  {% endif %}
   {% if platform_admin %}
   <dialog id="onboarding-review-dialog" class="workspace-dialog" aria-labelledby="onboarding-review-title">
-    <div class="dialog-heading"><h2 id="onboarding-review-title">Customer onboarding needs reapproval</h2><button type="button" class="button button-quiet" id="onboarding-review-later">Review later</button></div>
-    <p>The 30-day DNS exception has paused for these customers. Review each customer to approve another 30 days or end onboarding.</p>
+    <div class="dialog-heading"><h2 id="onboarding-review-title">Customer access review</h2><button type="button" class="button button-quiet" id="onboarding-review-later">Close review</button></div>
+    <p>These customer onboarding approvals need review. Their 30-day DNS exception has paused. Approve another 30 days or end onboarding for each customer.</p>
     <div id="onboarding-due-customers"></div><p id="onboarding-review-feedback" aria-live="polite"></p>
   </dialog>
-  <script src="/static/js/onboarding.js?v=20261008-1" defer></script>
+  <script src="/static/js/onboarding.js?v=20261008-2" defer></script>
   {% endif %}
   <script src="/static/js/google-admin.js?v=20261008-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261008-177" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261008-178" defer></script>
 </body>
 </html>

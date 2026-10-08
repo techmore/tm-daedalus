@@ -1129,9 +1129,61 @@
 
   function pauseRestrictedWorkspaceControls() {
     if (controlsEnabled) return;
-    document.querySelectorAll('#add-scanner, [data-open-enrollment], #issue-scanner-enrollment, [data-command="start_scan"], [data-save-scanner-scope], [data-run-active-exposure], #run-nikto, [data-membership-decision], [data-membership-role]').forEach(function (button) {
+    document.querySelectorAll('#add-scanner, [data-open-enrollment], #issue-scanner-enrollment, [data-command="start_scan"], [data-save-scanner-scope], [data-run-active-exposure], #run-nikto, [data-membership-decision="true"], [data-pending-approval="true"], [data-membership-role]').forEach(function (button) {
       button.disabled = true;
     });
+  }
+
+  function workspaceAccessPresentation(organization, now) {
+    var verified = organization.verification_status === "verified";
+    var available = organization.controls_enabled === true;
+    var moment = Number.isFinite(now) ? now : Date.now();
+    function deadline(value) {
+      var parsed = value ? new Date(value).getTime() : NaN;
+      return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : "date unavailable";
+    }
+    var verificationTime = organization.verification_expires_at ? new Date(organization.verification_expires_at).getTime() : NaN;
+    var onboarding = organization.onboarding;
+    return {
+      ownership: verified ? "Verified" : "Awaiting TXT verification",
+      controls: available ? "Controls available" : "Controls paused",
+      capabilities: available ? "Available to workspace admins" : "Paused pending verification or approval",
+      explanation: verified ? "Domain ownership is verified." : available ? "Temporary approval provides access while domain ownership is pending." : "Public DNS and website checks and saved reports remain available.",
+      verification: verified ? "" : Number.isFinite(verificationTime) ? "Ownership verification window " + (verificationTime <= moment ? "ended " : "ends ") + deadline(organization.verification_expires_at) + "." : "Ownership verification deadline is unavailable.",
+      onboarding: onboarding && onboarding.status === "onboarding" ? (onboarding.review_required === true ? "Onboarding approval is overdue. Review was due " : "Onboarding review due ") + deadline(onboarding.review_due_at) + "." : "",
+      override: organization.probation_override_expires_at ? "Temporary admin approval ends " + deadline(organization.probation_override_expires_at) + "." : ""
+    };
+  }
+
+  function renderWorkspaceAccess(organization) {
+    var summary = workspaceAccessPresentation(organization);
+    var fields = {
+      "access-ownership-state": summary.ownership,
+      "access-controls-state": summary.controls,
+      "access-capabilities": summary.capabilities,
+      "access-control-explanation": summary.explanation,
+      "access-verification-deadline": summary.verification,
+      "access-onboarding-status": summary.onboarding,
+      "access-override-status": summary.override
+    };
+    Object.keys(fields).forEach(function (id) {
+      var node = document.getElementById(id);
+      if (!node) return;
+      if (node.textContent !== fields[id]) text(node, fields[id]);
+      node.hidden = !fields[id];
+    });
+    var state = document.getElementById("access-controls-state");
+    if (state) state.classList.toggle("is-paused", organization.controls_enabled !== true);
+    var ownership = document.getElementById("domain-verification-details");
+    if (ownership) ownership.hidden = organization.verification_status === "verified";
+    var approval = document.getElementById("probation-override-card");
+    var refreshActions = document.getElementById("access-actions-refresh");
+    if (approval && approval.dataset) {
+      var approvalChanged = (approval.dataset.overrideExpires || "") !== (organization.probation_override_expires_at || "");
+      var unnecessaryGrant = organization.verification_status === "verified" && !organization.probation_override_expires_at;
+      approval.hidden = approvalChanged || unnecessaryGrant;
+      if (refreshActions) refreshActions.hidden = !approvalChanged || unnecessaryGrant;
+    }
   }
 
   function updateWorkspaceControls(organization) {
@@ -1142,7 +1194,20 @@
       controlsNotice.textContent = "Temporary workspace access has closed. Scanner enrollment, new scans and active website audits are paused. Review domain verification, onboarding approval or the temporary override. Saved results remain available.";
       controlsNotice.classList.remove("hidden");
     } else if (controlsNotice && controlsEnabled) controlsNotice.classList.add("hidden");
+    renderWorkspaceAccess(organization);
     pauseRestrictedWorkspaceControls();
+    // Static controls also recover after a remote approval. Request state is
+    // separate from authorization so an in-flight action stays disabled.
+    ["add-scanner", "issue-scanner-enrollment"].forEach(function (id) {
+      var button = document.getElementById(id);
+      if (button) button.disabled = !controlsEnabled || button.dataset.requestBusy === "true";
+    });
+    var exposure = document.querySelector("[data-run-active-exposure]");
+    if (exposure) exposure.disabled = !controlsEnabled || exposure.dataset.requestBusy === "true";
+    var nikto = document.getElementById("run-nikto");
+    if (nikto) nikto.disabled = !controlsEnabled || Boolean(niktoHistory && (niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "queued" || run.status === "running"; })));
+    var scannerPauseNote = document.getElementById("scanner-access-paused");
+    if (scannerPauseNote) scannerPauseNote.hidden = controlsEnabled;
   }
 
   function render(data) {
@@ -1169,7 +1234,7 @@
           var empty = document.createElement("div");
           empty.className = "empty-card";
           empty.textContent = document.getElementById("add-scanner")
-            ? "No scanner connected yet. Use Add scanner to enroll the Mac bridge."
+            ? controlsEnabled ? "No scanner connected yet. Use Add scanner to enroll a scanner for this network." : "No scanner connected yet. Review Overview → Workspace access before enrolling a scanner."
             : "No scanner connected yet. Ask a workspace admin to enroll a scanner for this network.";
           agentList.append(empty);
         } else {
@@ -1487,6 +1552,8 @@
         var who = document.createElement("span"); who.className = "approval-who"; who.textContent = member.email || member.name || "Unknown user";
         var approve = document.createElement("button"); approve.type = "button"; approve.className = "button button-primary status-action"; approve.textContent = "Approve";
         var deny = document.createElement("button"); deny.type = "button"; deny.className = "button button-quiet status-action"; deny.textContent = "Deny";
+        approve.dataset.pendingApproval = "true"; approve.disabled = !controlsEnabled;
+        deny.dataset.pendingApproval = "false";
         [[approve, true], [deny, false]].forEach(function (pair) {
           pair[0].addEventListener("click", async function () {
             approve.disabled = true; deny.disabled = true;
@@ -1494,7 +1561,7 @@
               await postJson("/api/memberships/" + member.id + "/decision", { approve: pair[1] });
               await loadPendingApprovals();
             } catch (error) {
-              note.textContent = error.message; note.hidden = false; approve.disabled = false; deny.disabled = false;
+              note.textContent = error.message; note.hidden = false; approve.disabled = !controlsEnabled; deny.disabled = false;
             }
           });
         });
@@ -1671,6 +1738,7 @@
         return;
       }
       issueScannerEnrollment.disabled = true;
+      issueScannerEnrollment.dataset.requestBusy = "true";
       delete codeOutput.dataset.code;
       delete commandOutput.dataset.scannerName;
       document.getElementById("copy-code").disabled = true;
@@ -1700,6 +1768,7 @@
       } catch (error) {
         text(codeOutput, error.message);
       } finally {
+        delete issueScannerEnrollment.dataset.requestBusy;
         issueScannerEnrollment.disabled = !controlsEnabled;
       }
     });
@@ -5203,13 +5272,14 @@
   if (activeExposureButton) activeExposureButton.addEventListener("click", async function () {
     var original = activeExposureButton.textContent;
     activeExposureButton.disabled = true; text(activeExposureButton, "Checking fixed paths…");
+    activeExposureButton.dataset.requestBusy = "true";
     text(document.getElementById("web-active-feedback"), "The bounded request set can take up to 40 seconds.");
     try {
       var result = await postJson("/api/external-checks/web-active/run");
       text(document.getElementById("web-active-feedback"), "Run #" + result.id + " saved. Load its evidence and coverage state.");
       await loadActiveExposure(); await loadAuditLog();
     } catch (error) { text(document.getElementById("web-active-feedback"), error.message); }
-    finally { text(activeExposureButton, original); activeExposureButton.disabled = !controlsEnabled; }
+    finally { delete activeExposureButton.dataset.requestBusy; text(activeExposureButton, original); activeExposureButton.disabled = !controlsEnabled; }
   });
 
   async function loadExternalCheck(type, olderKind) {
@@ -5482,9 +5552,9 @@
         });
         text(feedback, body.created ? body.customer + ": " + lines.join(" · ") : lines.join(" · "));
         if (body.created) {
-          text(document.getElementById("created-record-name"), "Optional ownership check");
-          text(document.getElementById("created-record-value"), "Open each workspace's Members page to copy its TXT record when you want it verified.");
-          text(document.getElementById("created-probation"), "Audits do not wait for verification.");
+          text(document.getElementById("created-record-name"), "Domain ownership");
+          text(document.getElementById("created-record-value"), "Open each workspace's Overview → Workspace access to copy its DNS TXT record.");
+          text(document.getElementById("created-probation"), "Public checks can run now. Active checks, scanners and sharing require verification or a current approval.");
           challenge.classList.remove("hidden");
         }
         createWorkspaceForm.reset();
@@ -5545,28 +5615,75 @@
 
   var issueChallengeButton = document.getElementById("issue-domain-challenge");
   var verifyDomainButton = document.getElementById("verify-domain");
+  var replaceChallengeButton = document.getElementById("replace-domain-challenge");
   var verificationFeedback = document.getElementById("verification-feedback");
+  var domainChallengeBusy = false;
+
+  function renderDomainChallenge(body) {
+    var record = body.txt;
+    var current = body.state === "active" && record;
+    var challenge = document.getElementById("dns-challenge");
+    if (challenge) challenge.classList.toggle("hidden", !current);
+    text(document.getElementById("challenge-record-name"), current ? record.record_name : "");
+    text(document.getElementById("challenge-record-value"), current ? record.value_available === true && typeof record.record_value === "string" ? record.record_value : "The original value cannot be redisplayed." : "");
+    var expiry = current && record.expires_at ? new Date(record.expires_at) : null;
+    text(document.getElementById("challenge-expires"), current ? expiry && Number.isFinite(expiry.getTime()) ? "Record expires " + expiry.toLocaleString() + "." : "Record expiry is unavailable." : "");
+    if (body.verified) {
+      text(verificationFeedback, "Domain ownership is already verified. Refresh the workspace to see its current access.");
+    } else if (current && record.value_available !== true) {
+      text(verificationFeedback, "The current record remains valid. If you already published it, check DNS now. Use Replace TXT record if you need a new value.");
+    } else if (current) {
+      text(verificationFeedback, "Publish this record at your DNS provider, then check DNS here. Refreshing keeps the same record.");
+    } else {
+      text(verificationFeedback, body.state === "expired" ? "The previous record expired. Show DNS TXT record prepares a new one." : "Show DNS TXT record prepares the ownership instructions.");
+    }
+  }
+
+  async function domainChallengeRequest(path, method) {
+    if (domainChallengeBusy) throw new Error("A DNS request is already in progress.");
+    domainChallengeBusy = true;
+    [issueChallengeButton, verifyDomainButton, replaceChallengeButton].forEach(function (button) { if (button) button.disabled = true; });
+    try {
+      if (method === "POST") return await postJson(path);
+      var response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
+      var body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "Could not load the ownership instructions");
+      return body;
+    } finally {
+      domainChallengeBusy = false;
+      [issueChallengeButton, verifyDomainButton, replaceChallengeButton].forEach(function (button) { if (button) button.disabled = false; });
+    }
+  }
+
   if (issueChallengeButton && orgId) {
     issueChallengeButton.addEventListener("click", async function () {
       text(verificationFeedback, "Preparing a DNS TXT record…");
       try {
-        var body = await postJson("/api/workspaces/" + orgId + "/domain-challenge");
+        var body = await domainChallengeRequest("/api/workspaces/" + orgId + "/domain-challenge/ensure", "POST");
         if (body.verified) return window.location.reload();
-        text(document.getElementById("challenge-record-name"), body.txt.record_name);
-        text(document.getElementById("challenge-record-value"), body.txt.record_value);
-        text(document.getElementById("challenge-expires"), "Challenge expires " + new Date(body.txt.expires_at).toLocaleString() + ".");
-        document.getElementById("dns-challenge").classList.remove("hidden");
-        text(verificationFeedback, "Publish the record, wait for DNS to update, then check it here.");
+        renderDomainChallenge(body);
       } catch (error) {
         showError(verificationFeedback, error.message);
       }
+    });
+    domainChallengeRequest("/api/workspaces/" + orgId + "/domain-challenge", "GET").then(renderDomainChallenge).catch(function (error) {
+      showError(verificationFeedback, error.message);
+    });
+  }
+  if (replaceChallengeButton && orgId) {
+    replaceChallengeButton.addEventListener("click", function () {
+      requestInlineConfirmation(replaceChallengeButton, "Replace the current TXT record? The previous value will stop verifying this domain. Update DNS with the new value afterward.", "Replace record", async function () {
+        var body = await domainChallengeRequest("/api/workspaces/" + orgId + "/domain-challenge", "POST");
+        if (body.verified) return window.location.reload();
+        renderDomainChallenge(body);
+      });
     });
   }
   if (verifyDomainButton && orgId) {
     verifyDomainButton.addEventListener("click", async function () {
       text(verificationFeedback, "Checking the public DNS TXT record…");
       try {
-        var body = await postJson("/api/workspaces/" + orgId + "/verify-domain");
+        var body = await domainChallengeRequest("/api/workspaces/" + orgId + "/verify-domain", "POST");
         if (body.verified) {
           text(verificationFeedback, "Domain verified. Reloading workspace…");
           window.location.reload();
@@ -5644,7 +5761,7 @@
             button.className = approve ? "button button-small" : "button button-small button-quiet";
             button.dataset.membershipDecision = String(approve);
             button.dataset.membershipId = member.id;
-            button.disabled = !controlsEnabled;
+            button.disabled = approve && !controlsEnabled;
             button.textContent = approve ? "Approve as user" : "Deny";
             actions.append(button);
           });
@@ -5866,7 +5983,7 @@
       }
       return;
     }
-    var decision = event.target.closest("[data-membership-decision]");
+    var decision = event.target.closest("[data-membership-decision][data-membership-id]");
     if (!decision) return;
     decision.disabled = true;
     try {

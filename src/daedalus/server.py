@@ -372,6 +372,13 @@ def ensure_cis_presence_columns(connection) -> None:
         connection.execute(text("ALTER TABLE cis_devices ADD COLUMN last_client_heartbeat_at TIMESTAMP"))
 
 
+def ensure_domain_challenge_columns(connection) -> None:
+    """Leave older hash-only proof valid without inventing its public TXT value."""
+    existing = {column["name"] for column in sqlalchemy_inspect(connection).get_columns("domain_challenges")}
+    if "record_value" not in existing:
+        connection.execute(text("ALTER TABLE domain_challenges ADD COLUMN record_value VARCHAR(128)"))
+
+
 def recover_interrupted_external_checks() -> int:
     """Preserve incomplete attempts and notify their workspace after process loss."""
     with SessionLocal() as db:
@@ -411,6 +418,7 @@ async def lifespan(_app: FastAPI):
         ensure_agent_command_columns(connection)
         ensure_external_check_columns(connection)
         ensure_cis_presence_columns(connection)
+        ensure_domain_challenge_columns(connection)
         connection.execute(
             text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_organizations_domain "
@@ -654,7 +662,7 @@ def get_session_user(request: Request, db: Session) -> User:
     if key is not None:
         request.session["organization_id"] = key.organization_id
         request.state.user_api_key = key
-        if request.url.path in {"/api/workspaces", "/api/workspaces/select", "/api/membership-requests", "/api/my-workspaces"}:
+        if request.url.path in {"/api/workspaces", "/api/workspaces/select", "/api/membership-requests", "/api/my-workspaces", "/api/customers"}:
             raise HTTPException(status_code=403, detail="Access key is limited to its workspace")
     user = db.get(User, int(user_id))
     if user is None:
@@ -1061,7 +1069,7 @@ def record_probation_override_notification(
         )
     elif action == "expired":
         title = "Temporary probation override expired"
-        summary = f"The temporary override ended at {expires_at.isoformat()}Z. Verification or a new audited override is required for unverified-domain controls."
+        summary = f"The temporary override ended at {expires_at.isoformat()}Z. Review Workspace access for current domain verification and approval status. Controls remain available when another valid authorization applies."
     else:
         title = "Temporary probation override revoked"
         summary = (
@@ -2574,12 +2582,72 @@ def issue_workspace_challenge(
         token_hash=token_digest(clear_token),
         now=now,
     )
+    challenge.record_value = challenge_record_value(clear_token)
     db.flush()
+    return serialize_domain_challenge(organization, challenge)
+
+
+def serialize_domain_challenge(organization: Organization, challenge: DomainChallenge) -> dict[str, Any]:
+    value = challenge.record_value
+    available = (isinstance(value, str)
+                 and re.fullmatch(r"daedalus-verification=[A-Za-z0-9_-]{32}", value) is not None
+                 and isinstance(challenge.token_hash, str)
+                 and re.fullmatch(r"[a-f0-9]{64}", challenge.token_hash) is not None
+                 and secrets.compare_digest(token_digest(value.split("=", 1)[1]), challenge.token_hash))
     return {
+        "challenge_id": challenge.id,
         "record_name": challenge_record_name(organization.domain),
-        "record_value": challenge_record_value(clear_token),
-        "expires_at": challenge.expires_at.isoformat() + "Z",
+        "record_value": value if available else None,
+        "value_available": available,
+        "expires_at": iso_utc(challenge.expires_at),
     }
+
+
+def current_domain_challenge(db: Session, organization: Organization) -> dict[str, Any]:
+    if organization.verification_status == "verified":
+        return {"verified": True, "domain": organization.domain, "state": "verified", "txt": None}
+    query = select(DomainChallenge).where(
+        DomainChallenge.organization_id == organization.id,
+        DomainChallenge.verified_at.is_(None),
+    ).order_by(DomainChallenge.id.desc()).limit(1)
+    challenge = db.scalar(query.where(DomainChallenge.expires_at > utcnow()))
+    if challenge is None:
+        challenge = db.scalar(query)
+    if challenge is None:
+        return {"verified": False, "domain": organization.domain, "state": "none", "txt": None}
+    return {"verified": False, "domain": organization.domain,
+            "state": "active" if challenge.expires_at > utcnow() else "expired",
+            "txt": serialize_domain_challenge(organization, challenge)}
+
+
+def lock_domain_challenge_workspace(db: Session, organization: Organization, user: User, request: Request) -> Organization:
+    """Serialize challenge writes and refresh authorization before modifying proof."""
+    organization_id, user_id = organization.id, user.id
+    # A no-op row update holds the workspace write lock until commit on SQLite
+    # and row-locking databases. Two ensure requests cannot issue two tokens.
+    db.rollback()
+    approved_admin = select(Membership.id).where(
+        Membership.organization_id == organization_id, Membership.user_id == user_id,
+        Membership.status == "approved", Membership.role == "admin",
+    ).exists()
+    changed = db.execute(update(Organization).where(
+        Organization.id == organization_id, approved_admin,
+    ).values(verification_status=Organization.verification_status)
+        .execution_options(synchronize_session=False))
+    if changed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=403, detail="Workspace admin role required")
+    db.expire_all()
+    # Lock acquisition may wait for another writer. The key or its expiry can
+    # change during that wait even when the workspace membership stays valid.
+    try:
+        current_user = get_session_user(request, db)
+        if current_user.id != user_id or request.session.get("organization_id") != organization_id:
+            raise HTTPException(status_code=403, detail="Workspace access changed during this request")
+    except HTTPException:
+        db.rollback()
+        raise
+    return db.get(Organization, organization_id)
 
 
 def require_agent(
@@ -2999,6 +3067,40 @@ def create_customer_workspaces(
     return {"customer": payload.name.strip(), "results": results, "created": len(created)}
 
 
+@app.get("/api/workspaces/{organization_id}/domain-challenge")
+def get_domain_challenge(
+    organization_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    _, organization, _ = get_org_context(request, db, admin=True)
+    if organization.id != organization_id:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return JSONResponse(current_domain_challenge(db, organization), headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/workspaces/{organization_id}/domain-challenge/ensure")
+def ensure_domain_challenge(
+    organization_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user, organization, _ = get_org_context(request, db, admin=True)
+    if organization.id != organization_id:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    organization = lock_domain_challenge_workspace(db, organization, user, request)
+    body = current_domain_challenge(db, organization)
+    created = body["state"] not in {"active", "verified"}
+    if created:
+        body["txt"] = issue_workspace_challenge(db, organization, user)
+        body["state"] = "active"
+        audit(db, organization.id, user.id, "domain_challenge.issued", {
+            "record_name": challenge_record_name(organization.domain),
+        })
+    db.commit()
+    return JSONResponse({**body, "created": created}, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/workspaces/{organization_id}/domain-challenge")
 def create_domain_challenge(
     organization_id: int,
@@ -3008,8 +3110,10 @@ def create_domain_challenge(
     user, organization, _ = get_org_context(request, db, admin=True)
     if organization.id != organization_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    organization = lock_domain_challenge_workspace(db, organization, user, request)
     if organization.verification_status == "verified":
-        return {"verified": True, "domain": organization.domain}
+        db.commit()
+        return JSONResponse({**current_domain_challenge(db, organization), "created": False}, headers={"Cache-Control": "no-store"})
     challenge = issue_workspace_challenge(db, organization, user)
     audit(
         db,
@@ -3019,11 +3123,13 @@ def create_domain_challenge(
         {"record_name": challenge_record_name(organization.domain)},
     )
     db.commit()
-    return {
+    return JSONResponse({
         "verified": False,
         "domain": organization.domain,
+        "state": "active",
+        "created": True,
         "txt": challenge,
-    }
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/workspaces/{organization_id}/verify-domain")
@@ -3052,6 +3158,9 @@ async def verify_workspace_domain(
             status_code=409,
             detail="The TXT challenge expired. Create a new challenge and add its record.",
         )
+    expected_domain = organization.domain
+    expected_challenges = [(challenge.id, challenge.token_hash, challenge.expires_at) for challenge in challenges]
+    organization_id, user_id = organization.id, user.id
     try:
         matched = await run_in_threadpool(
             has_matching_txt,
@@ -3068,27 +3177,73 @@ async def verify_workspace_domain(
             "record_name": challenge_record_name(organization.domain),
             "detail": "The verification TXT record was not found yet.",
         }
-    organization.verification_status = "verified"
-    organization.verification_expires_at = None
-    for challenge in challenges:
-        challenge.verified_at = now
+    # DNS collection can take several seconds. End the old read transaction,
+    # then atomically require the same unexpired proof and administrator before
+    # opening controls. Replacement or expiry during lookup must not verify.
+    db.rollback()
+    current_user = get_session_user(request, db)
+    current_organization = db.get(Organization, organization_id)
+    if current_organization is None or current_organization.domain != expected_domain:
+        raise HTTPException(status_code=409, detail="The workspace changed during the DNS check. Refresh and check again.")
+    current_organization = lock_domain_challenge_workspace(db, current_organization, current_user, request)
+    # Read the clock only after acquiring the lock. Proof can expire while this
+    # request is waiting, and no other writer can replace it before the CAS.
+    verified_at = utcnow()
+    if current_organization.domain != expected_domain:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="The workspace changed during the DNS check. Refresh and check again.")
+    if current_organization.verification_status == "verified":
+        # A concurrent successful check already recorded the transition.
+        db.commit()
+        return {"verified": True, "domain": current_organization.domain}
+    unchanged_proof = [select(DomainChallenge.id).where(
+        DomainChallenge.organization_id == organization_id,
+        DomainChallenge.id == challenge_id,
+        DomainChallenge.token_hash == expected_hash,
+        DomainChallenge.expires_at == expected_expiry,
+        DomainChallenge.expires_at > verified_at,
+        DomainChallenge.verified_at.is_(None),
+    ).exists() for challenge_id, expected_hash, expected_expiry in expected_challenges]
+    unexpected_proof = select(DomainChallenge.id).where(
+        DomainChallenge.organization_id == organization_id,
+        DomainChallenge.verified_at.is_(None),
+        DomainChallenge.expires_at > verified_at,
+        DomainChallenge.id.not_in([item[0] for item in expected_challenges]),
+    ).exists()
+    approved_admin = select(Membership.id).where(
+        Membership.organization_id == organization_id, Membership.user_id == user_id,
+        Membership.role == "admin", Membership.status == "approved",
+    ).exists()
+    changed = db.execute(update(Organization).where(
+        Organization.id == organization_id, Organization.domain == expected_domain,
+        Organization.verification_status != "verified", approved_admin,
+        *unchanged_proof, ~unexpected_proof,
+    ).values(verification_status="verified", verification_expires_at=None)
+        .execution_options(synchronize_session=False))
+    if changed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="The TXT challenge or workspace access changed during the DNS check. Refresh the instructions and check again.")
+    db.execute(update(DomainChallenge).where(
+        DomainChallenge.organization_id == organization_id,
+        DomainChallenge.id.in_([item[0] for item in expected_challenges]),
+    ).values(verified_at=verified_at).execution_options(synchronize_session=False))
     audit(
         db,
-        organization.id,
-        user.id,
+        organization_id,
+        user_id,
         "domain.verified",
-        {"domain": organization.domain},
+        {"domain": expected_domain},
     )
     db.commit()
     await live_hub.publish(
-        organization.id,
+        organization_id,
         {
             "type": "domain_status",
             "verification_status": "verified",
-            "domain": organization.domain,
+            "domain": expected_domain,
         },
     )
-    return {"verified": True, "domain": organization.domain}
+    return {"verified": True, "domain": expected_domain}
 
 
 @app.post("/api/membership-requests")
@@ -3243,7 +3398,7 @@ async def decide_membership_request(
     db: Session = Depends(get_db),
 ):
     _, organization, _ = get_org_context(request, db, admin=True)
-    if not workspace_controls_available(db, organization):
+    if payload.approve and not workspace_controls_available(db, organization):
         raise HTTPException(
             status_code=403,
             detail="Verify the domain or grant a 14-day probation override or approve customer onboarding before sharing access.",
@@ -3465,13 +3620,14 @@ async def grant_probation_override(
     if len(reason) < 8:
         raise HTTPException(status_code=422, detail="Enter a reason of at least 8 characters.")
     now = utcnow()
-    close_scanner_controls(
-        db,
-        organization.id,
-        actor_user_id=user.id,
-        reason="probation_override_regranted",
-        now=now,
-    )
+    if not workspace_controls_available(db, organization):
+        close_scanner_controls(
+            db,
+            organization.id,
+            actor_user_id=user.id,
+            reason="probation_override_regranted",
+            now=now,
+        )
     override = ProbationOverride(
         organization_id=organization.id,
         granted_by_user_id=user.id,
@@ -3540,13 +3696,17 @@ async def revoke_probation_override(
     now = utcnow()
     override.revoked_at = now
     override.revoked_by_user_id = user.id
-    close_scanner_controls(
-        db,
-        organization.id,
-        actor_user_id=user.id,
-        reason="probation_override_revoked",
-        now=now,
-    )
+    # Sessions do not autoflush. Check the remaining authorization after the
+    # revocation is stored so this override cannot keep its own controls open.
+    db.flush()
+    if not workspace_controls_available(db, organization):
+        close_scanner_controls(
+            db,
+            organization.id,
+            actor_user_id=user.id,
+            reason="probation_override_revoked",
+            now=now,
+        )
     audit(
         db,
         organization.id,
@@ -5798,6 +5958,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
                 "recent_events": [],
                 "workspaces": user_memberships,
                 "platform_admin": user.email.lower() in PLATFORM_ADMIN_EMAILS and getattr(request.state, "user_api_key", None) is None,
+                "workspace_key_session": getattr(request.state, "user_api_key", None) is not None,
                 "demo_mode": DEMO_MODE,
             },
         )
@@ -5838,6 +5999,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "agent_bridge_online": agent_bridge_online,
             "workspaces": user_memberships,
             "platform_admin": user.email.lower() in PLATFORM_ADMIN_EMAILS and scoped_key is None,
+            "workspace_key_session": scoped_key is not None,
             "demo_mode": DEMO_MODE,
             "cis_client_release": release_status(DATA_DIR / "cis-client-release"),
             "workspace_controls_enabled": (
@@ -6150,7 +6312,9 @@ def workspace_portfolio(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/api/dashboard")
 def dashboard_data(request: Request, db: Session = Depends(get_db)):
+    from daedalus.onboarding import summary as onboarding_summary
     _, organization, membership = get_org_context(request, db)
+    onboarding = onboarding_summary(db, organization.id)
     probation_override = active_probation_override(db, organization.id)
     agents = db.scalars(
         select(Agent)
@@ -6169,6 +6333,8 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
             "name": organization.name,
             "domain": organization.domain,
             "verification_status": organization.verification_status,
+            "verification_expires_at": iso_utc(organization.verification_expires_at),
+            "onboarding": ({key: onboarding[key] for key in ("status", "review_due_at", "review_required")} if onboarding else None),
             "controls_enabled": (
                 workspace_controls_available(db, organization)
             ),

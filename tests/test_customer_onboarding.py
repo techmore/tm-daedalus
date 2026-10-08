@@ -55,6 +55,8 @@ class CustomerOnboardingTests(unittest.TestCase):
         self.assertTrue(self.admin_client.get('/api/dashboard').json()['organization']['controls_enabled'])
         page = self.admin_client.get('/dashboard').text
         self.assertIn('onboarding-review-dialog', page)
+        self.assertIn('onboarding-review-reminder', page)
+        self.assertIn('Review customer access', page)
         self.assertIn('onboarding.js', page)
 
     def test_due_review_pauses_exception_notice_is_deduplicated_and_renewal_is_explicit(self):
@@ -109,7 +111,9 @@ class CustomerOnboardingTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/admin/onboarding').status_code,403)
         org_id = normal.json()['results'][0]['organization_id']
         self.assertEqual(self.client.post(f'/api/admin/onboarding/{org_id}',json={'version':0,'action':'approve','reason':'Self granting should fail'}).status_code,403)
-        self.assertNotIn('onboarding-review-dialog',self.client.get('/dashboard').text)
+        page = self.client.get('/dashboard').text
+        self.assertNotIn('onboarding-review-dialog', page)
+        self.assertNotIn('onboarding-review-reminder', page)
 
     def test_platform_admin_still_requires_approved_admin_membership(self):
         self.google_callback({'sub':'other-owner','email':'other@example.net','email_verified':True})
