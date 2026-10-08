@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — exact original-XML host/port coverage deployed
+
+SER8 Incus activated dd92966cf340d147e3fe5c10cfb1be8ab7f2dba9, verified 80-file release SHA-256 96934b7ea12f39aed6f87dcc8e9778516a48c9bd26f835eee8247403b330f4d0. Verified off-host backup daedalus-data-20261008T045619Z.tar.gz preceded activation; internal/public health passed. Final full suite: 866 passed, one skipped, 308 subtests.
+
+Selection v3 reassembles hash-verified original XML, checks complete one-IP scan and port accounting, associates compatible occurrence-time results, and applies exact protocol/port membership instead of treating default TCP scans as all-port assessments. Ambiguous, unsupported, corrupt or repeated evidence remains unknown. Applied XML hashes/source IDs/counts/type are retained; late complete XML can create immutable comparison history and reconcile the immediate completed successor. Fixtures prove notice deduplication and reject later XML as proof for earlier results. Scanner bundles, machine scopes and report assets were unchanged.
+
+Normal authenticated production API compared the two saved physical Mac runs. HTTP 200/version 3 retained one proof per run, each covering 1,000 TCP ports on the same IP. It now reports matching target coverage and one confirmed missing port observation; this does not prove port closure, explain a cause or establish whole-subnet coverage. Historical comparison hashes were unchanged; the read created no new scan, comparison, notice or PDF. Private receipt: /data/codex-xml-coverage-comparison-20261008.json. Broader multi-host/subnet/protocol and fresh physical alert acceptance remain open. See [scanner comparisons](docs/SCANNER-COMPARISONS.md). Prior whole-run backend CI 37728658549 and installed Linux CI 37728564686 passed; XML-source CI is not claimed passed yet.
+
+
 ## October 8, 2026 — whole-run host comparisons deployed
 
 SER8 Incus runs application 7534a83471273236c2f560bb402caf69276794c3. Verified 79-file release SHA-256 bb2c65e854b6a3900b0dbb787352c097dc2ee81925e1040bf91e13dc8d19e67a; verified off-host backup daedalus-data-20261008T043956Z.tar.gz preceded activation. Internal/public health passed. Full suite: 851 passed, one skipped, 308 subtests; final focused comparison checks: 24 passed and two subtests.
