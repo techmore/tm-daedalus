@@ -98,3 +98,25 @@ def test_pdf_appendix_preserves_previous_content_streams():
     assert all(a.get_contents().get_data()==b.get_contents().get_data() for a,b in zip(old.pages,new.pages))
     text=' '.join(page.extract_text() for page in new.pages[len(old.pages):])
     assert 'Network traffic and connection review' in text and '<script>AP</script>' in text and 'Unavailable' in text
+
+
+def test_switch_edge_and_mapped_ap_preview_bounds():
+    s={'networks':[{'id':'N','name':'HQ'}], 'devices':[{'serial':f'S{i}','name':f'S{i:02}','model':'MS120','networkId':'N'} for i in range(22)]
+       +[{'serial':f'M{i}','model':'MX100','networkId':'N'} for i in range(22)]
+       +[{'serial':f'A{i}','model':'MR44','networkId':'N'} for i in range(60)]}
+    s['switch_neighbors']=[{'device_serial':'S0','network_id':'N','status':'complete','data':summarize_neighbors({'ports':{str(i):{'lldp':{'chassisId':f'A{i}'}} for i in range(60)}},inventory_lookup(s['devices'],'N'),'S0')}]
+    analysis=build_path_analysis(s);view=project_path_analysis(analysis,s)['networks'][0]
+    assert len(view['switches'])==20 and view['additional_switches']==2
+    assert len(view['edges'])==20 and view['additional_edges']==2
+    assert view['summary']['mapped_ap_count']==60 and len(view['switches'][0]['aps'])==50 and view['switches'][0]['additional_aps']==10
+    full=project_path_analysis(analysis,s,complete=True)['networks'][0]
+    assert len(full['switches'])==22 and len(full['edges'])==22 and len(full['switches'][0]['aps'])==60
+
+
+def test_duplicate_rf_band_is_invalid_and_missing_counter_not_zero():
+    s=snapshot();rows=s['channel_utilization']['data']['rows'];rows.append(copy.deepcopy(rows[0]))
+    del s['wireless_connections'][0]['data']['devices'][0]['counters']['dns']
+    analysis=build_path_analysis(s);ap=analysis['networks'][0]['switches'][0]['aps'][0]
+    assert ap['channel_status']=='invalid_evidence' and ap['bands']==[]
+    assert ap['connection_status']=='partial' and ap['connection_counters']['dns'] is None
+    assert analysis['summary']['ap_telemetry_unavailable_count']==2
