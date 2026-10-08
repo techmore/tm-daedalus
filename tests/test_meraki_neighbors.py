@@ -45,6 +45,7 @@ def test_remote_conflict_preserves_neighbor_not_port_and_names_never_match():
     data=summarize_neighbors({'ports':{'1':{'lldp':{'chassisId':'AP','portId':'eth0'},'cdp':{'deviceId':'AP','portId':'eth1'}},
                                       '2':{'lldp':{'systemName':'AP','managementAddress':'AP'}}}},inventory_lookup(inventory(),'N'),'SW')
     assert data['rows'][0]['status']=='matched' and data['rows'][0]['remote_port_conflict'] and data['rows'][0]['neighbor_port'] is None
+    assert data['rows'][0]['neighbor_ports']=={'lldp':'eth0','cdp':'eth1'}
     assert data['rows'][1]['status']=='unmatched'
 
 
@@ -105,3 +106,26 @@ def test_pdf_appendix_preserves_all_existing_content_streams():
     assert len(new.pages)>len(old.pages)
     assert all(a.get_contents().get_data()==b.get_contents().get_data() for a,b in zip(old.pages,new.pages))
     assert 'Switch port relationships' in new.pages[-1].extract_text() and '<script>AP</script>' in new.pages[-1].extract_text()
+
+
+def test_protocol_port_projection_allowlist_and_unknown_schema():
+    s=evidence();ob=s['switch_neighbors'][0];row=ob['data']['rows'][0]
+    row['neighbor_ports']={'lldp':'eth0','cdp':'GigabitEthernet0','private':'never-save'}
+    assert project_neighbors(s)['switches'][0]['data']['rows'][0]['neighbor_ports']=={'lldp':'eth0','cdp':'GigabitEthernet0'}
+    for data in (None,{}, {'schema_version':True},{'schema_version':2}):
+        ob['data']=data;view=project_neighbors(s)['switches'][0];assert view['data'] is None and view['status']=='invalid_evidence'
+
+
+def test_new_protocol_port_detail_is_coverage_not_a_network_change():
+    ob=evidence()['switch_neighbors'][0];ob['control']='Switch managed neighbors'
+    current={'organization':{'id':'O'},'security_controls':[ob]}
+    previous=copy.deepcopy(current);old=previous['security_controls'][0]['data'];old.pop('port_id_detail_version')
+    for row in old['rows']: row.pop('neighbor_ports')
+    comparison=compare_meraki_snapshots(previous,current)
+    assert comparison['changed_control_count']==0
+    assert comparison['coverage_changes'][0]['evidence_dimension']=='remote_port_ids'
+    assert comparison['coverage_changes'][0]['previous_status']=='not_collected'
+    assert comparison['coverage_changes'][0]['current_status']=='complete'
+    changed=copy.deepcopy(current);changed['security_controls'][0]['data']['rows'][0]['neighbor_ports']['lldp']='eth2'
+    comparison=compare_meraki_snapshots(current,changed)
+    assert comparison['changed_control_count']==1 and comparison['coverage_changes']==[]

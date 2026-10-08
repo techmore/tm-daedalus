@@ -47,6 +47,7 @@ def summarize_neighbors(raw: Any, lookup: dict, local_serial: str) -> dict:
         if not isinstance(port, str) or not port.strip() or not PORT.fullmatch(port) or not isinstance(discovery, dict):
             raise ValueError("Invalid LLDP/CDP port record")
         candidates, protocols, remote_ports = set(), set(), set()
+        protocol_ports = {}
         ambiguous = False
         def match(value, protocol, remote_port=None):
             nonlocal ambiguous
@@ -60,6 +61,7 @@ def summarize_neighbors(raw: Any, lookup: dict, local_serial: str) -> dict:
                 candidates.add(serial); protocols.add(protocol)
                 if isinstance(remote_port, str) and remote_port.strip() and PORT.fullmatch(remote_port):
                     remote_ports.add(remote_port)
+                    protocol_ports[protocol] = remote_port
         match(discovery.get("deviceMac"), "deviceMac")
         for protocol, field in (("lldp", "chassisId"), ("cdp", "deviceId")):
             details = discovery.get(protocol)
@@ -73,8 +75,9 @@ def summarize_neighbors(raw: Any, lookup: dict, local_serial: str) -> dict:
             "neighbor_serial": next(iter(candidates)) if status == "matched" else None,
             "neighbor_port": next(iter(remote_ports)) if status == "matched" and len(remote_ports) == 1 else None,
             "remote_port_conflict": status == "matched" and len(remote_ports) > 1,
+            "neighbor_ports": dict(sorted(protocol_ports.items())) if status == "matched" else {},
             "protocols": sorted(protocols) if status == "matched" else []})
-    return {"schema_version": 1, "scope": SCOPE, "reported_port_count": len(rows),
+    return {"schema_version": 1, "port_id_detail_version": 1, "scope": SCOPE, "reported_port_count": len(rows),
             **{key + "_port_count": sum(row["status"] == key for row in rows) for key in ("matched", "unmatched", "ambiguous")},
             "rows": rows}
 
@@ -109,11 +112,16 @@ def project_neighbors(snapshot: dict, *, complete: bool = False) -> dict:
                 if row["status"] == "matched" and not matched:
                     invalid = True; break
                 remote = row.get("neighbor_port")
+                protocol_ports = row.get("neighbor_ports")
+                clean_ports = {protocol: protocol_ports[protocol] for protocol in ('lldp', 'cdp')
+                    if isinstance(protocol_ports, dict) and isinstance(protocol_ports.get(protocol), str)
+                    and protocol_ports[protocol].strip() and PORT.fullmatch(protocol_ports[protocol])} if matched else {}
                 rows.append({"local_port": port, "status": row["status"],
                     "neighbor_name": (text(neighbor.get("name")) or text(neighbor.get("model"))) if matched else None,
                     "neighbor_model": text(neighbor.get("model")) if matched else None,
                     "neighbor_port": remote if matched and isinstance(remote, str) and PORT.fullmatch(remote) else None,
                     "remote_port_conflict": row.get("remote_port_conflict") is True if matched else False,
+                    "neighbor_ports": clean_ports,
                     "protocols": [p for p in ("lldp", "cdp", "deviceMac") if p in row["protocols"]] if matched and isinstance(row.get("protocols"), list) else []})
             if invalid:
                 result["status"] = "invalid_evidence"
@@ -121,5 +129,7 @@ def project_neighbors(snapshot: dict, *, complete: bool = False) -> dict:
                 limit = MAX_PORTS if complete else 50
                 result["data"] = {"rows": rows[:limit], "additional_rows": max(0, len(rows) - limit), "reported_port_count": len(rows),
                     **{key + "_port_count": sum(row["status"] == key for row in rows) for key in ("matched", "unmatched", "ambiguous")}}
+        if result['data'] is None and result['status'] == 'complete':
+            result['status'] = 'invalid_evidence'
         results.append(result)
     return {"scope": SCOPE, "switches": results, "additional_switches": max(0, len(observations) - len(results))}

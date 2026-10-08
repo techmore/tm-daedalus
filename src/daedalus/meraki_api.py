@@ -965,8 +965,14 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
             indexed[key] = redact_meraki_data(row)
         return indexed
 
-    def normalized(row: dict[str, Any]) -> Any:
+    def normalized(row: dict[str, Any], *, include_neighbor_ports: bool = True) -> Any:
         data = row.get("data")
+        if row.get("control") == "Switch managed neighbors" and isinstance(data, dict):
+            data = dict(data)
+            data.pop("port_id_detail_version", None)
+            if not include_neighbor_ports and isinstance(data.get("rows"), list):
+                data["rows"] = [{k: v for k, v in item.items() if k != "neighbor_ports"}
+                    if isinstance(item, dict) else item for item in data["rows"]]
         field = {"Wireless SSID security": "number", "Wireless RF profiles": "id", "Switch access policies": "accessPolicyNumber", "Switch port configuration": "portId", "Switch port status": "portId"}.get(row.get("control"))
         if field and isinstance(data, list) and all(isinstance(item, dict) and field in item for item in data):
             return sorted(data, key=lambda item: str(item[field]))
@@ -983,6 +989,18 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
             if old_status != new_status:
                 coverage.append({**identity, "previous_status": old_status, "current_status": new_status})
             continue
-        if json.dumps(normalized(old), sort_keys=True) != json.dumps(normalized(new), sort_keys=True):
-            changes.append({**identity, "previous": normalized(old), "current": normalized(new)})
+        include_ports = True
+        if key[2] == "Switch managed neighbors":
+            def has_port_detail(row):
+                data = row.get("data")
+                return isinstance(data, dict) and type(data.get("port_id_detail_version")) is int and data["port_id_detail_version"] == 1
+            old_detail, new_detail = has_port_detail(old), has_port_detail(new)
+            include_ports = old_detail and new_detail
+            if old_detail != new_detail:
+                coverage.append({**identity, "evidence_dimension": "remote_port_ids",
+                    "previous_status": "complete" if old_detail else "not_collected",
+                    "current_status": "complete" if new_detail else "not_collected"})
+        old_data, new_data = normalized(old, include_neighbor_ports=include_ports), normalized(new, include_neighbor_ports=include_ports)
+        if json.dumps(old_data, sort_keys=True) != json.dumps(new_data, sort_keys=True):
+            changes.append({**identity, "previous": old_data, "current": new_data})
     return {"organization_id": current_org, "changes": changes, "coverage_changes": coverage, "changed_control_count": len(changes)}

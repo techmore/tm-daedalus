@@ -55,5 +55,5 @@ assert.ok(all(unknown).some(n=>n.tag==='dd'&&n.textContent==='Unavailable'));
         self.assertIn('.meraki-power-table { min-width: 640px; }', style)
         self.assertIn('background: var(--card-surface)', style)
         template = (root / 'templates/dashboard.html').read_text()
-        self.assertIn('app.css?v=daedalus-20261008-169', template)
-        self.assertIn('dashboard.js?v=daedalus-20261008-169', template)
+        self.assertIn('app.css?v=daedalus-20261008-170', template)
+        self.assertIn('dashboard.js?v=daedalus-20261008-170', template)

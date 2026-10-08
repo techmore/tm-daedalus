@@ -1432,10 +1432,10 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 story.append(_paragraph(f"Collection: {switch['status'] or 'unknown'}; port relationships unavailable.", styles["MerakiBody"]))
                 continue
             story.append(_paragraph(f"Reported ports: {data['reported_port_count']}; matched: {data['matched_port_count']}; unmatched: {data['unmatched_port_count']}; ambiguous: {data['ambiguous_port_count']}.", styles["MerakiBody"]))
-            rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in ("Local port", "Assigned neighbor / model", "Remote port", "Evidence")]]
+            rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in ("Local port", f"Assigned neighbor / model - local switch: {switch['device_name'] or 'Switch'}", "Reported remote port IDs", "Evidence")]]
             for row in data["rows"]:
                 name = f"{row['neighbor_name']} / {row['neighbor_model']}" if row['status'] == 'matched' else 'Ambiguous discovery' if row['status'] == 'ambiguous' else 'Not matched to assigned inventory'
-                remote = 'Conflicting port IDs' if row['remote_port_conflict'] else row['neighbor_port'] or 'Unavailable'
+                remote = '; '.join(f'{protocol.upper()}: {port}' for protocol, port in row['neighbor_ports'].items()) or ('Different protocol port IDs' if row['remote_port_conflict'] else row['neighbor_port'] or 'Unavailable')
                 values = (row['local_port'], name, remote, ', '.join(row['protocols']) or row['status'])
                 rows.append([_paragraph(value, styles["MerakiSmall"]) for value in values])
             if len(rows) > 1:
