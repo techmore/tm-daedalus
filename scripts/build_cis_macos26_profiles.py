@@ -38,6 +38,8 @@ SUPPORTED_RULE_IDS = {
     "pwpolicy_max_lifetime_enforce",
     "pwpolicy_minimum_length_enforce",
     "pwpolicy_history_enforce",
+    "pwpolicy_alpha_numeric_enforce",
+    "pwpolicy_special_character_enforce",
     "system_settings_system_wide_preferences_configure",
     "os_unlock_active_user_session_disable",
     "os_password_hint_remove",

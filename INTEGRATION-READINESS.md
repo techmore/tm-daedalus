@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 8, 2026 — additional Level 2 password-policy routines
+
+Source adds bounded read-only numeric-identifier and special-character-predicate routines against pinned NIST mSCP Tahoe procedures. Native fixtures cover explicit match/mismatch, absent/typed/duplicate identifiers, noncanonical counts, compound/negated predicates and failed capture. Static command allowlist fixtures include both `/usr/bin/pwpolicy -getaccountpolicies` paths. Mapping metadata is 104 distinct rule IDs, 88/100 Level 1 and 102/119 Level 2. Mapping counts are not complete benchmark procedure validation. Published JSON, immutable profile versions, installed clients and report templates are unchanged.
+
+Full backend suite passed 877 tests and 313 subtests with one skip. Local Xcode compiled and emitted unit passes, but its UI runner is still active at this checkpoint; no final native pass is claimed. Private result bundle: validation/cis-password-20261008/tests.xcresult (not yet finalized). Managed physical macOS 26, trusted signing/notarization and client rollout remain open. Source push starts native and actual macOS 26 CI. The previous production purchase-summary backend 37732878504 and installed Linux 37732878407 both passed. SER8 still runs portal source 1deb5f4; this client-only implementation has not changed installed binaries.
+
+
 ## October 8, 2026 — visible BFS purchase budgets and browser validation
 
 SER8 Incus activated source 1deb5f4528b5964354ea2577857318ebfe0a4035, verified 80-file release SHA-256 7d471b1217d1a65d991048e7cfb958a535f86dbbc695f1e3791d2e58c0a14397, after verified off-host backup daedalus-data-20261008T053225Z.tar.gz. Internal/public health passed. Full local suite: 877 passed, one skipped, 313 subtests; final renderer/topic suite: 41 passed, two subtests.

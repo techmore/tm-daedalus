@@ -686,6 +686,33 @@ struct TahoeAdditionalCommandChecksTests {
         #expect(status == "pass")
     }
 
+    @Test func numericPolicyIdentifiersAreBoundedAndDoNotExposePolicy() {
+        let rule = "pwpolicy_alpha_numeric_enforce"
+        func xml(_ ids: [Any]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: ["policyCategoryPasswordContent": ids.map { ["policyIdentifier": $0] }], format: .xml, options: 0), encoding: .utf8)!
+        }
+        #expect(run(rule, .init(output: xml(["com.apple.requireAlphanumeric"]))) == "pass")
+        #expect(run(rule, .init(output: xml(["minimumLength"]))) == "fail")
+        for ids: [Any] in [[], [true], ["notrequireAlphanumeric"], ["requireAlphanumeric", "requireAlphanumeric"]] {
+            #expect(run(rule, .init(output: xml(ids))) == "manual")
+        }
+        #expect(run(rule, .init(output: xml(["requireAlphanumeric"]), exitCode: 1)) == "manual")
+    }
+
+    @Test func specialCharacterPolicyRequiresOneExplicitSupportedPredicate() {
+        let rule = "pwpolicy_special_character_enforce"
+        func xml(_ contents: [Any]) -> String {
+            String(data: try! PropertyListSerialization.data(fromPropertyList: ["policyCategoryPasswordContent": contents.map { ["policyContent": $0] }], format: .xml, options: 0), encoding: .utf8)!
+        }
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){1,}'"]))) == "pass")
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){2}'", "policyAttributePassword matches '.{15,}'"]))) == "pass")
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){0,}'"]))) == "fail")
+        for contents: [Any] in [[], [true], ["unknown"], ["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){01,}'"], ["NOT policyAttributePassword matches '(.*[^a-zA-Z0-9].*){1,}'"], ["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){1,}' OR TRUE"], ["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){1,}'", "policyAttributePassword matches '(.*[^a-zA-Z0-9].*){2,}'"]] {
+            #expect(run(rule, .init(output: xml(contents))) == "manual")
+        }
+        #expect(run(rule, .init(output: xml(["policyAttributePassword matches '(.*[^a-zA-Z0-9].*){1,}'"]), error: "denied")) == "manual")
+    }
+
     @Test func passwordLengthRequiresAnExplicitSupportedCondition() {
         let rule = "pwpolicy_minimum_length_enforce"
         func xml(_ contents: [Any]) -> String {
@@ -892,6 +919,8 @@ struct TahoeAdditionalCommandChecksTests {
             "pwpolicy_max_lifetime_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_minimum_length_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_history_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
+            "pwpolicy_alpha_numeric_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
+            "pwpolicy_special_character_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "system_settings_system_wide_preferences_configure": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.preferences"]),
             "os_unlock_active_user_session_disable": ("/usr/bin/security", ["-q", "authorizationdb", "read", "system.login.screensaver"]),
             "os_password_hint_remove": ("/usr/bin/dscl", [".", "-list", "/Users", "hint"]),

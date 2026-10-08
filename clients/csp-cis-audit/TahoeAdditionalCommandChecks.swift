@@ -38,7 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_home_folders_secure", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "pwpolicy_alpha_numeric_enforce", "pwpolicy_special_character_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_home_folders_secure", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -107,7 +107,7 @@ extension MacOSChecks {
              "os_safari_warn_fraudulent_website_enable":
             return runManagedProfileSettingCheck(check: check, command: command)
 
-        case "pwpolicy_history_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce":
+        case "pwpolicy_alpha_numeric_enforce", "pwpolicy_special_character_enforce", "pwpolicy_history_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce":
             let evidence = command("/usr/bin/pwpolicy", ["-getaccountpolicies"])
             guard usable(evidence), evidence.output.utf8.count <= 65536 else {
                 return result("manual", "Account-policy evidence was unavailable or exceeded its limit.")
@@ -122,6 +122,54 @@ extension MacOSChecks {
             }
             guard let policy = authorizationPolicy(xml) else {
                 return result("manual", "Account-policy XML could not be read unambiguously.")
+            }
+            if rule == "pwpolicy_alpha_numeric_enforce" {
+                var identifiers = [String]()
+                var invalid = false
+                func visit(_ object: Any) {
+                    if let dictionary = object as? [String: Any] {
+                        if let raw = dictionary["policyIdentifier"] {
+                            if let value = raw as? String, !value.isEmpty, value.utf8.count <= 4096 {
+                                identifiers.append(value)
+                            } else { invalid = true }
+                        }
+                        for value in dictionary.values { visit(value) }
+                    } else if let values = object as? [Any] { values.forEach(visit) }
+                }
+                visit(policy)
+                guard !invalid, !identifiers.isEmpty, identifiers.count <= 100 else {
+                    return result("manual", "Typed bounded policy identifiers were absent or unsupported.")
+                }
+                let candidates = identifiers.filter { $0.contains("requireAlphanumeric") }
+                guard candidates.count <= 1, candidates.allSatisfy({ $0 == "requireAlphanumeric" || $0.hasSuffix(".requireAlphanumeric") }) else {
+                    return result("manual", "Numeric-character policy identifiers were duplicate or ambiguous.")
+                }
+                return result(candidates.count == 1 ? "pass" : "fail", "Captured the pinned numeric-character policy identifier criterion. This is identifier evidence, not a password-creation attempt or external directory enforcement claim. Raw policy is omitted.")
+            }
+            if rule == "pwpolicy_special_character_enforce" {
+                guard let entries = policy["policyCategoryPasswordContent"] as? [[String: Any]],
+                      !entries.isEmpty, entries.count <= 100 else {
+                    return result("manual", "Explicit password-content policy entries were absent or unsupported.")
+                }
+                let expression = try! NSRegularExpression(pattern: #"^policyAttributePassword matches '\(\.\*\[\^a-zA-Z0-9\]\.\*\)\{(0|[1-9][0-9]{0,3}),?\}'$"#)
+                var minima = [Int]()
+                for entry in entries {
+                    guard let content = entry["policyContent"] as? String, content.utf8.count <= 4096 else {
+                        return result("manual", "Password-content policy was absent or wrongly typed.")
+                    }
+                    guard content.contains("[^a-zA-Z0-9]") else { continue }
+                    let value = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+                    guard let match = expression.firstMatch(in: value, range: range), match.range == range,
+                          let capture = Range(match.range(at: 1), in: value), let minimum = Int(value[capture]) else {
+                        return result("manual", "Special-character condition uses an unsupported or compound predicate.")
+                    }
+                    minima.append(minimum)
+                }
+                guard minima.count == 1 else {
+                    return result("manual", "Exactly one explicit special-character condition was not available.")
+                }
+                return result(minima[0] >= 1 ? "pass" : "fail", "Captured one explicit special-character minimum of " + String(minima[0]) + "; pinned Level 2 minimum is 1. This is local policy evidence, not a password-creation attempt or external directory assessment. Raw policy is omitted.")
             }
             if rule == "pwpolicy_minimum_length_enforce" {
                 guard let entries = policy["policyCategoryPasswordContent"] as? [[String: Any]],
