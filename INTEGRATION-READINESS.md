@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 8, 2026 — live certificate-history failure preservation
+
+Source `9068299` is active on SER8 Incus: verified 79-file archive `4ce70f2f5469ed688957889dbd0ce1d7aa47ff89a9ca415080562a8339b86994`, pre-deploy off-host backup `daedalus-data-20261008T025632Z.tar.gz`, internal/public readiness passed. A normal authenticated CSP DNS audit completed as run 74 at 02:57:45Z, completed_with_warnings, zero recorded changes. Certificate history remained unavailable/timeout, with no entries or newly-observed-certificate claim. The saved completion audit records manual source, duration and repeat-warning suppression. Read-only database validation confirmed zero inbox notices for this run. Private receipts: /data/codex-dns-ct-independent-live-20261008.json and /data/codex-dns-ct-history-receipt-20261008.json.
+
+[Backend CI 37720287963](https://github.com/techmore/tm-daedalus/actions/runs/37720287963) passed at the active source. Its Linux workflow 37720287895 remained in progress at this checkpoint; the unchanged engine/upgrade source previously passed all scenarios at d199aae. Successful public certificate-history collection remains an external evidence gap. The deployment and outage checks do not establish that crt.sh is unavailable to every client or that issuance history is empty. PDF assets and installed scanner software were unchanged.
+
 ## October 8, 2026 — independent certificate-history query coverage
 
 Certificate-history collection now attempts root-domain and subdomain queries independently. A failed root query can retain valid subdomain observations as partial evidence, mirroring the existing root-only partial path. Failed query scope and bounded HTTP/error categories are recorded and displayed; partial observations still cannot produce newly-observed-certificate alerts. A root access/rate-limit refusal (401/403/429) stops additional requests. Both failed queries remain unavailable, with no empty issuance claim. Fixed provider, pinned public addresses, verified HTTPS, response bounds and redirect refusal are retained. No certificate/log proof validation is inferred.
