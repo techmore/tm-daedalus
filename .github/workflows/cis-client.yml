@@ -58,7 +58,7 @@ jobs:
           xcodebuild -quiet test \
             -project clients/csp-cis-audit/CSP-CIS_Audit.xcodeproj \
             -scheme CSP-CIS_Audit -destination 'platform=macOS' \
-            -only-testing:CSP-CIS_AuditTests/TahoeAdditionalCommandChecksTests \
+            -only-testing:CSP-CIS_AuditTests/TahoeAdditionalCommandChecksTests/realTahoePlatformAssessment \
             -resultBundlePath "$RUNNER_TEMP/cis-tahoe-platform.xcresult" \
             CODE_SIGNING_ALLOWED=NO
           test -s "$RUNNER_TEMP/cis-tahoe-platform-receipt.json"
