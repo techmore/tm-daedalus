@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 8, 2026 — Onboarding and Google Admin source activated
+
+Release `793a5116d89cb5518f3546ae3faaddd2be3c2528` is active in production with verified 98-file archive digest `f60dd82aaa774062e1b71b8b6546834d99656d1f115f2d6e0f6c7af256f11992`, preceded by verified off-host backup `daedalus-data-20261008T160335Z.tar.gz` (SHA-256 `86244ade89ce0e8157e9b63e3ff4b2ac2ef7429e14f2b8ca2483b7ac7f127e71`). Internal/public readiness passed. Lewis workspace 8 has the requested owner’s approved admin membership and active complimentary onboarding through November 7; no DNS verification was inferred. Dedicated Google Admin credentials are absent on production, so no live Google collection or consent is claimed. Private onboarding/provisioning and public asset verification receipts are retained under `validation/customer-onboarding-20261008/`.
+
 ## October 8, 2026 — Google Admin initial source acceptance
 
 Implemented separate Admin OAuth with one-time actor/workspace/domain-bound consent, OIDC identity validation through Authlib, strict scope grants, Google customer/domain probes and encrypted refresh credentials. Only customer/domain/user/role-management read-only Directory scopes are requested beyond `openid email`. Verified ownership and explicit entire-customer authorization are required; duplicate-customer workspace attachment is denied. Collection is bounded and retains minimized account/role evidence. Current definitive GA-03 results describe recorded active administrators' 2SV enrollment/enforcement; factor type, group-derived admin coverage and other effective policies remain manual review. Exact Workspace Benchmark version/profile and rights are pending.

@@ -1,5 +1,9 @@
 # Daedalus project report
 
+## October 8, 2026 — Lewis Dental Group added; onboarding deployed
+
+Release `793a511` is active on SER8 after verified off-host backup and successful internal/public readiness. Lewis Dental Group (`lewisdentalgrp.com`) is workspace 8 under the requested owner with approved admin membership, complimentary onboarding and a November 7, 2026 review deadline. DNS ownership remains pending; onboarding controls are open. The owner’s approved workspace-list projection includes Lewis, daily public schedules are enabled, and public onboarding/dashboard assets match tested source. Full suite: 1,114 passed, one skipped, 342 subtests. Real browser visual review and future renewal acceptance remain open. The Google Admin section is also deployed, but its dedicated credentials and real tenant consent are still pending. [Customer workflow](docs/CUSTOMER-ONBOARDING.md); [hosting inventory](docs/WEBSITE-HOSTING-COSTS.md).
+
 ## October 8, 2026 — Complimentary customer onboarding implemented locally
 
 Added platform-admin customer onboarding in the customer creation dialog and existing-customer list: complimentary status, 30-day DNS exception, explicit renewal/end decisions, admin review popup, expiry notices and audit history. Ownership remains unverified and Google Admin consent retains its verification requirement. Production activation and Lewis customer creation remain pending deployment access. [Workflow and acceptance](docs/CUSTOMER-ONBOARDING.md).

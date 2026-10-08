@@ -1,6 +1,6 @@
 # Complimentary customer onboarding
 
-Implemented in local source October 8, 2026. Production activation and the Lewis Dental Group customer record remain pending; deployment SSH access has not been established in this session.
+Deployed October 8, 2026 as source `793a5116d89cb5518f3546ae3faaddd2be3c2528`. Lewis Dental Group (`lewisdentalgrp.com`, workspace 8) is created under the requested owner with approved admin membership and complimentary onboarding. First review: November 7, 2026 at 16:04:25 UTC (12:04:25 Eastern). DNS ownership remains pending; onboarding controls are active.
 
 ## Admin workflow
 
@@ -26,3 +26,5 @@ Complimentary status records the free onboarding decision. There is no payment o
 - Review the populated admin dialog and due popup on desktop/mobile, keyboard navigation, page refresh and real expiry/renewal behavior. Local API/template tests do not establish production or browser visual acceptance.
 
 Local validation receipt: `validation/customer-onboarding-20261008/receipt.json` (ignored/private). Full suite: **1,114 passed, one skipped, 342 subtests**. Nine onboarding backend/UI checks passed; the UI check executes popup dismissal, new-due-customer prompting and reapproval through a DOM fixture. JavaScript syntax and diff whitespace passed. Release file selection includes both new modules. Actual populated browser visuals and production acceptance remain pending.
+
+Production rollout passed internal/public readiness after verified off-host backup `daedalus-data-20261008T160335Z.tar.gz`. The 98-file release digest is `f60dd82aaa774062e1b71b8b6546834d99656d1f115f2d6e0f6c7af256f11992`. Owner workspace-list database projection includes Lewis exactly once; its creation, approval and owner-requested provisioning are audited. Public onboarding/dashboard scripts match tested source. Live browser visual review and a real future 30-day renewal remain separate acceptance checks.

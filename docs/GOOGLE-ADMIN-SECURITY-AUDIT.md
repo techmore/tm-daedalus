@@ -129,3 +129,7 @@ Ongoing project reports should describe the feature as **implemented locally / n
 8. Repeat each audit; confirm comparison isolation, unchanged-result notice suppression, failures and reconnect behavior. Review the saved report/coverage and explicitly opt into the desired recurrence. Validate an actual scheduled refresh and inbox notice. Keep outbound email delivery as a separate requirement.
 
 Google setup references: [OAuth consent/audience](https://developers.google.com/workspace/guides/configure-oauth-consent), [web-server consent and offline access](https://developers.google.com/identity/protocols/oauth2/web-server), and [Directory scope documentation](https://developers.google.com/workspace/admin/directory/v1/guides/authorizing).
+
+### October 8 production source activation
+
+The Google Admin section and backend were activated with onboarding release `793a511` after verified off-host backup and internal/public readiness. Dedicated Admin client credentials are absent on production. No real Google consent, tenant audit or scheduled refresh is claimed; benchmark pinning and the live acceptance gates above remain pending.
