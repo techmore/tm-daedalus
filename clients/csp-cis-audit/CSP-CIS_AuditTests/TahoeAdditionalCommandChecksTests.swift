@@ -5,6 +5,61 @@ import CryptoKit
 @testable import CSP_CIS_Audit
 
 struct TahoeAdditionalCommandChecksTests {
+    @Test func effectiveSudoPolicyUsesVersionOnlyAndKeepsRawPolicyLocal() {
+        let rules = ["os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure"]
+        let output = "Sudo version 1.9.17p2\nAuthentication timestamp timeout: 0.0 minutes\nType of authentication timestamp record: tty\nLog when a command is allowed by sudoers\nPrivate fixture policy metadata\n"
+        for rule in rules {
+            #expect(MacOSChecks.additionalMacOS26CommandRuleIDs.contains(rule))
+            let check = CISCheck(id: rule, category: "macos", description: "Sudo criterion", ruleID: rule)
+            let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { path, arguments in
+                #expect(path == "/usr/bin/sudo")
+                #expect(arguments == ["-V"])
+                return .init(output: output)
+            }, readPreference: { _, _ in nil })
+            #expect(result.status == "pass")
+            #expect(!result.details.contains("Private fixture"))
+            #expect(!result.details.contains("1.9.17"))
+        }
+    }
+
+    @Test func effectiveSudoPolicyExplicitMismatchesFail() {
+        let output = "Sudo version 1.9.17p2\nAuthentication timestamp timeout: 0.0 minutes\nType of authentication timestamp record: tty\nLog when a command is allowed by sudoers\n"
+        for (rule, old, new) in [("os_sudo_timeout_configure", "0.0 minutes", "5.0 minutes"),
+                                 ("os_sudo_timeout_configure", "0.0 minutes", "-1.0 minutes"),
+                                 ("os_sudoers_timestamp_type_configure", "record: tty", "record: global"),
+                                 ("os_sudoers_timestamp_type_configure", "record: tty", "record: ppid"),
+                                 ("os_sudo_log_enforce", "Log when a command is allowed by sudoers\n", "")] {
+            let check = CISCheck(id: rule, category: "macos", description: "Sudo criterion", ruleID: rule)
+            let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { _, _ in
+                .init(output: output.replacingOccurrences(of: old, with: new))
+            }, readPreference: { _, _ in nil })
+            #expect(result.status == "fail")
+        }
+    }
+
+    @Test func effectiveSudoPolicyUnavailableOrAmbiguousEvidenceStaysManual() {
+        let output = "Sudo version 1.9.17p2\nAuthentication timestamp timeout: 0.0 minutes\nType of authentication timestamp record: tty\nLog when a command is allowed by sudoers\n"
+        for rule in ["os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure"] {
+            let check = CISCheck(id: rule, category: "macos", description: "Sudo criterion", ruleID: rule)
+            for evidence: MacOSChecks.CommandEvidence in [.init(output: "Sudo version 1.9.17p2\n"),
+                .init(output: output, exitCode: 1), .init(output: output, error: "unreadable"),
+                .init(output: output, unavailable: "timed out"), .init(output: String(repeating: "x", count: 65537)),
+                .init(output: output + "Authentication timestamp timeout: 0.0 minutes\n"),
+                .init(output: output + "Type of authentication timestamp record: tty\n"),
+                .init(output: output.replacingOccurrences(of: "0.0 minutes", with: "nan minutes")),
+                .init(output: output.replacingOccurrences(of: "0.0 minutes", with: "0.0 minutes extra")),
+                .init(output: output.replacingOccurrences(of: "record: tty", with: "record: unknown")),
+                .init(output: output + "\0")] {
+                let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { _, _ in evidence }, readPreference: { _, _ in nil })
+                #expect(result.status == "manual")
+            }
+        }
+        let rule = "os_sudo_log_enforce"
+        let check = CISCheck(id: rule, category: "macos", description: "Sudo criterion", ruleID: rule)
+        let duplicate = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { _, _ in .init(output: output + "Log when a command is allowed by sudoers\n") }, readPreference: { _, _ in nil })
+        #expect(duplicate.status == "manual")
+    }
+
     @Test func secureHomeDirectoriesUsePinnedModesAndKeepNamesLocal() {
         let rule = "os_home_folders_secure"
         #expect(MacOSChecks.additionalMacOS26CommandRuleIDs.contains(rule))
@@ -913,6 +968,9 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_sudo_timeout_configure": ("/usr/bin/sudo", ["-V"]),
+            "os_sudo_log_enforce": ("/usr/bin/sudo", ["-V"]),
+            "os_sudoers_timestamp_type_configure": ("/usr/bin/sudo", ["-V"]),
             "os_home_folders_secure": ("/usr/bin/find", ["/System/Volumes/Data/Users", "-mindepth", "1", "-maxdepth", "1", "-type", "d", "!", "-name", "*Shared*", "!", "-name", "*Guest*", "-exec", "/usr/bin/stat", "-f", "%HT:%Lp", "{}", "+"]),
             "pwpolicy_account_lockout_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_account_lockout_timeout_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),

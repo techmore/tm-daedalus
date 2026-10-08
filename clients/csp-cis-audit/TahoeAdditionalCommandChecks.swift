@@ -38,6 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
+        "os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure",
         "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "pwpolicy_alpha_numeric_enforce", "pwpolicy_special_character_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_home_folders_secure", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
@@ -99,6 +100,48 @@ extension MacOSChecks {
         }
         let rule = check.ruleID ?? ""
         switch rule {
+        case "os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure":
+            // Version mode never executes a command or asks for a password.
+            // Full effective policy is available only when the caller already
+            // has the privileges sudo requires; the client does not elevate.
+            let evidence = command("/usr/bin/sudo", ["-V"])
+            guard usable(evidence), evidence.output.utf8.count <= 65536,
+                  !evidence.output.unicodeScalars.contains(where: { $0.value == 0 || $0.value == 127 }) else {
+                return result("manual", "Effective sudo policy was unavailable, unsuccessful or exceeded its capture limit. No privilege escalation was attempted.")
+            }
+            let lines = evidence.output.components(separatedBy: .newlines)
+            let versions = lines.filter { $0.hasPrefix("Sudo version ") }
+            let timeouts = lines.filter { $0.hasPrefix("Authentication timestamp timeout:") }
+            let timestampTypes = lines.filter { $0.hasPrefix("Type of authentication timestamp record:") }
+            guard versions.count == 1, versions[0].range(of: "^Sudo version [0-9]+(?:\\.[0-9]+){1,3}(?:p[0-9]+)?$", options: .regularExpression) != nil,
+                  timeouts.count == 1, timestampTypes.count == 1,
+                  timeouts[0].range(of: "^Authentication timestamp timeout: -?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)? minutes$", options: .regularExpression) != nil else {
+                return result("manual", "Complete supported effective sudo policy fields were not available. Version-only output, missing permissions or ambiguous fields require review.")
+            }
+            let timeoutText = timeouts[0].dropFirst("Authentication timestamp timeout: ".count).dropLast(" minutes".count)
+            let timestampType = String(timestampTypes[0].dropFirst("Type of authentication timestamp record: ".count))
+            guard let timeout = Double(timeoutText), timeout.isFinite,
+                  ["tty", "global", "ppid", "kernel"].contains(timestampType) else {
+                return result("manual", "Effective sudo policy contains an unsupported timeout or timestamp type; no compliance result was inferred.")
+            }
+            if rule == "os_sudo_timeout_configure" {
+                return result(timeout == 0 ? "pass" : "fail", timeout == 0
+                    ? "Effective authentication timeout matches the pinned zero-minute criterion."
+                    : "Effective authentication timeout differs from the pinned zero-minute criterion.")
+            }
+            if rule == "os_sudoers_timestamp_type_configure" {
+                return result(timestampType == "tty" ? "pass" : "fail", timestampType == "tty"
+                    ? "Effective authentication timestamp record type matches the pinned tty criterion."
+                    : "Effective authentication timestamp record type differs from the pinned tty criterion.")
+            }
+            let logging = lines.filter { $0 == "Log when a command is allowed by sudoers" }
+            guard logging.count <= 1 else {
+                return result("manual", "Effective sudo logging evidence is duplicated or ambiguous.")
+            }
+            return result(logging.count == 1 ? "pass" : "fail", logging.count == 1
+                ? "Complete captured effective sudo policy explicitly enables allowed-command logging. Actual event delivery is not assessed."
+                : "Complete captured effective sudo policy lacks the allowed-command logging flag required by the pinned check.")
+
         case "os_safari_advertising_privacy_protection_enable",
              "os_safari_open_safe_downloads_disable",
              "os_safari_prevent_cross-site_tracking_enable",
