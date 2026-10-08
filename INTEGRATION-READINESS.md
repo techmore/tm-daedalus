@@ -1,5 +1,13 @@
 # Integration readiness
 
+## October 8, 2026 — active portal release and installed Linux evidence
+
+Production now runs source `d199aae`, verified 79-file release SHA-256 `08372a8b725e078ceab6284f9eb7273bf82a99a4f919b2f028e847073f5b39c9`. The pre-deploy off-host backup is `daedalus-data-20261008T023918Z.tar.gz`. Incus activation and internal/public readiness checks passed; a separate public check returned HTTP 200 / ready at 02:41:38Z. A normal authenticated CSP operator request downloaded the live scanner kit (HTTP 200, 1,000,130 bytes). Its engine ZIP, Swift status source and both upgrade helpers match active production bytes. BFS reports 40 and 41 remain completed with their original PDF sizes. No installed scanner engine or bridge was upgraded.
+
+[Linux workflow 37718157847](https://github.com/techmore/tm-daedalus/actions/runs/37718157847), source `4e1a2aa`, completed successfully for all three scenarios: managed lifecycle, interrupted bridge and repeated scan comparison. The downloaded repeat receipt confirms distinct completed run IDs, two accepted/succeeded acknowledgement pairs, comparable explicit loopback coverage and zero host/port changes. Lifecycle receipt confirms maintenance refusal without service change, successful owner release and upgrade, retained enrollment/settings/history, repeated-kit no-op, recovery with identical saved PDF bytes and cleanup. These are disposable Linux loopback installations, not physical-host soak evidence.
+
+For active source `d199aae`, [backend CI 37718905043](https://github.com/techmore/tm-daedalus/actions/runs/37718905043) and [native scanner status CI 37718905007](https://github.com/techmore/tm-daedalus/actions/runs/37718905007) passed. The fresh Linux workflow 37718904975 was still running at this observation. Local suite remains 795 passed, one skipped and 287 subtests. Legacy engine migration, live native maintenance display, scanner PDF baseline acceptance, broader dashboard/mobile acceptance and trusted CIS distribution remain open.
+
 ## October 8, 2026 — native scanner maintenance and activity presentation
 
 The Mac status indicator now presents maintenance explicitly in the menu badge, window status and accessibility description, with an explanation that scan/report starts are paused. Unavailable engines show Offline; malformed or contradictory activity shows unknown rather than idle. Legacy coherent idle responses remain supported. Swift fixtures compile the actual application source and cover maintenance, resume, scan progress, report work, offline and unknown states. A dedicated macOS workflow runs these fixtures and compiles the complete application without changing any service installation.
