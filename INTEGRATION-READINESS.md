@@ -1,5 +1,10 @@
 # Integration readiness
 
+## October 8, 2026 — Meraki power table active in production
+
+SER8 Incus activated source 3e6013aa9a9ffa2f4b8e93737797798306bdd96c, verified 79-file release SHA-256 692bd38d11cdc75cef41de2d55dc8520af01f0f626a30c83531c609efec3aeca. Verified off-host backup daedalus-data-20261008T032426Z.tar.gz preceded activation; internal/public readiness passed. A normal authenticated operator GET returned dashboard HTTP 200 with both current asset versions. Served JavaScript/CSS match active source bytes. BFS report 42 remains completed with seven saved power observations and its original 154,882-byte PDF. Private receipt: /data/codex-meraki-power-ui-20261008.json. Source backend CI 37722559671 and installed Linux CI 37722559609 are running at this checkpoint. This is API/asset validation, not rendered desktop/mobile acceptance; the ego-browser ownership boundary remains unchanged.
+
+
 ## October 8, 2026 — Meraki power dashboard hierarchy
 
 The PoE detail section now puts shown-switch count, complete energy coverage and measured energy from the shown switches ahead of a per-switch comparison table. Unknown, failed and unknown-timespan readings stay unavailable; measured zero stays zero. Truncated lists explicitly limit summary scope to shown switches. One shared note explains the 24-hour measurement window, missing ports and the difference between average usage and peak capacity. The table uses column/row headers, a caption and a named keyboard-focusable scroll region with a visible focus indicator. Styling uses existing cream, brown and olive theme variables.
