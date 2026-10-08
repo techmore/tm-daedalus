@@ -1,6 +1,6 @@
 # Complimentary customer onboarding
 
-Deployed October 8, 2026 as source `793a5116d89cb5518f3546ae3faaddd2be3c2528`. Lewis Dental Group (`lewisdentalgrp.com`, workspace 8) is created under the requested owner with approved admin membership and complimentary onboarding. First review: November 7, 2026 at 16:04:25 UTC (11:04:25 Eastern). DNS ownership remains pending; onboarding controls are active.
+Initial onboarding deployed October 8, 2026 as source `793a5116d89cb5518f3546ae3faaddd2be3c2528`. Lewis Dental Group (`lewisdentalgrp.com`, workspace 8) is created under the requested owner with approved admin membership and complimentary onboarding. First review: November 7, 2026 at 16:04:25 UTC (11:04:25 Eastern). DNS ownership remains pending; onboarding controls are active.
 
 ## Admin workflow
 
@@ -42,3 +42,7 @@ Earlier source validation receipt: `validation/customer-onboarding-20261008/rece
 The nonmodal source change passed **15 focused backend/UI tests**. DOM fixtures execute initial/reloaded pages, minute polls, a newly due customer, explicit opening/closing, an already open dialog, unchanged and focused drafts, stale-version conflicts, failed refresh, reapproval, ending onboarding, a delayed pre-save request racing a successful decision, and list-only recovery after a saved decision's refresh fails. Platform-admin templates include the reminder; ordinary customer admins do not receive it. Backend expiry, durable notices and authorization tests remain in the focused suite. These are source checks; deployment and populated browser visual acceptance remain separate requirements.
 
 Production rollout passed internal/public readiness after verified off-host backup `daedalus-data-20261008T160335Z.tar.gz`. The 98-file release digest is `f60dd82aaa774062e1b71b8b6546834d99656d1f115f2d6e0f6c7af256f11992`. Owner workspace-list database projection includes Lewis exactly once; its creation, approval and owner-requested provisioning are audited. Public onboarding/dashboard scripts match tested source. Live browser visual review and a real future 30-day renewal remain separate acceptance checks.
+
+## Latest access rollout
+
+The coherent access/TXT/nonmodal review source `1ca4abcd5531127470d76a47ef8f812bc1a74ca3` is deployed on SER8. Full local validation passed **1,258 tests, one skipped, 402 subtests**; backend and all five managed scanner CI scenarios passed. Normal production Bearer and token-login cookie checks confirm customer creation is denied to workspace-only keys and revocation invalidates both. Existing proof and all 71 historical report pairs are preserved. [Deployment, live validation and data recovery receipt](COMPLETION-AUDIT-20261008.md#october-8--coherent-customer-access-and-refresh-safe-txt-instructions). Actual new-customer TXT publication, sharing and populated visual acceptance remain open.
