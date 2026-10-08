@@ -73,6 +73,12 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
                     validation.validate(Path('/unused'), Path('/unused-receipt'), close_listener=True, **options)
                 lookup.assert_not_called()
 
+    def test_real_harness_disables_background_external_audits(self):
+        source = Path(validation.__file__).read_text()
+        self.assertIn('DAEDALUS_BACKGROUND_WORKERS_ENABLED="false"', source)
+        self.assertIn('SELECT COUNT(*) FROM external_check_runs', source)
+        self.assertIn('Scanner-only validation unexpectedly ran an external audit', source)
+
     def test_readiness_refuses_exited_process_before_accepting_response(self):
         from unittest.mock import Mock, patch
         process = Mock()

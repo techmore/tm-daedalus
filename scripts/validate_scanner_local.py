@@ -245,7 +245,7 @@ def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, i
         portal_data = root / 'portal-data'
         portal_data.mkdir(mode=0o700)
         portal_database = portal_data / 'daedalus.db'
-        environment.update(PYTHON_DOTENV_DISABLED="1", DAEDALUS_DATABASE_URL=f"sqlite:///{portal_database}", DAEDALUS_DATA_DIR=str(portal_data), DAEDALUS_REPORTS_DIR=str(portal_data / "reports"), DAEDALUS_SESSION_SECRET=secrets.token_urlsafe(48), DAEDALUS_ENV="development", DAEDALUS_DEMO_MODE="true", DAEDALUS_BASE_URL=portal, PYTHONPATH=str(REPO / "src"))
+        environment.update(PYTHON_DOTENV_DISABLED="1", DAEDALUS_DATABASE_URL=f"sqlite:///{portal_database}", DAEDALUS_DATA_DIR=str(portal_data), DAEDALUS_REPORTS_DIR=str(portal_data / "reports"), DAEDALUS_SESSION_SECRET=secrets.token_urlsafe(48), DAEDALUS_ENV="development", DAEDALUS_DEMO_MODE="true", DAEDALUS_BACKGROUND_WORKERS_ENABLED="false", DAEDALUS_BASE_URL=portal, PYTHONPATH=str(REPO / "src"))
         if managed_linux:
             environment.update({key: os.environ[key] for key in ('XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS') if key in os.environ})
             environment.update(XDG_CONFIG_HOME=str(config_home), XDG_DATA_HOME=str(data_home))
@@ -537,6 +537,9 @@ raise SystemExit(completed.returncode)
                 socket_live.close()
                 with sqlite3.connect(portal_database) as db:
                     acknowledgements = [json.loads(row[0]).get("status") for row in db.execute("SELECT details FROM audit_logs WHERE action='scanner.command_result_reported'")]
+                    external_audit_count = db.execute("SELECT COUNT(*) FROM external_check_runs").fetchone()[0]
+                    if external_audit_count != 0:
+                        raise RuntimeError("Scanner-only validation unexpectedly ran an external audit")
                 if acknowledgements != ["accepted", "succeeded"] * (2 if repeat_scan else 1):
                     raise RuntimeError("Expected persisted accepted and succeeded command acknowledgements")
                 if not any(message.get("type") == "scan_event" for message in live):
@@ -561,6 +564,8 @@ raise SystemExit(completed.returncode)
                         raise RuntimeError('Recovery queues did not drain cleanly')
                     recovery_proof.update(command_claim_unchanged=True, terminal_acknowledged=True, own_bridge_interruption='SIGKILL', source_process_restarted=False, pending_queues_drained=True, upload_hold='loopback transport shim returned 503', interruption_scope='owned bridge killed while source workflow awaited guarded real Nmap output')
                 receipt = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "target": "127.0.0.1", "scanner_bundle_sha256": hashlib.sha256(bundled).hexdigest(), "source_tree_sha256": json.loads((source / "manifest.json").read_text())["source_tree_sha256"], "bridge_protocol": agent["command_protocol_version"], "product_skip_host_discovery": True, "per_scan_skip_host_discovery": skip_host_discovery, "command_acknowledgement_states": acknowledgements, "command_status": command["status"], "command_completed_at": command["completed_at"], "host_count": len(matched), "open_port_count": len(open_ports), "loopback_listener_port": listener_port, "observed_port_protocol": "tcp", "persisted_json_artifact_downloaded": bool(event.get("artifact_download_url")), "saved_event_names": sorted({e["event_name"] for e in history if e["agent_id"] == agent_id}), "realtime_messages": len(live), "realtime_types": sorted({str(m.get("type", "")) for m in live}), "nmap_invocations": [[Path(v).name if i == 0 else "<isolated-output>" if 'actual-scan' in v else v for i,v in enumerate(argv)] for argv in invocations], "nmap_xml_sha256": hashlib.sha256(xml).hexdigest(), "source_job_id": run_id, "grouped_run_status": run_detail["run"]["status"], "grouped_run_event_count": run_detail["run"]["event_count"], "pdf_scope": "explicit-run-snapshot", "pdf_status": report["status"], "pdf_bytes": len(pdf), "pdf_sha256": hashlib.sha256(pdf).hexdigest(), "limits": ["Single ephemeral loopback listener port; PATHguard executes real Nmap with bounded options", "No default scan coverage, service install, external targets, persistence soak, or production readiness claimed", "Ephemeral credentials/database/logs/spool removed; only sanitized receipt and PDF retained"]}
+                receipt["external_audit_run_count"] = external_audit_count
+                receipt["background_workers_enabled"] = False
                 if managed_linux:
                     def service_pid():
                         return int(subprocess.run(['systemctl', '--user', 'show', '--property=MainPID', '--value', 'daedalus-nmapui.service'], check=True, capture_output=True, text=True, timeout=10).stdout.strip())
