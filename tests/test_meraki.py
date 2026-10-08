@@ -151,6 +151,8 @@ class MerakiClientTests(unittest.TestCase):
         self.assertNotIn("never-store-this", str(result))
         self.assertEqual(len(result["security_controls"]), 10)
         self.assertEqual(result["wan_uplinks"]["data"]["state_counts"], {"active": 1})
+        self.assertEqual(result["wan_uplinks"]["data"]["rows"][0]["device_name"], "Gateway")
+        self.assertEqual(result["wan_uplinks"]["data"]["rows"][0]["network_name"], "HQ")
         self.assertNotIn("never-store-this", str(result))
 
     def test_collects_switch_and_wireless_allowlisted_settings_with_partial_coverage(self):

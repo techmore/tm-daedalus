@@ -24,6 +24,8 @@ assert.ok(text.includes('1/2 assigned appliances reported'));
 assert.equal(nodes.filter(n=>n.tag==='th'&&n.attrs.scope==='col').length,5);
 assert.ok(nodes.some(n=>n.tag==='caption'));
 assert.ok(nodes.some(n=>n.tabIndex===0));
+const named=new Node('div');renderMerakiWanuplinks(named,{status:'complete',data:{},rows:[{device_serial:'opaque-serial',network_id:'opaque-network',device_name:'Firewall',network_name:'Campus <literal>',interface:'wan1',state:'active',last_reported_at:'2026-10-08T05:49:33Z'}]});
+const namedText=all(named).map(n=>n.textContent).join(' ');assert.ok(namedText.includes('Firewall'));assert.ok(namedText.includes('Campus <literal>'));assert.ok(namedText.includes('2026-10-08T05:49:33Z'));assert.ok(!namedText.includes('opaque-serial'));
 const legacy=new Node('div');renderMerakiWanuplinks(legacy,{});assert.equal(legacy.children.length,0);
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)

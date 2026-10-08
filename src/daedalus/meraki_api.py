@@ -756,6 +756,14 @@ class MerakiClient:
                 for device in appliances if device.get("networkId") in network_by_id}),
             collection=True) if appliances else None
 
+        if wan_uplinks and isinstance(wan_uplinks.get("data"), dict):
+            appliance_by_serial = {device["serial"]: device for device in appliances}
+            for row in wan_uplinks["data"]["rows"]:
+                device_name = appliance_by_serial[row["device_serial"]].get("name")
+                network_name = network_by_id[row["network_id"]].get("name")
+                row["device_name"] = device_name[:200] if isinstance(device_name, str) and device_name else row["device_serial"]
+                row["network_name"] = network_name[:200] if isinstance(network_name, str) and network_name else row["network_id"]
+
         client_usage = collect_observation(f"/organizations/{organization_id}/clients/overview", "Aggregate client usage", {"id": "", "name": organization["name"]}, _aggregate_client_usage, params={"timespan": CLIENT_USAGE_TIMESPAN})
         for index, network in enumerate(networks, start=1):
             if progress:

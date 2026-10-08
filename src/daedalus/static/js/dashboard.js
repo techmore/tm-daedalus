@@ -1837,7 +1837,7 @@
       var head = document.createElement("thead"), tr = document.createElement("tr");
       ["Appliance", "Network", "Interface", "Reported state", "Device last reported"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
       var body = document.createElement("tbody");
-      (evidence.rows || []).forEach(function (row) {var tr = document.createElement("tr"); [row.device_serial, row.network_id, row.interface, row.state || "unknown", row.last_reported_at || "Unavailable"].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);});
+      (evidence.rows || []).forEach(function (row) {var tr = document.createElement("tr"); [row.device_name || row.device_serial, row.network_name || row.network_id, row.interface, row.state || "unknown", row.last_reported_at || "Unavailable"].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);});
       table.append(body); scroll.append(table); section.append(scroll);
       if (evidence.additional_rows) {var more = document.createElement("p"); more.textContent = evidence.additional_rows + " more interfaces in the complete saved evidence."; section.append(more);}
     }

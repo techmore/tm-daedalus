@@ -1184,8 +1184,9 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in
                  ("Appliance", "Network", "Interface", "Reported state", "Last reported")]]
         for row in data.get("rows", []):
-            rows.append([_paragraph(row.get(key, "Unavailable"), styles["MerakiCell"])
-                for key in ("device_serial", "network_id", "interface", "state", "last_reported_at")])
+            rows.append([_paragraph(value, styles["MerakiCell"]) for value in (
+                row.get("device_name") or row.get("device_serial"), row.get("network_name") or row.get("network_id"),
+                row.get("interface"), row.get("state"), row.get("last_reported_at"))])
         if len(rows) > 1:
             story.append(_table(rows, [1.4 * inch, 1.7 * inch, .7 * inch, 1.1 * inch, 2 * inch]))
 
