@@ -53,6 +53,51 @@ class CertificateTransparencyTests(unittest.TestCase):
         self.assertEqual(len(result["entries"]), 1)
         self.assertEqual(result["subdomain_query_error_type"], "TimeoutError")
 
+    def test_root_failure_still_collects_subdomains_as_partial(self):
+        with patch("daedalus.certificate_transparency._public_addresses", return_value=["8.8.8.8"]), patch(
+            "daedalus.certificate_transparency._fetch_query", side_effect=[ProviderHTTPFailure(502), [self.row()]]
+        ) as query:
+            result = run_transparency_check("example.org")
+        self.assertEqual([call.args[0] for call in query.call_args_list], ["example.org", "%.example.org"])
+        self.assertEqual(result["state"], "observed")
+        self.assertTrue(result["collection_partial"])
+        self.assertEqual(len(result["entries"]), 1)
+        self.assertEqual(result["root_query_http_status"], 502)
+        self.assertEqual(result["root_query_error_type"], "ProviderHTTPFailure")
+        self.assertNotIn("subdomain_query_error_type", result)
+        from daedalus.certificate_transparency import newly_observed_entries
+        self.assertEqual(newly_observed_entries(transparency_evidence("example.org", []), result, "example.org"), [])
+
+    def test_failed_root_and_empty_subdomain_response_remain_partial(self):
+        with patch("daedalus.certificate_transparency._public_addresses", return_value=["8.8.8.8"]), patch(
+            "daedalus.certificate_transparency._fetch_query", side_effect=[TimeoutError, []]
+        ):
+            result = run_transparency_check("example.org")
+        self.assertEqual(result["state"], "observed")
+        self.assertEqual(result["entries"], [])
+        self.assertTrue(result["collection_partial"])
+        self.assertEqual(result["root_query_error_type"], "TimeoutError")
+
+    def test_both_failed_queries_are_unavailable_not_empty_issuance(self):
+        with patch("daedalus.certificate_transparency._public_addresses", return_value=["8.8.8.8"]), patch(
+            "daedalus.certificate_transparency._fetch_query", side_effect=[ProviderHTTPFailure(502), TimeoutError]
+        ) as query:
+            result = run_transparency_check("example.org")
+        self.assertEqual(query.call_count, 2)
+        self.assertEqual(result["state"], "unavailable")
+        self.assertNotIn("entries", result)
+        self.assertEqual(result["http_status"], 502)
+
+    def test_root_access_or_rate_limit_refusal_does_not_issue_more_queries(self):
+        for status in [401, 403, 429]:
+            with self.subTest(status=status), patch("daedalus.certificate_transparency._public_addresses", return_value=["8.8.8.8"]), patch(
+                "daedalus.certificate_transparency._fetch_query", side_effect=ProviderHTTPFailure(status)
+            ) as query:
+                result = run_transparency_check("example.org")
+            query.assert_called_once()
+            self.assertEqual(result["state"], "unavailable")
+            self.assertEqual(result["http_status"], status)
+
     def test_provider_http_status_is_saved_without_response_body(self):
         connection = MagicMock()
         connection.getresponse.return_value.status = 502
@@ -64,7 +109,7 @@ class CertificateTransparencyTests(unittest.TestCase):
         self.assertEqual(result["http_status"], 502)
         self.assertEqual(result["error_code"], "provider_http_error")
         connection.getresponse.return_value.read.assert_not_called()
-        connection.close.assert_called_once()
+        self.assertEqual(connection.close.call_count, 2)
         with self.assertRaises(ValueError):
             ProviderHTTPFailure(900)
 
@@ -89,8 +134,9 @@ class CertificateTransparencyTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         fetch_entries("example.org")
             resolve.assert_called_once_with("crt.sh")
-            self.assertEqual(connection.request.call_args.args[:2], ("GET", "/?q=%25.example.org&output=json" if status == 200 and body == b'[]' else "/?q=example.org&output=json"))
-            self.assertEqual(connection.close.call_count, 2 if status == 200 and body == b'[]' else 1)
+            self.assertEqual([call.args[:2] for call in connection.request.call_args_list], [
+                ("GET", "/?q=example.org&output=json"), ("GET", "/?q=%25.example.org&output=json")])
+            self.assertEqual(connection.close.call_count, 2)
 
 class CertificateTransparencyComparisonTests(unittest.TestCase):
     row = CertificateTransparencyTests.row

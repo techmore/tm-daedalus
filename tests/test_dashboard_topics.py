@@ -646,6 +646,13 @@ renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{sta
 assert.equal(grid.children[3].children[1].children[0].detail,'History provider returned HTTP 502.');
 renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'unavailable',error_type:'TimeoutError'}});
 assert.equal(grid.children[3].children[1].children[0].detail,'History provider timed out.');
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'observed',collection_partial:true,entries:[],root_query_error_type:'ProviderHTTPFailure',root_query_http_status:502}});
+assert.equal(grid.children[3].children[1].children[0].value,'Partial evidence');
+assert.equal(grid.children[3].children[1].children[0].detail,'Root-domain history lookup returned HTTP 502.');
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'observed',collection_partial:true,entries:[],root_query_error_type:'TimeoutError'}});
+assert.equal(grid.children[3].children[1].children[0].detail,'Root-domain history lookup timed out.');
+renderDnsSnapshot({domain:'example.org',records:{},certificate_transparency:{state:'observed',collection_partial:true,entries:[],subdomain_query_error_type:'TimeoutError'}});
+assert.equal(grid.children[3].children[1].children[0].detail,'Subdomain history lookup timed out.');
 
 
 renderDnsSnapshot(null);assert.equal(grid.children.length,1);

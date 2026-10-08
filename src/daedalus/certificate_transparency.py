@@ -16,11 +16,14 @@ MAX_SAVED_ENTRIES = 100
 
 
 class PartialTransparencyFailure(RuntimeError):
-    def __init__(self, rows: list, error_type: str, http_status: int | None = None):
-        super().__init__("Subdomain transparency query unavailable")
+    def __init__(self, rows: list, error_type: str, http_status: int | None = None, query: str = "subdomain"):
+        super().__init__("Certificate history query unavailable")
+        if query not in {"root", "subdomain"}:
+            raise ValueError("Invalid certificate history query scope")
         self.rows = rows
         self.error_type = error_type
         self.http_status = http_status
+        self.query = query
 
 
 class ProviderHTTPFailure(ValueError):
@@ -54,12 +57,20 @@ def fetch_entries(domain: str) -> list:
     domain = normalize_domain(domain)
     addresses = _public_addresses("crt.sh")
     # Preserve root coverage as well as the legacy wildcard subdomain query.
-    root_rows = _fetch_query(domain, addresses[0])
-    try:
-        subdomain_rows = _fetch_query("%." + domain, addresses[0])
-    except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
-        raise PartialTransparencyFailure(root_rows, type(exc).__name__, getattr(exc, "http_status", None)) from exc
-    return root_rows + subdomain_rows
+    rows, failures = [], []
+    for scope, query in (("root", domain), ("subdomain", "%." + domain)):
+        try:
+            rows.extend(_fetch_query(query, addresses[0]))
+        except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
+            if scope == "root" and isinstance(exc, ProviderHTTPFailure) and exc.http_status in {401, 403, 429}:
+                raise  # Do not make another query after access or rate-limit refusal.
+            failures.append((scope, exc))
+    if len(failures) == 2:
+        raise failures[0][1]
+    if failures:
+        scope, exc = failures[0]
+        raise PartialTransparencyFailure(rows, type(exc).__name__, getattr(exc, "http_status", None), scope) from exc
+    return rows
 
 
 def _date(value: object) -> str:
@@ -128,9 +139,9 @@ def run_transparency_check(domain: str) -> dict:
             return {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
                     "error_type": "ValueError", "log_proofs_verified": False, "live_certificate_verified": False}
         result["collection_partial"] = True
-        result["subdomain_query_error_type"] = exc.error_type
+        result[exc.query + "_query_error_type"] = exc.error_type
         if exc.http_status is not None:
-            result["subdomain_query_http_status"] = exc.http_status
+            result[exc.query + "_query_http_status"] = exc.http_status
         return result
     except (OSError, ValueError, RuntimeError, http.client.HTTPException) as exc:
         result = {"domain": domain, "state": "unavailable", "provider": "crt.sh", "scope": "domain_and_subdomains",
