@@ -75,6 +75,12 @@ Local final validation passed **1,161 tests, one skipped, 349 subtests**. Backen
 
 ## October 8 — Penn public audit and bounded scanner update reads
 
+### Follow-up: deployed bounded capture and report evidence
+
+Source `8653f9fea937816b7a3afca7500e02d4153b4766` is deployed on SER8 Incus with verified 99-file release digest `3ac7b777c6b5669155700cd69f28e94c2d7c495124d7f41ffa46feec41526599`. Backend CI 37831798952, native macOS CI 37831798904, and all five managed Linux scenarios in 37831798975 passed. Internal/public readiness passed. The ordinary authenticated dashboard check at 19:30 UTC shows Mac agent 2 and Linux agent 3 online and NmapUI ready; the stale agent remains offline. All 67 completed PDFs and saved snapshots are byte-identical across this rollout. Backup `daedalus-data-20261008T192833Z.tar.gz` is retained off-host. Installed bridges have not yet been upgraded to the new collector.
+
+New external posture PDF rendering includes retained public registration and certificate-transparency observations, explicit partial/unavailable status and ownership/log-proof/live-TLS limitations. The existing CSP theme and scanner template are preserved. The seven-page local preview from Penn report 67's saved snapshot was visually reviewed in full; the existing production report is untouched. Focused report tests passed 29 cases; the full local suite passed 1,177 tests, one skipped and 349 subtests. Deployment of this report enhancement remains pending at this entry.
+
 All five actual Linux managed scenarios completed successfully in CI `37826522086` for deployed source `8b34571`, including lifecycle, interrupted bridge, repeat comparison, listener change and multi-host change.
 
 Normal approved-user requests collected Penn Charter public DNS/email run **93** (completed with warnings, zero new differences) and website run **94** (completed, two page-content differences), then generated posture PDF **67**. Domain ownership remains pending and controls are closed; no active or Nikto checks were requested. The PDF is seven visually reviewed pages, 17,169 bytes, SHA-256 `05ea9992f134a3ee1da72272fc3000e3037f8bbd835997524826fd58b1d10087`. It preserves the existing report theme. Registration metadata is collected; certificate-transparency evidence remains unavailable. Website content digest/size differences do not establish a security incident.

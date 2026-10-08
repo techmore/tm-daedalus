@@ -43,6 +43,42 @@ class CISEndpointSummaryTests(unittest.TestCase):
 
 
 class ExternalPostureReportTests(unittest.TestCase):
+    def test_domain_history_renders_saved_evidence_and_qualification(self):
+        from unittest.mock import patch
+        from daedalus import reports
+        snapshot = {"domain": "example.org", "checks": {"dns": {"run": {"id": 1, "status": "completed", "snapshot": {
+            "registration_observations": {"state": "observed", "protocol": "rdap", "collection_partial": True,
+                "registrars": ["Example Registrar <review>"], "nameservers": ["ns.example.org"],
+                "events": [{"action": "expiration", "date": "2027-01-01T00:00:00Z"}], "source_url": "https://rdap.example.org/domain/example.org"},
+            "certificate_transparency": {"state": "observed", "provider": "crt.sh", "scope": "domain_and_subdomains",
+                "collection_partial": True, "subdomain_query_error_type": "TimeoutError", "entries": [
+                    {"id": 42, "issuer": "Example CA <public>", "dns_names": ["example.org", "www.example.org"],
+                     "not_before": "2026-01-01T00:00:00Z", "not_after": "2027-01-01T00:00:00Z"}]},
+        }}}}}
+        with patch.object(reports, "_paragraph", wraps=reports._paragraph) as paragraphs:
+            pdf = build_external_posture_pdf(snapshot)
+        values = [str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        self.assertIn("Partial", values)
+        self.assertIn("TimeoutError", values)
+        self.assertIn("Expiration", values)
+        self.assertTrue(any("42" in value and "Example CA" in value for value in values))
+        self.assertTrue(any("does not verify workspace ownership" in value for value in values))
+        self.assertTrue(any("did not verify certificate log proofs" in value for value in values))
+
+    def test_unavailable_domain_history_never_claims_no_certificates_or_no_registration(self):
+        from unittest.mock import patch
+        from daedalus import reports
+        with patch.object(reports, "_paragraph", wraps=reports._paragraph) as paragraphs:
+            build_external_posture_pdf({"checks": {"dns": {"run": {"snapshot": {
+                "registration_observations": {"state": "unavailable", "error_type": "TimeoutError"},
+                "certificate_transparency": {"state": "unavailable", "error_code": "provider_http_error"},
+            }}}}})
+        values = [str(call.args[0]) for call in paragraphs.call_args_list]
+        self.assertEqual(values.count("Unavailable"), 2)
+        self.assertIn("provider_http_error", values)
+        self.assertFalse(any("No certificate entries were retained" in value for value in values))
+
     def test_bounded_exposure_heading_and_complete_probe_list_stay_together(self):
         from daedalus import reports
 

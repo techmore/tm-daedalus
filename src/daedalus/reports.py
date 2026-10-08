@@ -247,6 +247,64 @@ def _append_email_assessment(
         story.append(_table(steps, [1.0 * inch, 1.0 * inch, 4.5 * inch]))
 
 
+def _append_domain_history(story: list[Any], snapshot: dict[str, Any], styles: dict[str, ParagraphStyle]) -> None:
+    """Render saved public evidence without treating it as ownership or live TLS proof."""
+    registration = snapshot.get("registration_observations")
+    if isinstance(registration, dict):
+        story.append(Paragraph("Domain registration observations", styles["subsection"]))
+        state = registration.get("state")
+        rows = [[_paragraph(label, styles["table_header"]) for label in ("Measure", "Saved observation")]]
+        values = [("Collection", "Observed" if state == "observed" else "Unavailable" if state == "unavailable" else "Unknown"),
+                  ("Protocol", registration.get("protocol") or "Unknown")]
+        if state == "observed":
+            values.extend([( "Coverage", "Partial" if registration.get("collection_partial") is True else "Complete provider collection" if registration.get("collection_partial") is False else "Unknown"),
+                           ("Registrar", registration.get("registrars") or "Not reported"),
+                           ("Nameservers", registration.get("nameservers") or "Not reported")])
+            for event in (registration.get("events") or [])[:100]:
+                if isinstance(event, dict):
+                    values.append((str(event.get("action") or "Registration event").title(), _time_text(event.get("date"))))
+        else:
+            values.append(("Collection error", registration.get("error_type") or "Not reported"))
+        if registration.get("source_url"):
+            values.append(("Source", registration["source_url"]))
+        rows.extend([_paragraph(label, styles["cell"]), _paragraph(value, styles["cell"])] for label, value in values)
+        story.append(_table(rows, [1.55 * inch, 4.95 * inch]))
+        story.append(_paragraph("Public registration metadata does not verify workspace ownership. Missing or unavailable evidence does not establish that the domain is unregistered.", styles["small"]))
+
+    transparency = snapshot.get("certificate_transparency")
+    if isinstance(transparency, dict):
+        story.append(Paragraph("Certificate transparency history", styles["subsection"]))
+        state = transparency.get("state")
+        rows = [[_paragraph(label, styles["table_header"]) for label in ("Measure", "Saved observation")]]
+        values = [("Collection", "Observed" if state == "observed" else "Unavailable" if state == "unavailable" else "Unknown"),
+                  ("Provider", transparency.get("provider") or "Unknown"),
+                  ("Scope", str(transparency.get("scope") or "Unknown").replace("_", " "))]
+        if state == "observed":
+            values.append(("Coverage", "Partial" if transparency.get("collection_partial") is True else "Complete bounded provider collection" if transparency.get("collection_partial") is False else "Unknown"))
+            for scope in ("root", "subdomain"):
+                if transparency.get(scope + "_query_error_type"):
+                    values.append((scope.title() + " query error", transparency[scope + "_query_error_type"]))
+        else:
+            values.append(("Collection error", transparency.get("error_code") or transparency.get("error_type") or "Not reported"))
+        rows.extend([_paragraph(label, styles["cell"]), _paragraph(value, styles["cell"])] for label, value in values)
+        story.append(_table(rows, [1.55 * inch, 4.95 * inch]))
+        entries = transparency.get("entries")
+        if state == "observed" and isinstance(entries, list):
+            if entries:
+                entry_rows = [[_paragraph(label, styles["table_header"]) for label in ("Entry / issuer", "DNS names", "Certificate dates")]]
+                for entry in entries[:100]:
+                    if isinstance(entry, dict):
+                        entry_rows.append([_paragraph(f"{entry.get('id', 'Unknown')}\n{entry.get('issuer') or 'Unknown issuer'}", styles["cell"]),
+                                           _paragraph(entry.get("dns_names") or "Not reported", styles["cell"]),
+                                           _paragraph(f"From: {_time_text(entry.get('not_before'))}\nUntil: {_time_text(entry.get('not_after'))}", styles["cell"])])
+                story.append(_table(entry_rows, [2.0 * inch, 2.4 * inch, 2.1 * inch]))
+                if len(entries) > 100:
+                    story.append(_paragraph("Additional entries remain in the saved snapshot.", styles["small"]))
+            else:
+                story.append(_paragraph("No certificate entries were retained in this bounded provider observation.", styles["body"]))
+        story.append(_paragraph("These are historical provider observations. Daedalus did not verify certificate log proofs or the live website certificate through this collection. Unavailable or partial results cannot establish an absence of certificates.", styles["small"]))
+
+
 def _append_dns(story: list[Any], check: dict[str, Any], styles: dict[str, ParagraphStyle]) -> None:
     story.append(Paragraph("DNS and email health", ParagraphStyle(name="DNSSection", parent=styles["section"], keepWithNext=False)))
     _append_latest_attempt(story, check, styles)
@@ -304,6 +362,7 @@ def _append_dns(story: list[Any], check: dict[str, Any], styles: dict[str, Parag
         story.append(Spacer(1, 6))
         warnings = "; ".join(f"{name}: {error}" for name, error in sorted(errors.items()))
         story.append(_paragraph("Resolver warnings: " + warnings, styles["small"]))
+    _append_domain_history(story, snapshot, styles)
     _append_changes(story, check.get("changes") or [], styles)
 
 
