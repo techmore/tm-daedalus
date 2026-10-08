@@ -23,6 +23,7 @@ def make_bundle(path: Path) -> None:
         archive.writestr("daedalus-scanner-kit/src/daedalus/__init__.py", "__version__='test'\n")
         archive.writestr("daedalus-scanner-kit/src/daedalus/agent.py", "pass\n")
         archive.writestr("daedalus-scanner-kit/src/daedalus/command_journal.py", "pass\n")
+        archive.writestr("daedalus-scanner-kit/src/daedalus/scanner_activity.py", "pass\n")
 
 
 class ManagedScannerUpgradeTests(unittest.TestCase):

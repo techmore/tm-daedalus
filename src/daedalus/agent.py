@@ -32,6 +32,7 @@ import socketio
 
 from daedalus import __version__
 from daedalus.command_journal import CommandJournal
+from daedalus.scanner_activity import MAX_RUNTIME_BYTES, activity_from_runtime, unknown_activity
 
 
 LOG = logging.getLogger("daedalus.agent")
@@ -556,6 +557,7 @@ class NmapUIBridge:
             "version": f"Daedalus bridge {__version__}",
             "platform": platform.system(),
             "detected_networks": self._detected_networks,
+            "nmapui_activity": self._read_nmapui_activity(),
             **scanner_health,
         }
         response = self._request(
@@ -565,6 +567,28 @@ class NmapUIBridge:
         )
         response.raise_for_status()
         self.last_successful_check_in = datetime.now(UTC).isoformat()
+
+    def _read_nmapui_activity(self) -> dict[str, Any]:
+        """Read bounded loopback operational state, with no admission changes."""
+        username = os.environ.get("NMAPUI_USERNAME", "")
+        password = os.environ.get("NMAPUI_PASSWORD", "")
+        basic_auth = (username, password) if username and password else None
+        deadline = time.monotonic() + 4
+        try:
+            with httpx.Client(trust_env=False, follow_redirects=False, timeout=2) as client:
+                with client.stream("GET", self.nmapui_url + "/api/runtime/status", auth=basic_auth,
+                                   headers={"Accept-Encoding": "identity"}) as response:
+                    response.raise_for_status()
+                    if response.status_code != 200 or response.headers.get("content-encoding", "identity").lower() != "identity" or time.monotonic() >= deadline:
+                        return unknown_activity()
+                    data = bytearray()
+                    for chunk in response.iter_raw():
+                        if time.monotonic() >= deadline or len(data) + len(chunk) > MAX_RUNTIME_BYTES:
+                            return unknown_activity()
+                        data.extend(chunk)
+            return activity_from_runtime(json.loads(bytes(data).decode("utf-8")))
+        except (httpx.HTTPError, ValueError, UnicodeError, RecursionError):
+            return unknown_activity()
 
     def _read_nmapui_health(self) -> dict[str, Any]:
         """Read only the NmapUI readiness and version fields for the fleet card."""

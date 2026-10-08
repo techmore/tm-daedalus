@@ -501,6 +501,7 @@
       ? "Last heartbeat " + new Date(agent.last_seen_at).toLocaleString()
       : "Waiting for first heartbeat";
     card.append(head, name, subtitle, telemetry, readiness, lastSeen, meta);
+    appendScannerActivity(card, agent);
 
     var authorizedNetworks = Array.isArray(agent.authorized_networks) ? agent.authorized_networks : [];
     var detectedNetworks = Array.isArray(agent.detected_networks) ? agent.detected_networks : [];
@@ -1012,6 +1013,74 @@
     return card;
   }
 
+  function appendScannerActivity(card, agent) {
+    card.scannerActivityAgent = agent;
+    var section = document.createElement("section"); section.className = "scanner-current-activity";
+    var heading = document.createElement("h4"); heading.textContent = "Current scanner activity";
+    var summary = document.createElement("p"); summary.className = "scanner-activity-summary";
+    var activity = agent.nmapui_activity;
+    var observed = activity && Date.parse(activity.observed_at);
+    var valid = agent.enabled !== false && agent.status !== "disabled" && agent.bridge_online === true && agent.nmapui_ready !== false && activity &&
+      activity.schema_version === 1 && ["idle", "maintenance", "running"].includes(activity.state) &&
+      Number.isFinite(observed) && observed <= Date.now() + 5000 && Date.now() - observed <= 45000 &&
+      Number.isInteger(activity.active_job_count) && activity.active_job_count >= 0 && activity.active_job_count <= 128 &&
+      Array.isArray(activity.jobs) && activity.jobs.length === Math.min(activity.active_job_count, 8) &&
+      activity.truncated === (activity.active_job_count > 8) &&
+      (activity.state === "running") === (activity.active_job_count > 0) && activity.jobs.every(function (job) {
+        return job && ["scan", "report", "other"].includes(job.job_type) && ["running", "cancelling"].includes(job.status) &&
+          (job.target === null || (typeof job.target === "string" && job.target.length > 0 && job.target.length <= 255 && !/[\x00-\x1f\x7f]/.test(job.target))) &&
+          (job.progress === null || (typeof job.progress === "number" && Number.isFinite(job.progress) && job.progress >= 0 && job.progress <= 100));
+      });
+    summary.textContent = !valid ? (agent.enabled === false || agent.status === "disabled"
+      ? "Activity unavailable · scanner access revoked"
+      : agent.bridge_online !== true ? "Current activity unknown · scanner bridge offline"
+      : "Current activity unknown · a fresh runtime observation is unavailable")
+      : activity.state === "maintenance" ? "Maintenance · new scans and reports are paused"
+      : activity.state === "idle" ? "Idle · no active jobs observed"
+      : activity.active_job_count + " active " + (activity.active_job_count === 1 ? "job" : "jobs");
+    section.append(heading, summary);
+    if (valid && activity.state === "running") {
+      activity.jobs.forEach(function (job) {
+        var row = document.createElement("div"); row.className = "scanner-active-job";
+        var label = document.createElement("p");
+        label.textContent = ({scan: "Scan", report: "Report", other: "Scanner job"}[job.job_type]) +
+          " · " + (job.status === "cancelling" ? "Cancellation requested" : "Running") +
+          " · " + (job.target || "Target not reported") +
+          (job.progress === null ? " · Progress not reported" : " · " + job.progress + "% reported");
+        row.append(label);
+        if (job.progress !== null) {
+          var track = document.createElement("div"); track.className = "report-progress-track";
+          track.setAttribute("role", "progressbar"); track.setAttribute("aria-label", "Reported " + job.job_type + " progress");
+          track.setAttribute("aria-valuemin", "0"); track.setAttribute("aria-valuemax", "100"); track.setAttribute("aria-valuenow", String(job.progress));
+          var fill = document.createElement("span"); fill.className = "report-progress-bar"; fill.style.width = job.progress + "%";
+          track.append(fill); row.append(track);
+        }
+        section.append(row);
+      });
+      if (activity.truncated) {
+        var more = document.createElement("p"); more.textContent = "Showing 8 of " + activity.active_job_count + " active jobs. Open the local scanner for all activity.";
+        section.append(more);
+      }
+    }
+    var note = document.createElement("p"); note.className = "check-scope-note";
+    note.textContent = (valid ? "Runtime observed " + new Date(observed).toLocaleString() + ". " : "") +
+      "Current activity is separate from saved results. An idle observation does not confirm that an earlier scan completed.";
+    section.append(note); card.append(section);
+    return section;
+  }
+
+  function refreshScannerActivities(agents) {
+    var list = document.getElementById("agent-list");
+    if (!list) return;
+    Array.from(list.children).forEach(function (card) {
+      var agent = Array.isArray(agents) ? agents.find(function (candidate) { return String(candidate.id) === card.dataset.agentId; }) : card.scannerActivityAgent;
+      if (!agent) return;
+      var prior = card.querySelector(".scanner-current-activity");
+      var updated = appendScannerActivity(card, agent);
+      if (prior) prior.replaceWith(updated);
+    });
+  }
+
   function makeEventRow(event) {
     var row = document.createElement("article");
     row.className = "event-row";
@@ -1157,14 +1226,66 @@
     return {counts: counts, areas: ordered.map(function (entry) { return entry.area; })};
   }
 
+  function workspaceEvidenceTime(value, now) {
+    if (typeof value !== "string" || !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
+    var timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) && timestamp <= now ? timestamp : null;
+  }
+
+  function workspaceAreaPresentation(area, now) {
+    area = area && typeof area === "object" ? area : {};
+    now = Number.isFinite(now) ? now : Date.now();
+    var known = ["recorded", "attention", "unavailable", "not_assessed", "running"];
+    var state = known.indexOf(area.state) >= 0 ? area.state : "unknown";
+    var timestamp = workspaceEvidenceTime(area.updated_at, now);
+    var hasEvidence = timestamp !== null && state !== "not_assessed" && state !== "unknown";
+    var labels = {recorded: "Evidence saved", attention: "Review evidence", unavailable: "Latest attempt failed",
+      not_assessed: "Not assessed", running: "Check running", unknown: "Assessment status unknown"};
+    var level = state === "unavailable" ? "bad" : state === "attention" || state === "unknown" ? "warn"
+      : state === "not_assessed" || state === "running" ? "idle" : "ok";
+    var verdict = labels[state];
+    var unknownTime = state !== "not_assessed" && (area.updated_at != null || state === "recorded") && timestamp === null;
+    if (state === "recorded" && timestamp === null) { level = "warn"; verdict = "Evidence time unknown"; }
+    else if (state === "recorded" && now - timestamp > 48 * 3600 * 1000) { level = "warn"; verdict = "Evidence needs refresh"; }
+    var when = hasEvidence ? "Saved evidence " + dateLabel(area.updated_at)
+      : state === "unknown" ? "Saved evidence source unknown"
+      : unknownTime ? "Saved evidence time needs review" : "No saved assessment time";
+    if (hasEvidence && (state === "unavailable" || state === "running")) when += " · earlier evidence retained";
+    var schedule = area.schedule;
+    var interval = schedule && Number.isInteger(schedule.interval_hours) && schedule.interval_hours > 0 ? schedule.interval_hours : null;
+    var scheduleLabel = !schedule ? "" : schedule.enabled === false ? "Automatic checks off"
+      : schedule.enabled === true && interval !== null ? "Automatic checks every " + interval + " hours" : "Schedule unknown";
+    var reviewLabel = state === "not_assessed" ? "Review setup" : state === "running" ? "Review progress"
+      : state === "unavailable" ? "Review attempt" : state === "unknown" ? "Review status" : "Review findings";
+    return {area: area, state: state, level: level, verdict: verdict, when: when, hasEvidence: hasEvidence,
+      unknownTime: unknownTime, scheduleLabel: scheduleLabel, interval: interval,
+      enableSchedule: !!schedule && schedule.enabled === false && (interval === 24 || interval === 168) && (area.key === "dns" || area.key === "web"),
+      reviewLabel: reviewLabel};
+  }
+
+  function workspaceStatusSummary(areas, now) {
+    var rows = (Array.isArray(areas) ? areas : []).map(function (area) { return workspaceAreaPresentation(area, now); });
+    var order = {bad: 0, warn: 1, idle: 2, ok: 3};
+    rows.sort(function (left, right) { return order[left.level] - order[right.level]; });
+    var review = rows.filter(function (row) { return row.level === "bad" || row.level === "warn"; }).length;
+    var missing = rows.filter(function (row) { return row.state === "not_assessed"; }).length;
+    var running = rows.filter(function (row) { return row.state === "running"; }).length;
+    var unknown = rows.filter(function (row) { return row.state === "unknown" || row.unknownTime; }).length;
+    var saved = rows.filter(function (row) { return row.hasEvidence; }).length;
+    var headline = !rows.length ? "Assessment coverage unavailable"
+      : review ? review + (review === 1 ? " area needs review" : " areas need review")
+      : missing ? missing + (missing === 1 ? " area not assessed" : " areas not assessed")
+      : running ? "Checks are running" : "Saved evidence available";
+    var details = [saved + " of " + rows.length + " areas have dated saved evidence"];
+    if (missing) details.push(missing + " not assessed");
+    if (running) details.push(running + " in progress");
+    if (unknown) details.push(unknown + " with unknown status or time");
+    return {rows: rows, review: review, missing: missing, running: running, unknown: unknown, saved: saved,
+      headline: headline, detail: details.join(" · "), level: rows.length ? rows[0].level : "warn"};
+  }
+
   function areaLevel(area) {
-    if (area.state === "unavailable") return "bad";
-    if (area.state === "attention") return "warn";
-    if (area.state === "not_assessed" || area.state === "running") return "idle";
-    var t = new Date(area.updated_at).getTime();
-    if (isFinite(t) && Date.now() - t > 48 * 3600 * 1000) return "warn";
-    if (area.schedule && !area.schedule.enabled) return "warn";
-    return "ok";
+    return workspaceAreaPresentation(area).level;
   }
 
   async function loadPortfolio() {
@@ -1176,38 +1297,45 @@
       if (!response.ok || !Array.isArray(body.workspaces)) throw new Error("Customers could not be loaded.");
       var order = {bad: 0, warn: 1, idle: 2, ok: 3};
       var rows = body.workspaces.map(function (workspace) {
-        var levels = workspace.areas.map(areaLevel);
-        var worst = levels.reduce(function (acc, level) { return order[level] < order[acc] ? level : acc; }, "ok");
-        var issues = levels.filter(function (level) { return level === "bad" || level === "warn"; }).length;
-        var newest = workspace.areas.map(function (area) { return area.updated_at; }).filter(Boolean).sort().pop();
-        return {workspace: workspace, levels: levels, worst: worst, issues: issues, newest: newest};
+        return {workspace: workspace, assessment: workspaceStatusSummary(workspace.areas)};
       });
-      rows.sort(function (x, y) { return order[x.worst] - order[y.worst] || x.workspace.name.localeCompare(y.workspace.name); });
-      var needing = rows.filter(function (row) { return row.worst === "bad" || row.worst === "warn"; }).length;
+      rows.sort(function (x, y) { return order[x.assessment.level] - order[y.assessment.level] || String(x.workspace.name).localeCompare(String(y.workspace.name)); });
+      var needing = rows.filter(function (row) { return row.assessment.review > 0 || !row.assessment.rows.length; }).length;
+      var incomplete = rows.filter(function (row) { return row.assessment.missing > 0; }).length;
+      var running = rows.filter(function (row) { return row.assessment.running > 0; }).length;
       host.replaceChildren();
       var banner = document.createElement("div");
-      banner.className = "status-banner is-" + (rows.some(function (r) { return r.worst === "bad"; }) ? "bad" : needing ? "warn" : "ok");
+      banner.className = "status-banner is-" + (rows.some(function (row) { return row.assessment.level === "bad"; }) ? "bad" : needing ? "warn" : incomplete || running || !rows.length ? "idle" : "ok");
       var headline = document.createElement("strong");
-      headline.textContent = needing ? needing + " of " + rows.length + " customers need attention" : "All " + rows.length + " customers look good";
-      banner.append(headline);
+      headline.textContent = !rows.length ? "No customers available" : needing ? needing + " of " + rows.length + " customers need review"
+        : incomplete ? incomplete + " of " + rows.length + " customers have unassessed areas"
+        : running ? "Customer checks are running" : "Saved customer evidence available";
+      var coverage = document.createElement("span");
+      coverage.textContent = rows.length + " accessible customers · " + incomplete + " with unassessed areas · " + running + " with checks in progress. Saved evidence is not a security verdict.";
+      banner.append(headline, coverage);
       host.append(banner);
       var list = document.createElement("ul"); list.className = "status-list";
       rows.forEach(function (row) {
-        var li = document.createElement("li"); li.className = "status-row portfolio-row is-" + row.worst;
+        var li = document.createElement("li"); li.className = "status-row portfolio-row is-" + row.assessment.level;
         var dot = document.createElement("span"); dot.className = "status-dot"; dot.setAttribute("aria-hidden", "true");
         var name = document.createElement("button"); name.type = "button"; name.className = "status-name";
         name.textContent = row.workspace.name; name.dataset.selectWorkspace = row.workspace.id;
+        name.setAttribute("aria-label", "Review " + row.workspace.name);
         var domain = document.createElement("span"); domain.className = "status-when portfolio-domain"; domain.textContent = row.workspace.domain;
         var chips = document.createElement("span"); chips.className = "portfolio-chips";
-        row.workspace.areas.forEach(function (area, index) {
-          if (row.levels[index] === "idle" && area.key !== "dns" && area.key !== "web") return;
-          var chip = document.createElement("span"); chip.className = "portfolio-chip is-" + row.levels[index];
-          chip.textContent = area.title; chip.title = area.title + ": " + area.summary;
+        row.assessment.rows.forEach(function (area) {
+          var chip = document.createElement("span"); chip.className = "portfolio-chip is-" + area.level;
+          chip.textContent = (area.area.title || "Unknown area") + ": " + area.verdict;
+          chip.title = area.when + (area.area.summary ? " · " + area.area.summary : "");
           chips.append(chip);
         });
         var verdict = document.createElement("span"); verdict.className = "status-verdict";
-        verdict.textContent = row.worst === "ok" ? "All good" : row.issues ? row.issues + (row.issues === 1 ? " thing to look at" : " things to look at") : "Waiting for first check";
-        li.append(dot, name, domain, verdict, chips);
+        verdict.textContent = row.assessment.headline;
+        var coverage = document.createElement("span"); coverage.className = "status-why";
+        var datedAreas = row.assessment.rows.filter(function (area) { return area.hasEvidence; });
+        datedAreas.sort(function (left, right) { return new Date(right.area.updated_at).getTime() - new Date(left.area.updated_at).getTime(); });
+        coverage.textContent = row.assessment.detail + (datedAreas.length ? " · Latest saved evidence " + dateLabel(datedAreas[0].area.updated_at) : " · No dated saved evidence");
+        li.append(dot, name, domain, verdict, chips, coverage);
         list.append(li);
       });
       host.append(list);
@@ -1217,90 +1345,89 @@
   function renderStatusBoard(areas) {
     var host = document.getElementById("workspace-priorities");
     if (!host) return;
+    var focusKey = host.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.statusKey : null;
+    var assessment = workspaceStatusSummary(areas);
     host.replaceChildren();
-    var STALE_MS = 48 * 3600 * 1000;
-    var rows = [];
-    function ago(value) {
-      var ms = Date.now() - new Date(value).getTime();
-      if (!isFinite(ms) || ms < 0) return "";
-      var h = Math.floor(ms / 3600000);
-      return h < 1 ? "just now" : h < 48 ? h + "h ago" : Math.floor(h / 24) + "d ago";
-    }
-    function stale(value) { var t = new Date(value).getTime(); return isFinite(t) && Date.now() - t > STALE_MS; }
-    areas.forEach(function (area) {
-      var level = "ok", verdict = "OK";
-      if (area.state === "unavailable") { level = "bad"; verdict = "Last check failed"; }
-      else if (area.state === "attention") { level = "warn"; verdict = "Needs a look"; }
-      else if (area.state === "not_assessed") { level = "idle"; verdict = "Not checked yet"; }
-      else if (area.state === "running") { level = "idle"; verdict = "Checking now"; }
-      else if (area.updated_at && stale(area.updated_at)) { level = "warn"; verdict = "Out of date"; }
-      var sched = area.schedule;
-      var daily = sched && !sched.enabled;
-      if (daily && level === "ok") { level = "warn"; verdict = "OK, but not rechecked"; }
-      rows.push({area: area, level: level, verdict: verdict, daily: daily, canRun: !!sched,
-                 when: area.updated_at ? ago(area.updated_at) : ""});
-    });
-    var order = {bad: 0, warn: 1, idle: 2, ok: 3};
-    rows.sort(function (x, y) { return order[x.level] - order[y.level]; });
-    var bad = rows.filter(function (r) { return r.level === "bad"; }).length;
-    var warn = rows.filter(function (r) { return r.level === "warn"; }).length;
-    var checked = rows.filter(function (r) { return r.area.updated_at; }).length;
     var banner = document.createElement("div");
-    var tone = bad ? "bad" : warn ? "warn" : !checked ? "idle" : "ok";
-    banner.className = "status-banner is-" + tone;
-    var headline = document.createElement("strong");
-    headline.textContent = bad || warn ? (bad + warn) + (bad + warn === 1 ? " thing needs" : " things need") + " attention"
-      : !checked ? "Nothing has been checked yet" : "All good";
-    var sub = document.createElement("span");
-    var newest = rows.map(function (r) { return r.area.updated_at; }).filter(Boolean).sort().pop();
-    sub.textContent = newest ? "Latest check " + ago(newest) : "Run a check to see where you stand";
+    banner.className = "status-banner is-" + assessment.level;
+    var headline = document.createElement("strong"); headline.textContent = assessment.headline;
+    var sub = document.createElement("span"); sub.textContent = assessment.detail + ". Saved evidence is not a security verdict.";
     banner.append(headline, sub);
     if (role === "admin") {
       var runAll = document.createElement("button"); runAll.type = "button"; runAll.className = "button button-primary status-run-all";
-      runAll.textContent = "Check now";
+      runAll.textContent = "Refresh DNS & website"; runAll.dataset.statusKey = "public-refresh";
+      var pendingTypes = ["dns", "web"];
+      var feedback = document.createElement("span"); feedback.className = "status-refresh-feedback";
+      feedback.setAttribute("role", "status");
       runAll.addEventListener("click", async function () {
-        runAll.disabled = true; runAll.textContent = "Checking…";
-        await Promise.all(["dns", "web"].map(function (type) {
-          return fetch("/api/external-checks/" + type + "/run", {method: "POST", credentials: "same-origin"}).catch(function () {});
+        runAll.disabled = true; runAll.textContent = "Requesting checks…";
+        var outcomes = await Promise.all(pendingTypes.map(async function (type) {
+          try {
+            var response = await fetch("/api/external-checks/" + type + "/run", {method: "POST", credentials: "same-origin"});
+            return {type: type, accepted: response.ok};
+          } catch (_error) { return {type: type, accepted: false}; }
         }));
-        await loadWorkspacePosture();
+        pendingTypes = outcomes.filter(function (outcome) { return !outcome.accepted; }).map(function (outcome) { return outcome.type; });
+        if (pendingTypes.length) {
+          var failed = pendingTypes.map(function (type) { return type === "dns" ? "DNS & email" : "website"; });
+          var accepted = outcomes.filter(function (outcome) { return outcome.accepted; }).map(function (outcome) { return outcome.type === "dns" ? "DNS & email" : "website"; });
+          feedback.textContent = (accepted.length ? accepted.join(" and ") + " check requested. " : "") + "Could not request " + failed.join(" and ") + " checks. Review those areas or try again.";
+          runAll.disabled = false; runAll.textContent = "Retry " + failed.join(" & ");
+        } else {
+          await loadWorkspacePosture();
+        }
       });
-      banner.append(runAll);
+      banner.append(runAll, feedback);
     }
     host.append(banner);
     var list = document.createElement("ul"); list.className = "status-list";
-    rows.forEach(function (r) {
-      var li = document.createElement("li"); li.className = "status-row is-" + r.level;
+    assessment.rows.forEach(function (row) {
+      var li = document.createElement("li"); li.className = "status-row is-" + row.level;
       var dot = document.createElement("span"); dot.className = "status-dot"; dot.setAttribute("aria-hidden", "true");
-      var name = document.createElement("button"); name.type = "button"; name.className = "status-name"; name.textContent = r.area.title;
-      name.addEventListener("click", function () { activateTab(r.area.key, true); });
-      var verdict = document.createElement("span"); verdict.className = "status-verdict"; verdict.textContent = r.verdict;
-      var when = document.createElement("span"); when.className = "status-when"; when.textContent = r.when;
+      var key = typeof row.area.key === "string" && /^[a-z-]+$/.test(row.area.key) ? row.area.key : null;
+      var name = document.createElement("button"); name.type = "button"; name.className = "status-name";
+      name.textContent = row.area.title || "Unknown area"; name.disabled = !key;
+      if (key) { name.dataset.statusKey = key + "-name"; name.addEventListener("click", function () { activateTab(key, true); }); }
+      var verdict = document.createElement("span"); verdict.className = "status-verdict"; verdict.textContent = row.verdict;
+      var when = document.createElement("span"); when.className = "status-when"; when.textContent = row.when;
       var action = document.createElement("span"); action.className = "status-action-slot";
-      if (r.daily) {
-        if (role === "admin") {
-          var turnOn = document.createElement("button"); turnOn.type = "button"; turnOn.className = "button button-quiet status-action";
-          turnOn.textContent = "Turn on daily";
-          turnOn.addEventListener("click", async function () {
-            turnOn.disabled = true; turnOn.textContent = "Turning on…";
-            try {
-              var resp = await fetch("/api/external-checks/" + r.area.key + "/schedule", {method: "PUT", credentials: "same-origin",
-                headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: 24})});
-              if (!resp.ok) throw new Error();
-              await loadWorkspacePosture();
-            } catch (_e) { turnOn.disabled = false; turnOn.textContent = "Retry"; }
-          });
-          action.append(turnOn);
-        } else { action.textContent = "Daily off"; action.className += " status-when"; }
-      } else if (r.canRun) { action.textContent = "Daily ✓"; action.className += " status-when"; }
+      var review = document.createElement("button"); review.type = "button"; review.className = "button button-quiet status-action";
+      review.textContent = row.reviewLabel; review.disabled = !key;
+      review.setAttribute("aria-label", row.reviewLabel + ": " + (row.area.title || "Unknown area"));
+      if (key) { review.dataset.statusKey = key + "-review"; review.addEventListener("click", function () { activateTab(key, true); }); }
+      action.append(review);
+      if (row.enableSchedule && role === "admin") {
+        var turnOn = document.createElement("button"); turnOn.type = "button"; turnOn.className = "button button-quiet status-action";
+        turnOn.textContent = "Enable automatic checks"; turnOn.dataset.statusKey = key + "-schedule";
+        turnOn.setAttribute("aria-label", "Enable " + row.area.title + " checks every " + row.interval + " hours");
+        turnOn.addEventListener("click", async function () {
+          turnOn.disabled = true; turnOn.textContent = "Enabling…";
+          try {
+            var response = await fetch("/api/external-checks/" + key + "/schedule", {method: "PUT", credentials: "same-origin",
+              headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: row.interval})});
+            if (!response.ok) throw new Error();
+            await loadWorkspacePosture();
+          } catch (_error) { turnOn.disabled = false; turnOn.textContent = "Retry automatic checks"; }
+        });
+        action.append(turnOn);
+      }
       li.append(dot, name, verdict, when, action);
-      if (r.level !== "ok" && r.level !== "idle" && r.area.summary) {
-        var why = document.createElement("span"); why.className = "status-why"; why.textContent = r.area.summary; why.title = r.area.summary;
-        li.append(why);
+      var why = document.createElement("span"); why.className = "status-why";
+      why.textContent = (row.area.summary || "Assessment summary unavailable.") + (row.scheduleLabel ? " · " + row.scheduleLabel : "");
+      li.append(why);
+      if (row.area.audit_summary) {
+        var audit = document.createElement("span"); audit.className = "status-why";
+        var auditTime = workspaceEvidenceTime(row.area.audit_updated_at, Date.now());
+        audit.textContent = row.area.audit_summary + " · " + (auditTime !== null ? "Audit evidence " + dateLabel(row.area.audit_updated_at) : "Audit evidence time unknown");
+        li.append(audit);
       }
       list.append(li);
     });
     host.append(list);
+    if (focusKey && /^[a-z-]+$/.test(focusKey)) {
+      var focused = host.querySelector('[data-status-key="' + focusKey + '"]');
+      if (focused) focused.focus({preventScroll: true});
+    }
   }
 
   async function loadWorkspacePosture() {
@@ -1314,20 +1441,20 @@
       if (sequence !== postureRequestSequence) return;
       var focusedKey = host.contains(document.activeElement) ? document.activeElement.dataset.postureKey : null;
       host.replaceChildren();
-      var labels = {recorded:"Evidence saved", attention:"Review evidence", not_assessed:"Not assessed", running:"Check running", unavailable:"Latest attempt failed"};
       var assessment = workspaceAssessmentSummary(body.areas);
       renderStatusBoard(body.areas);
       assessment.areas.forEach(function (area) {
+        var presentation = workspaceAreaPresentation(area);
         var card = document.createElement("button"); card.type = "button"; card.className = "posture-card"; card.dataset.postureKey = area.key;
         var heading = document.createElement("strong"); heading.textContent = area.title;
-        var state = document.createElement("span"); state.className = "posture-state is-" + area.state; state.textContent = labels[area.state] || "Unknown";
+        var state = document.createElement("span"); state.className = "posture-state is-" + (presentation.level === "warn" ? "attention" : presentation.level === "bad" ? "unavailable" : presentation.state); state.textContent = presentation.verdict;
         var summary = document.createElement("p"); summary.textContent = area.summary;
-        var date = document.createElement("small"); date.textContent = area.updated_at ? "Saved evidence / check-in " + dateLabel(area.updated_at) : "No saved assessment time";
+        var date = document.createElement("small"); date.textContent = presentation.when;
         var link = document.createElement("span"); link.className = "module-link"; link.textContent = "Review this area →";
         card.append(heading, state, summary, date);
         if (area.audit_summary) {
           var audit = document.createElement("p"); audit.textContent = area.audit_summary;
-          var captured = document.createElement("small"); captured.textContent = "Audit evidence " + dateLabel(area.audit_updated_at);
+          var captured = document.createElement("small"); captured.textContent = workspaceEvidenceTime(area.audit_updated_at, Date.now()) !== null ? "Audit evidence " + dateLabel(area.audit_updated_at) : "Audit evidence time unknown";
           card.append(audit, captured);
         }
         card.append(link);
@@ -1379,6 +1506,9 @@
   }
 
   function refresh(force) {
+    // Expire old runtime facts even if the network request fails or a user is
+    // editing controls. Saved evidence and focused controls remain untouched.
+    refreshScannerActivities();
     if (dashboardRefreshPromise) {
       if (force) return dashboardRefreshPromise.then(function () { return refresh(true); });
       return dashboardRefreshPromise;
@@ -1389,6 +1519,7 @@
         if (!response.ok) return;
         var data = await response.json();
         updateWorkspaceControls(data.organization);
+        refreshScannerActivities(data.agents);
         if (!force && document.querySelector(".inline-confirmation")) return;
         render(data);
         if (activeTab === "overview") { await loadWorkspacePosture(); await loadPendingApprovals(); }
@@ -3968,7 +4099,7 @@
         var lookIcon = document.createElement("span"); lookIcon.className = "check-mark"; lookIcon.textContent = failed.length ? "!" : "✓"; lookIcon.setAttribute("aria-hidden", "true");
         var lookLabel = document.createElement("strong"); lookLabel.textContent = "DNS lookups";
         var lookDetail = document.createElement("span"); lookDetail.className = "check-detail";
-        lookDetail.textContent = failed.length ? "These lookups failed and are unknown: " + failed.join(", ") + "." : "Every lookup was answered.";
+        lookDetail.textContent = failed.length ? "These lookups failed and are unknown: " + failed.join(", ") + "." : "No DNS lookup errors were recorded. Empty answers can still mean no record was found.";
         look.append(lookIcon, lookLabel, lookDetail); list.append(look);
         container.append(list);
         return;

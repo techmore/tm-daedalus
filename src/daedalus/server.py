@@ -38,6 +38,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from anyio import from_thread
 
 from daedalus import __version__
+from daedalus.scanner_activity import unknown_activity, validated_activity
 from daedalus.cis_client_release import load_release, release_status, ReleaseInvalid
 from daedalus.config import (
     APP_ENV,
@@ -201,6 +202,7 @@ def build_agent_bundle() -> bytes:
         "src/daedalus/__init__.py": PACKAGE_DIR / "__init__.py",
         "src/daedalus/agent.py": PACKAGE_DIR / "agent.py",
         "src/daedalus/command_journal.py": PACKAGE_DIR / "command_journal.py",
+        "src/daedalus/scanner_activity.py": PACKAGE_DIR / "scanner_activity.py",
     }
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as output:
@@ -289,6 +291,8 @@ def ensure_agent_telemetry_columns(connection) -> None:
         "host_platform": "VARCHAR(80)",
         "nmapui_version": "VARCHAR(80)",
         "nmapui_ready": "BOOLEAN",
+        "nmapui_activity": "JSON",
+        "nmapui_activity_at": "DATETIME",
         "nmapui_restart_supported": "BOOLEAN NOT NULL DEFAULT 0",
         "command_protocol_version": "INTEGER NOT NULL DEFAULT 0",
         "authorized_networks": "JSON NOT NULL DEFAULT '[]'",
@@ -527,6 +531,16 @@ class AgentHeartbeatRequest(BaseModel):
     nmapui_ready: bool | None = None
     nmapui_restart_supported: bool = False
     command_protocol_version: int = Field(default=0, ge=0, le=100)
+    nmapui_activity: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_activity(self):
+        if self.nmapui_activity is not None:
+            normalized = validated_activity(self.nmapui_activity)
+            if normalized is None:
+                raise ValueError("Scanner activity must match the bounded version-1 schema.")
+            self.nmapui_activity = normalized
+        return self
 
 
 class NewCommandRequest(BaseModel):
@@ -2615,8 +2629,19 @@ def agent_bridge_online(agent: Agent, *, now: datetime | None = None) -> bool:
     return bool(
         agent.enabled
         and agent.last_seen_at is not None
-        and agent.last_seen_at >= current_time - timedelta(seconds=45)
+        and current_time - timedelta(seconds=45) <= agent.last_seen_at <= current_time
     )
+
+
+def scanner_activity_projection(agent: Agent, *, now: datetime | None = None) -> dict[str, Any]:
+    """Fresh operational state is independent from saved scan evidence."""
+    current_time = now or utcnow()
+    observed_at = agent.nmapui_activity_at
+    if (not agent_bridge_online(agent, now=current_time) or agent.nmapui_ready is False or observed_at is None
+            or observed_at > current_time or observed_at < current_time - timedelta(seconds=45)):
+        return {**unknown_activity(), "observed_at": None}
+    activity = validated_activity(agent.nmapui_activity) or unknown_activity()
+    return {**activity, "observed_at": iso_utc(observed_at)}
 
 
 @app.get("/healthz")
@@ -5996,6 +6021,10 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
     scoped = sum(bool(agent.authorized_networks) for agent in agents)
     ready = sum(agent_status(agent) == "online" and agent.nmapui_ready is True for agent in agents)
     completed_scans = 0
+    recent_scans = 0
+    older_scans = 0
+    unknown_scan_times = 0
+    scan_recency_now = utcnow()
     scan_attempts = 0
     scan_times = []
     for agent in agents:
@@ -6009,12 +6038,25 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
             run = scanner_run_summary(db, agent, job_id)
             if run["status"] == "completed" and not run["group_metadata_conflict"]:
                 completed_scans += 1
-                scan_times.append(run["last_occurred_at"])
+                collected = run["last_occurred_at"]
+                try:
+                    observed = datetime.fromisoformat(collected) if isinstance(collected, str) else None
+                    observed = observed.astimezone(UTC).replace(tzinfo=None) if observed is not None and observed.tzinfo is not None else None
+                except ValueError:
+                    observed = None
+                if observed is None or observed > scan_recency_now:
+                    unknown_scan_times += 1
+                else:
+                    scan_times.append(collected)
+                    if observed < scan_recency_now - timedelta(hours=48):
+                        older_scans += 1
+                    else:
+                        recent_scans += 1
     scanner_state = "not_assessed" if not scan_attempts else "recorded" if completed_scans == len(agents) else "attention"
-    if agents and (ready != len(agents) or scoped != len(agents) or (completed_scans and completed_scans != len(agents))):
+    if agents and (ready != len(agents) or scoped != len(agents) or older_scans or unknown_scan_times or (completed_scans and completed_scans != len(agents))):
         scanner_state = "attention"
     areas.append({"key":"scanners", "title":"Internal network", "state":scanner_state,
-        "summary":f"{ready}/{len(agents)} scan engines ready · {online} online · {scoped} with approved ranges · {completed_scans} with a completed latest scan. Saved runs do not establish coverage of all approved ranges." if agents else "No enabled scanners in this workspace.",
+        "summary":f"{ready}/{len(agents)} scan engines ready · {online} online · {scoped} with approved ranges · {completed_scans} with a completed latest scan · {recent_scans} within 48 hours · {older_scans} older · {unknown_scan_times} with unknown scan time. Saved runs do not establish coverage of all approved ranges." if agents else "No enabled scanners in this workspace.",
         "updated_at":max(scan_times, default=None),
         "availability_updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
     devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
@@ -6149,6 +6191,7 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
                 "platform": agent.host_platform,
                 "nmapui_version": agent.nmapui_version,
                 "nmapui_ready": agent.nmapui_ready,
+                "nmapui_activity": scanner_activity_projection(agent),
                 "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
                 "command_protocol_version": agent.command_protocol_version or 0,
                 "connection_scope": scanner_connection_scope(agent),
@@ -6313,6 +6356,10 @@ async def agent_heartbeat(
                    "detected_networks": payload.detected_networks})
         agent.detected_networks = payload.detected_networks
     agent.nmapui_connected = payload.nmapui_connected
+    # Omission by an older bridge clears current activity rather than extending
+    # the freshness of a prior observation with an unrelated heartbeat.
+    agent.nmapui_activity = payload.nmapui_activity
+    agent.nmapui_activity_at = agent.last_seen_at if payload.nmapui_activity is not None else None
     agent.nmapui_restart_supported = payload.nmapui_restart_supported
     agent.command_protocol_version = payload.command_protocol_version
     if payload.version:
@@ -6337,6 +6384,7 @@ async def agent_heartbeat(
             "platform": agent.host_platform,
             "nmapui_version": agent.nmapui_version,
             "nmapui_ready": agent.nmapui_ready,
+            "nmapui_activity": scanner_activity_projection(agent),
             "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
                 "command_protocol_version": agent.command_protocol_version or 0,
         },

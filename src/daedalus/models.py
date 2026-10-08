@@ -80,6 +80,8 @@ class Agent(Base):
     host_platform: Mapped[str | None] = mapped_column(String(80), nullable=True)
     nmapui_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
     nmapui_ready: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    nmapui_activity: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    nmapui_activity_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     nmapui_restart_supported: Mapped[bool] = mapped_column(Boolean, default=False)
     command_protocol_version: Mapped[int] = mapped_column(Integer, default=0)
     detected_networks: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)

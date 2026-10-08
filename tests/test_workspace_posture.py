@@ -186,6 +186,25 @@ class WorkspacePostureTests(unittest.TestCase):
         self.assertNotIn('10.9.0.0',str(area()))
         self.assertNotIn('private-fixture-token',str(area()))
 
+    def test_one_recent_scan_does_not_hide_older_or_future_scan_evidence(self):
+        org,_=self.context();now=server.utcnow()
+        with self.session_factory() as db:
+            agents=[]
+            for offset in (0, -72, 1):
+                agent=Agent(organization_id=org,name='Fixture',token_hash=f'fixture-{offset}',enabled=True,
+                    nmapui_connected=True,nmapui_ready=True,authorized_networks=['127.0.0.1/32'],last_seen_at=now,created_at=now)
+                db.add(agent);db.flush();agents.append(agent.id)
+                db.add(ScanEvent(organization_id=org,agent_id=agent.id,event_name='job_status',
+                    source_job_id=f'fixture-{offset}',source_job_type='scan',payload={'status':'completed','job_type':'scan'},
+                    occurred_at=now+timedelta(hours=offset),created_at=now))
+            db.commit()
+        area=next(a for a in self.client.get('/api/workspace-posture').json()['areas'] if a['key']=='scanners')
+        self.assertEqual(area['state'],'attention')
+        self.assertIn('3 with a completed latest scan',area['summary'])
+        self.assertIn('1 within 48 hours · 1 older · 1 with unknown scan time',area['summary'])
+        self.assertEqual(area['updated_at'],server.iso_utc(now))
+        self.assertNotIn('127.0.0.1',str(area))
+
     def test_website_certificate_expiry_is_an_independent_review_signal(self):
         org,_=self.context();now=server.utcnow()
         for expiry,state,label in ((None,'attention','unknown'),('invalid','attention','unknown'),(now.isoformat(),'attention','unknown'),((now-timedelta(days=1)).replace(tzinfo=server.UTC).isoformat(),'attention','expired'),((now+timedelta(days=10)).replace(tzinfo=server.UTC).isoformat(),'attention','expires soon'),((now+timedelta(days=60)).replace(tzinfo=server.UTC).isoformat(),'recorded','expires')):

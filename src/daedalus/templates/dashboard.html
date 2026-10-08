@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-176">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-177">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -196,6 +196,7 @@
             <h3>{{ agent.name }}</h3><p class="agent-subtitle">{{ organization.domain }}</p>
             <p class="agent-telemetry">{{ agent.host_platform or 'Scanner details awaiting heartbeat' }}{% if agent.bridge_version %} · Bridge {{ agent.bridge_version }}{% endif %}{% if agent.nmapui_version %} · NmapUI {{ agent.nmapui_version }}{% endif %}</p>
             <p class="agent-readiness">{% if not agent.enabled %}Scanner access revoked · current NmapUI status unavailable{% elif not agent_bridge_online(agent) %}Current NmapUI status unknown · scanner bridge offline{% elif agent.nmapui_ready is sameas true %}NmapUI ready{% elif agent.nmapui_ready is sameas false %}NmapUI not ready{% else %}NmapUI health check pending{% endif %}</p>
+            <section class="scanner-current-activity"><h4>Current scanner activity</h4><p>Loading fresh runtime observation…</p></section>
             <p class="agent-last-seen">{% if agent.last_seen_at %}Last heartbeat {{ agent.last_seen_at.isoformat() }} UTC{% else %}Waiting for first heartbeat{% endif %}</p>
             <p class="scanner-scope-summary">{% if agent.authorized_networks %}Approved networks: {{ agent.authorized_networks|join(', ') }}{% else %}No approved network scope. This scanner cannot receive scan commands until an admin assigns a CIDR.{% endif %}</p>
             <div class="agent-meta"><span>Scanner ID</span><code>{{ agent.id }}</code></div>
@@ -624,6 +625,6 @@
   <script src="/static/js/onboarding.js?v=20261008-1" defer></script>
   {% endif %}
   <script src="/static/js/google-admin.js?v=20261008-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261008-176" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261008-177" defer></script>
 </body>
 </html>

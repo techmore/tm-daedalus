@@ -312,6 +312,29 @@ and does not mark scans stopped: the original scan command remains unconfirmed
 until the scanner reports its terminal result. Offline scanners cannot receive
 the request. Each decision is recorded in workspace audit history.
 
+## Current activity in the portal
+
+The current scanner card separates bridge connectivity, engine readiness,
+current runtime activity, and saved observations. Updated bridges read the
+existing loopback runtime status during each approximately eight-second
+heartbeat. The card shows idle, maintenance, or active scan/report jobs with
+their reported target and progress. Progress is an engine observation; even
+100% does not establish that a scan completed. Completion remains a saved
+terminal receipt in scan history.
+
+Runtime collection accepts at most 64 KiB and 128 jobs, displays at most eight
+allowlisted job summaries, and excludes session IDs, commands, output and
+unrelated details. Reads use no proxy or redirect and are bounded by per-read
+timeouts and an elapsed-time deadline. The portal records the heartbeat receipt
+time. Activity older than 45 seconds, an offline or revoked bridge, an observed
+unready engine, or incoherent/missing telemetry is unknown. A fresh runtime
+observation can remain visible while the Socket.IO connection reconnects.
+
+An older bridge does not report this optional activity field; its card stays
+unknown until the managed kit is upgraded. Detected or reported targets do not
+change approved network scopes. Runtime rows update independently of focused
+controls and expire on periodic refresh even if the portal request fails.
+
 ## Upload recovery
 
 Scanner events are written to private local storage before upload. A portal or

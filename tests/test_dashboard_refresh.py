@@ -297,19 +297,27 @@ let fetch = () => { calls++; return new Promise(resolve => { release = resolve; 
 let render = value => rendered.push(value);
 let controlUpdates = 0;
 function updateWorkspaceControls() { controlUpdates++; }
+let activityCalls = [];
+function refreshScannerActivities(...args) { activityCalls.push(args.length ? 'received' : 'expire'); }
 let document = {querySelector(selector) { assert.equal(selector, '.inline-confirmation'); return inlineConfirmationOpen ? {} : null; }};
 ''' + function + '''
 (async () => {
   const first = refresh(), second = refresh();
   assert.strictEqual(first, second);
   assert.equal(calls, 1);
+  assert.deepEqual(activityCalls, ['expire', 'expire'], 'cached activity expires even for a shared inflight request');
   release({ok: true, json: async () => ({status: 'offline'})});
   await first;
   assert.deepEqual(rendered, [{status: 'offline'}]);
   assert.equal(dashboardRefreshPromise, null);
+  assert.deepEqual(activityCalls, ['expire', 'expire', 'received']);
   fetch = async () => { throw new Error('offline fixture'); };
   await refresh();
   assert.equal(dashboardRefreshPromise, null);
+  assert.equal(activityCalls.at(-1), 'expire', 'network failure must still expire cached activity');
+  fetch = async () => ({ok: false});
+  await refresh();
+  assert.equal(activityCalls.at(-1), 'expire', 'non-OK responses must still expire cached activity');
   fetch = async () => ({ok: true, json: async () => ({status: 'online'})});
   await refresh();
   assert.equal(rendered.length, 2);
@@ -318,6 +326,7 @@ let document = {querySelector(selector) { assert.equal(selector, '.inline-confir
   await refresh();
   assert.equal(rendered.length, 2, 'passive refresh must leave an open confirmation in place');
   assert.equal(controlUpdates, 3, 'permission updates continue while a confirmation is open');
+  assert.equal(activityCalls.at(-1), 'received', 'current activity updates while confirmation controls remain in place');
   await refresh(true);
   assert.deepEqual(rendered.at(-1), {status: 'newer'}, 'confirmed actions can force the dashboard update');
 })().catch(error => { console.error(error); process.exitCode = 1; });

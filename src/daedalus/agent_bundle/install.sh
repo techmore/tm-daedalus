@@ -55,7 +55,7 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "Python 3.11 or newer is requir
   || fail "Python 3.11 or newer is required."
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-for bridge_path in "$INSTALL_ROOT/src" "$INSTALL_ROOT/src/daedalus" "$INSTALL_ROOT/.venv" "$INSTALL_ROOT/pyproject.toml" "$INSTALL_ROOT/src/daedalus/__init__.py" "$INSTALL_ROOT/src/daedalus/agent.py" "$INSTALL_ROOT/src/daedalus/command_journal.py"; do
+for bridge_path in "$INSTALL_ROOT/src" "$INSTALL_ROOT/src/daedalus" "$INSTALL_ROOT/.venv" "$INSTALL_ROOT/pyproject.toml" "$INSTALL_ROOT/src/daedalus/__init__.py" "$INSTALL_ROOT/src/daedalus/agent.py" "$INSTALL_ROOT/src/daedalus/command_journal.py" "$INSTALL_ROOT/src/daedalus/scanner_activity.py"; do
   reject_symlink "$bridge_path"
 done
 mkdir -p "$INSTALL_ROOT/src/daedalus"
@@ -64,6 +64,7 @@ cp -f "$SCRIPT_DIR/pyproject.toml" "$INSTALL_ROOT/pyproject.toml"
 cp -f "$SCRIPT_DIR/src/daedalus/__init__.py" "$INSTALL_ROOT/src/daedalus/__init__.py"
 cp -f "$SCRIPT_DIR/src/daedalus/agent.py" "$INSTALL_ROOT/src/daedalus/agent.py"
 cp -f "$SCRIPT_DIR/src/daedalus/command_journal.py" "$INSTALL_ROOT/src/daedalus/command_journal.py"
+cp -f "$SCRIPT_DIR/src/daedalus/scanner_activity.py" "$INSTALL_ROOT/src/daedalus/scanner_activity.py"
 
 "$PYTHON_BIN" -m venv "$INSTALL_ROOT/.venv"
 "$INSTALL_ROOT/.venv/bin/python" -m pip install \

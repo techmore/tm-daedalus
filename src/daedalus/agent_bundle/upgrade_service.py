@@ -39,7 +39,7 @@ MAX_MEMBERS = 20000
 KIT_PREFIX = "daedalus-scanner-kit/"
 REQUIRED_KIT_FILES = {
     "nmapui-source.zip", "pyproject.toml", "src/daedalus/__init__.py",
-    "src/daedalus/agent.py", "src/daedalus/command_journal.py",
+    "src/daedalus/agent.py", "src/daedalus/command_journal.py", "src/daedalus/scanner_activity.py",
 }
 
 
