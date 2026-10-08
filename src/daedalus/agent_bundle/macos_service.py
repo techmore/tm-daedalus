@@ -453,20 +453,20 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "manage":
         parser = argparse.ArgumentParser(description="Manage validated Daedalus LaunchAgents; retain configuration and evidence")
         parser.add_argument("kind", choices=("manage",))
-        parser.add_argument("action", choices=("status", "restart", "uninstall", "restore", "upgrade"))
+        parser.add_argument("action", choices=("status", "restart", "uninstall", "restore", "upgrade", "upgrade-offline"))
         parser.add_argument("--bundle", type=Path, help="Scanner kit ZIP used by the explicit upgrade action")
         args = parser.parse_args()
         if sys.platform != "darwin":
             parser.error("Managed LaunchAgent lifecycle commands require macOS")
-        if args.action == "upgrade" and args.bundle is None:
-            parser.error("upgrade requires --bundle <scanner-kit.zip>")
-        if args.action != "upgrade" and args.bundle is not None:
-            parser.error("--bundle is supported only with upgrade")
+        if args.action in {"upgrade", "upgrade-offline"} and args.bundle is None:
+            parser.error("upgrade actions require --bundle <scanner-kit.zip>")
+        if args.action not in {"upgrade", "upgrade-offline"} and args.bundle is not None:
+            parser.error("--bundle is supported only with upgrade actions")
         try:
-            if args.action == "upgrade":
+            if args.action in {"upgrade", "upgrade-offline"}:
                 from upgrade_service import upgrade_managed_scanner
 
-                result = upgrade_managed_scanner(args.bundle, user_root=Path.home())
+                result = upgrade_managed_scanner(args.bundle, user_root=Path.home(), offline=args.action == "upgrade-offline")
             else:
                 result = manage_services(args.action, user_root=Path.home())
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:

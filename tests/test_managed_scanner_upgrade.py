@@ -104,6 +104,70 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
         with macos_service.lifecycle_lock(self.root):
             pass  # Successful cutover releases the lock.
 
+    def offline_executor(self, args, **kwargs):
+        response = self.executor(args, **kwargs)
+        if args[1] == "print" and response.returncode:
+            response.stderr = "Could not find service"
+        return response
+
+    def test_offline_upgrade_requires_unloaded_services_and_preserves_data(self):
+        self.loaded.clear()
+        with patch.object(upgrade_service, "_require_scanner_offline") as offline:
+            result = upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.offline_executor,
+                                                            self.prepare, lambda _: True, offline=True)
+        self.assertTrue(result["offline_upgrade"])
+        self.assertEqual(offline.call_count, 2)
+        self.claim.assert_not_called()
+        self.idle_probe.assert_not_called()
+        self.release.assert_not_called()
+        self.assertFalse(any(c[1] == "bootout" for c in self.executor_calls))
+        self.assertEqual(self.loaded, {macos_service.NMAPUI_LABEL, macos_service.BRIDGE_LABEL})
+        for path, data in self.state_files.items():
+            self.assertEqual(path.read_bytes(), data)
+
+    def test_offline_upgrade_refuses_loaded_and_ambiguous_services(self):
+        for executor in (self.executor, lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="Permission denied")):
+            with self.subTest(executor=executor), self.assertRaisesRegex(ValueError, "unloaded"):
+                upgrade_service.upgrade_managed_scanner(self.bundle, self.root, executor, self.prepare, lambda _: True, offline=True)
+        self.assertFalse(any(c[1] in {"bootout", "bootstrap"} for c in self.executor_calls))
+
+    def test_offline_upgrade_refuses_service_or_listener_reappearing_during_staging(self):
+        for restart_service in (False, True):
+            self.loaded.clear()
+            self.executor_calls.clear()
+            def prepare(files, root, digest):
+                result = self.prepare(files, root, digest)
+                if restart_service:
+                    self.loaded.add(macos_service.NMAPUI_LABEL)
+                return result
+            guard = [None, None] if restart_service else [None, RuntimeError("listener appeared")]
+            with patch.object(upgrade_service, "_require_scanner_offline", side_effect=guard):
+                with self.assertRaises(RuntimeError):
+                    upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.offline_executor, prepare, lambda _: True, offline=True)
+            self.assertFalse(any(c[1] in {"bootout", "bootstrap"} for c in self.executor_calls))
+            for label, contents in self.old_bytes.items():
+                self.assertEqual((self.launch_agents / (label + ".plist")).read_bytes(), contents)
+
+    def test_offline_candidate_failure_restores_original_services_and_descriptors(self):
+        self.loaded.clear()
+        readiness = iter([False, True])
+        with patch.object(upgrade_service, "_require_scanner_offline"), self.assertRaisesRegex(RuntimeError, "ready"):
+            upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.offline_executor, self.prepare,
+                                                  lambda _: next(readiness), offline=True)
+        for label, contents in self.old_bytes.items():
+            self.assertEqual((self.launch_agents / (label + ".plist")).read_bytes(), contents)
+        self.assertEqual(self.loaded, {macos_service.NMAPUI_LABEL, macos_service.BRIDGE_LABEL})
+
+    def test_offline_probe_requires_connection_refusal(self):
+        payload = {"EnvironmentVariables": {"NMAPUI_PORT": "9137"}}
+        with patch.object(upgrade_service.socket, "create_connection", side_effect=ConnectionRefusedError()):
+            upgrade_service._require_scanner_offline(payload)
+        for failure in (TimeoutError(), OSError("fixture")):
+            with patch.object(upgrade_service.socket, "create_connection", side_effect=failure), self.assertRaisesRegex(RuntimeError, "unknown"):
+                upgrade_service._require_scanner_offline(payload)
+        with patch.object(upgrade_service.socket, "create_connection"), self.assertRaisesRegex(RuntimeError, "still running"):
+            upgrade_service._require_scanner_offline(payload)
+
     def test_maintenance_refusal_defers_without_service_changes(self):
         self.claim.side_effect = RuntimeError("Scanner maintenance could not be acquired")
         with self.assertRaisesRegex(RuntimeError, "maintenance"):

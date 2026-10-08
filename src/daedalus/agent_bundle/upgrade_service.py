@@ -9,6 +9,7 @@ import json
 import os
 import plistlib
 import shutil
+import socket
 import stat
 import subprocess
 import sys
@@ -263,6 +264,19 @@ def _require_scanner_idle(nmapui_payload: dict) -> None:
         raise RuntimeError("Scanner is busy or its activity is unknown; retry the upgrade after scans and reports finish")
 
 
+def _require_scanner_offline(nmapui_payload: dict) -> None:
+    """Only a refused loopback connection proves the local listener is stopped."""
+    port = int(nmapui_payload["EnvironmentVariables"]["NMAPUI_PORT"])
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=3):
+            pass
+    except ConnectionRefusedError:
+        return
+    except OSError as exc:
+        raise RuntimeError("Scanner offline state is unknown; refusing offline upgrade") from exc
+    raise RuntimeError("A scanner listener is still running; refusing offline upgrade")
+
+
 def _scanner_maintenance(nmapui_payload: dict, token: str | None = None, *, claim: bool = False) -> dict:
     """Claim/release local admission under the engine's job registry lock."""
     env = nmapui_payload["EnvironmentVariables"]
@@ -308,12 +322,12 @@ def _release_scanner_maintenance(nmapui_payload: dict, token: str) -> None:
         raise RuntimeError("Scanner maintenance release was not confirmed")
 
 
-def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None) -> dict:
+def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None, *, offline=False) -> dict:
     with macos_service.lifecycle_lock(user_root):
-        return _upgrade_managed_scanner_locked(bundle_path, user_root, executor, prepare_release, wait_ready)
+        return _upgrade_managed_scanner_locked(bundle_path, user_root, executor, prepare_release, wait_ready, offline=offline)
 
 
-def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None) -> dict:
+def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None, *, offline=False) -> dict:
     """Upgrade exactly the two recognized, loaded managed LaunchAgents.
 
     Hook contract: ``prepare_release(files, user_root, kit_sha256)`` returns
@@ -321,6 +335,8 @@ def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepa
     returns a truthy value when the candidate service is ready.
     """
     root = Path(user_root).expanduser().absolute()
+    if type(offline) is not bool:
+        raise ValueError("Offline upgrade mode must be explicitly boolean")
     executor = executor or subprocess.run
     # Validate ownership/configuration before kit reads, backups, or other writes.
     descriptors = macos_service.managed_artifacts(root)
@@ -334,7 +350,10 @@ def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepa
     domain = f"gui/{os.getuid()}"
     for label in (macos_service.NMAPUI_LABEL, macos_service.BRIDGE_LABEL):
         probe = executor([macos_service.LAUNCHCTL, "print", f"{domain}/{label}"], capture_output=True, text=True, timeout=10)
-        if probe.returncode or "state = running" not in (getattr(probe, "stdout", "") or ""):
+        if offline:
+            if not probe.returncode or not any(message in (getattr(probe, "stderr", "") or "") for message in ("Could not find service", "Could not find specified service")):
+                raise ValueError("Offline upgrade requires both managed services to be confirmed unloaded")
+        elif probe.returncode or "state = running" not in (getattr(probe, "stdout", "") or ""):
             raise ValueError("Both managed scanner services must be loaded before upgrade")
     files, kit_digest = _read_kit(Path(bundle_path).expanduser().absolute())
     support = root / "Library/Application Support/Daedalus"
@@ -350,9 +369,10 @@ def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepa
     old_bridge = plistlib.loads(old_bytes[macos_service.BRIDGE_LABEL])
     current_nmap = old_nmap.get("WorkingDirectory") == str(support / "nmapui/releases" / expected_nmap_hash / "daedalus-nmapui-source")
     current_bridge = old_bridge.get("WorkingDirectory") == str(support / "scanner-bridge/releases" / expected_bridge_hash)
-    if current_nmap and current_bridge:
+    if current_nmap and current_bridge and not offline:
         return {"upgraded": False, "already_current": True, "kit_sha256": kit_digest, "data_preserved": True}
-    _require_scanner_idle(old_nmap)
+    activity_guard = _require_scanner_offline if offline else _require_scanner_idle
+    activity_guard(old_nmap)
     if prepare_release:
         nmap_release, bridge_release = prepare_release(files, root, kit_digest)
     else:
@@ -428,10 +448,16 @@ def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepa
     cutover_started = False
     maintenance_token = None
     try:
-        _require_scanner_idle(old_nmap)
-        maintenance_token = _acquire_scanner_maintenance(old_nmap)
+        activity_guard(old_nmap)
+        if offline:
+            for label in expected:
+                probe = executor([macos_service.LAUNCHCTL, "print", f"{domain}/{label}"], capture_output=True, text=True, timeout=10)
+                if not probe.returncode or not any(message in (getattr(probe, "stderr", "") or "") for message in ("Could not find service", "Could not find specified service")):
+                    raise RuntimeError("A managed service restarted during preparation; refusing offline cutover")
+        else:
+            maintenance_token = _acquire_scanner_maintenance(old_nmap)
         cutover_started = True
-        for label in (macos_service.BRIDGE_LABEL, macos_service.NMAPUI_LABEL):
+        for label in (() if offline else (macos_service.BRIDGE_LABEL, macos_service.NMAPUI_LABEL)):
             _run(executor, [macos_service.LAUNCHCTL, "bootout", domain, str(destinations[label])])
         for label, payload in candidate_payloads.items():
             destinations[label].parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -501,4 +527,7 @@ def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepa
             except Exception:
                 if not cutover_started:
                     raise RuntimeError("Scanner admission remains paused; restart the idle scanner to recover")
-    return {"upgraded": True, "kit_sha256": kit_digest, "backups": backups, "data_preserved": True}
+    result = {"upgraded": True, "kit_sha256": kit_digest, "backups": backups, "data_preserved": True}
+    if offline:
+        result["offline_upgrade"] = True
+    return result

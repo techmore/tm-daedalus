@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 8, 2026 — explicit offline macOS upgrade
+
+The separately selected upgrade-offline action requires both managed LaunchAgents to be confirmed unloaded and a refused loopback connection before staging and before cutover. It refuses live/ambiguous services, any responding listener and unknown connection failures; it repeats unit checks after staging. This enables initial legacy migration and stopped-installation recovery without silently weakening ordinary upgrade's maintenance claim. Both modes preserve configuration/evidence and share the lifecycle lock. A failed candidate restores and verifies the original descriptors/services. A planned stop of an older engine cannot atomically drain admission; no interruption-free legacy claim is made.
+
+Focused helper/installer/lock validation passed 86 tests and 35 subtests; the full suite passed 833 tests, one skip and 295 subtests. The candidate engine/bridge were staged on the local Mac without service changes. Live migration and installed admission acceptance remain pending at this source checkpoint.
+
+
 ## October 8, 2026 — Meraki power table active in production
 
 SER8 Incus activated source 3e6013aa9a9ffa2f4b8e93737797798306bdd96c, verified 79-file release SHA-256 692bd38d11cdc75cef41de2d55dc8520af01f0f626a30c83531c609efec3aeca. Verified off-host backup daedalus-data-20261008T032426Z.tar.gz preceded activation; internal/public readiness passed. A normal authenticated operator GET returned dashboard HTTP 200 with both current asset versions. Served JavaScript/CSS match active source bytes. BFS report 42 remains completed with seven saved power observations and its original 154,882-byte PDF. Private receipt: /data/codex-meraki-power-ui-20261008.json. Source backend CI 37722559671 and installed Linux CI 37722559609 are running at this checkpoint. This is API/asset validation, not rendered desktop/mobile acceptance; the ego-browser ownership boundary remains unchanged.

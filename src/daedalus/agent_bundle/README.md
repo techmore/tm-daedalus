@@ -69,8 +69,18 @@ under the existing local trust policy; browser origins must match. The checks
 and maintenance calls use loopback without proxies or redirects.
 
 An older engine without the maintenance API defers cutover without stopping
-services. Its initial migration still requires a separately validated path;
-ordinary upgrade does not bypass this gate. Maintenance has no automatic
+services. Ordinary upgrade does not bypass this gate. For a planned initial
+migration or recovery of an already stopped installation, the separate action
+`sh manage-service-macos.sh upgrade-offline /path/to/daedalus-scanner-kit.zip`
+requires both managed LaunchAgents to be confirmed unloaded and the local
+scanner port to refuse connections before preparation and again before cutover.
+Loaded services, a live listener, ambiguous service errors or network timeouts
+are refused. It retains descriptors and data, bootstraps the candidate services
+and restores the original services if candidate readiness fails. It does not
+stop a running scanner for you. Plan the initial stop while idle; older engines
+cannot atomically drain admission, so work starting during that planned stop
+can be interrupted. Updated participants share a lifecycle lock across both
+upgrade modes, restart, uninstall and restore. Maintenance has no automatic
 expiry, so a stalled upgrader cannot silently reopen admission. The owning
 upgrader releases its opaque token; restarting the idle engine also clears
 the in-memory gate. After a crashed helper or a lost claim response, check
