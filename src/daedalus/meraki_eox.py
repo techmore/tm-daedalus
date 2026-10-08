@@ -4,7 +4,7 @@ import json
 import re
 from collections import Counter
 from datetime import datetime, UTC
-from .meraki_lifecycle import _day, NOTICES_V1
+from .meraki_lifecycle import _day, NOTICES_V1, NOTICES_V2, INDEX_V2
 
 SOURCE = 'https://developer.cisco.com/meraki/api-v1/get-organization-inventory-devices/'
 STATUSES = ('endOfSupport', 'nearEndOfSupport', 'endOfSale', 'unknown')
@@ -12,6 +12,12 @@ SCOPE = ('Meraki inventory API milestones for exact assigned devices. Blank stat
          'they do not establish ongoing support. Provider status is separate from published vendor notices, '
          'support contracts and warranty entitlement. Date differences require vendor verification. '
          'The published-notice comparison covers only the immutable version-1 catalog; other models have no notice cross-check here.')
+
+SCOPE_V2 = ('Meraki inventory API milestones for exact assigned devices. Blank status and missing dates remain unknown; '
+            'they do not establish ongoing support. Provider status is separate from published vendor dates, '
+            'support contracts and warranty entitlement. API and immutable version-2 published dates are kept '
+            'separate; differences require vendor verification. Published dates were observed October 8, 2026. '
+            'Models outside that catalog have no notice cross-check here.')
 
 
 def _identity(value):
@@ -102,12 +108,14 @@ def _validate_observation(data, assigned):
     return rows
 
 
-def build_provider_lifecycle(snapshot):
+def build_provider_lifecycle(snapshot, *, schema_version=2):
+    if type(schema_version) is not int or schema_version not in (1, 2):
+        raise ValueError("Unsupported provider lifecycle version.")
     observation = snapshot.get('inventory_eox')
     if observation is None:
         return None  # Never synthesize a new section in a historical snapshot.
-    result = {'schema_version': 1, 'status': 'invalid_evidence', 'source_url': SOURCE,
-              'scope': SCOPE, 'as_of': None, 'rows': [], 'summary': {}}
+    result = {'schema_version': schema_version, 'status': 'invalid_evidence', 'source_url': SOURCE,
+              'scope': SCOPE if schema_version == 1 else SCOPE_V2, 'as_of': None, 'rows': [], 'summary': {}}
     try:
         day = _day(snapshot.get('collected_at'))
         result['as_of'] = day.isoformat() if day else None
@@ -132,11 +140,12 @@ def build_provider_lifecycle(snapshot):
         grouped.update((n, m.upper(), 'unknown', None, None, False) for s, (n,m) in assigned.items() if s not in seen)
         rows = []
         for (network, model, status, sale, support, reported), count in grouped.items():
-            notice = NOTICES_V1.get(model)
+            notice = (NOTICES_V1 if schema_version == 1 else NOTICES_V2).get(model)
             conflicts = [key for key, value, published in [('end_of_sale_date', sale, notice[1] if notice else None),
                         ('end_of_support_date', support, notice[2] if notice else None)] if value and published and value != published]
+            source = {'published_source_url': notice[3] if notice else INDEX_V2} if schema_version == 2 else {}
             days = (_day(support) - day).days if support and day else None
-            rows.append({'network_id': network, 'network_name': names[network], 'model': model, 'quantity': count,
+            rows.append({**source, 'network_id': network, 'network_name': names[network], 'model': model, 'quantity': count,
                          'provider_status': status, 'reported': reported, 'end_of_sale_date': sale,
                          'end_of_support_date': support, 'days_until_support_date': days,
                          'published_end_of_sale_date': notice[1] if notice else None,
@@ -160,9 +169,10 @@ def project_provider_lifecycle(saved, *, complete=False):
     """Validate grouped snapshot evidence and derived counters without exposing serials."""
     if saved is None:
         return None
-    invalid = {'schema_version': 1, 'status': 'invalid_evidence', 'scope': SCOPE, 'source_url': SOURCE,
+    version = saved.get('schema_version') if isinstance(saved, dict) and type(saved.get('schema_version')) is int and saved['schema_version'] in (1,2) else 2
+    invalid = {'schema_version': version, 'status': 'invalid_evidence', 'scope': SCOPE if version == 1 else SCOPE_V2, 'source_url': SOURCE,
                'as_of': None, 'rows': [], 'summary': {}, 'additional_rows': 0}
-    if not isinstance(saved, dict) or type(saved.get('schema_version')) is not int or saved['schema_version'] != 1:
+    if not isinstance(saved, dict) or type(saved.get('schema_version')) is not int or saved['schema_version'] not in (1,2):
         return invalid
     if saved.get('status') in ('unavailable', 'invalid_evidence'):
         expected = {k:v for k,v in invalid.items() if k != 'additional_rows'}
@@ -193,7 +203,7 @@ def project_provider_lifecycle(saved, *, complete=False):
         source_rows.sort(key=lambda r:r['device_serial'])
         rebuilt = build_provider_lifecycle({'collected_at':saved.get('as_of'), 'networks':[{'id':k,'name':v} for k,v in networks.items()],
             'devices':devices, 'inventory_eox':{'status':'complete','data':{'schema_version':1,'rows':source_rows,'expected_device_count':len(devices),
-             'reported_device_count':len(source_rows),'missing_device_count':len(devices)-len(source_rows)}}})
+             'reported_device_count':len(source_rows),'missing_device_count':len(devices)-len(source_rows)}}}, schema_version=version)
         if json.dumps(saved, sort_keys=True) != json.dumps(rebuilt, sort_keys=True):
             return invalid
     except (ValueError, TypeError, KeyError):

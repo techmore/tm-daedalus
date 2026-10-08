@@ -30,7 +30,7 @@ def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                           'complete_inventory_pricing': bool(counts) and not unmatched and bool(dependency_complete)})
     refresh = build_refresh_plan(scenarios)
     provider = build_provider_lifecycle(snapshot)
-    return {**({'provider_lifecycle': provider} if provider is not None else {}), 'lifecycle': build_lifecycle(snapshot), 'refresh_plan': refresh, 'catalog_version': CATALOG_VERSION, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
+    return {**({'provider_lifecycle': provider} if provider is not None else {}), 'lifecycle': build_lifecycle(snapshot, schema_version=2), 'refresh_plan': refresh, 'catalog_version': CATALOG_VERSION, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
             'inventory_collected_at': snapshot.get('collected_at'), 'scenarios': scenarios,
             'assumptions': [
                 'Planning candidates require design review; model names do not establish feature equivalence.',

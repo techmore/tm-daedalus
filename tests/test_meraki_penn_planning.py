@@ -75,7 +75,7 @@ def test_lifecycle_groups_keep_source_link_with_model():
  start=next(i for i,p in enumerate(pdf.pages) if 'Hardware support milestones' in p.extract_text())
  for p in pdf.pages[start:]:
   text=p.extract_text()
-  assert text.count('assigned devices')==text.count('Official vendor')
+  assert len(__import__('re').findall(r'/ \d+ assigned devices',text))==text.count('Official vendor notice')+text.count('Official vendor lifecycle index')
 
 
 def test_ui_renders_required_items_alongside_candidates():

@@ -21,7 +21,7 @@ def fixture():
 
 def test_assigned_only_allowlist_status_and_frozen_utc_day():
     snapshot,_=fixture();result=build_provider_lifecycle(snapshot)
-    assert result['summary']=={'assigned_devices':4,'reported_devices':3,'missing_devices':1,'provider_end_of_support':1,'provider_near_end_of_support':0,'unknown_status':2,'unknown_support_date':2,'date_conflicts':1,'no_notice_cross_check':2}
+    assert result['summary']=={'assigned_devices':4,'reported_devices':3,'missing_devices':1,'provider_end_of_support':1,'provider_near_end_of_support':0,'unknown_status':2,'unknown_support_date':2,'date_conflicts':1,'no_notice_cross_check':1}
     assert result['as_of']=='2026-10-09' and result['rows'][0]['days_until_support_date']==-80
     assert result['rows'][1]['date_conflicts']==['end_of_sale_date','end_of_support_date']
     assert 'PRIVATE' not in str(snapshot) and 'UNASSIGNED' not in str(snapshot)

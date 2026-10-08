@@ -1512,9 +1512,9 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         for row in lifecycle['rows']:
             entry = []
             entry.append(_paragraph(f"{row['network_name']} / {row['model']} / {row['quantity']} assigned devices", styles["MerakiSubsection"]))
-            entry.append(_paragraph(f"End of sale: {row['end_of_sale_date'] or 'Unknown'}; end of support: {row['end_of_support_date'] or 'Unknown'}. {labels[row['support_status']]}" + (f" ({row['days_until_support_date']} days)." if row['days_until_support_date'] is not None else '.'), styles["MerakiBody"]))
+            entry.append(_paragraph(f"End of sale: {row['end_of_sale_date'] or 'Unknown'}; end of support: {row['end_of_support_date'] or 'Unknown'}. {labels[row['support_status']]}" + ((f" ({-row['days_until_support_date']} days ago)." if lifecycle['schema_version'] == 2 and row['days_until_support_date'] < 0 else f" ({row['days_until_support_date']} days).") if row['days_until_support_date'] is not None else '.'), styles["MerakiBody"]))
             entry.append(_paragraph(row['note'], styles["MerakiSmall"]))
-            label = 'Official vendor notice' if row['notice_status'] == 'published' else 'Official vendor lifecycle index'
+            label = 'Official vendor notice' if row['notice_status'] == 'published' and 'End-of-Life_Notices/' not in row['source_url'] else 'Official vendor lifecycle index'
             entry.append(Paragraph('<link href="' + row['source_url'] + '">' + label + '</link>', styles["MerakiSmall"]))
 
             story.append(KeepTogether(entry))
@@ -1537,8 +1537,12 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                     _paragraph(f"Published sale: {row['published_end_of_sale_date'] or 'Not in notice catalog'}; published support: {row['published_end_of_support_date'] or 'Not in notice catalog'}.", styles["MerakiSmall"])]
                 review = 'Assigned inventory record observed.' if row['reported'] else 'Inventory record missing.'
                 if row['date_conflicts']: review += ' API and published dates differ; verify with vendor.'
-                review += f" {row['days_until_support_date']} days to API support date." if row['days_until_support_date'] is not None else ' Support date unverified.'
+                days = row['days_until_support_date']
+                review += (f" API support date passed {-days} days ago." if provider['schema_version'] == 2 and days < 0 else f" {days} days to API support date.") if days is not None else ' Support date unverified.'
                 entry.append(_paragraph(review, styles["MerakiSmall"]))
+                if provider['schema_version'] == 2:
+                    label = 'Published vendor dates' if row['published_end_of_support_date'] else 'Review vendor index'
+                    entry.append(Paragraph('<link href="' + row['published_source_url'] + '">' + label + '</link>', styles["MerakiSmall"]))
                 story.append(KeepTogether(entry))
         story.append(Paragraph('<link href="' + EOX_SOURCE + '">Meraki inventory API documentation</link>', styles["MerakiSmall"]))
 
