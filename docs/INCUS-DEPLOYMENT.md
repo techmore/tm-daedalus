@@ -24,6 +24,17 @@ Actual acceptance includes scan/XML upload, portal-managed restart, container
 restart with automatic service startup, in-place upgrade and a repeated-kit
 no-op. Host reboot and additional VLAN locations remain separate open checks.
 
+On October 8, the installed older engine lacked the maintenance endpoint and
+correctly refused a normal upgrade. The explicit local `upgrade-offline` path
+was used after verifying the owned units, confirming no active jobs, stopping
+both units and proving the configured listener closed. The upgrade retained
+enrollment/authentication bytes, exact descriptor backups and all 68 portal
+PDF/snapshot pairs. A subsequent normal upgrade of that same kit was a no-op.
+Installed agent source hashes match application source `5318e6a`; portal
+command 33 successfully returned a Linux update-check receipt from the existing
+APT index without refreshing catalogs or installing packages. This proves the
+installed Linux command path, not a remote portal-driven upgrade feature.
+
 ## Preview a release
 
 From a clean checkout of `main`, with SSH access to the Incus host:
