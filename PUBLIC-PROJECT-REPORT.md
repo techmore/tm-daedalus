@@ -1,5 +1,21 @@
 # Daedalus project report
 
+## October 8, 2026 — Complimentary customer onboarding implemented locally
+
+Added platform-admin customer onboarding in the customer creation dialog and existing-customer list: complimentary status, 30-day DNS exception, explicit renewal/end decisions, admin review popup, expiry notices and audit history. Ownership remains unverified and Google Admin consent retains its verification requirement. Production activation and Lewis customer creation remain pending deployment access. [Workflow and acceptance](docs/CUSTOMER-ONBOARDING.md).
+
+## October 8, 2026 — Website hosting inventory and costs
+
+Added a dated [hosting inventory and cost methodology](docs/WEBSITE-HOSTING-COSTS.md) for Lewis Dental Group, CSP marketing, BFS and the Daedalus portal. DNS and website evidence support PBHS for Lewis, Edlio for BFS, GitHub Pages for CSP static pages and the documented SER8/Incus portal deployment. Costs distinguish published infrastructure comparisons from unverified current contracts; origin regions and actual vendor bills remain open. Lewis account onboarding awaits authenticated creation and normal domain verification. Automated hosting-cost reporting remains an implementation requirement.
+
+## October 8, 2026 — Google Admin reporting implemented locally
+
+The source now includes the Google Admin security section, a ten-item checklist, read-only OAuth/customer validation, manual evidence/rationale, saved PDF/JSON reports, comparison notices and opt-in recurrence. Local validation uses synthetic tenant data. CSP and `bfs.org` are the requested live targets; no live Google audit or production activation is claimed. Dedicated OAuth setup and consent, current domain verification, reviewed Workspace Benchmark and scheduled-operation acceptance remain pending. [Implementation scope and rollout checklist](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md).
+
+## October 8, 2026 — Planned Google Admin security reporting
+
+Added Google Admin security to ongoing reporting scope: read-only OAuth audit access, domain/customer validation, a settings checklist, evidence-backed recommendations and change history. CIS Controls v8.1 supplies program rationale; the exact Google Workspace Benchmark version and applicability must be reviewed before configuration-specific claims. This is a documented plan: live collection, dashboard/PDF integration, scheduling and domain acceptance remain open. See [scope and acceptance criteria](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md).
+
 ## Current completion summary — October 8, 2026 (UTC)
 
 **The full project is not complete.** Historical entries below describe their own source and environment. Current evidence and remaining requirements are separated here so earlier checkpoints do not look like today's deployment state.
@@ -23,6 +39,7 @@
 | Google identity and users | Live sign-in; scoped access keys; local sharing workflow and isolation fixtures | Broader real-user onboarding, sharing, domain independence and admin succession acceptance |
 | Domain verification | TXT/probation/14-day override implementation and expiry fixtures | Real second-domain TXT onboarding and expiry/renewal acceptance |
 | DNS, email and website | Actual saved audits, repeats, comparisons, dated notices and reports; CSP website run 72 retains two content observations and notice 44; interrupted BFS run 61 retains failure notice 34 | Broader checker/provider review and successful public certificate-history collection evidence |
+| Google Admin security | [Locally implemented audit/reporting](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md): read-only OAuth, tenant validation, checklist/manual evidence, PDF/JSON/history and recurrence | Production activation, benchmark pinning, dedicated OAuth setup and real CSP/BFS consent, ownership/privilege checks and scheduled-operation acceptance |
 | Internal scanners | Real Mac uploads/history; installed Linux loopback lifecycle/recovery/comparison; automatic connection CIDR display | Broader multi-protocol/subnet coverage, live multi-host whole-run comparison acceptance, additional VLAN/subnet locations, broader installed scan/command/report validation and fleet soak |
 | Remote management | Typed audited scanner commands, restart and update-check evidence | Agreed broader integration scope and validation on deployment targets; full original remote-control parity is unproven |
 | Meraki | Live multi-network inventory, control coverage, repeat comparison and saved UniFi purchase scenarios with links | Broader model mappings, design/procurement review, original report parity and quoted renewal comparisons |

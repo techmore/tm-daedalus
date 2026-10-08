@@ -90,3 +90,7 @@ if APP_ENV == "production":
         Fernet(ENCRYPTION_KEY.encode("ascii"))
     except (UnicodeEncodeError, ValueError) as exc:
         raise RuntimeError("DAEDALUS_ENCRYPTION_KEY must be a valid Fernet key in production.") from exc
+
+# Dedicated audit project: never reuse login/Drive credentials for Admin access.
+GOOGLE_ADMIN_CLIENT_ID = os.environ.get("GOOGLE_ADMIN_CLIENT_ID", "").strip()
+GOOGLE_ADMIN_CLIENT_SECRET = os.environ.get("GOOGLE_ADMIN_CLIENT_SECRET", "").strip()

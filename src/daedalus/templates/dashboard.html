@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-175">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-176">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -42,6 +42,7 @@
         <button class="nav-item" data-tab="meraki"><span>◈</span>Meraki security</button>
         <button class="nav-item" data-tab="dns"><span>⌁</span>DNS &amp; email health</button>
         <button class="nav-item" data-tab="web"><span>◎</span>Website health</button>
+        <button class="nav-item" data-tab="google-admin"><span>◉</span>Google Admin security</button>
         <button class="nav-item" data-tab="cis"><span>▤</span>Endpoint compliance</button>
         <button class="nav-item" data-tab="reports"><span>▧</span>Reports</button>
         <button class="nav-item" data-tab="notifications"><span>♢</span>Notifications <b id="notification-badge" class="notification-badge hidden" aria-label="Unread notifications">0</b></button>
@@ -101,7 +102,7 @@
       <section class="tab-panel active" id="tab-overview">
         {% if membership.role == 'admin' and organization.verification_status != 'verified' %}
         <section class="verification-card" aria-labelledby="verify-domain-title">
-            <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; Nikto and bounded exposure checks require a verified domain or an active admin override.</p></div>
+            <div><p class="eyebrow">DOMAIN OWNERSHIP</p><h3 id="verify-domain-title">Verify {{ organization.domain }} to unlock full workspace controls</h3><p class="muted">This workspace has a 30-day verification window. Public checks are scoped to the registered domain. Website Nmap remains excluded; Nikto and bounded exposure checks require a verified domain or active onboarding/admin approval.</p></div>
           <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button">Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button">Check DNS now</button></div>
           <p class="verification-feedback" id="verification-feedback" aria-live="polite"></p>
           <div class="dns-challenge hidden" id="dns-challenge">
@@ -128,6 +129,9 @@
         </section>
         {% endif %}
         {% endif %}
+        {% endif %}
+        {% if onboarding and onboarding.status == 'onboarding' %}
+        <section class="override-card"><div><p class="eyebrow">COMPLIMENTARY CUSTOMER ONBOARDING</p><h3>{{ '30-day reapproval required' if onboarding.review_required else 'DNS changes can wait during onboarding' }}</h3><p>Review due <time data-local-time datetime="{{ onboarding.review_due_at }}">{{ onboarding.review_due_at }}</time>. {{ 'The onboarding DNS exception has paused. Ask the platform administrator to review access.' if onboarding.review_required else 'Assessment, scanner and sharing controls are available during this approved transition.' }}</p></div></section>
         {% endif %}
         <section class="status-board" aria-labelledby="overview-assessment-title"><h2 id="overview-assessment-title" class="visually-hidden">Workspace status</h2><div id="workspace-priorities" aria-live="polite"><p class="muted">Checking status…</p></div><div id="pending-approvals" aria-live="polite"></div></section>
         <details class="topic-secondary"><summary>Full evidence details</summary>
@@ -183,7 +187,7 @@
         </div>
         {% endif %}
         {% if not workspace_controls_enabled %}
-        <div class="security-note"><span>ⓘ</span><span>Scanner enrollment, internal scan commands, and member approval are paused until domain verification or an active 14-day admin override.</span></div>
+        <div class="security-note"><span>ⓘ</span><span>Scanner enrollment, internal scan commands, and member approval are paused until domain verification, active onboarding approval or an active 14-day admin override.</span></div>
         {% endif %}
         <div id="agent-list" class="agent-grid">
           {% for agent in agents %}
@@ -223,6 +227,7 @@
         ('meraki', 'Network security', 'MERAKI', 'Review saved network findings and coverage, then compare reports over time.'),
         ('dns', 'DNS & email health', 'DOMAIN HEALTH', 'Review mail delivery and sender protection, then inspect the records behind each result.'),
         ('web', 'Website health', 'EXTERNAL POSTURE', 'Review the public HTTPS response, TLS certificate, and selected security headers.'),
+        ('google-admin', 'Google Admin security', 'WORKSPACE SECURITY', 'Audit account and administrator settings, record effective-policy evidence, and explain recommended changes.'),
         ('cis', 'Endpoint compliance', 'DEVICE HEALTH', 'Review endpoint check-ins, baseline results, and changes that need attention.'),
         ('reports', 'Report library', 'REPORTING', 'Generate and keep workspace reports from saved security-check evidence.')
       ] %}
@@ -457,6 +462,56 @@
             <p class="check-scope-note schedule-note">Recurring checks run only for TXT-verified workspaces and use the same passive checks, saved history, comparisons, and audit log as manual runs. An admin can disable them at any time.</p>
           </section>          </details>
         </section>
+        {% elif key == 'google-admin' %}
+        <section class="topic-priority" aria-labelledby="google-admin-assessment-title">
+          <p class="eyebrow">CURRENT ASSESSMENT</p><h3 id="google-admin-assessment-title">Google Workspace security</h3>
+          <p id="google-admin-summary" aria-live="polite">Loading saved assessment...</p>
+          <p class="check-scope-note">CIS Controls v8.1 provides the program rationale. The Google Workspace Benchmark version/profile remains pending review. Results are CSP checklist observations, not a CIS compliance attestation.</p>
+        </section>
+        <details class="topic-secondary"><summary>Audit connection and schedule</summary>
+          <p id="google-admin-connection" aria-live="polite">Checking connection...</p>
+          <p class="muted">This audit uses separate read-only Google Admin consent. Your portal sign-in and Drive export do not grant audit access. The account needs the Google privileges required for each API; unavailable evidence stays explicit.</p>
+          {% if membership.role == 'admin' %}
+          <label class="google-admin-consent"><input type="checkbox" id="google-admin-customer-consent"> I authorize an audit of the entire Google Workspace customer associated with this verified domain, including its other domains and customer-wide account/role settings.</label>
+          <div class="agent-actions">
+            <button class="button button-primary" id="google-admin-connect" type="button" disabled>Connect audit account</button>
+            <button class="button" id="google-admin-collect" type="button" disabled>Run read-only audit</button>
+            <button class="button button-quiet" id="google-admin-disconnect" type="button" disabled>Disconnect audit access</button>
+          </div>
+          <label>Recurring audit<select id="google-admin-schedule"><option value="0">Off</option><option value="1">Daily</option><option value="7">Weekly</option><option value="30">Every 30 days</option></select></label>
+          <label class="google-admin-consent"><input type="checkbox" id="google-admin-schedule-review"> I reviewed the saved report and its coverage limits and approve recurring collection.</label>
+          <button class="button" id="google-admin-save-schedule" type="button" disabled>Save schedule</button>
+          <p class="fine-print">Complete and review the first report before enabling recurrence. Changed observations and collection failures appear in the workspace inbox; email delivery is not enabled here.</p>
+          {% endif %}
+          <p id="google-admin-feedback" aria-live="polite"></p>
+        </details>
+        <section class="topic-evidence" aria-labelledby="google-admin-checklist-title">
+          <h3 id="google-admin-checklist-title">Settings checklist and change rationale</h3>
+          <p class="muted">API evidence assesses active administrator 2-Step Verification and supplies account/role context. Gmail, app trust, sharing, session, device and recovery controls require scoped manual evidence. Missing policy evidence is never a pass.</p>
+          <div id="google-admin-checklist"></div>
+          {% if membership.role == 'admin' %}
+          <details class="topic-secondary"><summary>Record manual policy evidence</summary>
+            <form id="google-admin-review-form" class="workspace-form">
+              <label>Checklist item<select name="check_id" id="google-admin-review-check"></select></label>
+              <label>Source evidence date and time<input name="evidence_collected_at" type="datetime-local" required></label>
+              <label>Policy scope<input name="policy_scope" required minlength="3" maxlength="300" placeholder="OU/group, inherited or overridden policy, and Workspace edition"></label>
+              <label>Observed setting<textarea name="observed" required minlength="3" maxlength="1000"></textarea></label>
+              <label>Proposed target<textarea name="expected" required minlength="3" maxlength="1000"></textarea></label>
+              <label>Reason for the change<textarea name="rationale" required minlength="3" maxlength="1000"></textarea></label>
+              <label>Evidence reference<input name="source_reference" required minlength="3" maxlength="500" placeholder="Private capture/export reference and baseline version"></label>
+              <label>Suggested owner<input name="owner" required minlength="3" maxlength="200"></label>
+              <label>Validation method<textarea name="validation" required minlength="3" maxlength="1000"></textarea></label>
+              <p class="fine-print">Record settings and private evidence references only; exclude secrets and unnecessary personal data. Evidence is appended to the next assessment and does not turn a manual check into a pass.</p>
+              <button type="submit" class="button" id="google-admin-review-save" disabled>Save evidence for next audit</button>
+              <p id="google-admin-review-feedback" aria-live="polite"></p>
+            </form>
+          </details>
+          {% endif %}
+        </section>
+        <section class="report-library"><h3>Saved Google Admin reports</h3>
+          <p id="google-admin-report-library-status" aria-live="polite">Reports belong to this workspace.</p>
+          <div class="report-job-list" id="google-admin-report-job-list"></div>
+        </section>
         {% elif key == 'reports' %}
         <section class="drive-card hidden" id="drive-card" aria-live="polite"></section>
         <section class="report-library">
@@ -470,6 +525,9 @@
           <div class="section-heading check-subheading"><div><p class="eyebrow">NETWORK &amp; ENDPOINT POSTURE</p><h3>Meraki &amp; endpoint reports</h3></div></div>
           <span class="check-status" id="posture-report-library-status" aria-live="polite">Reports are scoped to this workspace.</span>
           <div class="report-job-list" id="posture-report-job-list" aria-live="polite"><div class="empty-events">Loading network and endpoint reports…</div></div>
+          <div class="section-heading check-subheading"><div><p class="eyebrow">GOOGLE WORKSPACE</p><h3>Google Admin security reports</h3></div></div>
+          <p id="google-admin-library-status" aria-live="polite">Reports belong to this workspace.</p>
+          <div class="report-job-list" id="google-admin-library-list"></div>
           <details class="topic-secondary"><summary>Create a domain health report</summary>
           <div class="report-toolbar">
             <div>
@@ -515,6 +573,11 @@
         <h3>Add a customer</h3>
         <label>Customer name<input name="name" required minlength="2" maxlength="200" placeholder="Deep Run Hemp"></label>
         <label>Domains, one per line<textarea name="domains" required rows="4" maxlength="2000" placeholder="deeprunshop.com&#10;deeprunhemp.com"></textarea></label>
+        {% if platform_admin %}
+        <label><input name="onboarding" type="checkbox"> Onboarding — complimentary access for 30 days, without DNS changes</label>
+        <label>Onboarding reason<input name="onboarding_reason" minlength="8" maxlength="500" value="Vendor transition: complimentary onboarding"></label>
+        <small>You will be prompted to reapprove every 30 days. The DNS exception pauses if approval expires. Domain ownership stays unverified.</small>
+        {% endif %}
         <button class="button button-primary" type="submit">Add customer</button>
         <small>You can paste full web addresses. Each domain gets its own workspace, and DNS, email and website checks start automatically every day. TXT verification is optional.</small>
       </form>
@@ -533,8 +596,20 @@
       <p class="fine-print" id="created-probation"></p>
       <button class="button button-primary" id="open-created-workspace" type="button">Open this workspace</button>
     </div>
+    {% if platform_admin %}
+    <section aria-labelledby="onboarding-customers-title"><h3 id="onboarding-customers-title">Customer onboarding</h3><p class="muted">Grant, review or end complimentary onboarding during a vendor transition.</p><div id="onboarding-customers"></div><p id="onboarding-feedback" aria-live="polite"></p></section>
+    {% endif %}
     <div id="dialog-workspace-list" class="workspace-request-list"></div>
   </dialog>
-  <script src="/static/js/dashboard.js?v=daedalus-20261008-175" defer></script>
+  {% if platform_admin %}
+  <dialog id="onboarding-review-dialog" class="workspace-dialog" aria-labelledby="onboarding-review-title">
+    <div class="dialog-heading"><h2 id="onboarding-review-title">Customer onboarding needs reapproval</h2><button type="button" class="button button-quiet" id="onboarding-review-later">Review later</button></div>
+    <p>The 30-day DNS exception has paused for these customers. Review each customer to approve another 30 days or end onboarding.</p>
+    <div id="onboarding-due-customers"></div><p id="onboarding-review-feedback" aria-live="polite"></p>
+  </dialog>
+  <script src="/static/js/onboarding.js?v=20261008-1" defer></script>
+  {% endif %}
+  <script src="/static/js/google-admin.js?v=20261008-1" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261008-176" defer></script>
 </body>
 </html>

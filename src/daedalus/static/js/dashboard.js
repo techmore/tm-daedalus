@@ -65,6 +65,7 @@
     portfolio: "All customers",
     scanners: "Internal network",
     meraki: "Meraki security report",
+    "google-admin": "Google Admin security",
     dns: "DNS & email health",
     web: "Website health",
     cis: "Endpoint compliance",
@@ -176,6 +177,7 @@
     if (name === "overview") loadWorkspacePosture();
     if (name === "portfolio") loadPortfolio();
     if (name === "meraki") loadMeraki();
+    if (name === "google-admin") { if (window.daedalusGoogleAdmin) window.daedalusGoogleAdmin.load(); loadReports(); }
     if (name === "cis") { loadCIS(); loadReports(); }
     if (name === "dns" || name === "web") loadExternalCheck(name);
     if (name === "web") { loadActiveExposure(); loadNikto(); }
@@ -1068,7 +1070,7 @@
     controlsEnabled = organization.controls_enabled === true;
     var controlsNotice = document.getElementById("workspace-controls-notice");
     if (controlsNotice && controlsJustClosed) {
-      controlsNotice.textContent = "Temporary workspace access has closed. Scanner enrollment, new scans and active website audits are paused. Review domain verification or renew the 14-day override in Overview. Saved results remain available.";
+      controlsNotice.textContent = "Temporary workspace access has closed. Scanner enrollment, new scans and active website audits are paused. Review domain verification, onboarding approval or the temporary override. Saved results remain available.";
       controlsNotice.classList.remove("hidden");
     } else if (controlsNotice && controlsEnabled) controlsNotice.classList.add("hidden");
     pauseRestrictedWorkspaceControls();
@@ -2607,7 +2609,7 @@
       var main = document.createElement("div");
       main.className = "report-job-main";
       var heading = document.createElement("strong");
-      var reportLabel = job.report_type === "meraki_security" ? "Meraki security report"
+      var reportLabel = job.report_type === "google_admin_security" ? "Google Admin security audit" : job.report_type === "meraki_security" ? "Meraki security report"
         : (job.report_type === "cis_endpoint" ? "CIS endpoint report" : (job.report_type === "scanner_results" ? "Internal scanner report" : "External posture report"));
       heading.textContent = reportLabel + " · " + job.domain;
       var metadata = document.createElement("small");
@@ -2669,6 +2671,11 @@
             actions.append(saveDrive);
           }
         }
+      }
+      if (job.google_admin_snapshot_url) {
+        var googleEvidence = document.createElement("a"); googleEvidence.className = "button button-small button-quiet";
+        googleEvidence.href = job.google_admin_snapshot_url; googleEvidence.textContent = "Download audit evidence";
+        actions.append(googleEvidence);
       }
       if (job.meraki_changes_url) {
         var changes = document.createElement("a");
@@ -2763,6 +2770,8 @@
     card.append(copy, actions);
   }
 
+  window.addEventListener("google-admin-changed", function () { loadReports(); loadWorkspacePosture(); });
+
   async function loadReports() {
     if (!orgId) return;
     window.clearTimeout(reportPollTimer);
@@ -2777,7 +2786,9 @@
       renderReportJobs(reports, "posture-report-job-list", "posture-report-library-status", ["meraki_security", "cis_endpoint"]);
       renderReportJobs(reports, "meraki-report-job-list", "meraki-report-library-status", "meraki_security");
       renderReportJobs(reports, "cis-pdf-job-list", "cis-pdf-library-status", "cis_endpoint");
-      if ((activeTab === "reports" || activeTab === "meraki" || activeTab === "cis") && reports.some(function (job) {
+      renderReportJobs(reports, "google-admin-report-job-list", "google-admin-report-library-status", "google_admin_security");
+      renderReportJobs(reports, "google-admin-library-list", "google-admin-library-status", "google_admin_security");
+      if ((activeTab === "reports" || activeTab === "meraki" || activeTab === "cis" || activeTab === "google-admin") && reports.some(function (job) {
         return job.status === "queued" || job.status === "running";
       })) {
         reportPollTimer = window.setTimeout(loadReports, 900);
@@ -5277,7 +5288,9 @@
       try {
         var body = await postJson("/api/customers", {
           name: form.get("name"),
-          domains: String(form.get("domains") || "").split(/[\s,;]+/).filter(Boolean)
+          domains: String(form.get("domains") || "").split(/[\s,;]+/).filter(Boolean),
+          onboarding: form.get("onboarding") === "on",
+          onboarding_reason: form.get("onboarding_reason") || "Vendor transition: complimentary onboarding"
         });
         var lines = body.results.map(function (item) {
           var label = item.domain || item.input;
@@ -5291,6 +5304,7 @@
           challenge.classList.remove("hidden");
         }
         createWorkspaceForm.reset();
+        if (window.daedalusOnboarding) window.daedalusOnboarding.load();
       } catch (error) {
         showError(feedback, error.message);
       }
@@ -5505,6 +5519,9 @@
     var data = entry.details || {};
     if (entry.action === "workspace.probation_expired") return "Domain verification probation expired for " + (data.domain || "this workspace") + " at " + dateLabel(data.expires_at) + ". Recorded when observed: " + dateLabel(data.observed_at) + ".";
     if (entry.action === "probation_override.expired") return "Temporary override #" + data.override_id + " expired at " + dateLabel(data.expires_at) + ". Recorded when observed: " + dateLabel(data.observed_at) + ".";
+    if (entry.action === "onboarding.approved" || entry.action === "onboarding.reapproved") return "Complimentary onboarding approved for 30 days, through " + dateLabel(data.review_due_at) + ". Reason: " + (data.reason || "Recorded by platform administrator") + ".";
+    if (entry.action === "onboarding.ended") return "Complimentary onboarding ended. Reason: " + (data.reason || "Recorded by platform administrator") + ".";
+    if (entry.action === "onboarding.review_due") return "Customer onboarding needs reapproval after " + dateLabel(data.review_due_at) + ".";
     if (entry.action === "probation_override.granted") return "Temporary override #" + data.override_id + " granted through " + dateLabel(data.expires_at) + "." + (data.reason ? " Reason: " + data.reason : "");
     if (entry.action === "probation_override.revoked") return "Temporary override #" + data.override_id + " revoked before its scheduled expiry.";
     return "";

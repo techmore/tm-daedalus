@@ -51,6 +51,8 @@ from daedalus.config import (
     DATA_DIR,
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
+    GOOGLE_ADMIN_CLIENT_ID,
+    GOOGLE_ADMIN_CLIENT_SECRET,
     HOST,
     PORT,
     REPORTS_DIR,
@@ -85,6 +87,7 @@ from daedalus.models import (
     ExternalCheckSchedule,
     WorkspaceIcon,
     DriveConnection,
+    GoogleAdminConnection,
     DriveUpload,
     MerakiCredential,
     MerakiOrganizationGrant,
@@ -130,6 +133,7 @@ from daedalus.meraki_switch import project_switch_ports
 from daedalus.meraki_wan import project_wan_usage
 from daedalus.meraki_planning import build_unifi_plan, project_unifi_plan
 from daedalus.reports import (
+    build_google_admin_pdf,
     build_cis_endpoint_pdf,
     build_external_posture_pdf,
     build_meraki_security_pdf,
@@ -157,6 +161,13 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
         client_kwargs={"scope": "https://www.googleapis.com/auth/drive.file"},
     )
+
+
+if GOOGLE_ADMIN_CLIENT_ID and GOOGLE_ADMIN_CLIENT_SECRET and GOOGLE_ADMIN_CLIENT_ID != GOOGLE_CLIENT_ID:
+    from daedalus.google_admin import SCOPES as GOOGLE_ADMIN_SCOPES
+    oauth.register(name="google_admin", client_id=GOOGLE_ADMIN_CLIENT_ID, client_secret=GOOGLE_ADMIN_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": " ".join(GOOGLE_ADMIN_SCOPES), "code_challenge_method": "S256"})
 
 
 def utcnow() -> datetime:
@@ -699,9 +710,10 @@ def active_probation_override(
 
 
 def workspace_controls_available(db: Session, organization: Organization) -> bool:
+    from daedalus.onboarding import active
     return organization.verification_status == "verified" or active_probation_override(
         db, organization.id
-    ) is not None
+    ) is not None or active(db, organization.id) is not None
 
 
 def audit(
@@ -813,6 +825,7 @@ def serialize_report_job(job: ReportJob, actor: User | None = None) -> dict[str,
         )} if comparison and job.status == "completed" else None,
         "meraki_changes_url": f"/api/meraki/reports/{job.id}/changes" if comparison and job.status == "completed" else None,
         "meraki_snapshot_url": f"/api/meraki/reports/{job.id}/snapshot" if job.report_type == "meraki_security" and job.status == "completed" else None,
+        "google_admin_snapshot_url": f"/api/google-admin/reports/{job.id}/snapshot" if job.report_type == "google_admin_security" and job.status == "completed" else None,
         "drive_link": getattr(job, "_drive_link", None),
     }
 
@@ -1205,6 +1218,9 @@ def recover_interrupted_report_jobs() -> int:
     with SessionLocal() as db:
         jobs = db.scalars(select(ReportJob).where(ReportJob.status.in_(("queued", "running")))).all()
         for job in jobs:
+            if job.report_type == "google_admin_security":
+                from daedalus.google_admin_routes import release_job
+                release_job(db, job)
             job.status = "failed"
             job.stage = "Interrupted by server restart"
             job.error_summary = "The report job did not finish before the server restarted."
@@ -1230,7 +1246,9 @@ def generate_report_job(report_job_id: int) -> None:
             return
         job.status = "running"
         job.progress = 5 if job.report_type == "meraki_security" else 12
-        if job.report_type == "meraki_security":
+        if job.report_type == "google_admin_security":
+            job.stage = "Preparing Google Admin audit"
+        elif job.report_type == "meraki_security":
             job.stage = "Preparing Meraki report"
         elif job.report_type == "cis_endpoint":
             job.stage = "Preparing CIS endpoint report"
@@ -1247,7 +1265,12 @@ def generate_report_job(report_job_id: int) -> None:
         db.commit()
 
     try:
-        if report_type == "external_posture":
+        if report_type == "google_admin_security":
+            from daedalus.google_admin_routes import collect_job
+            snapshot = collect_job(report_job_id)
+            update_report_progress(report_job_id, 70, "Rendering Google Admin audit evidence")
+            pdf_bytes = build_google_admin_pdf(snapshot)
+        elif report_type == "external_posture":
             pdf_bytes = build_external_posture_pdf(snapshot)
         elif report_type == "cis_endpoint":
             update_report_progress(report_job_id, 40, "Rendering CIS endpoint results")
@@ -1337,6 +1360,9 @@ def generate_report_job(report_job_id: int) -> None:
             job = db.get(ReportJob, report_job_id)
             if job is None:
                 return
+            if report_type == "google_admin_security":
+                from daedalus.google_admin_routes import authorized_connection
+                authorized_connection(db, job)
             job.status = "completed"
             job.progress = 100
             job.stage = "PDF ready"
@@ -1357,6 +1383,9 @@ def generate_report_job(report_job_id: int) -> None:
                     "size_bytes": len(pdf_bytes),
                 },
             )
+            if report_type == "google_admin_security":
+                from daedalus.google_admin_routes import completion
+                completion(db, job)
             if report_type == "meraki_security":
                 comparison = snapshot["meraki_comparison"]
                 if any(comparison[key] for key in ("changed_control_count", "coverage_change_count", "inventory_change_count", "inventory_coverage_change_count")):
@@ -1395,6 +1424,9 @@ def generate_report_job(report_job_id: int) -> None:
         with SessionLocal() as db:
             job = db.get(ReportJob, report_job_id)
             if job is not None:
+                if report_type == "google_admin_security":
+                    from daedalus.google_admin_routes import release_job
+                    release_job(db, job)
                 job.status = "failed"
                 job.stage = "PDF generation failed"
                 job.error_summary = f"PDF generation failed ({type(exc).__name__})."
@@ -2224,9 +2256,14 @@ async def external_check_scheduler() -> None:
             if time.monotonic() - last_defaults > 3600:
                 last_defaults = time.monotonic()
                 await run_in_threadpool(ensure_default_external_schedules)
+            from daedalus.onboarding import record_due
+            await run_in_threadpool(record_due)
             expired_overrides = await run_in_threadpool(record_expired_probation_overrides)
             for item in expired_overrides:
                 await live_hub.publish(item["organization_id"], {"type": "workspace_notification_created", "source_type": "probation_override_expired", "source_id": item["override_id"]})
+            from daedalus.google_admin_routes import run_due
+            for google_report_id in await run_in_threadpool(run_due):
+                await run_in_threadpool(generate_report_job, google_report_id)
             await run_in_threadpool(expire_scanner_commands)
             due_schedules = await run_in_threadpool(claim_due_external_check_schedules)
             for schedule in due_schedules:
@@ -2788,7 +2825,7 @@ def clean_domain_input(raw: str) -> str:
     return normalize_domain(value)
 
 
-def create_domain_workspace(db: Session, user: User, name: str, domain: str) -> tuple[Organization, dict[str, Any]]:
+def create_domain_workspace(db: Session, user: User, name: str, domain: str, *, onboarding_reason: str | None = None) -> tuple[Organization, dict[str, Any]]:
     existing = db.scalar(select(Organization).where(Organization.domain == domain))
     if existing is not None:
         raise HTTPException(
@@ -2820,6 +2857,9 @@ def create_domain_workspace(db: Session, user: User, name: str, domain: str) -> 
                 created_at=now,
             )
         )
+        if onboarding_reason is not None:
+            from daedalus.onboarding import start
+            start(db, organization, user, onboarding_reason)
         challenge = issue_workspace_challenge(db, organization, user)
         audit(
             db,
@@ -2867,6 +2907,8 @@ def create_workspace(
 class CustomerCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     domains: list[str] = Field(min_length=1, max_length=20)
+    onboarding: bool = False
+    onboarding_reason: str = Field(default="Vendor transition: complimentary onboarding", max_length=500)
 
 
 @app.post("/api/customers")
@@ -2877,6 +2919,12 @@ def create_customer_workspaces(
 ):
     """One customer, one or more domains: a workspace per domain, audited daily."""
     user = get_session_user(request, db)
+    if payload.onboarding:
+        from daedalus.onboarding import platform_admin, mutation_origin
+        platform_admin(request, db)
+        mutation_origin(request)
+        if len(payload.onboarding_reason.strip()) < 8:
+            raise HTTPException(422, "Enter an onboarding reason of at least 8 characters")
     results: list[dict[str, Any]] = []
     created: list[Organization] = []
     seen: set[str] = set()
@@ -2895,7 +2943,7 @@ def create_customer_workspaces(
     for domain, _ in cleaned:
         label = f"{payload.name.strip()} · {domain}" if multiple else payload.name.strip()
         try:
-            organization, challenge = create_domain_workspace(db, user, label, domain)
+            organization, challenge = create_domain_workspace(db, user, label, domain, onboarding_reason=payload.onboarding_reason.strip() if payload.onboarding else None)
         except HTTPException as exc:
             results.append({"domain": domain, "status": "exists" if exc.status_code == 409 else "invalid", "detail": exc.detail})
             continue
@@ -3155,7 +3203,7 @@ async def decide_membership_request(
     if not workspace_controls_available(db, organization):
         raise HTTPException(
             status_code=403,
-            detail="Verify the domain or grant a 14-day probation override before sharing access.",
+            detail="Verify the domain or grant a 14-day probation override or approve customer onboarding before sharing access.",
         )
     membership = db.get(Membership, membership_id)
     if membership is None or membership.organization_id != organization.id:
@@ -3226,7 +3274,7 @@ async def change_workspace_membership_role(
     if not workspace_controls_available(db, organization):
         raise HTTPException(
             status_code=403,
-            detail="Verify the domain or grant a 14-day probation override before changing administrator access.",
+            detail="Verify the domain or grant a 14-day probation override or approve customer onboarding before changing administrator access.",
         )
     membership = db.get(Membership, membership_id)
     if membership is None or membership.organization_id != organization.id:
@@ -3649,11 +3697,12 @@ def list_workspace_notifications(
                 "read_at": iso_utc(receipt.read_at) if receipt else None,
                 "tab": (
                     "reports" if notification.source_type == "report_job_failure"
+                    else "google-admin" if notification.source_type == "google_admin_report"
                     else "meraki" if notification.source_type == "meraki_report"
                     else "cis" if notification.source_type == "cis_report"
                     else "scanners" if notification.source_type == "scanner_comparison"
                     else "members" if notification.source_type in {
-                        "probation_override_granted", "probation_override_revoked", "probation_override_expired"
+                        "probation_override_granted", "probation_override_revoked", "probation_override_expired", "onboarding_review_due"
                     }
                     else "dns" if notification.title.startswith("DNS and email")
                     else "web"
@@ -5674,6 +5723,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
                 "agents": [],
                 "recent_events": [],
                 "workspaces": user_memberships,
+                "platform_admin": user.email.lower() in PLATFORM_ADMIN_EMAILS and getattr(request.state, "user_api_key", None) is None,
                 "demo_mode": DEMO_MODE,
             },
         )
@@ -5700,6 +5750,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         .limit(25)
     ).all()
     probation_override = active_probation_override(db, organization.id)
+    from daedalus.onboarding import summary as onboarding_summary
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -5712,11 +5763,13 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "agent_status": agent_status,
             "agent_bridge_online": agent_bridge_online,
             "workspaces": user_memberships,
+            "platform_admin": user.email.lower() in PLATFORM_ADMIN_EMAILS and scoped_key is None,
             "demo_mode": DEMO_MODE,
             "workspace_controls_enabled": (
-                organization.verification_status == "verified" or probation_override is not None
+                workspace_controls_available(db, organization)
             ),
             "probation_override": probation_override,
+            "onboarding": onboarding_summary(db, organization.id),
         },
     )
 
@@ -5956,6 +6009,21 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         "summary":f"{review if review is not None else 'Unknown'} review observations · {unavailable if unavailable is not None else 'unknown'} controls unavailable · {totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} assigned devices" if meraki else "No completed network report yet.",
         "latest_attempt_status":meraki_attempt.status if meraki_attempt else None,
         "updated_at":iso_utc(meraki.completed_at) if meraki else None})
+    google_job = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id,
+        ReportJob.report_type == "google_admin_security", ReportJob.status == "completed").order_by(ReportJob.id.desc()))
+    google_attempt = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id,
+        ReportJob.report_type == "google_admin_security").order_by(ReportJob.id.desc()))
+    google_connection = db.get(GoogleAdminConnection, org.id)
+    summary = ((google_job.report_snapshot or {}).get("google_admin") or {}).get("summary", {}) if google_job else {}
+    state = "attention" if google_job else "not_assessed"
+    if google_attempt and google_attempt.status in {"queued", "running"}:
+        state = "running"
+    elif google_attempt and google_attempt.status == "failed" or google_connection and google_connection.last_error:
+        state = "unavailable"
+    areas.append({"key": "google-admin", "title": "Google Admin security", "state": state,
+        "summary": f"{summary.get('definitive', 0)}/{summary.get('applicable', 10)} checks assessed; {summary.get('fail', 0)} failed. Effective-policy manual review remains required." if google_job else "No Google Admin audit saved. Separate read-only consent is required.",
+        "updated_at": iso_utc(google_job.completed_at) if google_job else None,
+        "latest_attempt_status": google_attempt.status if google_attempt else None})
     return areas
 
 
@@ -6010,7 +6078,7 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
             "domain": organization.domain,
             "verification_status": organization.verification_status,
             "controls_enabled": (
-                organization.verification_status == "verified" or probation_override is not None
+                workspace_controls_available(db, organization)
             ),
             "probation_override_expires_at": (
                 probation_override.expires_at.isoformat() + "Z" if probation_override else None
@@ -7717,6 +7785,12 @@ async def live_updates(websocket: WebSocket):
     finally:
         live_hub.disconnect(organization_id_int, websocket)
 
+
+from daedalus.onboarding import router as onboarding_router
+app.include_router(onboarding_router)
+
+from daedalus.google_admin_routes import router as google_admin_router
+app.include_router(google_admin_router)
 
 if __name__ == "__main__":
     import uvicorn

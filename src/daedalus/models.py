@@ -135,6 +135,18 @@ class ProbationOverride(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
+class CustomerOnboarding(Base):
+    __tablename__ = "customer_onboarding"
+
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    approved_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="onboarding")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    review_due_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -535,3 +547,42 @@ class DriveUpload(Base):
     drive_file_id: Mapped[str] = mapped_column(String(128), nullable=False)
     web_view_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class GoogleAdminConnection(Base):
+    __tablename__ = "google_admin_connections"
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    customer_id: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    connection_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    connected_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    google_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_scopes: Mapped[list] = mapped_column(JSON, nullable=False)
+    approved_binding: Mapped[dict] = mapped_column(JSON, nullable=False)
+    connected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_verified_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    active_report_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    schedule_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class GoogleAdminConsent(Base):
+    __tablename__ = "google_admin_consents"
+    state_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    domain: Mapped[str] = mapped_column(String(253), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class GoogleAdminReview(Base):
+    __tablename__ = "google_admin_reviews"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    connection_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    check_id: Mapped[str] = mapped_column(String(12), nullable=False)
+    reviewer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False)

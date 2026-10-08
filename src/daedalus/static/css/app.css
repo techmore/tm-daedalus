@@ -1026,3 +1026,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .meraki-topology-canvas {overflow: auto; max-height: 660px; border: 1px solid #cbcbb9; border-radius: 8px; background: #faf8f1;}
 .meraki-topology-canvas svg {display: block; max-width: none; font-family: inherit;}
 .meraki-topology-canvas:focus-visible {outline: 3px solid #6e754b; outline-offset: 3px;}
+
+.google-admin-consent { display: flex; align-items: flex-start; gap: .65rem; margin: 1rem 0; max-width: 65ch; }
+.google-admin-consent input { width: auto; flex-shrink: 0; margin-top: .25rem; }
+.google-admin-check { border-bottom: 1px solid var(--line, #d9dccb); padding: 1rem 0; overflow-wrap: anywhere; }
+.google-admin-check summary { cursor: pointer; font-weight: 600; }
+.google-admin-check p { font-size: .9rem; line-height: 1.5; }
+#google-admin-review-form textarea { min-height: 5rem; width: 100%; }
+.onboarding-customer { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.onboarding-customer label { display: grid; gap: .35rem; }
+.onboarding-customer input { width: 100%; box-sizing: border-box; }
+.onboarding-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+
+.workspace-form input[type="checkbox"] { width: 1.1rem; min-height: 1.1rem; padding: 0; }
+.onboarding-customer input { min-height: 38px; padding: .5rem; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--ink); }

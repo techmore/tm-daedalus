@@ -9,6 +9,10 @@ Daedalus is Cyber Security Pilot's multi-organization security portal. It brings
 - **Profiles:** [`src/daedalus/profiles/`](src/daedalus/profiles/) — endpoint baseline profiles.
 - **Tests:** [`tests/`](tests/).
 
+## Google Admin security reporting
+
+The [Google Admin audit guide and checklist](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md) covers the implemented read-only OAuth connection, customer/domain validation, CIS Controls v8.1 rationale, manual policy evidence and immutable recurring reports. Dedicated OAuth configuration, production activation and real CSP/BFS acceptance remain pending.
+
 ## GitHub Pages
 
 GitHub Pages publishes only `site/` through [`.github/workflows/pages.yml`](.github/workflows/pages.yml). The Python application, its database, sign-in, reports, integrations, and scanner command channel require a server; GitHub Pages hosts only the static marketing pages. The Daedalus portal runs separately from the Pages site.
@@ -120,3 +124,7 @@ This repository does not yet define a license or contribution policy. Contact Cy
 Signed-in users can manage workspace-bound keys from **Access keys** in the dashboard. Keys are shown once, stored as SHA-256 hashes, expire in 1–90 days, and retain the user's live membership and role. Use `Authorization: Bearer <key>` for API requests, or the access-key form on the sign-in page. Revocation invalidates key sessions and closes their live connection within five seconds. Key sessions cannot issue more keys or select another workspace; use Google sign-in for those actions.
 
 Host operators can explicitly provision the named Codex operator for an existing verified domain with `python -m daedalus.operator_key --domain cybersecuritypilot.org --output /private/new-key.json`. The command refuses an existing output file and writes mode 0600; it never prints the token. This service identity has an audited admin membership solely in that domain, with a 30-day key. It does not impersonate a Google user.
+
+## Customer onboarding
+
+Configured platform administrators can grant complimentary 30-day onboarding in **Add or join workspace → Add a customer**, or review existing customers in the same dialog. The DNS exception requires explicit reapproval every 30 days; overdue customers appear in an admin popup and durable workspace notices. Configure `DAEDALUS_PLATFORM_ADMIN_EMAILS` with the intended authenticated owners. [Authority, expiry and rollout](docs/CUSTOMER-ONBOARDING.md).

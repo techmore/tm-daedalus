@@ -16,6 +16,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import KeepTogether, LongTable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from daedalus.email_policy import analyze_email_auth
+from daedalus.google_admin_pdf import build_google_admin_pdf
 
 
 OLIVE_950 = colors.HexColor("#1f2117")
