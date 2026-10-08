@@ -75,9 +75,32 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
         make_bundle(self.bundle)
         self.executor_calls = []
         self.loaded = {macos_service.NMAPUI_LABEL, macos_service.BRIDGE_LABEL}
+        self.idle_patch = patch.object(upgrade_service, "_require_scanner_idle")
+        self.idle_probe = self.idle_patch.start()
+        self.addCleanup(self.idle_patch.stop)
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_busy_engine_defers_before_staging_or_service_changes(self):
+        self.idle_probe.side_effect = RuntimeError("Scanner is busy")
+        with patch.object(self, "prepare") as prepare:
+            with self.assertRaisesRegex(RuntimeError, "busy"):
+                upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.executor, prepare, lambda _: True)
+            prepare.assert_not_called()
+        self.assertEqual(self.loaded, {macos_service.NMAPUI_LABEL, macos_service.BRIDGE_LABEL})
+        self.assertFalse(any(c[1] in {"bootout", "bootstrap"} for c in self.executor_calls))
+        for label, raw in self.old_bytes.items():
+            self.assertEqual((self.launch_agents / (label + ".plist")).read_bytes(), raw)
+
+    def test_engine_becoming_busy_during_staging_defers_cutover(self):
+        self.idle_probe.side_effect = [None, RuntimeError("Scanner is busy")]
+        with self.assertRaisesRegex(RuntimeError, "busy"):
+            upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.executor, self.prepare, lambda _: True)
+        self.assertEqual(self.idle_probe.call_count, 2)
+        self.assertFalse(any(c[1] in {"bootout", "bootstrap"} for c in self.executor_calls))
+        for label, raw in self.old_bytes.items():
+            self.assertEqual((self.launch_agents / (label + ".plist")).read_bytes(), raw)
 
     def test_kit_hash_and_members_use_same_snapshot_when_path_is_replaced(self):
         original = self.bundle.read_bytes()
@@ -272,3 +295,52 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must be loaded"):
             upgrade_service.upgrade_managed_scanner(self.bundle, self.root, scheduled, self.prepare, lambda _: True)
         self.assertFalse(any(call[1] in {"bootout", "bootstrap"} for call in self.executor_calls))
+
+
+class ScannerIdleProbeTests(unittest.TestCase):
+    def test_only_explicit_coherent_idle_status_is_accepted(self):
+        import json
+        payload = {"EnvironmentVariables": {"NMAPUI_PORT": "9001"}}
+        for status, accepted in [
+            ({"has_active_jobs": False, "active_jobs": [], "active_job_types": []}, True),
+            ({"has_active_jobs": True, "active_jobs": [{}], "active_job_types": ["scan"]}, False),
+            ({"has_active_jobs": False, "active_jobs": [{}], "active_job_types": []}, False),
+            ({"has_active_jobs": False}, False), ([], False),
+        ]:
+            with self.subTest(status=status), patch.object(upgrade_service, "urlopen", return_value=io.BytesIO(json.dumps(status).encode())):
+                if accepted:
+                    upgrade_service._require_scanner_idle(payload)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        upgrade_service._require_scanner_idle(payload)
+
+    def test_unavailable_malformed_and_oversized_status_defer(self):
+        payload = {"EnvironmentVariables": {"NMAPUI_PORT": "9001"}}
+        for body in [b"not JSON", b"x" * 65537]:
+            with patch.object(upgrade_service, "urlopen", return_value=io.BytesIO(body)), self.assertRaises(RuntimeError):
+                upgrade_service._require_scanner_idle(payload)
+        with patch.object(upgrade_service, "urlopen", side_effect=TimeoutError()), self.assertRaises(RuntimeError):
+            upgrade_service._require_scanner_idle(payload)
+
+    def test_local_activity_probe_refuses_redirects(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+        paths = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                paths.append(self.path)
+                self.send_response(302)
+                self.send_header('Location', '/redirected')
+                self.end_headers()
+            def log_message(self, *_):
+                pass
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.01}, daemon=True)
+        thread.start()
+        try:
+            payload = {'EnvironmentVariables': {'NMAPUI_PORT': str(server.server_port), 'NMAPUI_USERNAME': 'fixture-user', 'NMAPUI_PASSWORD': 'fixture-password'}}
+            with self.assertRaises(RuntimeError):
+                upgrade_service._require_scanner_idle(payload)
+            self.assertEqual(paths, ['/api/runtime/status'])
+        finally:
+            server.shutdown();server.server_close();thread.join(timeout=1)

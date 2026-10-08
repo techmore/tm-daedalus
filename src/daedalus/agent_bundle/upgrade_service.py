@@ -16,12 +16,21 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path, PurePosixPath
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 try:  # Package import for tests; script import for the bundled macOS CLI.
     from . import macos_service
 except ImportError:  # pragma: no cover - exercised by the bundled direct-script entrypoint
     import macos_service  # type: ignore[no-redef]
+
+class _NoLocalRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# Local service credentials must stay on loopback, without proxies or redirects.
+urlopen = build_opener(ProxyHandler({}), _NoLocalRedirect()).open
+
 
 MAX_KIT_BYTES = 512 * 1024 * 1024
 MAX_MEMBER_BYTES = 256 * 1024 * 1024
@@ -233,6 +242,27 @@ def _default_ready(nmapui_payload: dict, timeout: int = 60) -> bool:
     return False
 
 
+def _require_scanner_idle(nmapui_payload: dict) -> None:
+    """Defer cutover unless the local engine explicitly reports no active jobs."""
+    env = nmapui_payload["EnvironmentVariables"]
+    request = Request(f"http://127.0.0.1:{env['NMAPUI_PORT']}/api/runtime/status")
+    username, password = env.get("NMAPUI_USERNAME", ""), env.get("NMAPUI_PASSWORD", "")
+    if username and password:
+        import base64
+        request.add_header("Authorization", "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode())
+    try:
+        with urlopen(request, timeout=3) as response:
+            raw = response.read(65537)
+        if len(raw) > 65536:
+            raise ValueError("Oversized local status")
+        payload = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError("Scanner activity could not be confirmed; retry the upgrade when the local scanner is available") from exc
+    if (not isinstance(payload, dict) or payload.get("has_active_jobs") is not False
+            or payload.get("active_jobs") != [] or payload.get("active_job_types") != []):
+        raise RuntimeError("Scanner is busy or its activity is unknown; retry the upgrade after scans and reports finish")
+
+
 def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None) -> dict:
     """Upgrade exactly the two recognized, loaded managed LaunchAgents.
 
@@ -272,6 +302,7 @@ def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_relea
     current_bridge = old_bridge.get("WorkingDirectory") == str(support / "scanner-bridge/releases" / expected_bridge_hash)
     if current_nmap and current_bridge:
         return {"upgraded": False, "already_current": True, "kit_sha256": kit_digest, "data_preserved": True}
+    _require_scanner_idle(old_nmap)
     if prepare_release:
         nmap_release, bridge_release = prepare_release(files, root, kit_digest)
     else:
@@ -346,6 +377,7 @@ def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_relea
         backups[label] = str(path)
     cutover_started = False
     try:
+        _require_scanner_idle(old_nmap)
         cutover_started = True
         for label in (macos_service.BRIDGE_LABEL, macos_service.NMAPUI_LABEL):
             _run(executor, [macos_service.LAUNCHCTL, "bootout", domain, str(destinations[label])])

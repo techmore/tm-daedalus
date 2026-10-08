@@ -58,6 +58,12 @@ run this from its directory:
 sh manage-service-macos.sh upgrade /path/to/daedalus-scanner-kit.zip
 ```
 
+On macOS, upgrades require an explicit idle response from the local engine
+before staging and again before switching services. Busy, inconsistent,
+unavailable, malformed or oversized activity responses defer the upgrade.
+The checks use loopback without proxies or redirects. Atomic coordination with
+new job submission remains outstanding; these are activity preflight checks.
+
 Upgrade is separate from enrollment. It stages versioned NmapUI and bridge
 releases, preserves the existing enrollment, settings, scan data, event spool,
 command journal, service port, and authentication environment, then switches
@@ -356,3 +362,17 @@ permissions. Downloads are limited to 64 MiB, validate the PDF response and do
 not follow redirects. The enrollment token is never placed in a browser URL or
 injected into the local web interface. This device access cannot create reports
 or read another scanner or workspace’s PDF; generation remains in the portal.
+
+## October 7 calendar-date correction
+
+The distributed NmapUI source ZIP is SHA-256
+`b4a6ad04efc868ff3559c9a8ebd83554b2374814e53629bd1f1d83a987d88ae9`.
+Relative to installed Mac source ZIP
+`1491af73a5fc90a5e1dc067e6d8023249ab9ce347f6eb5cfb348f5d25918c5bc`,
+only `static/js/scan_banners.js` and its manifest changed. All other files,
+including report styles and fonts, are identical. Saved scan labels use local
+calendar days, with invalid or future dates shown as unknown rather than today.
+Node fixtures cover midnight, daylight saving time and invalid/future input.
+The existing Mac scanner has not been switched to this source bundle; its
+installed bridge source does not match the retained upgrade kits and provenance
+needs resolution before cutover.
