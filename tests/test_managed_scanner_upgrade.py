@@ -78,9 +78,45 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
         self.idle_patch = patch.object(upgrade_service, "_require_scanner_idle")
         self.idle_probe = self.idle_patch.start()
         self.addCleanup(self.idle_patch.stop)
+        self.claim_patch = patch.object(upgrade_service, "_acquire_scanner_maintenance", return_value="a" * 32)
+        self.claim = self.claim_patch.start()
+        self.addCleanup(self.claim_patch.stop)
+        self.release_patch = patch.object(upgrade_service, "_release_scanner_maintenance")
+        self.release = self.release_patch.start()
+        self.addCleanup(self.release_patch.stop)
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_maintenance_refusal_defers_without_service_changes(self):
+        self.claim.side_effect = RuntimeError("Scanner maintenance could not be acquired")
+        with self.assertRaisesRegex(RuntimeError, "maintenance"):
+            upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.executor, self.prepare, lambda _: True)
+        self.assertFalse(any(c[1] in {"bootout", "bootstrap"} for c in self.executor_calls))
+        self.release.assert_not_called()
+        for label, raw in self.old_bytes.items():
+            self.assertEqual((self.launch_agents / (label + ".plist")).read_bytes(), raw)
+
+    def test_admission_is_claimed_before_service_stop_and_released_after(self):
+        events = []
+        self.claim.side_effect = lambda _: events.append("claim") or "a" * 32
+        self.release.side_effect = lambda _, token: events.append("release")
+        def executor(args, **kwargs):
+            if args[1] in {"bootout", "bootstrap"}:
+                events.append(args[1])
+            return self.executor(args, **kwargs)
+        result = upgrade_service.upgrade_managed_scanner(self.bundle, self.root, executor, self.prepare, lambda _: True)
+        self.assertTrue(result["upgraded"])
+        self.assertEqual(events, ["claim", "bootout", "bootout", "bootstrap", "bootstrap", "release"])
+        self.release.assert_called_once_with(unittest.mock.ANY, "a" * 32)
+
+    def test_failed_candidate_rolls_back_and_releases_admission(self):
+        with self.assertRaisesRegex(RuntimeError, "did not become ready"):
+            upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.executor, self.prepare,
+                                                    lambda p: p["WorkingDirectory"] == str(self.nmap_release / "daedalus-nmapui-source"))
+        self.release.assert_called_once_with(unittest.mock.ANY, "a" * 32)
+        for label, raw in self.old_bytes.items():
+            self.assertEqual((self.launch_agents / (label + ".plist")).read_bytes(), raw)
 
     def test_busy_engine_defers_before_staging_or_service_changes(self):
         self.idle_probe.side_effect = RuntimeError("Scanner is busy")
@@ -344,3 +380,65 @@ class ScannerIdleProbeTests(unittest.TestCase):
             self.assertEqual(paths, ['/api/runtime/status'])
         finally:
             server.shutdown();server.server_close();thread.join(timeout=1)
+
+
+class ScannerMaintenanceTransportTests(unittest.TestCase):
+    payload = {"EnvironmentVariables": {"NMAPUI_PORT": "9001", "NMAPUI_USERNAME": "fixture-user", "NMAPUI_PASSWORD": "fixture-password"}}
+
+    def test_claim_and_owner_release_use_authenticated_local_methods(self):
+        import json
+        for token, method, reply in [(None, "POST", {"maintenance_active": True, "token": "a" * 32}),
+                                     ("a" * 32, "DELETE", {"maintenance_active": False})]:
+            with patch.object(upgrade_service, "urlopen", return_value=io.BytesIO(json.dumps(reply).encode())) as transport:
+                if token is None:
+                    self.assertEqual(upgrade_service._acquire_scanner_maintenance(self.payload), "a" * 32)
+                else:
+                    upgrade_service._release_scanner_maintenance(self.payload, token)
+                req = transport.call_args.args[0]
+                self.assertEqual(req.full_url, "http://127.0.0.1:9001/api/runtime/maintenance")
+                self.assertEqual(req.get_method(), method)
+                self.assertEqual(json.loads(req.data), {} if token is None else {"token": token})
+                self.assertTrue(req.get_header("Authorization").startswith("Basic "))
+                self.assertEqual(transport.call_args.kwargs["timeout"], 3)
+
+    def test_invalid_claims_defer(self):
+        import json
+        replies = [[], {}, {"maintenance_active": False, "token": "a" * 32},
+                   {"maintenance_active": True, "token": "g" * 32},
+                   {"maintenance_active": True, "token": "a" * 31}]
+        for raw in [json.dumps(p).encode() for p in replies] + [b"bad JSON", b"x" * 65537]:
+            with self.subTest(raw_size=len(raw)), patch.object(upgrade_service, "urlopen", return_value=io.BytesIO(raw)):
+                with self.assertRaisesRegex(RuntimeError, "upgrade deferred"):
+                    upgrade_service._acquire_scanner_maintenance(self.payload)
+
+    def test_unsupported_or_busy_engine_defers(self):
+        from urllib.error import HTTPError
+        for code in [404, 409, 401, 503]:
+            with self.subTest(code=code), patch.object(upgrade_service, "urlopen", side_effect=HTTPError("http://127.0.0.1", code, "fixture", {}, None)):
+                with self.assertRaisesRegex(RuntimeError, "upgrade deferred"):
+                    upgrade_service._acquire_scanner_maintenance(self.payload)
+
+    def test_maintenance_redirect_never_forwards_credentials_or_owner_token(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from threading import Thread
+        paths = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                paths.append(self.path)
+                self.send_response(307)
+                self.send_header("Location", "/credential-trap")
+                self.end_headers()
+            do_DELETE = do_POST
+            def log_message(self, *args):
+                pass
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = Thread(target=server.serve_forever, daemon=True); thread.start()
+        payload = {"EnvironmentVariables": {**self.payload["EnvironmentVariables"], "NMAPUI_PORT": str(server.server_port)}}
+        try:
+            with self.assertRaises(RuntimeError):
+                upgrade_service._acquire_scanner_maintenance(payload)
+            with self.assertRaises(Exception):
+                upgrade_service._release_scanner_maintenance(payload, "a" * 32)
+            self.assertEqual(paths, ["/api/runtime/maintenance", "/api/runtime/maintenance"])
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=1)

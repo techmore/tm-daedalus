@@ -61,8 +61,23 @@ sh manage-service-macos.sh upgrade /path/to/daedalus-scanner-kit.zip
 On macOS, upgrades require an explicit idle response from the local engine
 before staging and again before switching services. Busy, inconsistent,
 unavailable, malformed or oversized activity responses defer the upgrade.
-The checks use loopback without proxies or redirects. Atomic coordination with
-new job submission remains outstanding; these are activity preflight checks.
+Immediately before switching services, the upgrader also claims maintenance
+under the engine's job registry lock. The engine admits either new work or
+maintenance, never both. While maintenance is active, scan/report starts are
+refused with a retry message. The API accepts authenticated loopback requests
+under the existing local trust policy; browser origins must match. The checks
+and maintenance calls use loopback without proxies or redirects.
+
+An older engine without the maintenance API defers cutover without stopping
+services. Its initial migration still requires a separately validated path;
+ordinary upgrade does not bypass this gate. Maintenance has no automatic
+expiry, so a stalled upgrader cannot silently reopen admission. The owning
+upgrader releases its opaque token; restarting the idle engine also clears
+the in-memory gate. After a crashed helper or a lost claim response, check
+local runtime status and restart the idle scanner to recover. Tokens are never
+included in public runtime status. Linux upgrade coordination remains a
+separate implementation task. This source change does not update installed
+scanners automatically.
 
 Upgrade is separate from enrollment. It stages versioned NmapUI and bridge
 releases, preserves the existing enrollment, settings, scan data, event spool,

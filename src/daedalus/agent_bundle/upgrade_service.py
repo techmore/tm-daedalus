@@ -263,6 +263,51 @@ def _require_scanner_idle(nmapui_payload: dict) -> None:
         raise RuntimeError("Scanner is busy or its activity is unknown; retry the upgrade after scans and reports finish")
 
 
+def _scanner_maintenance(nmapui_payload: dict, token: str | None = None) -> dict:
+    """Claim/release local admission under the engine's job registry lock."""
+    env = nmapui_payload["EnvironmentVariables"]
+    request = Request(
+        f"http://127.0.0.1:{env['NMAPUI_PORT']}/api/runtime/maintenance",
+        data=json.dumps({"token": token} if token is not None else {}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="DELETE" if token is not None else "POST",
+    )
+    username, password = env.get("NMAPUI_USERNAME", ""), env.get("NMAPUI_PASSWORD", "")
+    if username and password:
+        import base64
+        request.add_header("Authorization", "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode())
+    with urlopen(request, timeout=3) as response:
+        raw = response.read(65537)
+    if len(raw) > 65536:
+        raise ValueError("Oversized maintenance response")
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid maintenance response")
+    return payload
+
+
+def _acquire_scanner_maintenance(nmapui_payload: dict) -> str:
+    try:
+        payload = _scanner_maintenance(nmapui_payload)
+        token = payload.get("token")
+        if (payload.get("maintenance_active") is not True or not isinstance(token, str)
+                or len(token) != 32 or any(c not in "0123456789abcdef" for c in token)):
+            raise ValueError("Invalid maintenance ownership")
+        return token
+    except Exception as exc:
+        raise RuntimeError(
+            "Scanner maintenance could not be acquired; upgrade deferred. "
+            "The engine must support maintenance and have no active scans or reports. "
+            "If admission remains paused, restart the idle scanner to recover."
+        ) from exc
+
+
+def _release_scanner_maintenance(nmapui_payload: dict, token: str) -> None:
+    payload = _scanner_maintenance(nmapui_payload, token)
+    if payload.get("maintenance_active") is not False:
+        raise RuntimeError("Scanner maintenance release was not confirmed")
+
+
 def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None) -> dict:
     """Upgrade exactly the two recognized, loaded managed LaunchAgents.
 
@@ -376,8 +421,10 @@ def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_relea
                 os.fsync(stream.fileno())
         backups[label] = str(path)
     cutover_started = False
+    maintenance_token = None
     try:
         _require_scanner_idle(old_nmap)
+        maintenance_token = _acquire_scanner_maintenance(old_nmap)
         cutover_started = True
         for label in (macos_service.BRIDGE_LABEL, macos_service.NMAPUI_LABEL):
             _run(executor, [macos_service.LAUNCHCTL, "bootout", domain, str(destinations[label])])
@@ -441,4 +488,12 @@ def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_relea
         raise
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+        # The old engine loses its in-memory gate on restart. A release against
+        # a replacement engine cannot clear another owner's maintenance token.
+        if maintenance_token is not None:
+            try:
+                _release_scanner_maintenance(old_nmap, maintenance_token)
+            except Exception:
+                if not cutover_started:
+                    raise RuntimeError("Scanner admission remains paused; restart the idle scanner to recover")
     return {"upgraded": True, "kit_sha256": kit_digest, "backups": backups, "data_preserved": True}
