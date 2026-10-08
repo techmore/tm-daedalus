@@ -1933,6 +1933,31 @@
     container.append(section);
   }
 
+  function renderMerakiLifecycle(container, evidence, overview) {
+    if (!evidence) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Hardware support milestones"; section.append(heading);
+    if (evidence.status !== "available") {var missing = document.createElement("p"); missing.textContent = "Lifecycle evidence unavailable or invalid; support dates remain unverified."; section.append(missing); container.append(section); return;}
+    var counts = evidence.summary || {}, summary = document.createElement("p");
+    summary.textContent = counts.within_180_days + " devices with support dates within 180 days · " + counts.date_passed + " with dates passed · " + counts.unknown + " with unknown support dates · As of " + (evidence.as_of || "unknown date"); section.append(summary);
+    var note = document.createElement("p"); note.className = "muted"; note.textContent = evidence.scope; section.append(note);
+    if (overview) {container.append(section); return;}
+    var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("role", "region"); scroll.setAttribute("aria-label", "Hardware lifecycle dates");
+    var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Vendor notices observed " + evidence.notice_observed_on; table.append(caption);
+    var head = document.createElement("thead"), tr = document.createElement("tr");
+    ["Network / model / quantity", "End of sale", "End of support", "Review / source"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+    var body = document.createElement("tbody"), labels = {date_passed: "Support date passed", within_180_days: "Support date within 180 days", later: "Support date later than 180 days", unknown: "Support date unknown"};
+    (evidence.rows || []).forEach(function (row) {
+      var tr = document.createElement("tr");
+      [row.network_name + " / " + row.model + " × " + row.quantity, row.end_of_sale_date || "Unknown", row.end_of_support_date || "Unknown"].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);});
+      var td = document.createElement("td"), text = document.createElement("p"); text.textContent = labels[row.support_status] + (Number.isInteger(row.days_until_support_date) ? " · " + row.days_until_support_date + " days" : "") + ". " + row.note; td.append(text);
+      if (["https://documentation.meraki.com/Platform_Management/Product_Information/End-of-Life_(EOL)_Products_and_Dates", "https://www.cisco.com/c/en/us/products/collateral/wireless/catalyst-9100ax-access-points/meraki-wi-fi-6-indoor-access-points-eol.html"].indexOf(row.source_url) !== -1) {var link = document.createElement("a"); link.href = row.source_url; link.textContent = row.notice_status === "published" ? "Official vendor notice" : "Official vendor lifecycle index"; link.target = "_blank"; link.rel = "noopener noreferrer"; td.append(link);}
+      tr.append(td); body.append(tr);
+    }); table.append(body); scroll.append(table); section.append(scroll);
+    if (evidence.additional_rows) {var more = document.createElement("p"); more.textContent = evidence.additional_rows + " more model/network rows in the evidence download and PDF."; section.append(more);}
+    container.append(section);
+  }
+
   function renderMerakiPaths(container, evidence, overview) {
     if (!evidence) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2189,6 +2214,7 @@
     container.append(metricGrid);
     if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, false);
 
+    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, false);
     var plan = details.unifi_plan;
     if (plan && Array.isArray(plan.scenarios)) {
       var planning = document.createElement("section"); planning.className = "meraki-detail-section";
@@ -2434,6 +2460,7 @@
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
+        if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
         if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
@@ -2447,6 +2474,7 @@
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
+        if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
         if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
@@ -2466,7 +2494,8 @@
       renderMerakiClientOverview(container, details);
       renderMerakiCis8Overview(container, details);
       renderMerakiTopologyOverview(container, details);
-      if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
+      if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
+        if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
       renderMerakiSwitchOverview(container, details);
       renderMerakiWanOverview(container, details);
       renderMerakiPlanningOverview(container, details);

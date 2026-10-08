@@ -1,6 +1,7 @@
 """Dated, inventory-based purchase planning; candidates require design review."""
 from collections import Counter
 from typing import Any
+from .meraki_lifecycle import build_lifecycle, project_lifecycle
 
 PRICE_DATE = '2026-10-07'
 # US vendor storefront observations, including the separately displayed surcharge.
@@ -46,7 +47,7 @@ def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
                           'priced_device_count': sum(r['quantity'] for r in rows),
                           'complete_inventory_pricing': bool(counts) and not unmatched})
     refresh = build_refresh_plan(scenarios)
-    return {'refresh_plan': refresh, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
+    return {'lifecycle': build_lifecycle(snapshot), 'refresh_plan': refresh, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
             'inventory_collected_at': snapshot.get('collected_at'), 'scenarios': scenarios,
             'assumptions': [
                 'Planning candidates require design review; model names do not establish feature equivalence.',
@@ -63,6 +64,8 @@ def project_unifi_plan(plan: Any) -> dict[str, Any] | None:
         return None
     result = dict(plan)
     result['scenarios'] = []
+    if 'lifecycle' in plan:
+        result['lifecycle'] = project_lifecycle(plan['lifecycle'])
     if 'refresh_plan' in plan:
         result['refresh_plan'] = project_refresh_plan(plan['refresh_plan'])
     for scenario in plan.get('scenarios', [])[:2]:

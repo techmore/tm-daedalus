@@ -1491,6 +1491,21 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             path_aps(network['unmapped_aps'], network['name'] + ' - unmapped')
             path_aps(network['ambiguous_aps'], network['name'] + ' - ambiguous mappings')
 
+    from daedalus.meraki_lifecycle import project_lifecycle
+    lifecycle = project_lifecycle((report_snapshot.get("unifi_plan") or {}).get("lifecycle"), complete=True)
+    if lifecycle and lifecycle['status'] == 'available':
+        story.append(PageBreak())
+        story.append(_paragraph("Hardware support milestones", styles["MerakiSection"]))
+        story.append(_paragraph(lifecycle['scope'], styles["MerakiBody"]))
+        story.append(_paragraph(f"Vendor notices observed {lifecycle['notice_observed_on']}; inventory as of {lifecycle['as_of'] or 'unknown date'}.", styles["MerakiSmall"]))
+        labels = {'date_passed': 'Support date passed', 'within_180_days': 'Support date within 180 days', 'later': 'Support date later than 180 days', 'unknown': 'Support date unknown'}
+        for row in lifecycle['rows']:
+            story.append(_paragraph(f"{row['network_name']} / {row['model']} / {row['quantity']} assigned devices", styles["MerakiSubsection"]))
+            story.append(_paragraph(f"End of sale: {row['end_of_sale_date'] or 'Unknown'}; end of support: {row['end_of_support_date'] or 'Unknown'}. {labels[row['support_status']]}" + (f" ({row['days_until_support_date']} days)." if row['days_until_support_date'] is not None else '.'), styles["MerakiBody"]))
+            story.append(_paragraph(row['note'], styles["MerakiSmall"]))
+            label = 'Official vendor notice' if row['notice_status'] == 'published' else 'Official vendor lifecycle index'
+            story.append(Paragraph('<link href="' + row['source_url'] + '">' + label + '</link>', styles["MerakiSmall"]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter
