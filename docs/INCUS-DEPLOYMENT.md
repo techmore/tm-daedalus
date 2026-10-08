@@ -95,3 +95,9 @@ host. Rehearse against a separate restored data directory before any live switch
 ### DNS audit resolver provenance
 
 Set `DAEDALUS_AUDIT_DNS_NAMESERVERS` to up to three comma-separated IPv4/IPv6 resolver addresses to use an explicit upstream for DNS/email audits. Empty uses the system resolver. For the current Incus host, restart the instance after changing the environment (`incus restart --timeout 120 daedalus-prod`) and verify `/readyz`. A direct systemd restart on this host can fail to stop the prior process because of container control-group permissions; checking the next snapshot's resolver provenance confirms that the new environment took effect. Snapshots retain resolver mode and addresses; resolver metadata changes do not create domain configuration alerts. Query availability changes remain evidence and may generate notices. No silent fallback is performed. Website target validation and ownership verification keep their existing resolvers. Resolver AD flags do not prove locally validated DNSSEC.
+
+### October 7 recovery refresh
+
+The post-BFS/report/key-revocation archive `daedalus-data-20261008T014901Z.tar.gz` was verified and restored into a fresh private local directory. All **41 completed PDFs** were present with their recorded sizes and PDF headers; both encrypted Meraki credentials decrypted using the existing sealed recovery configuration. BFS reports 40/41 retained saved USD purchase plans, and the temporary validation key remained revoked. The restored production-configured application completed its lifespan and returned ready through an isolated TestClient, with collectors disabled and no listening socket. Unauthenticated report access returned 401; the runtime then stopped. Receipt: ignored `validation/recovery-20261008/receipt.json`.
+
+This verifies the latest archive, configuration and application startup. Separate recovery-password custody, public failover and restored Google OAuth login remain unverified.

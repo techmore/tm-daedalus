@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 7, 2026 — latest production recovery validation
+
+The post-BFS backup was restored into a fresh private directory. All 41 completed PDFs matched recorded sizes and PDF headers. Both saved Meraki credentials decrypted using the existing sealed recovery configuration; BFS purchase plans and temporary-key revocation were retained. The restored production-configured application started and stopped through an isolated TestClient lifespan, returned ready, denied unauthenticated report access and kept collectors disabled. No listening socket or production data mutation was used. Separate secret custody, public failover and restored Google login remain open. See [Incus recovery](docs/INCUS-DEPLOYMENT.md).
+
 ## October 7, 2026 — production BFS Meraki and purchase planning
 
 SER8 Incus deployed source `7c26179` with public/internal readiness checks passing. BFS reports **40 and 41** completed against Buckingham Friends School (Cisco organization 296035), collecting 27 devices and 48 controls, with zero unavailable controls and three review observations. The repeat retained report 40 as its comparison baseline and found no control, coverage or inventory changes. Both reports retain dated UniFi purchase scenarios ($11,356 and $12,940), quantities and official vendor links in the dashboard, saved JSON and PDF. This is a candidate equipment budget; tax, shipping, accessories and implementation are excluded.
