@@ -206,6 +206,25 @@ The owner token is stored only in the private transaction record and is
 excluded from command output and public runtime status. Local HTTP calls do
 not use proxies or follow redirects.
 
+For an older engine without the maintenance API, use an explicit offline
+upgrade. First confirm in the local scanner UI that no scan or report is
+running. Check `sh manage-service-linux.sh status` to verify the owned units,
+then stop those units during a local maintenance window:
+
+```sh
+systemctl --user stop daedalus-scanner-bridge.service daedalus-nmapui.service
+sh manage-service-linux.sh upgrade-offline /path/to/daedalus-scanner-kit.zip
+```
+
+The offline command requires both verified units stopped and enabled, with
+zero service PIDs and a refused connection on the configured loopback port.
+It checks again after runtime preparation and before cutover. An active,
+unknown or reopened listener is refused. It retains the same private backups,
+enrollment and rollback path and starts the upgraded services after cutover.
+A repeated offline kit that is already installed leaves services stopped;
+start the verified units explicitly in that case. Use the normal `upgrade`
+command for subsequent upgrades once the engine supports maintenance.
+
 `upgrade-rollback` recovers an interrupted transaction. A successfully completed
 upgrade has no pending transaction to recover; repeating its kit is a no-op.
 

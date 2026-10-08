@@ -13,6 +13,73 @@ from test_managed_scanner_upgrade import make_bundle
 
 
 class LinuxUpgradeTests(unittest.TestCase):
+    def stopped(self):
+        for state in self.states.values():
+            state.update(ActiveState='inactive', MainPID='0')
+
+    def test_explicit_offline_upgrade_starts_new_services_without_http_maintenance(self):
+        self.stopped()
+        with patch.object(upgrade.shared, '_require_scanner_offline') as offline:
+            result = self.operate('upgrade-offline')
+        self.assertTrue(result['upgraded'])
+        self.assertEqual(offline.call_count, 3)
+        self.claim.assert_not_called()
+        self.release.assert_not_called()
+        self.assertEqual(self.enrollment.read_bytes(), self.original[self.enrollment])
+        self.assertEqual(self.evidence.read_bytes(), self.original[self.evidence])
+
+    def test_offline_upgrade_refuses_either_running_service(self):
+        for name in self.states:
+            with self.subTest(name=name):
+                self.stopped(); self.states[name].update(ActiveState='active', MainPID='123')
+                self.calls.clear()
+                with self.assertRaisesRegex(ValueError, 'both managed services stopped'):
+                    self.operate('upgrade-offline')
+                self.assertFalse(any(c[2] in {'stop', 'start'} for c in self.calls))
+        self.claim.assert_not_called()
+
+    def test_offline_upgrade_refuses_open_or_unknown_listener_without_cutover(self):
+        self.stopped()
+        with patch.object(upgrade.shared, '_require_scanner_offline', side_effect=RuntimeError('Scanner offline state is unknown')):
+            with self.assertRaisesRegex(ValueError, 'offline state is unknown'):
+                self.operate('upgrade-offline')
+        self.assertFalse((self.config / upgrade.PENDING).exists())
+        self.assertFalse(any(c[2] in {'stop', 'start'} for c in self.calls))
+        for path, raw in self.original.items():
+            self.assertEqual(path.read_bytes(), raw)
+
+    def test_offline_upgrade_rechecks_services_after_preparing(self):
+        self.stopped()
+        def prepare(files, support):
+            result = self.prepare(files, support)
+            self.states[service.NMAPUI_UNIT].update(ActiveState='active', MainPID='321')
+            return result
+        with patch.object(upgrade.shared, '_require_scanner_offline'):
+            with self.assertRaisesRegex(ValueError, 'both managed services stopped'):
+                self.operate('upgrade-offline', prepare=prepare)
+        self.assertFalse((self.config / upgrade.PENDING).exists())
+        self.assertFalse(any(c[2] in {'stop', 'start'} for c in self.calls))
+
+    def test_offline_upgrade_late_listener_reappearance_keeps_recovery_without_stopping(self):
+        self.stopped()
+        with patch.object(upgrade.shared, '_require_scanner_offline', side_effect=[None, None, RuntimeError('listener reopened')]):
+            with self.assertRaisesRegex(ValueError, 'listener reopened'):
+                self.operate('upgrade-offline')
+        self.assertTrue((self.config / upgrade.PENDING).exists())
+        self.assertFalse(any(c[2] in {'stop', 'start'} for c in self.calls))
+        for path, raw in self.original.items():
+            self.assertEqual(path.read_bytes(), raw)
+
+    def test_offline_failed_readiness_restores_old_descriptors(self):
+        self.stopped()
+        readiness = iter([False, True])
+        with patch.object(upgrade.shared, '_require_scanner_offline'):
+            with self.assertRaisesRegex(ValueError, 'previous services were restored'):
+                self.operate('upgrade-offline', wait_ready=lambda *_: next(readiness))
+        for path, raw in self.original.items():
+            self.assertEqual(path.read_bytes(), raw)
+        self.assertFalse((self.config / upgrade.PENDING).exists())
+
     def test_missing_recovery_transaction_has_clear_message(self):
         with self.assertRaisesRegex(service.ServiceError, 'No interrupted upgrade transaction'):
             upgrade.read_pending(self.unit_dir, self.config)

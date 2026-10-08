@@ -123,7 +123,7 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
     executor = executor or subprocess.run
     wait_ready = wait_ready or ready
     unit_dir, config_dir, data_home = map(lambda p: Path(p).absolute(), (unit_dir, config_dir, data_home))
-    if action not in {'upgrade', 'upgrade-rollback'}:
+    if action not in {'upgrade', 'upgrade-offline', 'upgrade-rollback'}:
         raise service.ServiceError('Unsupported upgrade action.')
     # Shared lifecycle lock prevents overlap with removal/recovery.
     service._ownership(unit_dir, config_dir)
@@ -193,6 +193,11 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
                 maintenance_token = shared._acquire_scanner_maintenance(maintenance_payload, previous_token)
             except RuntimeError as exc:
                 raise service.ServiceError(str(exc)) from exc
+        def require_closed_listener(payload):
+            try:
+                shared._require_scanner_offline(payload)
+            except RuntimeError as exc:
+                raise service.ServiceError(str(exc)) from exc
         if action == 'upgrade-rollback':
             record = read_pending(unit_dir, config_dir)
             port = int(environment_value(record['old'][service.NMAPUI_UNIT].encode(), 'NMAPUI_PORT'))
@@ -220,7 +225,14 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         if resume_path.exists() or resume_path.is_symlink():
             service._resume(unit_dir, config_dir)
             resume_original = service._private_bytes(resume_path)
-        for name in (service.NMAPUI_UNIT, service.BRIDGE_UNIT):
+        def require_offline_services():
+            for name in (service.NMAPUI_UNIT, service.BRIDGE_UNIT):
+                state = observe(name)
+                if state['ActiveState'] not in {'inactive', 'failed'} or state['MainPID'] != '0' or state['UnitFileState'] != 'enabled':
+                    raise service.ServiceError('Offline upgrade requires both managed services stopped and enabled.')
+        if action == 'upgrade-offline':
+            require_offline_services()
+        for name in (() if action == 'upgrade-offline' else (service.NMAPUI_UNIT, service.BRIDGE_UNIT)):
             state = observe(name)
             if state['ActiveState'] != 'active' or state['MainPID'] == '0' or state['UnitFileState'] != 'enabled':
                 raise service.ServiceError('Upgrade requires both managed services active and enabled.')
@@ -230,6 +242,9 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         port = int(environment_value(old[service.NMAPUI_UNIT], 'NMAPUI_PORT'))
         if not 1 <= port <= 65535:
             raise service.ServiceError('Managed scanner port is invalid.')
+        offline_payload = {'EnvironmentVariables': {**auth, 'NMAPUI_PORT': str(port)}}
+        if action == 'upgrade-offline':
+            require_closed_listener(offline_payload)
         files, kit_digest = shared._read_kit(Path(bundle).absolute())
         support = data_home / 'daedalus'
         for path in (support, support / 'nmapui/releases', support / 'scanner-bridge/releases'):
@@ -262,6 +277,9 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         candidate = {service.NMAPUI_UNIT: nmap, service.BRIDGE_UNIT: bridge, service.STATE_FILE: (json.dumps(state, sort_keys=True, indent=2) + '\n').encode()}
         if candidate == old:
             return {'upgraded': False, 'already_current': True, 'kit_sha256': kit_digest, 'data_preserved': True}
+        if action == 'upgrade-offline':
+            require_offline_services()
+            require_closed_listener(offline_payload)
         record = {'format': 1, 'unit_dir': str(unit_dir), 'config_dir': str(config_dir), 'kit_sha256': kit_digest, 'environment_sha256': digest(environment), 'enrollment_sha256': digest(enrollment), 'old': {key: value.decode() for key, value in old.items()}, 'candidate': {key: value.decode() for key, value in candidate.items()}}
         old_digest = digest(b''.join(old[name] for name in sorted(old)))
         backup_root = support / 'service-upgrades' / kit_digest / old_digest
@@ -272,7 +290,8 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
             if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
                 raise service.ServiceError('Upgrade backup directories must be private and owned by this user.')
         backup_file = backup_root / 'transaction.json'
-        claim(port)
+        if action != 'upgrade-offline':
+            claim(port)
         record['maintenance_token'] = maintenance_token
         record_bytes = (json.dumps(record, sort_keys=True, indent=2) + '\n').encode()
         if backup_file.exists() or backup_file.is_symlink():
@@ -287,6 +306,9 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
         else:
             service._write_exclusive(backup_file, record_bytes)
         service._write_exclusive(pending_path, record_bytes)
+        if action == 'upgrade-offline':
+            require_offline_services()
+            require_closed_listener(offline_payload)
         try:
             stop()
             write('candidate')
@@ -321,13 +343,13 @@ def operate(action, bundle, unit_dir, config_dir, data_home, *, executor=None, p
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('upgrade', 'upgrade-rollback'))
+    parser.add_argument('action', choices=('upgrade', 'upgrade-offline', 'upgrade-rollback'))
     parser.add_argument('--bundle', type=Path)
     parser.add_argument('--unit-dir', type=Path, required=True)
     parser.add_argument('--config-dir', type=Path, required=True)
     parser.add_argument('--data-home', type=Path, required=True)
     args = parser.parse_args()
-    if args.action == 'upgrade' and args.bundle is None:
+    if args.action in {'upgrade', 'upgrade-offline'} and args.bundle is None:
         parser.error('upgrade requires --bundle')
     try:
         print(json.dumps(operate(args.action, args.bundle, args.unit_dir, args.config_dir, args.data_home), sort_keys=True))
