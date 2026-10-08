@@ -1,33 +1,34 @@
 # Daedalus project report
 
-## Current completion summary — October 6, 2026
+## Current completion summary — October 8, 2026 (UTC)
 
-**The full project is not complete.** Historical entries below describe their own source and environment; they are not current production acceptance claims.
+**The full project is not complete.** Historical entries below describe their own source and environment. Current evidence and remaining requirements are separated here so earlier checkpoints do not look like today's deployment state.
 
-- **Repository:** published source d5347f3 includes UNPKG/jsDelivr package declarations, saved OSV evidence and review links, domain-isolation validation, scanner freshness and open-dashboard override-expiry handling. Production activation remains pending.
-- **Validation:** the full suite at 00e80e0 passed 744 tests and 249 subtests in 38.73 seconds, with one Linux-only skip and two dependency warnings. Backend CI 37479767626 succeeded at published d5347f3; its Linux 37479767745 is still active. The preceding published source dd48765 passed all three Linux scanner scenarios. A current-source isolated runtime also opened and migrated restored production data, authenticated the installed scanner token and served retained history. These results do not establish approved PDF fidelity, restored Google sign-in or production readiness.
-- **Local runtime:** a fresh isolated loopback QA instance runs da8c756 with background workers disabled. Two authenticated website runs saved distinct timestamped records, returned HTTP 200 and retained four linked origins. The repeat produced zero changes and zero notifications. No supported exact package versions were present, so advisory coverage correctly remained not assessed. The earlier DNS #25 receipt belongs to the previous temporary database, which is no longer available. Current populated browser review remains pending because the existing browser space is user-owned.
-- **Production:** public health returned OK. Fresh LAN SSH inspection now succeeded. The active Incus release digest is ef11867c4cbabc63a7a74b42fe3d0dd73b36de7abb9daa52a841112686d22f4d; its server.py hash matches source 2f8c817. The service is active, and the scanner PDF builder still uses the replacement ReportLab layout. No deployment was attempted during this review.
-- **Standardized PDF:** the unused alternate scanner renderer is removed from current source. Historical template assets are unchanged. The exact human-approved PDF reference, visual fidelity and corrective production activation remain unresolved; filenames and passing tests do not establish approval.
+- **Production:** SER8 Incus runs application source `d199aae`. The verified 79-file release digest is `08372a8b725e078ceab6284f9eb7273bf82a99a4f919b2f028e847073f5b39c9`. A verified off-host backup preceded activation; internal/public readiness passed. An authenticated live scanner-kit download matches the deployed engine ZIP, native status source and both upgrade helpers.
+- **Repository and validation:** implementation and receipts are committed and pushed. The full local suite passed 795 tests, with one skip and 287 subtests. Active application source passed backend and macOS status CI. The preceding unchanged engine/upgrade source passed all three installed Linux scenarios: lifecycle, interrupted bridge and repeat comparison. The active application-source Linux rerun also completed successfully ([37718904975](https://github.com/techmore/tm-daedalus/actions/runs/37718904975)).
+- **Installed Mac scanner:** the native status indicator is updated and visually reviewed with the real running engine, connected bridge, retained scan history and hosted PDF links. A separately compiled, isolated copy of the same status source also passed native window reviews for maintenance, simulated scan progress and unavailable/unknown states. Only its private configuration and observation paths changed. Fixture app/server were stopped afterwards; no scan was initiated and the live scanner remained connected. The engine itself retains its earlier release pending an initial migration to maintenance admission support.
+- **Meraki:** a larger authorized organization was audited on production; a repeated audit retained separate saved reports, configuration/inventory comparisons, dated purchase scenarios and vendor links in the dashboard, evidence and PDF. Candidate procurement budgets do not establish hardware feature equivalence, renewal savings or total cost of ownership.
+- **CIS:** the menu exposes assessment activity, assessed coverage and selected profile semantics. Real macOS 26 CI collects the published Level 2 profile. That is runner evidence; it does not replace a managed endpoint install, trusted signing/notarization, login persistence or production device acceptance. The available local Mac is macOS 27.
+- **Reports and theme:** scanner report assets remain byte-identical across these engine bundle updates. Exact human-approved PDF baseline acceptance remains open. Current topic layouts and marketing publication have implementation/API evidence; every populated desktop/mobile topic has not completed visual acceptance.
 
-### Full scope still requiring completion evidence
+### Full scope and remaining completion evidence
 
-| Area | Remaining requirement |
-| --- | --- |
-| Portal theme and topic UX | Current populated desktop/mobile acceptance across every topic and production activation |
-| Marketing Pages | Final content acceptance |
-| Incus operations | Current-source activation, separate recovery-secret custody, public DNS/TLS failover and restored Google login |
-| Google identity and users | Broader real-user onboarding, approved sharing, domain independence and admin succession |
-| Domain verification | Real second-domain TXT onboarding and probation/override expiry/renewal acceptance |
-| DNS, email and website audits | Broader checker semantics and owner/provider review; successful public certificate-history collection remains unverified |
-| Internal scanners | Additional VLAN/subnet locations and fleet soak |
-| Remote management | Agreed broader integration scope and validation on deployment targets |
-| Meraki | Larger authorized device inventory and review of unavailable controls |
-| CIS endpoints | Physical managed macOS 26 deployment, remaining check semantics, signing/notarization and login/reboot persistence |
-| Linked vendors | Broader package/version coverage and automated provider posture assessment; URL-declared advisory matches do not verify loaded code or vendor security |
-| Reports | Approved standardized scanner PDF fidelity and activation, plus production report regressions |
+| Area | Existing evidence | Remaining requirement |
+| --- | --- | --- |
+| CSP theme and topic UX | Deployed topic summaries; real native scanner window/history review | Populated desktop/mobile acceptance across every topic, keyboard/accessibility review and final content acceptance |
+| GitHub Pages marketing | Published custom-domain site and portal links | Final marketing/content acceptance |
+| Incus operations | Current-source activation, verified backup, restore rehearsal and live readiness | Separate recovery-secret custody, public DNS/TLS failover and restored Google login |
+| Google identity and users | Live sign-in; scoped access keys; local sharing workflow and isolation fixtures | Broader real-user onboarding, sharing, domain independence and admin succession acceptance |
+| Domain verification | TXT/probation/14-day override implementation and expiry fixtures | Real second-domain TXT onboarding and expiry/renewal acceptance |
+| DNS, email and website | Actual saved audits, repeats, comparisons, dated notices and reports | Broader checker/provider review and successful public certificate-history collection evidence |
+| Internal scanners | Real Mac uploads/history; installed Linux loopback lifecycle/recovery/comparison; automatic connection CIDR display | Legacy engine migration, live maintenance admission acceptance, additional VLAN/subnet locations and fleet soak |
+| Remote management | Typed audited scanner commands, restart and update-check evidence | Agreed broader integration scope and validation on deployment targets; full original remote-control parity is unproven |
+| Meraki | Live multi-network inventory, control coverage, repeat comparison and saved UniFi purchase scenarios with links | Broader model mappings, design/procurement review, original report parity and quoted renewal comparisons |
+| CIS endpoints | Real Tahoe CI; profile selection, upload/history/coverage and native checker fixtures | Managed macOS 26 deployment, remaining checker semantics, trusted signing/notarization and login/reboot persistence |
+| Linked vendors | Saved origins, supported exact package observations, OSV lookups and review history | Broader package coverage and provider posture assessment; declared versions do not prove loaded code or vendor security |
+| JIT PDF reports | Saved evidence, generation progress, downloads and recovery checks | Approved standardized scanner PDF fidelity and broader production document regressions |
 
-The detailed completion review and dated evidence remain below. None of these outstanding requirements is waived by a local test pass.
+[Integration readiness](INTEGRATION-READINESS.md) records dated receipts and CI links. No remaining requirement is waived by a local test pass or a simulated UI review.
 
 ## Calendar-label scanner candidate isolation — 2026-10-06
 

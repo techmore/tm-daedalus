@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 8, 2026 — isolated native activity visual acceptance
+
+A separate validation application compiled the exact ScannerStatus.swift source, changing only its private configuration and observation paths. A loopback fixture supplied maintenance, simulated scan progress (127.0.0.1 / 42%) and unavailable responses. Native accessibility and screenshots confirmed the window labels for each state, with no clipped header text at the reviewed window width. This proves window presentation, not real scan execution, a live engine maintenance claim or the menu-bar badge's rendered appearance. No production enrollment/token was used. Active source d199aae also completed all three installed Linux scenarios in [workflow 37718904975](https://github.com/techmore/tm-daedalus/actions/runs/37718904975). The fixture app and server were stopped; the real scanner window was restored and still reported running/connected/idle with retained history. Private provenance and observations: validation/native-status-ui-20261008/.
+
+PUBLIC-PROJECT-REPORT.md now replaces its stale October 6 completion summary with the active production/source evidence and a full-scope requirements matrix. Historical dated records are retained. Legacy migration, browser/mobile acceptance, exact scanner PDF approval, managed CIS distribution and operational acceptance remain open.
+
 ## October 8, 2026 — active portal release and installed Linux evidence
 
 Production now runs source `d199aae`, verified 79-file release SHA-256 `08372a8b725e078ceab6284f9eb7273bf82a99a4f919b2f028e847073f5b39c9`. The pre-deploy off-host backup is `daedalus-data-20261008T023918Z.tar.gz`. Incus activation and internal/public readiness checks passed; a separate public check returned HTTP 200 / ready at 02:41:38Z. A normal authenticated CSP operator request downloaded the live scanner kit (HTTP 200, 1,000,130 bytes). Its engine ZIP, Swift status source and both upgrade helpers match active production bytes. BFS reports 40 and 41 remain completed with their original PDF sizes. No installed scanner engine or bridge was upgraded.
