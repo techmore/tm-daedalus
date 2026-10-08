@@ -111,14 +111,14 @@ def validate_listener_change(comparison, listener_port):
     validate_loopback_comparison_coverage(comparison)
     expected = {"hosts_added": 0, "hosts_removed": 0, "hosts_not_observed": 0,
                 "port_changes": 1, "newly_observed_ports": 0,
-                "reported_port_changes": 0, "confirmed_removed_ports": 1}
+                "reported_port_changes": 1, "confirmed_removed_ports": 0}
     if comparison.get("available") is not True or comparison.get("truncated") or comparison.get("counts") != expected:
-        raise RuntimeError("Controlled listener change lacks one confirmed missing port observation")
+        raise RuntimeError("Controlled listener change lacks one confirmed open-to-closed observation")
     rows = comparison.get("port_changes", [])
     if (len(rows) != 1 or rows[0].get("host") != "127.0.0.1"
             or rows[0].get("protocol") != "tcp" or str(rows[0].get("port")) != str(listener_port)
-            or rows[0].get("change") != "removed" or rows[0].get("confirmed") is not True
-            or rows[0].get("before", {}).get("state") != "open" or rows[0].get("after") is not None):
+            or rows[0].get("change") != "state_service_changed" or rows[0].get("confirmed") is not True
+            or rows[0].get("before", {}).get("state") != "open" or rows[0].get("after", {}).get("state") != "closed"):
         raise RuntimeError("Controlled comparison changed another observation")
 
 
@@ -522,7 +522,7 @@ raise SystemExit(completed.returncode)
                         validate_listener_change(comparison, listener_port)
                         def saved_change():
                             saved = client.get(f"/api/agents/{agent_id}/run-comparisons").json()["comparisons"]
-                            return next((row for row in saved if row["previous_run_id"] == run_id and row["current_run_id"] == second_id and row["comparison"]["counts"].get("confirmed_removed_ports") == 1), None)
+                            return next((row for row in saved if row["previous_run_id"] == run_id and row["current_run_id"] == second_id and row["comparison"]["counts"].get("reported_port_changes") == 1), None)
                         saved = wait_for(saved_change)
                         notices = client.get("/api/notifications").json()["notifications"]
                         notices = [n for n in notices if n["source_type"] == "scanner_comparison" and n["source_id"] == saved["id"]]
@@ -749,7 +749,7 @@ def main():
     parser.add_argument("--run-loopback", action="store_true", help="Explicitly opt into real loopback-only Nmap")
     parser.add_argument("--nmapui-python", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
-    parser.add_argument("--close-listener", action="store_true", help="With --repeat-scan, close the owned listener and validate exact-port absence, saved history and inbox notice")
+    parser.add_argument("--close-listener", action="store_true", help="With --repeat-scan, close the owned listener and validate an exact-port state change, saved history and inbox notice")
     parser.add_argument("--repeat-scan", action="store_true", help="Repeat the bounded scan and validate distinct run IDs and comparison")
     parser.add_argument('--interrupt-bridge', action='store_true', help='Interrupt only the owned bridge during one in-flight loopback job, then validate durable recovery')
     parser.add_argument('--allow-host-discovery', action='store_true', help='Use normal host discovery for the loopback target instead of the default per-scan -Pn override')

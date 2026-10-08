@@ -32,13 +32,13 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
             "previous_run": {"covered_targets_source": "successful_daedalus_single_ip_command"},
             "current_run": {"covered_targets_source": "successful_daedalus_single_ip_command"},
             "counts": {"hosts_added": 0, "hosts_removed": 0, "hosts_not_observed": 0,
-                       "port_changes": 1, "newly_observed_ports": 0, "reported_port_changes": 0,
-                       "confirmed_removed_ports": 1},
+                       "port_changes": 1, "newly_observed_ports": 0, "reported_port_changes": 1,
+                       "confirmed_removed_ports": 0},
             "port_changes": [{"host": "127.0.0.1", "protocol": "tcp", "port": 12345,
-                "change": "removed", "confirmed": True, "before": {"state": "open"}, "after": None}]}
+                "change": "state_service_changed", "confirmed": True, "before": {"state": "open"}, "after": {"state": "closed"}}]}
         validation.validate_listener_change(comparison, 12345)
         for mutate in (lambda c: c.update(available=False), lambda c: c.update(truncated=True),
-                       lambda c: c["counts"].update(confirmed_removed_ports=0),
+                       lambda c: c["counts"].update(reported_port_changes=0),
                        lambda c: c["port_changes"][0].update(confirmed=False),
                        lambda c: c["port_changes"][0].update(change="not_observed"),
                        lambda c: c["port_changes"][0].update(host="192.168.1.1"),
