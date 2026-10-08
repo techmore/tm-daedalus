@@ -1349,6 +1349,28 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 rows.append(["Missing/unsupported labels", str(distribution["unknown_count"])])
                 story.append(_table(rows, [5.4 * inch, 1.5 * inch]))
 
+    from daedalus.meraki_actions import project_action_plan
+    action_plan = project_action_plan(report_snapshot.get("meraki_action_plan"))
+    if action_plan is not None:
+        story.append(PageBreak())
+        story.append(Paragraph("Recommendations & implementation plan", styles["MerakiSection"]))
+        story.append(_paragraph(action_plan["scope"], styles["MerakiBody"]))
+        labels = {"review": "Review observation", "planning": "Design / planning review", "evidence_gap": "Evidence gap"}
+        for phase, title in enumerate(action_plan["phases"]):
+            story.append(_paragraph(title, styles["MerakiSubsection"]))
+            rows = [row for row in action_plan["rows"] if row["phase"] == phase]
+            if not rows:
+                story.append(_paragraph("No actions derived for this window; this does not certify a healthy network.", styles["MerakiBody"]))
+            for row in rows:
+                story.append(KeepTogether([
+                    _paragraph(row["title"] + " - " + labels[row["status"]], styles["MerakiSubsection"]),
+                    _paragraph("Observation: " + row["observation"], styles["MerakiBody"]),
+                    _paragraph("Suggested owner: " + row["suggested_owner"], styles["MerakiSmall"]),
+                    _paragraph("Next action: " + row["action"], styles["MerakiBody"]),
+                    _paragraph("Validation: " + row["verification"], styles["MerakiBody"]),
+                    _paragraph("Saved evidence references: " + "; ".join(row["evidence_references"]), styles["MerakiSmall"]),
+                ]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

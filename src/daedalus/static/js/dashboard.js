@@ -1823,6 +1823,21 @@
     container.append(section);
   }
 
+  function renderMerakiActionPlan(container, plan) {
+    if (!plan || plan.schema_version !== 1 || !Array.isArray(plan.rows)) return;
+    var section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "Recommendations & implementation plan";
+    var scope = document.createElement("p"); scope.className = "muted"; scope.textContent = plan.scope; section.append(heading, scope);
+    var labels = {review: "Review observation", planning: "Design / planning review", evidence_gap: "Evidence gap"};
+    (plan.phases || []).forEach(function (phase, index) {
+      var group = document.createElement("details"), summary = document.createElement("summary"), rows = plan.rows.filter(function (row) {return row.phase === index;});
+      summary.textContent = phase + " · " + rows.length + " review actions"; group.append(summary);
+      if (!rows.length) {var empty = document.createElement("p"); empty.textContent = "No actions derived for this window; this does not certify a healthy network."; group.append(empty);}
+      rows.forEach(function (row) {var article = document.createElement("article"); article.className = "audit-policy-card";var title = document.createElement("strong"); title.textContent = row.title + " · " + (labels[row.status] || "Evidence gap");article.append(title);
+        [["Observation", row.observation], ["Suggested owner", row.suggested_owner], ["Next action", row.action], ["Validation", row.verification], ["Saved evidence", (row.evidence_references || []).join("; ")]].forEach(function (item) {var p = document.createElement("p"); p.textContent = item[0] + ": " + (item[1] || "Unavailable");article.append(p);});group.append(article);}); section.append(group);
+    }); container.append(section);
+  }
+
   function renderMerakiClientDistributions(container, observations, additionalNetworks) {
     if (!Array.isArray(observations) || !observations.length) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2103,6 +2118,7 @@
       container.append(planning);
     }
 
+    renderMerakiActionPlan(container, details.action_plan);
     renderMerakiClientDistributions(container, details.wireless_clients, details.wireless_clients_additional_networks);
     renderMerakiCis8(container, details.cis8_assessment);
     renderMerakiTopology(container, details.topology_graph);
@@ -2182,6 +2198,16 @@
       merakiDashboardDetailCache.set(reportId, cached);
     }
     return cached;
+  }
+
+  function renderMerakiActionOverview(container, details) {
+    var plan = details.action_plan;
+    if (!plan || plan.schema_version !== 1 || !Array.isArray(plan.rows)) return;
+    var section = document.createElement("section");section.className = "meraki-detail-section";var heading = document.createElement("h3");heading.textContent = "Recommended next actions";section.append(heading);
+    plan.rows.slice(0, 3).forEach(function (row) {var title = document.createElement("strong");title.textContent = row.title;var p = document.createElement("p");p.textContent = row.action;section.append(title, p);});
+    var note = document.createElement("p");note.className = "muted";note.textContent = "Suggested review windows require an approved owner and change plan. No automatic remediation or purchasing.";section.append(note);
+    var action = document.createElement("button");action.type = "button";action.className = "button button-small button-quiet";action.textContent = "Review implementation plan";
+    action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return;var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]');if (!saved) return;saved.open = true;var summary = saved.querySelector("summary");if (summary) {summary.focus();summary.scrollIntoView({block: "center", behavior: "smooth"});}});section.append(action);container.append(section);
   }
 
   function renderMerakiClientOverview(container, details) {
@@ -2297,6 +2323,7 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiActionOverview(container, details);
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
@@ -2308,6 +2335,7 @@
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiActionOverview(container, details);
         renderMerakiClientOverview(container, details);
         renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
@@ -2325,6 +2353,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiActionOverview(container, details);
       renderMerakiClientOverview(container, details);
       renderMerakiCis8Overview(container, details);
       renderMerakiTopologyOverview(container, details);

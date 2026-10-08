@@ -294,6 +294,8 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         details = details_response.json()
         self.assertEqual(details["summary"]["device_count"], 1)
         self.assertEqual(details["unifi_plan"], snapshot.json()["unifi_plan"])
+        self.assertEqual(details["action_plan"], snapshot.json()["meraki_action_plan"])
+        self.assertTrue(details["action_plan"]["rows"])
         self.assertEqual(details["wan_usage"][0]["data"]["interfaces"], second_snapshot["wan_usage"][0]["data"]["interfaces"])
         self.assertNotIn("intervals", details["wan_usage"][0]["data"])
         self.assertEqual(len(snapshot.json()["meraki"]["wan_usage"][0]["data"]["intervals"]), 1)

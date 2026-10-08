@@ -121,6 +121,7 @@ from daedalus.credential_store import CredentialEncryptionError, decrypt_secret,
 from daedalus.meraki_api import MerakiAPIError, MerakiClient, compare_meraki_snapshots
 from daedalus.meraki_cis8 import build_cis8_assessment, project_cis8_assessment
 from daedalus.meraki_clients import project_wireless_clients
+from daedalus.meraki_actions import build_action_plan, project_action_plan
 from daedalus.meraki_history import compare_meraki_inventory
 from daedalus.meraki_topology import project_topology
 from daedalus.meraki_switch import project_switch_ports
@@ -1293,6 +1294,7 @@ def generate_report_job(report_job_id: int) -> None:
                                    "coverage_change_count": len(comparison["coverage_changes"])})
             snapshot = {**snapshot, "meraki": meraki_snapshot, "meraki_comparison": comparison,
                         "unifi_plan": build_unifi_plan(meraki_snapshot), "meraki_cis8": build_cis8_assessment(meraki_snapshot)}
+            snapshot["meraki_action_plan"] = build_action_plan(meraki_snapshot, snapshot["unifi_plan"])
             with SessionLocal() as db:
                 job = db.get(ReportJob, report_job_id)
                 if job is not None:
@@ -5161,6 +5163,7 @@ def meraki_report_details(
             "data": project_wan_usage(row.get("data"))}
             for row in (snapshot.get("wan_usage") or [])[:100] if isinstance(row, dict)],
         "cis8_assessment": project_cis8_assessment((job.report_snapshot or {}).get("meraki_cis8")),
+        "action_plan": project_action_plan((job.report_snapshot or {}).get("meraki_action_plan")),
         "wireless_clients": [{"network_name": text_field(row, "network_name"),
             "status": text_field(row, "status", 40), "data": project_wireless_clients(row.get("data")) if row.get("status") == "complete" else None}
             for row in wireless_clients if isinstance(row, dict)],
