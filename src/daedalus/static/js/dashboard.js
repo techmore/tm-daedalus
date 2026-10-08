@@ -1823,6 +1823,27 @@
     container.append(section);
   }
 
+  function renderMerakiWanuplinks(container, evidence) {
+    if (!evidence || !evidence.status) return;
+    var data = evidence.data || {}, section = document.createElement("section"); section.className = "meraki-detail-section";
+    var heading = document.createElement("h4"); heading.textContent = "WAN / Internet uplinks";
+    var note = document.createElement("p"); note.className = "muted";
+    note.textContent = "Collection: " + evidence.status + ". Current reported interface states; no circuit capacity or throughput measurement. A ready or disconnected secondary interface does not establish an outage.";
+    section.append(heading, note);
+    if (evidence.status === "complete") {
+      var summary = document.createElement("p"); summary.textContent = (data.reported_device_count ?? "—") + "/" + (data.expected_device_count ?? "—") + " assigned appliances reported · " + (data.interface_count ?? "—") + " interfaces · " + (data.missing_device_count ?? "—") + " appliances missing"; section.append(summary);
+      var scroll = document.createElement("div"); scroll.className = "table-scroll"; scroll.tabIndex = 0; scroll.setAttribute("aria-label", "WAN interface observations");
+      var table = document.createElement("table"), caption = document.createElement("caption"); caption.textContent = "Saved WAN interface states"; table.append(caption);
+      var head = document.createElement("thead"), tr = document.createElement("tr");
+      ["Appliance", "Network", "Interface", "Reported state", "Device last reported"].forEach(function (label) {var th = document.createElement("th"); th.textContent = label; th.setAttribute("scope", "col"); tr.append(th);}); head.append(tr); table.append(head);
+      var body = document.createElement("tbody");
+      (evidence.rows || []).forEach(function (row) {var tr = document.createElement("tr"); [row.device_serial, row.network_id, row.interface, row.state || "unknown", row.last_reported_at || "Unavailable"].forEach(function (value) {var td = document.createElement("td"); td.textContent = value; tr.append(td);}); body.append(tr);});
+      table.append(body); scroll.append(table); section.append(scroll);
+      if (evidence.additional_rows) {var more = document.createElement("p"); more.textContent = evidence.additional_rows + " more interfaces in the complete saved evidence."; section.append(more);}
+    }
+    container.append(section);
+  }
+
   function renderMerakiChannelUtilization(container, evidence) {
     if (!evidence || !evidence.status) return;
     var data = evidence.data || {};
@@ -1932,6 +1953,7 @@
 
     renderMerakiPowerUsage(container, details.switch_power, (details.truncated || {}).switch_power);
 
+    renderMerakiWanuplinks(container, details.wan_uplinks);
     renderMerakiChannelUtilization(container, details.channel_utilization);
     renderMerakiWirelessConnections(container, details.wireless_connections || []);
 

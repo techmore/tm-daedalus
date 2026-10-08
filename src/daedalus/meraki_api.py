@@ -48,6 +48,55 @@ class MerakiAPIError(RuntimeError):
         self.status_code = status_code
 
 
+MAX_APPLIANCES_PER_REPORT = 1000
+
+
+def summarize_wan_uplinks(raw: Any, managed_networks: dict[str, str]) -> dict[str, Any]:
+    """Documented link states only; omit addresses and do not infer circuit capacity."""
+    if not isinstance(raw, list) or len(raw) > MAX_APPLIANCES_PER_REPORT:
+        raise MerakiAPIError("WAN uplink evidence exceeds its supported array shape or limit.")
+    seen, rows, omitted = set(), [], 0
+    states = {"active", "connecting", "failed", "not connected", "ready"}
+    for item in raw:
+        serial = item.get("serial") if isinstance(item, dict) else None
+        if (not isinstance(serial, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", serial)
+                or serial in seen):
+            raise MerakiAPIError("WAN uplink evidence requires unique device identifiers.")
+        seen.add(serial)
+        if serial not in managed_networks:
+            omitted += 1
+            continue
+        if item.get("networkId") != managed_networks[serial]:
+            raise MerakiAPIError("WAN uplink evidence does not match assigned network inventory.")
+        uplinks = item.get("uplinks")
+        if not isinstance(uplinks, list) or len(uplinks) > 4:
+            raise MerakiAPIError("WAN uplink evidence returned an unsupported interface array.")
+        reported_at = item.get("lastReportedAt")
+        try:
+            if (not isinstance(reported_at, str) or len(reported_at) > 64
+                    or datetime.fromisoformat(reported_at.replace("Z", "+00:00")).tzinfo is None):
+                reported_at = None
+        except ValueError:
+            reported_at = None
+        interfaces = set()
+        for uplink in uplinks:
+            interface = uplink.get("interface") if isinstance(uplink, dict) else None
+            if interface not in {"wan1", "wan2", "wan3", "cellular"} or interface in interfaces:
+                raise MerakiAPIError("WAN uplink evidence requires unique supported interfaces.")
+            interfaces.add(interface)
+            state = uplink.get("status")
+            rows.append({"device_serial": serial, "network_id": managed_networks[serial],
+                         "interface": interface, "state": state if isinstance(state, str) and state in states else "unknown",
+                         "last_reported_at": reported_at})
+    rows.sort(key=lambda row: (row["device_serial"], row["interface"]))
+    return {"rows": rows, "reported_device_count": len(managed_networks.keys() & seen),
+            "expected_device_count": len(managed_networks),
+            "missing_device_count": len(managed_networks.keys() - seen),
+            "omitted_device_count": omitted, "interface_count": len(rows),
+            "state_counts": dict(sorted(Counter(row["state"] for row in rows).items())),
+            "scope": "Current reported interface states; no circuit capacity, throughput or outage determination."}
+
+
 WIRELESS_CONNECTION_TIMESPAN = 86400
 
 
@@ -696,6 +745,17 @@ class MerakiClient:
                 for device in access_points if device.get("networkId") in network_by_id}),
             params={"timespan": 86400}, collection=True) if access_points else None
 
+        appliances = [device for device in devices if device.get("productType") == "appliance"
+                      or str(device.get("model", "")).startswith(("MX", "Z"))]
+        if len(appliances) > MAX_APPLIANCES_PER_REPORT:
+            raise MerakiAPIError(f"This report is limited to {MAX_APPLIANCES_PER_REPORT} appliances per run.")
+        wan_uplinks = collect_observation(
+            f"/organizations/{organization_id}/appliance/uplink/statuses",
+            "WAN uplink states", {"id": "", "name": organization["name"]},
+            lambda raw: summarize_wan_uplinks(raw, {str(device["serial"]): str(device["networkId"])
+                for device in appliances if device.get("networkId") in network_by_id}),
+            collection=True) if appliances else None
+
         client_usage = collect_observation(f"/organizations/{organization_id}/clients/overview", "Aggregate client usage", {"id": "", "name": organization["name"]}, _aggregate_client_usage, params={"timespan": CLIENT_USAGE_TIMESPAN})
         for index, network in enumerate(networks, start=1):
             if progress:
@@ -788,6 +848,7 @@ class MerakiClient:
             "licensing": {"status": licensing["status"], "data": licensing["data"], "endpoint": "licenses/overview"},
             "client_usage": {"status": client_usage["status"], "data": client_usage["data"]},
             "channel_utilization": channel_utilization,
+            "wan_uplinks": wan_uplinks,
             "wireless_connections": [row for row in observational if row["control"] == "Wireless connection outcomes"],
             "topology": [row for row in observational if row["control"] == "Managed link-layer topology"],
             "switch_power": switch_power,
@@ -824,7 +885,7 @@ def compare_meraki_snapshots(previous: dict[str, Any], current: dict[str, Any]) 
     def index(snapshot: dict[str, Any]) -> dict[tuple[str, str, str], dict[str, Any]]:
         indexed = {}
         for row in snapshot.get("security_controls", []):
-            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless connection outcomes", "Wireless channel utilization"}:
+            if not isinstance(row, dict) or row.get("control") in {"Aggregate client usage", "Wireless connection outcomes", "Wireless channel utilization", "WAN uplink states"}:
                 continue
             key = (str(row.get("network_id") or ""), str(row.get("device_serial") or ""), str(row.get("control") or ""))
             if key in indexed:

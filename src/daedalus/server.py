@@ -5119,6 +5119,15 @@ def meraki_report_details(
             "expected_device_count", "missing_device_count", "measured_band_count", "review_band_count", "review_thresholds_percent")},
         "rows": channel_rows[:100], "additional_rows": max(0, len(channel_rows) - 100)}
 
+    wan = snapshot.get("wan_uplinks")
+    wan = wan if isinstance(wan, dict) else {}
+    wan_data = wan.get("data") if isinstance(wan.get("data"), dict) else {}
+    wan_rows = wan_data.get("rows") if isinstance(wan_data.get("rows"), list) else []
+    wan_preview = {"status": text_field(wan, "status", 40),
+        "data": {key: wan_data.get(key) for key in ("reported_device_count", "expected_device_count",
+            "missing_device_count", "interface_count", "state_counts", "scope")},
+        "rows": wan_rows[:100], "additional_rows": max(0, len(wan_rows) - 100)}
+
     serialized_controls = []
     for control in controls:
         if not isinstance(control, dict):
@@ -5141,6 +5150,7 @@ def meraki_report_details(
         },
         "collected_at": text_field(snapshot, "collected_at", 80),
         "channel_utilization": channel_preview,
+        "wan_uplinks": wan_preview,
         "unifi_plan": project_unifi_plan((job.report_snapshot or {}).get("unifi_plan")),
         "wireless_connections": [{"network_name": text_field(row, "network_name"),
             "status": text_field(row, "status", 40),

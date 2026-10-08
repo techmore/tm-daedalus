@@ -1171,6 +1171,24 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         if len(rows) > 1:
             story.append(_table(rows, [1.5 * inch, .4 * inch, .9 * inch, 1 * inch, .9 * inch, 2.2 * inch]))
 
+    wan = meraki.get("wan_uplinks")
+    if isinstance(wan, dict):
+        story.append(PageBreak())
+        story.append(Paragraph("WAN / Internet uplinks", styles["MerakiSection"]))
+        story.append(_paragraph("Current reported interface states. Circuit capacity and throughput are not measured. "
+            "Ready or disconnected secondary interfaces do not establish an outage.", styles["MerakiBody"]))
+        data = wan.get("data") if isinstance(wan.get("data"), dict) else {}
+        story.append(_paragraph(f"Collection: {wan.get('status')}; assigned appliances reported: "
+            f"{data.get('reported_device_count', 'Unavailable')} / {data.get('expected_device_count', 'Unavailable')}; "
+            f"missing appliances: {data.get('missing_device_count', 'Unavailable')}", styles["MerakiBody"]))
+        rows = [[_paragraph(title, styles["MerakiTableHeader"]) for title in
+                 ("Appliance", "Network", "Interface", "Reported state", "Last reported")]]
+        for row in data.get("rows", []):
+            rows.append([_paragraph(row.get(key, "Unavailable"), styles["MerakiCell"])
+                for key in ("device_serial", "network_id", "interface", "state", "last_reported_at")])
+        if len(rows) > 1:
+            story.append(_table(rows, [1.4 * inch, 1.7 * inch, .7 * inch, 1.1 * inch, 2 * inch]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

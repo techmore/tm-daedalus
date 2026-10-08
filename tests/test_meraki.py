@@ -123,6 +123,9 @@ class MerakiClientTests(unittest.TestCase):
                 "/api/v1/organizations/org-1/devices/availabilities": [
                     {"serial": "Q2XX-TEST", "status": "offline", "lastReportedAt": "2026-09-29T12:00:00Z"}
                 ],
+                "/api/v1/organizations/org-1/appliance/uplink/statuses": [
+                    {"serial": "Q2XX-TEST", "networkId": "N_1", "uplinks": [{"interface": "wan1", "status": "active", "publicIp": "never-store-this"}]}
+                ],
                 "/api/v1/networks/N_1/appliance/firewall/l3FirewallRules": {"rules": []},
                 "/api/v1/networks/N_1/appliance/firewall/l7FirewallRules": {"rules": []},
                 "/api/v1/networks/N_1/appliance/security/intrusion": {"mode": "disabled"},
@@ -146,7 +149,9 @@ class MerakiClientTests(unittest.TestCase):
         self.assertTrue(any("Intrusion protection is disabled" in row["title"] for row in result["findings"]))
         self.assertEqual(result["summary"]["security_controls_unavailable"], 0)
         self.assertNotIn("never-store-this", str(result))
-        self.assertEqual(len(result["security_controls"]), 9)
+        self.assertEqual(len(result["security_controls"]), 10)
+        self.assertEqual(result["wan_uplinks"]["data"]["state_counts"], {"active": 1})
+        self.assertNotIn("never-store-this", str(result))
 
     def test_collects_switch_and_wireless_allowlisted_settings_with_partial_coverage(self):
         seen = []
