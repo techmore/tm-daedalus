@@ -117,6 +117,22 @@ struct ReportSummary: Codable {
     let errorChecks: Int
     let complianceScore: Double // Percentage of passed checks
     
+    var assessmentCoverageLabel: String {
+        guard totalChecks > 0 else { return "Assessment coverage: no checks recorded" }
+        var remaining = totalChecks
+        for count in [passedChecks, failedChecks, manualChecks, errorChecks] {
+            guard count >= 0 && count <= remaining else { return "Assessment coverage: unavailable" }
+            remaining -= count
+        }
+        guard remaining == 0 else { return "Assessment coverage: unavailable" }
+        return "Assessed: \(passedChecks + failedChecks)/\(totalChecks) · Unassessed: \(manualChecks + errorChecks)"
+    }
+
+    static func percentageLabel(count: Int, total: Int) -> String {
+        guard total > 0, count >= 0, count <= total else { return "Not assessed" }
+        return String(format: "%.2f", Double(count) / Double(total) * 100) + "%"
+    }
+
     // Category-specific summaries
     let macOSChecks: CategorySummary
     let chromeChecks: CategorySummary

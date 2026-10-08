@@ -56,6 +56,11 @@ class MenuBarManager: NSObject {
         titleItem.target = self
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
+        if let summary = resultsSummary {
+            menu.addItem(NSMenuItem(title: summary.assessmentCoverageLabel, action: nil, keyEquivalent: ""))
+            menu.addItem(NSMenuItem(title: "Manual and error results are unassessed; pass rate uses all checks.", action: nil, keyEquivalent: ""))
+            menu.addItem(NSMenuItem.separator())
+        }
 
         let importConfigItem = NSMenuItem(
             title: "Import Daedalus client config…",
@@ -122,27 +127,27 @@ class MenuBarManager: NSObject {
             menu.addItem(totalItem)
             
             // Passed checks
-            let passedItem = NSMenuItem(title: "Passed: \(summary.passedChecks) (\(String(format: "%.2f", summary.complianceScore))%)", action: dummySelector, keyEquivalent: "")
+            let passedItem = NSMenuItem(title: "Passed: \(summary.passedChecks) (\(ReportSummary.percentageLabel(count: summary.passedChecks, total: summary.totalChecks)))", action: dummySelector, keyEquivalent: "")
             passedItem.target = self
             menu.addItem(passedItem)
             
             // Failed checks
-            let failedItem = NSMenuItem(title: "Failed: \(summary.failedChecks) (\(String(format: "%.2f", Double(summary.failedChecks) / Double(summary.totalChecks) * 100))%)", action: dummySelector, keyEquivalent: "")
+            let failedItem = NSMenuItem(title: "Failed: \(summary.failedChecks) (\(ReportSummary.percentageLabel(count: summary.failedChecks, total: summary.totalChecks)))", action: dummySelector, keyEquivalent: "")
             failedItem.target = self
             menu.addItem(failedItem)
             
             // Manual checks
-            let manualItem = NSMenuItem(title: "Manual: \(summary.manualChecks) (\(String(format: "%.2f", Double(summary.manualChecks) / Double(summary.totalChecks) * 100))%)", action: dummySelector, keyEquivalent: "")
+            let manualItem = NSMenuItem(title: "Manual: \(summary.manualChecks) (\(ReportSummary.percentageLabel(count: summary.manualChecks, total: summary.totalChecks)))", action: dummySelector, keyEquivalent: "")
             manualItem.target = self
             menu.addItem(manualItem)
             
             // Error checks
-            let errorItem = NSMenuItem(title: "Errors: \(summary.errorChecks) (\(String(format: "%.2f", Double(summary.errorChecks) / Double(summary.totalChecks) * 100))%)", action: dummySelector, keyEquivalent: "")
+            let errorItem = NSMenuItem(title: "Errors: \(summary.errorChecks) (\(ReportSummary.percentageLabel(count: summary.errorChecks, total: summary.totalChecks)))", action: dummySelector, keyEquivalent: "")
             errorItem.target = self
             menu.addItem(errorItem)
             
             // Overall compliance score
-            let scoreItem = NSMenuItem(title: "Pass rate across all checks: \(String(format: "%.2f", summary.complianceScore))%", action: dummySelector, keyEquivalent: "")
+            let scoreItem = NSMenuItem(title: "Pass rate across all checks: \(ReportSummary.percentageLabel(count: summary.passedChecks, total: summary.totalChecks))", action: dummySelector, keyEquivalent: "")
             scoreItem.target = self
             menu.addItem(scoreItem)
             menu.addItem(NSMenuItem.separator())
@@ -153,17 +158,17 @@ class MenuBarManager: NSObject {
             menu.addItem(categoryTitle)
             
             // macOS
-            let macOSItem = NSMenuItem(title: "macOS: \(String(format: "%.2f", summary.macOSChecks.score))% (\(summary.macOSChecks.passed)/\(summary.macOSChecks.total) passed)", action: dummySelector, keyEquivalent: "")
+            let macOSItem = NSMenuItem(title: "macOS: \(ReportSummary.percentageLabel(count: summary.macOSChecks.passed, total: summary.macOSChecks.total)) (\(summary.macOSChecks.passed)/\(summary.macOSChecks.total) passed)", action: dummySelector, keyEquivalent: "")
             macOSItem.target = self
             menu.addItem(macOSItem)
             
             // Chrome
-            let chromeItem = NSMenuItem(title: "Chrome: \(String(format: "%.2f", summary.chromeChecks.score))% (\(summary.chromeChecks.passed)/\(summary.chromeChecks.total) passed)", action: dummySelector, keyEquivalent: "")
+            let chromeItem = NSMenuItem(title: "Chrome: \(ReportSummary.percentageLabel(count: summary.chromeChecks.passed, total: summary.chromeChecks.total)) (\(summary.chromeChecks.passed)/\(summary.chromeChecks.total) passed)", action: dummySelector, keyEquivalent: "")
             chromeItem.target = self
             menu.addItem(chromeItem)
             
             // Safari
-            let safariItem = NSMenuItem(title: "Safari: \(String(format: "%.2f", summary.safariChecks.score))% (\(summary.safariChecks.passed)/\(summary.safariChecks.total) passed)", action: dummySelector, keyEquivalent: "")
+            let safariItem = NSMenuItem(title: "Safari: \(ReportSummary.percentageLabel(count: summary.safariChecks.passed, total: summary.safariChecks.total)) (\(summary.safariChecks.passed)/\(summary.safariChecks.total) passed)", action: dummySelector, keyEquivalent: "")
             safariItem.target = self
             menu.addItem(safariItem)
             menu.addItem(NSMenuItem.separator())
@@ -193,7 +198,8 @@ class MenuBarManager: NSObject {
         // Update status item button to show compliance score if available
         if let button = statusItem?.button, let summary = resultsSummary {
             let score = Int(summary.complianceScore)
-            let scoreColor = getColorForScore(summary.complianceScore)
+            let scoreColor = summary.totalChecks > 0 && (summary.passedChecks > 0 || summary.failedChecks > 0)
+                ? getColorForScore(summary.complianceScore) : NSColor.secondaryLabelColor
             
             // Create a colored circle with the score inside
             let image = createScoreImage(score: score, color: scoreColor)

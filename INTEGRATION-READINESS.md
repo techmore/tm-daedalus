@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 7, 2026 — native endpoint assessment context
+
+The CIS menu now leads with assessed/unassessed counts and explains the all-check pass-rate denominator. Empty category percentages say Not assessed; entirely unassessed runs use a neutral icon. Shared presentation helpers reject inconsistent counts instead of showing a percentage. Final native xcresult: 115 passed, zero failed, one real-Tahoe platform test skipped on macOS 27.0.1. This changes the client UI; deployed endpoint binaries require an explicit update. Developer ID signing remains unavailable (only an Apple Development identity exists), so trusted distribution and actual macOS 26 validation remain open.
+
 ## October 7, 2026 — Meraki inventory identity validation
 
 Source `8db114d` rejects malformed, missing and duplicate network/device identities before a completed audit and purchase plan can be saved. This prevents silently omitted networks and inflated replacement quantities. Ten malformed/duplicate fixture cases are covered; a fresh read-only BFS collection passed with two networks and 27 unique devices. Full local suite: 777 tests passed, one skipped and 276 subtests. Incus activated the verified 79-file release `24895e1fde5e956f9ef6133b19efe5d8f5aea9adc1c4b6ae6f5c1deb8046dae3`, with pre-deploy off-host backup and internal/public readiness checks passing. Existing completed reports and scanner PDF assets were retained.

@@ -52,6 +52,8 @@ Never put an upload key in the app bundle, installer, repository, shared image, 
 
 ## Reports and data
 
+The native menu leads with assessed and unassessed counts. Pass and fail results are assessed; manual and error results are unassessed. Percentages use all checks and are explicitly labeled Not assessed for an empty category. An entirely unassessed run uses a neutral status icon. These labels describe collection coverage and do not establish benchmark conformance.
+
 The client stores JSON/text reports and run logs under `~/Library/Application Support/Daedalus/CIS Client/` in private subdirectories. A persistent random UUID identifies the endpoint across reports; hardware serial numbers are not collected. Daedalus stores normalized results, the profile slug/version, score, and changes between reports. The dashboard labels the percentage as a pass rate; fail, manual, and error checks remain in its denominator.
 
 The client uploads check results, device name, OS version, anonymous device ID, and report timestamps over HTTPS. The server removes details it does not need and scrubs common identifiers from check evidence. Review the profile's result details and workspace privacy requirements before deployment.

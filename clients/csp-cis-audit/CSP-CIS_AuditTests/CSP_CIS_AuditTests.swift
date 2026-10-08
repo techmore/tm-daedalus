@@ -11,6 +11,22 @@ import XCTest
 @testable import CSP_CIS_Audit
 
 struct CSP_CIS_AuditTests {
+    @Test func nativeSummaryExplainsAssessmentCoverageAndEmptyPercentages() {
+        let category = CategorySummary(total: 0, passed: 0, failed: 0, manual: 0, error: 0, score: 0)
+        func summary(_ total: Int, _ passed: Int, _ failed: Int, _ manual: Int, _ error: Int) -> ReportSummary {
+            ReportSummary(totalChecks: total, passedChecks: passed, failedChecks: failed, manualChecks: manual, errorChecks: error, complianceScore: 0, macOSChecks: category, chromeChecks: category, safariChecks: category)
+        }
+        #expect(summary(10, 2, 3, 4, 1).assessmentCoverageLabel == "Assessed: 5/10 · Unassessed: 5")
+        #expect(summary(10, 0, 0, 10, 0).assessmentCoverageLabel == "Assessed: 0/10 · Unassessed: 10")
+        #expect(summary(0, 0, 0, 0, 0).assessmentCoverageLabel == "Assessment coverage: no checks recorded")
+        #expect(summary(10, 2, 3, 4, 2).assessmentCoverageLabel == "Assessment coverage: unavailable")
+        #expect(summary(10, -1, 3, 4, 4).assessmentCoverageLabel == "Assessment coverage: unavailable")
+        #expect(ReportSummary.percentageLabel(count: 2, total: 10) == "20.00%")
+        #expect(ReportSummary.percentageLabel(count: 0, total: 0) == "Not assessed")
+        #expect(ReportSummary.percentageLabel(count: 11, total: 10) == "Not assessed")
+        #expect(ReportSummary.percentageLabel(count: -1, total: 10) == "Not assessed")
+    }
+
     @Test func approvedLoginMessageUsesExactCapturedPreferenceWithoutTextDisclosure() throws {
         let rule = "system_settings_loginwindow_loginwindowtext_enable"
         let check = CISCheck(id: rule, category: "macos", description: "Login warning", ruleID: rule, expectedLoginMessage: "Approved warning\nAuthorized only")
