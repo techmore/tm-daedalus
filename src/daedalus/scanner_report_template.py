@@ -58,8 +58,7 @@ PRINT_LAYOUT_V2_CSS = PRINT_LAYOUT_V1_CSS + """
   .overflow-x-auto { overflow: visible !important; }
 }"""
 PRINT_LAYOUT_V2_SHA256 = "149ecc07c5f6a5cc13a1a4ee101c6364d1b2035e3f4c8e549ff3711da1f73bd7"
-PRINT_LAYOUT_VERSION = 3
-PRINT_LAYOUT_CSS = PRINT_LAYOUT_V2_CSS + """
+PRINT_LAYOUT_V3_CSS = PRINT_LAYOUT_V2_CSS + """
 @media print {
   /* Long names and IPv6 evidence must fit without dropping table columns. */
   table { table-layout: fixed !important; }
@@ -88,11 +87,27 @@ PRINT_LAYOUT_CSS = PRINT_LAYOUT_V2_CSS + """
   #onlinehosts .collapsible-header h3, #onlinehosts li { overflow-wrap: anywhere; }
   #onlinehosts .collapsible-header .badge { flex-shrink: 0; margin-left: 8px; }
 }"""
+PRINT_LAYOUT_V3_SHA256 = "3773a1d00ecb16b0097d26df802caf9d1b64c7b6b2691d012d41965a6801abca"
+PRINT_LAYOUT_VERSION = 4
+PRINT_LAYOUT_CSS = PRINT_LAYOUT_V3_CSS + """
+@media print {
+  /* Allocate space from the actual evidence, keeping numeric ports intact. */
+  table { table-layout: auto !important; }
+  #table-services th, #table-services td,
+  #web-services th, #web-services td { width: auto !important; }
+  #table-services th:last-child, #table-services td:last-child { width: 18% !important; }
+  th { overflow-wrap: normal !important; }
+  #table-services td:nth-child(3), #table-services td:nth-child(3) *,
+  #web-services td:nth-child(3), #web-services td:nth-child(3) * { white-space: nowrap !important; }
+  table a[href^="#onlinehosts-"]:not([href*=":"]) { white-space: nowrap !important; }
+  .badge { white-space: nowrap !important; }
+}"""
 PRINT_LAYOUT_SHA256 = hashlib.sha256(PRINT_LAYOUT_CSS.encode("utf-8")).hexdigest()
 PRINT_LAYOUTS = {
     1: (PRINT_LAYOUT_V1_CSS, PRINT_LAYOUT_V1_SHA256),
     2: (PRINT_LAYOUT_V2_CSS, PRINT_LAYOUT_V2_SHA256),
-    3: (PRINT_LAYOUT_CSS, PRINT_LAYOUT_SHA256),
+    3: (PRINT_LAYOUT_V3_CSS, PRINT_LAYOUT_V3_SHA256),
+    4: (PRINT_LAYOUT_CSS, PRINT_LAYOUT_SHA256),
 }
 
 

@@ -335,7 +335,7 @@ def test_print_layout_version_and_digest_cannot_be_mixed():
     from daedalus.scanner_report_template import (
         scanner_print_layout_html, PRINT_LAYOUT_V1_SHA256, PRINT_LAYOUT_SHA256,
     )
-    for version, digest in ((1, PRINT_LAYOUT_SHA256), (2, PRINT_LAYOUT_V1_SHA256), (4, PRINT_LAYOUT_SHA256)):
+    for version, digest in ((1, PRINT_LAYOUT_SHA256), (2, PRINT_LAYOUT_V1_SHA256), (5, PRINT_LAYOUT_SHA256)):
         with pytest.raises(ValueError, match="print layout"):
             scanner_print_layout_html(standardized_scanner_html(XML), {
                 "print_layout_version": version, "print_layout_sha256": digest,
@@ -454,3 +454,54 @@ def test_print_layout_preserves_long_hostname_and_ipv6_evidence():
     assert address in compact and name in compact and "Exampleservice" in compact
     assert "Open Services" in text and "Web Services" in text and "Product Versions" in text
     assert len(reader.pages) <= 6
+
+
+def test_saved_v3_print_layout_is_frozen_and_never_upgraded():
+    from daedalus.scanner_report_template import scanner_print_layout_html, PRINT_LAYOUT_V3_CSS, PRINT_LAYOUT_V3_SHA256
+    assert PRINT_LAYOUT_V3_SHA256 == "3773a1d00ecb16b0097d26df802caf9d1b64c7b6b2691d012d41965a6801abca"
+    assert hashlib.sha256(PRINT_LAYOUT_V3_CSS.encode()).hexdigest() == PRINT_LAYOUT_V3_SHA256
+    html = standardized_scanner_html(XML)
+    rendered = scanner_print_layout_html(html, {
+        "print_layout_version": 3, "print_layout_sha256": PRINT_LAYOUT_V3_SHA256,
+    })
+    assert rendered == html.replace('</head>', '<style id="nmapui-print-layout-v3">' + PRINT_LAYOUT_V3_CSS + '</style></head>', 1)
+    assert 'nmapui-print-layout-v4' not in rendered
+
+
+@pytest.mark.parametrize("ipv6", [False, True])
+def test_print_port_links_stay_on_one_line_inside_bounded_tables(ipv6):
+    from playwright.sync_api import sync_playwright
+    from daedalus.scanner_report_template import scanner_print_layout_html, PRINT_LAYOUT_VERSION, PRINT_LAYOUT_SHA256
+    xml = XML.replace(b'portid="443"', b'portid="65535"')
+    if ipv6:
+        name = '.'.join(['longhostname' * 5] * 4) + '.example'
+        xml = xml.replace(b'127.0.0.1', b'2001:db8:1234:5678:abcd:eeee:ffff:1234').replace(b'addrtype="ipv4"', b'addrtype="ipv6"')
+        xml = xml.replace(b'<ports>', f'<hostnames><hostname name="{name}" type="user"/></hostnames><ports>'.encode())
+    html = scanner_print_layout_html(standardized_scanner_html(xml), {
+        "print_layout_version": PRINT_LAYOUT_VERSION, "print_layout_sha256": PRINT_LAYOUT_SHA256,
+    })
+    # Offline generated-document geometry at Letter printable width; no live
+    # portal or user browser is used. Text extraction alone misses soft wraps.
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+        try:
+            context = browser.new_context(viewport={"width": 720, "height": 1056}, java_script_enabled=False)
+            context.route("**/*", lambda route: route.abort())
+            page = context.new_page(); page.emulate_media(media="print")
+            page.set_content(html, wait_until="networkidle"); page.evaluate("document.fonts.ready")
+            proof = page.evaluate("""() => {
+              const links = [...document.querySelectorAll('#table-services td:nth-child(3) a, #web-services td:nth-child(3) a')];
+              return {ports: links.map(a => {
+                const range = document.createRange(); range.selectNodeContents(a);
+                const rects = [...range.getClientRects()]; const cell = a.closest('td').getBoundingClientRect();
+                return {text:a.textContent.trim(), lines:rects.length, inside:rects.every(r => r.left >= cell.left-1 && r.right <= cell.right+1)};
+              }), badges:[...document.querySelectorAll('.badge')].map(b => getComputedStyle(b).whiteSpace), tables:[...document.querySelectorAll('table')].map(t => {
+                const r=t.getBoundingClientRect(); return r.right <= 721 && r.left >= -1;
+              })};
+            }""")
+        finally:
+            browser.close()
+    assert len(proof['ports']) == 2
+    assert all(p['text'] == '65535' and p['lines'] == 1 and p['inside'] for p in proof['ports'])
+    assert proof['tables'] and all(proof['tables'])
+    assert proof['badges'] and all(value == 'nowrap' for value in proof['badges'])
