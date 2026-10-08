@@ -1,5 +1,10 @@
 # Integration readiness
 
+## October 8, 2026 — offline-upgrade source CI completion
+
+Installed Linux workflow [37723131122](https://github.com/techmore/tm-daedalus/actions/runs/37723131122) at source 76f38f8 completed successfully in all three scenarios: lifecycle, interrupted bridge and repeated scan comparison. Backend [37723131093](https://github.com/techmore/tm-daedalus/actions/runs/37723131093) also passed this implementation source. The installed Mac migration and admission evidence above remain separate physical-host observations.
+
+
 ## October 8, 2026 — installed Mac migration and actual admission acceptance
 
 The Mac engine moved from source ZIP b4a6ad04efc868ff3559c9a8ebd83554b2374814e53629bd1f1d83a987d88ae9 to 48ab8f8166dfc17e107d0a37309c13b2441a0c3bc187be0a15ca175a20821d3e. The updated bridge release is e2d1cf1c57d47178881fbf2790f2d7571d4bf7eb4612ca98a91f02dc8f0c2207; its three installed Python source files match the repository bytes. Only engine jobs.py, handlers/routes.py and manifest changed relative to the frozen prior bundle; all other engine/report assets match. Dependencies were staged without changing services, then an explicit planned idle stop preceded the separately verified offline upgrade. The first operator-history probe found absent Basic-auth fields and stopped before any service changes; the corrected probe respected the existing local trust configuration. No new authentication policy was introduced.
