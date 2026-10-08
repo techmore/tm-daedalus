@@ -741,6 +741,19 @@ def iso_utc(value: datetime | None) -> str | None:
     return value.isoformat() + "Z" if value else None
 
 
+def saved_external_comparison_context(run: ExternalCheckRun) -> dict[str, Any] | None:
+    context = run.comparison_context
+    if (not isinstance(context, dict) or set(context) != {"schema_version", "previous_run_id"}
+            or type(context.get("schema_version")) is not int or context["schema_version"] != 1
+            or run.status not in {"completed", "completed_with_warnings"}
+            or type(run.id) is not int or run.id <= 0):
+        return None
+    previous = context["previous_run_id"]
+    if previous is not None and (type(previous) is not int or not 0 < previous < run.id):
+        return None
+    return {"schema_version": 1, "previous_run_id": previous}
+
+
 def serialize_external_run(run: ExternalCheckRun, actor: User | None = None) -> dict[str, Any]:
     snapshot = run.snapshot
     if run.check_type == "dns" and isinstance(snapshot, dict):
@@ -769,6 +782,7 @@ def serialize_external_run(run: ExternalCheckRun, actor: User | None = None) -> 
         "completed_at": iso_utc(run.completed_at),
         "duration_ms": run.duration_ms,
         "change_count": run.change_count,
+        "comparison_context": saved_external_comparison_context(run),
         "snapshot": snapshot,
         "error_summary": run.error_summary,
     }
@@ -3605,13 +3619,8 @@ def external_check_history(
         serialize_external_run(*latest_snapshot_row)["snapshot"]
         if latest_snapshot_row else None
     )
-    comparison_context = latest_snapshot_row[0].comparison_context if latest_snapshot_row else None
-    comparison_recorded = bool(isinstance(comparison_context, dict)
-        and set(comparison_context) == {"schema_version", "previous_run_id"}
-        and type(comparison_context.get("schema_version")) is int and comparison_context["schema_version"] == 1
-        and (comparison_context["previous_run_id"] is None
-             or (type(comparison_context["previous_run_id"]) is int
-                 and 0 < comparison_context["previous_run_id"] < latest_snapshot_row[0].id)))
+    comparison_context = saved_external_comparison_context(latest_snapshot_row[0]) if latest_snapshot_row else None
+    comparison_recorded = comparison_context is not None
     schedule = db.scalar(
         select(ExternalCheckSchedule).where(
             ExternalCheckSchedule.organization_id == organization.id,

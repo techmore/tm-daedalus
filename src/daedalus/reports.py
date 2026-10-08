@@ -561,6 +561,23 @@ def _append_run_line(story: list[Any], run: dict[str, Any], styles: dict[str, Pa
         f"Run #{run.get('id')} · {run.get('status')} · completed {_time_text(run.get('completed_at'))} · initiated by {actor}",
         styles["small"],
     ))
+    if run.get("check_type") in {"dns", "web"} and "comparison_context" in run:
+        context = run.get("comparison_context")
+        previous = context.get("previous_run_id") if isinstance(context, dict) else None
+        valid = (isinstance(context, dict) and set(context) == {"schema_version", "previous_run_id"}
+                 and type(context.get("schema_version")) is int and context["schema_version"] == 1
+                 and type(run.get("id")) is int and run["id"] > 0
+                 and run.get("status") in {"completed", "completed_with_warnings"}
+                 and (previous is None or (type(previous) is int and 0 < previous < run["id"])))
+        if not valid:
+            label = "Comparison baseline details were not recorded for this saved run."
+        elif previous is None:
+            label = "Comparison: baseline established; no earlier usable saved assessment was compared."
+        else:
+            count = run.get("change_count")
+            count_label = str(count) if type(count) is int and count >= 0 else "Unknown count of"
+            label = f"Saved comparison baseline: run #{previous}. {count_label} recorded evidence difference(s). Unknown observations can limit comparison; differences are not incident verdicts."
+        story.append(_paragraph(label, styles["small"]))
 
 
 def _append_changes(story: list[Any], changes: list[dict[str, Any]], styles: dict[str, ParagraphStyle]) -> None:

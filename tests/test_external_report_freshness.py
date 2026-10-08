@@ -51,6 +51,34 @@ class ExternalReportFreshnessTests(unittest.TestCase):
     def capture(self):
         return capture_external_report_snapshot(self.db, self.organization, self.user)
 
+    def test_comparison_context_is_frozen_with_saved_report(self):
+        previous = self.add_run("completed")
+        current = self.add_run("completed_with_warnings")
+        current.comparison_context = {"schema_version": 1, "previous_run_id": previous.id}
+        self.db.commit()
+        captured = self.capture()["checks"]["dns"]["run"]
+        self.assertEqual(captured["comparison_context"], current.comparison_context)
+        self.assertIsNot(captured["comparison_context"], current.comparison_context)
+        current.comparison_context["previous_run_id"] = None
+        self.assertEqual(captured["comparison_context"]["previous_run_id"], previous.id)
+
+    def test_comparison_context_rejects_malformed_or_unfinished_evidence(self):
+        run = self.add_run("completed")
+        for context in (None, {}, {"schema_version": True, "previous_run_id": None},
+                        {"schema_version": 2, "previous_run_id": None},
+                        {"schema_version": 1, "previous_run_id": True},
+                        {"schema_version": 1, "previous_run_id": run.id},
+                        {"schema_version": 1, "previous_run_id": run.id + 1},
+                        {"schema_version": 1, "previous_run_id": 0},
+                        {"schema_version": 1, "previous_run_id": None, "extra": 1}):
+            with self.subTest(context=context):
+                run.comparison_context = context
+                self.assertIsNone(serialize_external_run(run)["comparison_context"])
+        run.comparison_context = {"schema_version": 1, "previous_run_id": None}
+        self.assertEqual(serialize_external_run(run)["comparison_context"], run.comparison_context)
+        run.status = "running"
+        self.assertIsNone(serialize_external_run(run)["comparison_context"])
+
     def test_successful_evidence_and_changes_preserved_with_newer_failure_or_running(self):
         baseline = self.add_run("completed_with_warnings")
         self.db.add(ExternalCheckChange(organization_id=self.organization.id,

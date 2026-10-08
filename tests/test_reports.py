@@ -43,6 +43,37 @@ class CISEndpointSummaryTests(unittest.TestCase):
 
 
 class ExternalPostureReportTests(unittest.TestCase):
+    def test_saved_comparison_details_render_without_changing_legacy_reports(self):
+        from daedalus import reports
+        styles = {"small": getSampleStyleSheet()["Normal"]}
+        base = {"id": 20, "check_type": "dns", "status": "completed", "change_count": 0}
+
+        def labels(run):
+            story = []
+            reports._append_run_line(story, run, styles)
+            return [item.getPlainText() for item in story if hasattr(item, "getPlainText")]
+
+        self.assertEqual(len(labels(base)), 1)
+        baseline = labels({**base, "comparison_context": {"schema_version": 1, "previous_run_id": None}})
+        self.assertIn("baseline established", baseline[-1])
+        for check_type in ("dns", "web"):
+            comparison = labels({**base, "check_type": check_type,
+                "comparison_context": {"schema_version": 1, "previous_run_id": 10}})
+            self.assertIn("run #10", comparison[-1])
+            self.assertIn("0 recorded evidence", comparison[-1])
+            self.assertIn("not incident verdicts", comparison[-1])
+        for context in (None, {}, {"schema_version": True, "previous_run_id": 10},
+                        {"schema_version": 1, "previous_run_id": True},
+                        {"schema_version": 1, "previous_run_id": 20}):
+            with self.subTest(context=context):
+                self.assertIn("not recorded", labels({**base, "comparison_context": context})[-1])
+        for count in (None, True, -1, "0"):
+            self.assertIn("Unknown count", labels({**base, "change_count": count,
+                "comparison_context": {"schema_version": 1, "previous_run_id": 10}})[-1])
+        for check_type in ("web-active", "nikto"):
+            self.assertEqual(len(labels({**base, "check_type": check_type,
+                "comparison_context": {"schema_version": 1, "previous_run_id": 10}})), 1)
+
     def test_domain_history_renders_saved_evidence_and_qualification(self):
         from unittest.mock import patch
         from daedalus import reports
