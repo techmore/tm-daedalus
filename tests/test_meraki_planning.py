@@ -36,3 +36,24 @@ def test_details_projection_is_bounded_and_does_not_mutate_snapshot():
     assert projected['scenarios'][0]['additional_unmatched_models'] == 20
     assert len(plan['scenarios'][0]['unmatched']) == 120
     assert project_unifi_plan(None) is None
+
+
+def test_pdf_appends_planning_and_preserves_existing_pages():
+    import io
+    from pypdf import PdfReader
+    from daedalus.reports import build_meraki_security_pdf
+    snapshot = {'domain': 'bfs.org', 'meraki': {'organization': {'name': 'BFS'}, 'collected_at': '2026-10-07', 'devices': [{'model': 'MR44'}]}}
+    original = PdfReader(io.BytesIO(build_meraki_security_pdf(snapshot)))
+    snapshot['unifi_plan'] = build_unifi_plan(snapshot['meraki'])
+    enhanced = PdfReader(io.BytesIO(build_meraki_security_pdf(snapshot)))
+    assert len(enhanced.pages) > len(original.pages)
+    for i, page in enumerate(original.pages):
+        assert page.extract_text() == enhanced.pages[i].extract_text()
+        assert page.get_contents().get_data() == enhanced.pages[i].get_contents().get_data()
+    appended = '\n'.join(p.extract_text() for p in enhanced.pages[len(original.pages):])
+    assert 'UniFi comparison and purchase planning' in appended
+    assert '$208.00' in appended
+    assert '$307.00' in appended
+    links = [a.get_object()['/A']['/URI'] for page in enhanced.pages for a in page.get('/Annots', []) if a.get_object().get('/A', {}).get('/S') == '/URI']
+    assert 'https://store.ui.com/us/en/products/u7-pro' in links
+    assert 'https://store.ui.com/us/en/products/u7-pro-max' in links

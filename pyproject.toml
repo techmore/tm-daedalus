@@ -28,6 +28,7 @@ package = true
 
 [dependency-groups]
 dev = [
+  "pypdf>=6,<7",
   "pytest>=8.3",
   "pytest-subtests>=0.14",
 ]

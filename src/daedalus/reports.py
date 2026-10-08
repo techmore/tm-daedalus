@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import io
 import math
+import re
 from datetime import UTC, datetime
 from html import escape
 from typing import Any
+from urllib.parse import urlsplit
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -1070,6 +1072,46 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                                         f"{change.get('field') or ''}: {change.get('previous_status')} to {change.get('current_status')}", styles["MerakiSmall"]))
             for change in (comparison.get("coverage_changes") or [])[:100]:
                 story.append(_paragraph(f"{change.get('control')}: {change.get('previous_status')} to {change.get('current_status')}", styles["MerakiSmall"]))
+
+    plan = report_snapshot.get("unifi_plan")
+    if isinstance(plan, dict) and plan.get("schema_version") == 1:
+        story.append(PageBreak())
+        story.append(Paragraph("UniFi comparison and purchase planning", styles["MerakiSection"]))
+        story.append(_paragraph(f"USD prices and availability observed {plan.get('price_observed_on')}. "
+                                f"Inventory captured {plan.get('inventory_collected_at') or generated_at}.", styles["MerakiSmall"]))
+        for note in plan.get("assumptions", []):
+            story.append(_paragraph(note, styles["MerakiBody"]))
+
+        def money(cents: int) -> str:
+            return f"${cents / 100:,.2f}"
+
+        for index, scenario in enumerate(plan.get("scenarios", [])):
+            if index:
+                story.append(PageBreak())
+            story.append(_paragraph(scenario.get("name"), styles["MerakiSubsection"]))
+            qualifier = "" if scenario.get("complete_inventory_pricing") else " - partial inventory pricing"
+            story.append(_paragraph(f"Hardware subtotal: {money(scenario.get('hardware_subtotal_cents', 0))}{qualifier}", styles["MerakiBody"]))
+            rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in
+                     ("Meraki model / qty", "UniFi candidate", "Unit incl. surcharge", "Subtotal", "Availability observed")]]
+            for row in scenario.get("rows", []):
+                rows.append([_paragraph(f"{row.get('meraki_model')} / {row.get('quantity')}", styles["MerakiCell"]),
+                             _paragraph(row.get("candidate_model"), styles["MerakiCell"]),
+                             _paragraph(money(row.get("unit_with_surcharge_cents", 0)), styles["MerakiCell"]),
+                             _paragraph(money(row.get("subtotal_cents", 0)), styles["MerakiCell"]),
+                             _paragraph(row.get("availability_observed"), styles["MerakiCell"])])
+            story.append(_table(rows, [1.3 * inch, 1.6 * inch, 1.15 * inch, 1.15 * inch, 1.7 * inch]))
+            for row in scenario.get("rows", []):
+                story.append(_paragraph(f"{row.get('meraki_model')} / {row.get('candidate_model')}: {row.get('review')}", styles["MerakiSmall"]))
+                url = row.get("purchase_url") or ""
+                # Only the fixed vendor origin and product slug are linkable.
+                parsed = urlsplit(url)
+                if (parsed.scheme == "https" and parsed.netloc == "store.ui.com"
+                        and re.fullmatch(r"/us/en/products/[a-z0-9-]+", parsed.path)
+                        and not parsed.query and not parsed.fragment):
+                    story.append(Paragraph(f'<link href="{escape(url, quote=True)}" color="#464a34">'
+                                           f'{escape(url)}</link>', styles["MerakiSmall"]))
+            for row in scenario.get("unmatched", []):
+                story.append(_paragraph(f"{row.get('quantity')} x {row.get('meraki_model')}: candidate and price need review.", styles["MerakiSmall"]))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
