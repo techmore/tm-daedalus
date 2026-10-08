@@ -734,6 +734,13 @@ class NmapUIBridge:
 
     @contextmanager
     def _managed_restart_lock(self):
+        if sys.platform == "darwin":
+            try:
+                with self._managed_macos_restart_lock():
+                    yield
+            except OSError as exc:
+                raise RuntimeError("Managed macOS lifecycle verification failed; refusing to restart NmapUI.") from exc
+            return
         if sys.platform != "linux":
             yield
             return
@@ -758,6 +765,37 @@ class NmapUIBridge:
             yield
         finally:
             os.close(lock)
+
+    @contextmanager
+    def _managed_macos_restart_lock(self):
+        # Same path and ownership contract as the standalone macOS helper.
+        # The bridge kit intentionally runs without importing helper scripts.
+        import fcntl
+        root = Path.home().absolute()
+        support = root / "Library/Application Support/Daedalus"
+        current = support
+        while current.is_relative_to(root):
+            if current.is_symlink():
+                raise RuntimeError("Managed scanner directory cannot contain symbolic links.")
+            if current == root:
+                break
+            current = current.parent
+        info = support.stat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o022:
+            raise RuntimeError("Managed scanner directory must be owned and not writable by others.")
+        descriptor = os.open(support / NMAPUI_SYSTEMD_LOCK_FILE,
+                             os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1:
+                raise RuntimeError("Scanner lifecycle lock must be a private owned regular file.")
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise RuntimeError("A scanner lifecycle action is running; retry restart after it finishes.") from exc
+            yield
+        finally:
+            os.close(descriptor)
 
     def _restart_managed_nmapui(self) -> None:
         label = str(self.config.get("nmapui_service_label") or "")

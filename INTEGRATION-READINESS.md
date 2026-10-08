@@ -1,5 +1,12 @@
 # Integration readiness
 
+## October 8, 2026 — macOS scanner lifecycle coordination
+
+The macOS helper now holds a private, owned, nonblocking lifecycle lock throughout upgrade validation, preparation, admission claim, cutover, readiness and rollback. Local restart/uninstall/restore and the updated bridge's remote restart use the same lock path. Overlapping actions defer before service mutations. Status remains read-only. The persistent inode is retained after release; symbolic links, FIFOs, hard links, unexpected ownership/permissions and directories writable by other users are refused. Missing/unsafe remote installation state yields a bounded command failure.
+
+Tests exercise both directions of helper/bridge exclusion, a separate-process contender, exception release, readiness exclusion and unsafe paths. The final full suite passed 809 tests, one skip and 293 subtests; the engine archive remains SHA-256 48ab8f8166dfc17e107d0a37309c13b2441a0c3bc187be0a15ca175a20821d3e. This checkpoint is source validation pending deployment. This coordinates updated participants; an older installed bridge/helper does not acquire the new lock. The installed Mac engine and bridge have not been migrated in this checkpoint. Ordinary upgrades still require the engine admission API; no legacy bypass or report-template change was introduced. The prior managed Linux workflow [37720287895](https://github.com/techmore/tm-daedalus/actions/runs/37720287895), source 9068299, completed successfully in all three scenarios.
+
+
 ## October 8, 2026 — live certificate-history failure preservation
 
 Source `9068299` is active on SER8 Incus: verified 79-file archive `4ce70f2f5469ed688957889dbd0ce1d7aa47ff89a9ca415080562a8339b86994`, pre-deploy off-host backup `daedalus-data-20261008T025632Z.tar.gz`, internal/public readiness passed. A normal authenticated CSP DNS audit completed as run 74 at 02:57:45Z, completed_with_warnings, zero recorded changes. Certificate history remained unavailable/timeout, with no entries or newly-observed-certificate claim. The saved completion audit records manual source, duration and repeat-warning suppression. Read-only database validation confirmed zero inbox notices for this run. Private receipts: /data/codex-dns-ct-independent-live-20261008.json and /data/codex-dns-ct-history-receipt-20261008.json.

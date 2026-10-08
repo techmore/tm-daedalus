@@ -88,6 +88,22 @@ class ManagedScannerUpgradeTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_upgrade_defers_before_any_probe_or_staging_when_lifecycle_locked(self):
+        with macos_service.lifecycle_lock(self.root):
+            with self.assertRaisesRegex(RuntimeError, "lifecycle"):
+                upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.executor, self.prepare, lambda _: True)
+        self.assertEqual(self.executor_calls, [])
+        self.claim.assert_not_called()
+
+    def test_upgrade_holds_lifecycle_lock_through_readiness(self):
+        def ready(payload):
+            with self.assertRaisesRegex(RuntimeError, "lifecycle"):
+                macos_service.manage_services("restart", user_root=self.root, executor=self.executor)
+            return True
+        upgrade_service.upgrade_managed_scanner(self.bundle, self.root, self.executor, self.prepare, ready)
+        with macos_service.lifecycle_lock(self.root):
+            pass  # Successful cutover releases the lock.
+
     def test_maintenance_refusal_defers_without_service_changes(self):
         self.claim.side_effect = RuntimeError("Scanner maintenance could not be acquired")
         with self.assertRaisesRegex(RuntimeError, "maintenance"):

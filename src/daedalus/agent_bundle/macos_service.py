@@ -13,6 +13,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -21,6 +22,32 @@ NMAPUI_LABEL = "org.daedalus.nmapui"
 BRIDGE_LABEL = "org.daedalus.scanner-bridge"
 LAUNCHCTL = "/bin/launchctl"
 SAFE_LABEL = re.compile(r"org\.daedalus\.(?:nmapui|scanner-bridge)\Z")
+LIFECYCLE_LOCK_FILE = ".daedalus-scanner-services.lock"
+
+
+@contextmanager
+def lifecycle_lock(user_root: Path):
+    """Serialize lifecycle mutations without deleting the shared lock inode."""
+    import fcntl
+    root = Path(user_root).expanduser().absolute()
+    support = root / "Library/Application Support/Daedalus"
+    _check_managed_path(support, root)
+    info = support.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o022:
+        raise ValueError("Managed scanner directory must be owned and not writable by others")
+    descriptor = os.open(support / LIFECYCLE_LOCK_FILE,
+                         os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1:
+            raise ValueError("Scanner lifecycle lock must be a private owned regular file")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError("A scanner lifecycle action is running; retry after it finishes") from exc
+        yield
+    finally:
+        os.close(descriptor)
 
 
 def _absolute(path: str) -> str:
@@ -371,6 +398,13 @@ def manage_services(action: str, *, user_root: Path, executor=None) -> dict:
     """Operate only validated user LaunchAgents; retain all data and tokens."""
     if action not in {"status", "restart", "uninstall", "restore"}:
         raise ValueError("Unsupported managed service action")
+    if action == "status":
+        return _manage_services_locked(action, user_root=user_root, executor=executor)
+    with lifecycle_lock(user_root):
+        return _manage_services_locked(action, user_root=user_root, executor=executor)
+
+
+def _manage_services_locked(action: str, *, user_root: Path, executor=None) -> dict:
     executor = executor or subprocess.run
     descriptors = _restore_descriptors(user_root) if action == "restore" else managed_artifacts(user_root)
     if action == "uninstall" and descriptors:

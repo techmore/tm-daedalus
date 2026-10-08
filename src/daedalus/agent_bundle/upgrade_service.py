@@ -309,6 +309,11 @@ def _release_scanner_maintenance(nmapui_payload: dict, token: str) -> None:
 
 
 def upgrade_managed_scanner(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None) -> dict:
+    with macos_service.lifecycle_lock(user_root):
+        return _upgrade_managed_scanner_locked(bundle_path, user_root, executor, prepare_release, wait_ready)
+
+
+def _upgrade_managed_scanner_locked(bundle_path, user_root, executor=None, prepare_release=None, wait_ready=None) -> dict:
     """Upgrade exactly the two recognized, loaded managed LaunchAgents.
 
     Hook contract: ``prepare_release(files, user_root, kit_sha256)`` returns

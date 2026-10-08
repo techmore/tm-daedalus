@@ -377,6 +377,7 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         self.assertIn("cve_array", FORWARDED_EVENTS)
 
     def test_managed_nmapui_restart_runs_while_the_socket_is_offline(self):
+        (self.root / "Library/Application Support/Daedalus").mkdir(parents=True)
         bridge = NmapUIBridge(
             {
                 "agent_id": 7,
@@ -394,7 +395,7 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         bridge._request = Mock(return_value=response)
         bridge._send_command_result = Mock()
 
-        with patch("daedalus.agent.sys.platform", "darwin"), patch(
+        with patch("daedalus.agent.Path.home", return_value=self.root), patch("daedalus.agent.sys.platform", "darwin"), patch(
             "daedalus.agent.subprocess.run"
         ) as run:
             bridge._run_one_command()
