@@ -119,6 +119,7 @@ from daedalus.external_checks import (
 from daedalus.email_policy import analyze_email_auth
 from daedalus.credential_store import CredentialEncryptionError, decrypt_secret, encrypt_secret
 from daedalus.meraki_api import MerakiAPIError, MerakiClient, compare_meraki_snapshots
+from daedalus.meraki_cis8 import build_cis8_assessment, project_cis8_assessment
 from daedalus.meraki_history import compare_meraki_inventory
 from daedalus.meraki_topology import project_topology
 from daedalus.meraki_switch import project_switch_ports
@@ -1290,7 +1291,7 @@ def generate_report_job(report_job_id: int) -> None:
                 comparison.update({"baseline": not bool(previous_meraki), "previous_report_id": previous.id if previous_meraki else None,
                                    "coverage_change_count": len(comparison["coverage_changes"])})
             snapshot = {**snapshot, "meraki": meraki_snapshot, "meraki_comparison": comparison,
-                        "unifi_plan": build_unifi_plan(meraki_snapshot)}
+                        "unifi_plan": build_unifi_plan(meraki_snapshot), "meraki_cis8": build_cis8_assessment(meraki_snapshot)}
             with SessionLocal() as db:
                 job = db.get(ReportJob, report_job_id)
                 if job is not None:
@@ -5157,6 +5158,7 @@ def meraki_report_details(
         "wan_usage": [{"network_name": text_field(row, "network_name"), "status": text_field(row, "status", 40),
             "data": project_wan_usage(row.get("data"))}
             for row in (snapshot.get("wan_usage") or [])[:100] if isinstance(row, dict)],
+        "cis8_assessment": project_cis8_assessment((job.report_snapshot or {}).get("meraki_cis8")),
         "topology_graph": project_topology(snapshot) if type(snapshot.get("topology_detail_version")) is int and snapshot["topology_detail_version"] == 1 else None,
         "switch_ports": project_switch_ports(snapshot.get("switch_ports")),
         "wan_usage_additional_networks": max(0, len(snapshot.get("wan_usage") or []) - 100) if isinstance(snapshot.get("wan_usage"), list) else 0,

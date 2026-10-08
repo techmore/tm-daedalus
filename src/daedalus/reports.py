@@ -1297,6 +1297,26 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
                 if len(rows) > 1: story.append(_table(rows, [2.8 * inch, 2.8 * inch, 1.3 * inch]))
                 else: story.append(_paragraph("No managed-device relationships reported. Missing links do not establish disconnection.", styles["MerakiBody"]))
 
+    from daedalus.meraki_cis8 import project_cis8_assessment
+    cis8 = project_cis8_assessment(report_snapshot.get("meraki_cis8"))
+    if cis8 is not None:
+        story.append(PageBreak())
+        story.append(Paragraph("CIS Controls v8 evidence review", styles["MerakiSection"]))
+        story.append(_paragraph(cis8["scope"], styles["MerakiBody"]))
+        counts = cis8["summary"]
+        story.append(_paragraph(f"Partial evidence: {counts['partial']}; review observations: {counts['review']}; "
+            f"not assessed: {counts['not_assessed']}. All controls require human assessment.", styles["MerakiBody"]))
+        labels = {"partial": "Partial evidence", "review": "Review observations", "not_assessed": "Not assessed"}
+        for row in cis8["rows"]:
+            section = [
+                _paragraph(f"CIS {row['control_id']} - {row['title']}", styles["MerakiSubsection"]),
+                _paragraph(f"Status: {labels[row['status']]}. {row['observation']}", styles["MerakiBody"]),
+                _paragraph("Next review: " + row["next_action"], styles["MerakiBody"]),
+                _paragraph("Saved evidence references: " + ("; ".join(row["evidence_references"]) or "No assessed Meraki evidence for this control"), styles["MerakiSmall"]),
+            ]
+            story.append(KeepTogether(section))
+        story.append(Paragraph('<link href="https://www.cisecurity.org/controls/cis-controls-navigator/v8" color="#464a34">CIS Controls v8 reference</link>', styles["MerakiSmall"]))
+
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()
         width, _height = letter

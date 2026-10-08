@@ -337,6 +337,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             oversized_meraki["switch_ports"] = [{"device_serial": "SW_1", "status": "complete", "data": summarize_switch_ports([{"portId": str(i)} for i in range(70)])} for _ in range(22)]
             oversized_meraki["findings"] = [{"title": f"Finding {index}"} for index in range(101)]
             oversized_meraki["warnings"] = [f"Warning {index}" for index in range(101)]
+            from daedalus.meraki_cis8 import build_cis8_assessment
+            saved_snapshot["meraki_cis8"] = build_cis8_assessment(oversized_meraki)
+            saved_snapshot["meraki_cis8"]["private"] = "never-serialize"
             saved_snapshot["meraki"] = oversized_meraki
             saved_job.report_snapshot = saved_snapshot
             db.commit()
@@ -356,6 +359,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(len(bounded["warnings"]), 100)
         self.assertEqual(bounded["truncated"], {"networks": 1, "devices": 1, "controls": 1, "topology": 1, "switch_power": 1, "findings": 1, "warnings": 1})
         self.assertEqual(len(bounded["topology"]), 100)
+        self.assertEqual(len(bounded["cis8_assessment"]["rows"]), 18)
+        self.assertEqual(sum(bounded["cis8_assessment"]["summary"].values()), 18)
+        self.assertNotIn("never-serialize", str(bounded["cis8_assessment"]))
         self.assertEqual(len(bounded["topology_graph"]["networks"]), 20)
         self.assertEqual(bounded["topology_graph"]["additional_networks"], 81)
         self.assertLessEqual(len(bounded["controls"][0]["evidence_preview"]), 3000)

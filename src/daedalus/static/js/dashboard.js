@@ -1823,6 +1823,21 @@
     container.append(section);
   }
 
+  function renderMerakiCis8(container, evidence) {
+    if (!evidence || evidence.schema_version !== 1 || !Array.isArray(evidence.rows)) return;
+    var section = document.createElement("section");section.className = "meraki-detail-section";
+    var title = document.createElement("h4");title.textContent = "CIS Controls v8 evidence review";
+    var note = document.createElement("p");note.className = "muted";note.textContent = evidence.scope || "Saved network evidence requires human control assessment.";section.append(title, note);
+    var labels = {partial: "Partial evidence", review: "Review observations", not_assessed: "Not assessed"};
+    evidence.rows.slice(0, 18).forEach(function (row) {
+      var group = document.createElement("details"), summary = document.createElement("summary");summary.textContent = "CIS " + row.control_id + " · " + row.title + " · " + (labels[row.status] || "Not assessed");group.append(summary);
+      var observed = document.createElement("p");observed.textContent = row.observation || "Evidence unavailable.";
+      var action = document.createElement("p");action.textContent = "Next review: " + (row.next_action || "Review external control evidence.");group.append(observed, action);
+      var refs = document.createElement("p");refs.className = "muted";refs.textContent = "Saved evidence references: " + ((row.evidence_references || []).length ? row.evidence_references.join("; ") : "No assessed Meraki evidence for this control");group.append(refs);section.append(group);
+    });
+    var source = document.createElement("a");source.href = "https://www.cisecurity.org/controls/cis-controls-navigator/v8";source.target = "_blank";source.rel = "noopener noreferrer";source.textContent = "CIS Controls v8 reference (opens in a new tab)";section.append(source);container.append(section);
+  }
+
   function renderMerakiTopology(container, evidence) {
     if (!evidence || !Array.isArray(evidence.networks) || !evidence.networks.length) return;
     var section = document.createElement("section"); section.className = "meraki-detail-section";
@@ -2062,6 +2077,7 @@
       container.append(planning);
     }
 
+    renderMerakiCis8(container, details.cis8_assessment);
     renderMerakiTopology(container, details.topology_graph);
     renderMerakiRefreshPlan(container, details.unifi_plan && details.unifi_plan.refresh_plan);
     renderMerakiSwitchPorts(container, details.switch_ports);
@@ -2139,6 +2155,19 @@
       merakiDashboardDetailCache.set(reportId, cached);
     }
     return cached;
+  }
+
+  function renderMerakiCis8Overview(container, details) {
+    var evidence = details.cis8_assessment;
+    if (!evidence || evidence.schema_version !== 1 || !Array.isArray(evidence.rows)) return;
+    var section = document.createElement("section");section.className = "meraki-detail-section";
+    var heading = document.createElement("h3");heading.textContent = "CIS Controls evidence coverage";
+    var grid = document.createElement("div");grid.className = "audit-metric-grid";
+    [["Partial evidence", "partial"], ["Review observations", "review"], ["Not assessed", "not_assessed"]].forEach(function (label) {var card = document.createElement("article");card.className = "audit-policy-card";var title = document.createElement("strong");title.textContent = label[0];var count = document.createElement("p");var v = (evidence.summary || {})[label[1]];count.textContent = Number.isSafeInteger(v) && v >= 0 ? String(v) : "Unavailable";card.append(title, count);grid.append(card);});
+    var note = document.createElement("p");note.className = "muted";note.textContent = "Control-level network evidence index. All controls require human assessment; no safeguard compliance or overall score is asserted. Endpoint benchmark results are separate.";
+    section.append(heading, grid, note);
+    var action = document.createElement("button");action.type = "button";action.className = "button button-small button-quiet";action.textContent = "Review CIS control evidence";
+    action.addEventListener("click", function () {if (!Number.isSafeInteger(details.report_id)) return;var saved = document.querySelector('#tab-meraki details[data-report-id="' + details.report_id + '"]');if (!saved) return;saved.open = true;var summary = saved.querySelector("summary");if (summary) {summary.focus();summary.scrollIntoView({block: "center", behavior: "smooth"});}});section.append(action);container.append(section);
   }
 
   function renderMerakiTopologyOverview(container, details) {
@@ -2230,6 +2259,7 @@
       container.replaceChildren();
       if (!Array.isArray(details.findings)) {
         appendEmpty(container, "Saved observation evidence is unavailable for this report.");
+        renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
@@ -2239,6 +2269,7 @@
       var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
       if (!review.length) {
         appendEmpty(container, "No saved observations are labeled Review.");
+        renderMerakiCis8Overview(container, details);
         renderMerakiTopologyOverview(container, details);
         renderMerakiSwitchOverview(container, details);
         renderMerakiWanOverview(container, details);
@@ -2254,6 +2285,7 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
+      renderMerakiCis8Overview(container, details);
       renderMerakiTopologyOverview(container, details);
       renderMerakiSwitchOverview(container, details);
       renderMerakiWanOverview(container, details);
