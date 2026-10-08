@@ -7377,7 +7377,7 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
            "snapshot_byte_limit": MAX_SCANNER_RUN_PDF_BYTES, "truncated": False}
     if status != "completed" or run["group_metadata_conflict"]:
         raise HTTPException(status_code=422, detail="The NmapUI report requires a completed scanner run with consistent saved run metadata.")
-    from daedalus.scanner_report_template import standardized_scanner_run_html, HISTORICAL_TEMPLATE_SHA256, REPORT_ASSET_SHA256
+    from daedalus.scanner_report_template import standardized_scanner_run_html, HISTORICAL_TEMPLATE_SHA256, REPORT_ASSET_SHA256, PRINT_LAYOUT_VERSION, PRINT_LAYOUT_SHA256
     try:
         standardized_scanner_run_html(saved_events)
     except ValueError as exc:
@@ -7401,7 +7401,9 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
             "requested_by": user.email, "generated_at": iso_utc(now),
             "scanner_report_template": {"source_commit": "86e404fc16626c9c674d52663101600ad29de695",
                                         "stylesheet_sha256": HISTORICAL_TEMPLATE_SHA256,
-                                        "asset_sha256": dict(REPORT_ASSET_SHA256)},
+                                        "asset_sha256": dict(REPORT_ASSET_SHA256),
+                                        "print_layout_version": PRINT_LAYOUT_VERSION,
+                                        "print_layout_sha256": PRINT_LAYOUT_SHA256},
             "scanner": {"name": agent.name, "agent_id": agent.id, "source_job_id": str(source_job_id),
                         "run": run, "events": saved_events, "payload": [],
                         "changes_since_previous": changes_since_previous}})
@@ -7410,7 +7412,8 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
     job.file_name = f"daedalus-scanner-{agent.id}-run-{source_job_id}-{job.id}.pdf"
     audit(db, organization.id, user.id, "report.requested", {"report_id": job.id, "report_type": job.report_type,
         "source_job_id": str(source_job_id), "agent_id": agent.id, "event_count": len(saved_events), "snapshot_payload_bytes": payload_bytes,
-        "template_sha256": HISTORICAL_TEMPLATE_SHA256, "template_asset_sha256": dict(REPORT_ASSET_SHA256)})
+        "template_sha256": HISTORICAL_TEMPLATE_SHA256, "template_asset_sha256": dict(REPORT_ASSET_SHA256),
+        "print_layout_version": PRINT_LAYOUT_VERSION, "print_layout_sha256": PRINT_LAYOUT_SHA256})
     db.commit()
     db.refresh(job)
     background_tasks.add_task(generate_report_job, job.id)

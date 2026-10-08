@@ -270,3 +270,48 @@ def test_changes_panel_matches_nmapui_markup_and_omits_empty_changes():
     assert changes_since_previous_html({"counts": zero}) == ""
     assert changes_since_previous_html(None) == ""
     assert "&lt;b&gt;" in changes_since_previous_html({"baseline": "<b>", "counts": {**zero, "hosts_added": 1}})
+
+
+def test_print_layout_requires_saved_opt_in_and_preserves_body():
+    from lxml import etree
+    from daedalus.scanner_report_template import (
+        scanner_print_layout_html, PRINT_LAYOUT_VERSION, PRINT_LAYOUT_SHA256,
+    )
+    html = standardized_scanner_html(XML)
+    for legacy in (None, {}, {"stylesheet_sha256": "historical"}):
+        assert scanner_print_layout_html(html, legacy) == html
+    enhanced = scanner_print_layout_html(html, {
+        "print_layout_version": PRINT_LAYOUT_VERSION,
+        "print_layout_sha256": PRINT_LAYOUT_SHA256,
+    })
+    assert enhanced.count('id="nmapui-print-layout-v1"') == 1
+    assert etree.tostring(etree.HTML(enhanced).find("body")) == etree.tostring(etree.HTML(html).find("body"))
+    assert '#web-services td:last-child' in enhanced
+
+
+@pytest.mark.parametrize("provenance", [
+    [], "invalid", {"print_layout_version": True},
+    {"print_layout_version": 2, "print_layout_sha256": "wrong"},
+    {"print_layout_version": 1}, {"print_layout_sha256": "wrong"},
+])
+def test_unknown_print_layout_is_never_silently_replaced(provenance):
+    from daedalus.scanner_report_template import scanner_print_layout_html
+    with pytest.raises(ValueError, match="print layout"):
+        scanner_print_layout_html(standardized_scanner_html(XML), provenance)
+
+
+def test_enhanced_pdf_renders_original_evidence_with_pinned_layout():
+    from daedalus.scanner_report_template import (
+        render_standardized_scanner_pdf, HISTORICAL_TEMPLATE_SHA256,
+        REPORT_ASSET_SHA256, PRINT_LAYOUT_VERSION, PRINT_LAYOUT_SHA256,
+    )
+    pdf = render_standardized_scanner_pdf({
+        "scanner_report_template": {
+            "stylesheet_sha256": HISTORICAL_TEMPLATE_SHA256,
+            "asset_sha256": dict(REPORT_ASSET_SHA256),
+            "print_layout_version": PRINT_LAYOUT_VERSION,
+            "print_layout_sha256": PRINT_LAYOUT_SHA256,
+        },
+        "scanner": {"events": xml_events()},
+    })
+    assert pdf.startswith(b"%PDF-")

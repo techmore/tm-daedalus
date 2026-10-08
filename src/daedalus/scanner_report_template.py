@@ -25,6 +25,46 @@ REPORT_ASSET_SHA256 = {
     "fonts/instrument-serif-latin-400-normal.woff2": "5eb09b5ac0e28b67c2f041c8ba6d244604ca0c0980d65912ab2d47fed84ddc31",
 }
 
+# Print-only enhancement: retain the original stylesheet, body and evidence.
+# Saved jobs without these fields keep the historical rendering behavior.
+PRINT_LAYOUT_VERSION = 1
+PRINT_LAYOUT_CSS = """@media print {
+  html, body { min-height: 0 !important; height: auto !important; }
+  body > div.max-w-7xl { padding-top: 20px !important; padding-bottom: 12px !important; }
+  pre, code { white-space: pre-wrap !important; overflow-wrap: anywhere; word-break: break-word; }
+  pre { overflow: visible !important; }
+  table { table-layout: auto; width: 100%; font-size: 9pt !important; line-height: 1.3 !important; break-inside: auto !important; page-break-inside: auto !important; }
+  th, td { overflow-wrap: normal; word-break: normal; vertical-align: top; padding: 1.5pt 2pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  table a, table .font-mono { white-space: normal; }
+  #table-services th { font-size: 8pt; }
+  #table-services td:last-child, #table-product-versions td:last-child,
+  #web-services td:last-child, td[colspan] { overflow-wrap: anywhere; }
+  #table-services th:last-child, #table-services td:last-child { width: 18%; }
+  #table-services td:nth-child(5), #table-services td:nth-child(6) { overflow-wrap: anywhere; }
+  tr:has(+ tr > td[colspan]) { break-after: avoid; page-break-after: avoid; }
+  .progress-segment[style*="width:0%;"] { display: none !important; }
+  footer { margin-top: 12px !important; padding-top: 12px !important; padding-bottom: 12px !important; break-inside: avoid; }
+}"""
+PRINT_LAYOUT_SHA256 = hashlib.sha256(PRINT_LAYOUT_CSS.encode("utf-8")).hexdigest()
+
+
+def scanner_print_layout_html(html: str, provenance: dict | None) -> str:
+    """Only opt in when a saved job identifies this exact print enhancement."""
+    if provenance is not None and not isinstance(provenance, dict):
+        raise ValueError("Saved scanner print layout provenance must be an object.")
+    if provenance is None or ("print_layout_version" not in provenance and "print_layout_sha256" not in provenance):
+        return html
+    if (type(provenance.get("print_layout_version")) is not int
+            or provenance["print_layout_version"] != PRINT_LAYOUT_VERSION
+            or provenance.get("print_layout_sha256") != PRINT_LAYOUT_SHA256):
+        raise ValueError("Saved scanner print layout is unavailable or differs; no replacement layout was generated.")
+    style = '<style id="nmapui-print-layout-v1">' + PRINT_LAYOUT_CSS + '</style>'
+    if html.count('</head>') != 1:
+        raise ValueError("Scanner report head is unavailable for print enhancement.")
+    return html.replace('</head>', style + '</head>', 1)
+
 
 def _report_asset_bytes(name: str) -> bytes:
     try:
@@ -311,6 +351,7 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
         html, inserted = re.subn(r"(<body[^>]*>)", lambda m: m.group(1) + panel, html, count=1)
         if not inserted:
             raise ValueError("The standardized report body could not receive the change summary.")
+    html = scanner_print_layout_html(html, provenance)
     with tempfile.TemporaryDirectory(prefix="daedalus-scanner-pdf-") as directory:
         path = Path(directory) / "report.html"
         path.write_text(html, encoding="utf-8")
