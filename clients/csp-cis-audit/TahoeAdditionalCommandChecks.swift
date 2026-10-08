@@ -38,6 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
+        "os_system_wide_applications_configure",
         "os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure",
         "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "pwpolicy_alpha_numeric_enforce", "pwpolicy_special_character_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_home_folders_secure", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
@@ -100,6 +101,28 @@ extension MacOSChecks {
         }
         let rule = check.ruleID ?? ""
         switch rule {
+        case "os_system_wide_applications_configure":
+            // Match the pinned /Applications directory criterion without a
+            // shell, following symlinks, collecting names or changing modes.
+            // Fixed markers verify an actual directory root and all matches;
+            // stderr/nonzero/timeout evidence never becomes a clean pass.
+            let evidence = command("/usr/bin/find", ["-P", "/Applications",
+                "(", "-path", "/Applications", "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", ")",
+                "-o", "(", "-iname", "*.app", "-type", "d", "-perm", "-2", "-exec", "/usr/bin/printf", "world-writable-application\n", ";", ")"])
+            guard usable(evidence), evidence.output.utf8.count <= 65536,
+                  evidence.output.hasSuffix("\n") else {
+                return result("manual", "Application-directory traversal was unavailable, unsuccessful or incomplete. Application names were not collected into the report.")
+            }
+            let lines = evidence.output.components(separatedBy: "\n").dropLast()
+            guard lines.filter({ $0 == "root-directory" }).count == 1,
+                  lines.allSatisfy({ $0 == "root-directory" || $0 == "world-writable-application" }) else {
+                return result("manual", "Application-directory evidence lacked a unique directory root or contained unsupported output. No clean permission result was inferred.")
+            }
+            let mismatches = lines.filter { $0 == "world-writable-application" }.count
+            return result(mismatches == 0 ? "pass" : "fail", mismatches == 0
+                ? "Completed bounded traversal found no world-writable application bundle directories under /Applications. Symlinks were not followed."
+                : "Completed bounded traversal found \(mismatches) world-writable application bundle directory match(es) under /Applications. Names remain local; no permissions were changed.")
+
         case "os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure":
             // Version mode never executes a command or asks for a password.
             // Full effective policy is available only when the caller already

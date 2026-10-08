@@ -25,6 +25,7 @@ SOURCE_URL = "https://github.com/usnistgov/macos_security/tree/" + SOURCE_COMMIT
 # bounded audit filesystem/ACL evidence checks.
 # All other rules remain manual until a dedicated local implementation exists.
 SUPPORTED_RULE_IDS = {
+    "os_system_wide_applications_configure",
     "os_sudo_timeout_configure",
     "os_sudo_log_enforce",
     "os_sudoers_timestamp_type_configure",

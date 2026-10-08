@@ -5,6 +5,44 @@ import CryptoKit
 @testable import CSP_CIS_Audit
 
 struct TahoeAdditionalCommandChecksTests {
+    @Test func applicationPermissionsUseOnlyFixedReadOnlyMarkers() {
+        let rule = "os_system_wide_applications_configure"
+        let check = CISCheck(id: rule, category: "macos", description: "Application permissions", ruleID: rule)
+        for (output, status) in [("root-directory\n", "pass"),
+                                  ("root-directory\nworld-writable-application\n", "fail"),
+                                  ("root-directory\nworld-writable-application\nworld-writable-application\n", "fail")] {
+            let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { path, arguments in
+                #expect(path == "/usr/bin/find")
+                #expect(arguments == ["-P", "/Applications", "(", "-path", "/Applications", "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", ")", "-o", "(", "-iname", "*.app", "-type", "d", "-perm", "-2", "-exec", "/usr/bin/printf", "world-writable-application\n", ";", ")"])
+                return .init(output: output)
+            }, readPreference: { _, _ in nil })
+            #expect(result.status == status)
+            #expect(!result.details.contains("root-directory"))
+            #expect(!result.details.contains(".app"))
+        }
+    }
+
+    @Test func applicationPermissionsRequireCompleteTypedTraversal() {
+        let rule = "os_system_wide_applications_configure"
+        let check = CISCheck(id: rule, category: "macos", description: "Application permissions", ruleID: rule)
+        for evidence: MacOSChecks.CommandEvidence in [.init(output: ""), .init(output: "root-directory"),
+            .init(output: "world-writable-application\n"), .init(output: "root-directory\nroot-directory\n"),
+            .init(output: "root-directory\n\n"), .init(output: "root-directory\nPrivateApplication.app\n"),
+            .init(output: "root-directory\n\0\n"), .init(output: String(repeating: "x", count: 65537)),
+            .init(output: "root-directory\n", error: "private/path: permission denied"),
+            .init(output: "root-directory\n", exitCode: 1),
+            .init(output: "root-directory\n", unavailable: "timed out")] {
+            let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { _, _ in evidence }, readPreference: { _, _ in nil })
+            #expect(result.status == "manual")
+            #expect(!result.details.contains("PrivateApplication"))
+            #expect(!result.details.contains("private/path"))
+        }
+        let unsupported = MacOSChecks.runTahoe(check: check, osMajorVersion: 27, command: { _, _ in
+            Issue.record("Unsupported OS must not run the filesystem check"); return .init()
+        }, readPreference: { _, _ in nil })
+        #expect(unsupported.status == "manual")
+    }
+
     @Test func effectiveSudoPolicyUsesVersionOnlyAndKeepsRawPolicyLocal() {
         let rules = ["os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure"]
         let output = "Sudo version 1.9.17p2\nAuthentication timestamp timeout: 0.0 minutes\nType of authentication timestamp record: tty\nLog when a command is allowed by sudoers\nPrivate fixture policy metadata\n"
@@ -968,6 +1006,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_system_wide_applications_configure": ("/usr/bin/find", ["-P", "/Applications", "(", "-path", "/Applications", "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", ")", "-o", "(", "-iname", "*.app", "-type", "d", "-perm", "-2", "-exec", "/usr/bin/printf", "world-writable-application\n", ";", ")"]),
             "os_sudo_timeout_configure": ("/usr/bin/sudo", ["-V"]),
             "os_sudo_log_enforce": ("/usr/bin/sudo", ["-V"]),
             "os_sudoers_timestamp_type_configure": ("/usr/bin/sudo", ["-V"]),
