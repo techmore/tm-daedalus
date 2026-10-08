@@ -1,5 +1,17 @@
 # Integration readiness
 
+## October 8, 2026 — physical Mac scan upload, PDF pipeline and remaining defects
+
+The migrated physical Mac (agent 2) ran the existing local Socket.IO workflow against its own loopback address without changing scanner settings or approved remote scope. Discovery run 6185933e-0956-4fa7-bba6-4abe0c82a09f completed with zero hosts; direct Nmap discovery confirmed the same outcome. Its 10 events and empty results are retained on production. A normal PDF request returned 422 because original XML was unavailable; no substitute report was created.
+
+After preserving the normal five-minute cooldown, run 7bf5f531-3d89-4169-ba0f-3e0325254728 used the existing per-run skip_host_discovery option. It completed with one host and 20 open TCP ports. Production saved 19 events, original Nmap XML, service results and the completed status. Native accessibility and an actual screenshot showed Active: scan 127.0.0.1 at 60%. The subsequent native completion/history review could not run because the Mac locked; no claim of that review is made. Normal hosted PDF request 43 completed: 281,656 bytes, five letter pages, with request/generated audit records (the existing Drive integration also recorded its saved audit).
+
+All five actual PDF pages were rendered and reviewed. Layout acceptance failed: long command text and the zero-down progress label clip, Open Services columns are crowded and long CPE values clip, and the final page is mostly empty. No stylesheet, font or template asset was changed. This is successful scan/upload/PDF pipeline evidence, not approval of the current print layout or the unidentified historical standardized baseline. Loopback evidence does not close broader VLAN/subnet/fleet validation.
+
+Another real gap was observed: native progress reaches 60%, while hosted source job-status evidence contains only initial running and terminal completed events. build_event_helpers.update_job_progress currently calls the raw status emitter instead of its grouped source-envelope emitter. This identifies the next implementation work: retain intermediate grouped progress without accepting raw browser events as evidence. Private receipts: validation/mac-loopback-scan-20261008/ and /data/codex-mac-loopback-20261008/.
+
+Installed Linux CI 37724785335 at c964cbf passed all three scenarios. Backend 37724890524 at ae651e6 passed the unchanged implementation plus evidence notes; the superseded backend 37724785343 was cancelled, not passed.
+
 ## October 8, 2026 — connection/scope guidance deployed to SER8
 
 SER8 Incus activated source c964cbf3c5c8f344de88da396a1e2efb4d171e08, verified 79-file release SHA-256 c260ef013755b66a3dffb51ba3fa65a67e7fdb58fd5976a1b0b0e9306680deed. Verified off-host backup daedalus-data-20261008T035239Z.tar.gz preceded activation; internal/public health passed. Normal authenticated dashboard HTTP 200 identifies physical Mac agent 2 as connected/ready, detects 192.168.222.0/24, retains approved 10.20.0.0/24 and reports connection_scope outside. Both served assets match deployed source bytes and use revision daedalus-20261008-153. Private receipt: /data/codex-scanner-connection-scope-20261008.json. This is API/asset acceptance; rendered desktop/mobile acceptance and fresh network scan validation remain open. Backend CI 37724785343 and installed Linux CI 37724785335 were in progress at inspection.
