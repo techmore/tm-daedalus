@@ -686,6 +686,9 @@ assert.equal(host.children.at(-1),'Latest result malformed');
 renderSavedScannerAssessment(host,{run:{status:'completed',last_occurred_at:'saved'},observations:{host_count:1,open_port_count:0,unknown_port_state_count:2,collected_at:'collected',covered_targets:null}});
 assert.equal(host.children[2].children[1].state,'neutral');assert.equal(host.children[2].children[2].state,'attention');
 assert.match(host.children[3].textContent,/coverage was not explicitly reported/);assert.match(host.children[3].textContent,/do not establish coverage/);
+renderSavedScannerAssessment(host,{run:{status:'completed'},observations:{host_count:2,open_port_count:1,unknown_port_state_count:0,covered_targets:['127.0.0.1/32'],additional_covered_targets:4,xml_coverage_host_count:1,xml_scanned_port_counts:{tcp:1000,udp:NaN,sctp:'unsafe'}}});
+assert.equal(host.children[2].children[3].value,'1/2');assert.equal(host.children[2].children[3].state,'attention');
+assert.match(host.children[3].textContent,/TCP 1,000/);assert.match(host.children[3].textContent,/4 more targets/);assert.doesNotMatch(host.children[3].textContent,/NaN|unsafe/);
 renderSavedScannerAssessment(host,{run:null});assert.equal(host.children.length,2);
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)

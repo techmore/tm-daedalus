@@ -503,3 +503,20 @@ class ScannerComparisonHistoryTests(unittest.TestCase):
         self.assertEqual(response["current_run"]["xml_coverage"], [])
         self.assertFalse(response["coverage"]["comparable"])
         self.assertEqual(response["counts"]["confirmed_removed_ports"], 0)
+
+    def test_xml_coverage_preserves_independent_successful_command_provenance(self):
+        from test_scanner_xml_coverage import chunks
+        self.setup_scanner()
+        for index in range(2):
+            if index:
+                self.job_id = str(uuid4())
+            command = self.successful_single_ip_command("127.0.0.1")
+            self.send(self.event("scan_xml_chunk", chunks()[0]["payload"], 1 + index * 3))
+            self.send(self.event("deep_scan_results", [{"ip":"127.0.0.1", "ports":[
+                {"port":22,"protocol":"tcp","state":"open"}]}], 2 + index * 3))
+            self.send(self.event("job_status", self.completed_job_payload("127.0.0.1", command), 3 + index * 3))
+        comparison = self.history().json()["comparisons"][0]["comparison"]
+        self.assertTrue(comparison["coverage"]["comparable"])
+        for field in ("previous_run", "current_run"):
+            self.assertEqual(comparison[field]["covered_targets_source"], "successful_daedalus_single_ip_command")
+            self.assertEqual(len(comparison[field]["xml_coverage"]), 1)

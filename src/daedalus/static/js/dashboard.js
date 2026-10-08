@@ -412,9 +412,22 @@
       makeAuditMetric("Open ports observed", String(observation.open_port_count), "Explicitly open; requires contextual review", "neutral"),
       makeAuditMetric("Unknown port states", String(observation.unknown_port_state_count), "No state reported for these observations", observation.unknown_port_state_count ? "attention" : "neutral")
     );
+    var evidenceHosts = observation.xml_coverage_host_count;
+    if (Number.isInteger(evidenceHosts) && evidenceHosts >= 0 && evidenceHosts <= observation.host_count) {
+      metrics.append(makeAuditMetric("Coverage evidence", evidenceHosts + "/" + observation.host_count,
+        "Observed hosts whose original scan evidence identifies the target and tested ports",
+        evidenceHosts > 0 && evidenceHosts === observation.host_count ? "neutral" : "attention"));
+    }
+    var tested = [];
+    ["tcp", "udp", "sctp"].forEach(function (protocol) {
+      var count = observation.xml_scanned_port_counts && observation.xml_scanned_port_counts[protocol];
+      if (Number.isSafeInteger(count) && count > 0) tested.push(protocol.toUpperCase() + " " + count.toLocaleString("en-US"));
+    });
     var note = document.createElement("p"); note.className = "check-scope-note";
     note.textContent = "Results collected " + dateLabel(observation.collected_at) + ". " +
-      (Array.isArray(observation.covered_targets) ? "Reported targets: " + observation.covered_targets.join(", ") + ". " : "Target coverage was not explicitly reported. ") +
+      (Array.isArray(observation.covered_targets) ? "Targets in saved coverage evidence: " + observation.covered_targets.join(", ") +
+        (Number.isInteger(observation.additional_covered_targets) && observation.additional_covered_targets > 0 ? " (" + observation.additional_covered_targets + " more targets in the saved run)" : "") + ". " : "Target coverage was not explicitly reported. ") +
+      (tested.length ? "Ports tested across hosts with matching original evidence: " + tested.join(" · ") + ". " : "") +
       "These observations do not establish coverage of every approved range or confirm vulnerabilities.";
     host.append(metrics, note);
   }

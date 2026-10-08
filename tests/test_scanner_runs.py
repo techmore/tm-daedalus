@@ -116,6 +116,50 @@ class ScannerRunTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.client.get(path, headers=self.headers).status_code, 404)
 
+    def test_assessment_uses_xml_proof_and_clears_it_for_later_incompatible_result(self):
+        from test_scanner_xml_coverage import chunks
+        self.setup_scanner()
+        xml = self.envelope("scan_xml_chunk", chunks()[0]["payload"])
+        xml["occurred_at"] = "2026-10-08T00:00:01Z"
+        self.send(xml)
+        result = self.envelope("deep_scan_results", [{"ip":"127.0.0.1", "ports":[
+            {"port":22,"protocol":"tcp","state":"open"}]}])
+        result["occurred_at"] = "2026-10-08T00:00:02Z"
+        self.send(result)
+        path = f"/api/agents/{self.agent}/assessment"
+        data = self.client.get(path).json()["observations"]
+        self.assertEqual(data["covered_targets"], ["127.0.0.1/32"])
+        self.assertEqual(data["xml_coverage_host_count"], 1)
+        self.assertEqual(data["xml_scanned_port_counts"], {"tcp":3})
+        self.assertFalse(data["coverage_complete"])
+        replacement = self.envelope("deep_scan_results", [{"ip":"127.0.0.1", "ports":[]}])
+        replacement["occurred_at"] = "2026-10-08T00:00:03Z"
+        self.send(replacement)
+        latest = self.client.get(path).json()["observations"]
+        self.assertEqual(latest["xml_coverage_host_count"], 0)
+        self.assertEqual(latest["xml_scanned_port_counts"], {})
+        self.assertIsNone(latest["covered_targets"])
+
+    def test_assessment_summarizes_201_hosts_and_bounds_target_preview(self):
+        import ipaddress
+        self.setup_scanner()
+        with self.session_factory() as db:
+            agent = db.get(server.Agent, self.agent)
+            now = server.utcnow()
+            for index in range(201):
+                address = str(ipaddress.ip_address("192.168.1.1") + index)
+                db.add(ScanEvent(organization_id=agent.organization_id, agent_id=agent.id,
+                    source_job_id=self.job_id, source_job_type="scan", event_name="deep_scan_results",
+                    occurred_at=now, created_at=now, payload={"hosts":[{"ip":address,"ports":[]}],
+                        "covered_targets":[address]}))
+            db.commit()
+        data = self.client.get(f"/api/agents/{self.agent}/assessment").json()["observations"]
+        self.assertEqual(data["host_count"], 201)
+        self.assertEqual(data["result_event_count"], 201)
+        self.assertEqual(len(data["covered_targets"]), 20)
+        self.assertEqual(data["additional_covered_targets"], 181)
+        self.assertEqual(data["xml_coverage_host_count"], 0)
+
     def test_latest_assessment_keeps_observations_separate_from_completion(self):
         self.setup_scanner()
         path = f"/api/agents/{self.agent}/assessment"

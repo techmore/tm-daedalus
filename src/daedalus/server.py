@@ -6901,7 +6901,7 @@ def scanner_client_report_download(agent_id: int, report_id: int,
 
 @app.get("/api/agents/{agent_id}/assessment")
 def scanner_assessment(agent_id: int, request: Request, db: Session = Depends(get_db)):
-    from daedalus.scanner_comparison import normalize_snapshot
+    from daedalus.scanner_comparison import normalize_snapshot, MAX_HOSTS, MAX_PORTS
     agent = scoped_scanner(request, db, agent_id)
     occurred = func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at)
     job_id = db.scalar(select(ScanEvent.source_job_id).where(
@@ -6918,15 +6918,19 @@ def scanner_assessment(agent_id: int, request: Request, db: Session = Depends(ge
     events = db.scalars(select(ScanEvent).options(defer(ScanEvent.payload)).where(
         ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
         ScanEvent.source_job_id == job_id, ScanEvent.event_name == "deep_scan_results",
-    ).order_by(occurred.asc(), ScanEvent.id.asc()).limit(201)).all()
+        ScanEvent.id <= run["snapshot_event_id"],
+    ).order_by(occurred.asc(), ScanEvent.id.asc()).limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
     if not events:
         response["reason"] = "Latest run has no saved detailed results."
         return response
-    if len(events) > 200:
+    if len(events) > MAX_SCANNER_COMPARISON_EVENTS:
         response["reason"] = "Detailed results exceed the summary event limit; review the saved run."
         return response
     snapshot = {"hosts": {}, "covered_targets": []}
     total_bytes = 0
+    xml_coverage = load_scanner_xml_coverage(db, agent, run, byte_limit=8 * 1024 * 1024)
+    final_proofs = {}
+    retained_ports = 0
     for event in events:
         if event.artifact_size_bytes and total_bytes + event.artifact_size_bytes > 8 * 1024 * 1024:
             response["reason"] = "Latest detailed results exceed the summary size limit; review the saved artifact."
@@ -6943,7 +6947,17 @@ def scanner_assessment(agent_id: int, request: Request, db: Session = Depends(ge
             return response
         # Each host result is a snapshot. A later result replaces that host's
         # earlier ports rather than retaining ports it no longer reported.
+        proofs = apply_scanner_xml_coverage(observed, xml_coverage, event)
+        for address in observed["hosts"]:
+            final_proofs.pop(address, None)
+        final_proofs.update({proof["host"]: proof for proof in proofs})
+        for address, host in observed["hosts"].items():
+            retained_ports -= len(snapshot["hosts"].get(address, {}).get("ports", {}))
+            retained_ports += len(host["ports"])
         snapshot["hosts"].update(observed["hosts"])
+        if len(snapshot["hosts"]) > MAX_HOSTS or retained_ports > MAX_PORTS:
+            response["reason"] = "Detailed results exceed the summary host/port limits; review the saved run."
+            return response
         if observed["covered_targets"] is None:
             snapshot["covered_targets"] = None
         elif snapshot["covered_targets"] is not None:
@@ -6954,7 +6968,13 @@ def scanner_assessment(agent_id: int, request: Request, db: Session = Depends(ge
         "host_count": len(snapshot["hosts"]),
         "open_port_count": sum(port["state"] == "open" for port in ports),
         "unknown_port_state_count": sum(port["state"] is None for port in ports),
-        "covered_targets": snapshot["covered_targets"],
+        "covered_targets": snapshot["covered_targets"][:20] if snapshot["covered_targets"] is not None else None,
+        "additional_covered_targets": max(0, len(snapshot["covered_targets"] or []) - 20),
+        "xml_coverage_host_count": len(final_proofs),
+        "xml_scanned_port_counts": {protocol: sum(proof["scanned_port_count"] for proof in final_proofs.values()
+            if proof["protocol"] == protocol) for protocol in sorted({proof["protocol"] for proof in final_proofs.values()})},
+        "xml_coverage": list(final_proofs.values())[:20],
+        "additional_xml_coverage_hosts": max(0, len(final_proofs) - 20),
         "result_event_id": event.id, "result_event_count": len(events),
         "collected_at": iso_utc(event.occurred_at or event.created_at),
         "coverage_complete": False,
@@ -7053,6 +7073,53 @@ def trusted_single_ip_scan_scope(db: Session, agent: Agent, summary: dict[str, A
 MAX_SCANNER_COMPARISON_EVENTS = 10000
 
 
+def load_scanner_xml_coverage(db: Session, agent: Agent, summary: dict, *, byte_limit: int = 64 * 1024 * 1024) -> dict:
+    from daedalus.scanner_xml_coverage import coverage_from_xml_events
+    xml_rows = db.scalars(select(ScanEvent).options(defer(ScanEvent.payload)).where(
+        ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
+        ScanEvent.source_job_id == summary["source_job_id"], ScanEvent.event_name == "scan_xml_chunk",
+        ScanEvent.id <= summary["snapshot_event_id"]).limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
+    xml_events, xml_bytes = [], 0
+    xml_coverage = {}
+    if len(xml_rows) <= MAX_SCANNER_COMPARISON_EVENTS:
+        try:
+            for row in xml_rows:
+                if row.artifact_size_bytes and xml_bytes + row.artifact_size_bytes > byte_limit:
+                    break
+                payload = load_scanner_event_payload(row)
+                xml_bytes += len(json.dumps(payload).encode("utf-8"))
+                if xml_bytes > byte_limit:
+                    break
+                xml_events.append({"id": row.id, "event_name": row.event_name, "payload": payload,
+                    "occurred_at": iso_utc(row.occurred_at or row.created_at)})
+            else:
+                xml_coverage = coverage_from_xml_events(xml_events)
+        except (ValueError, TypeError):
+            pass  # XML coverage remains unknown; result observations remain available.
+    return xml_coverage
+
+
+def apply_scanner_xml_coverage(observed: dict, evidence: dict, event: ScanEvent) -> list[dict]:
+    from daedalus.scanner_xml_coverage import matches_observation
+    covered_addresses, facts = [], []
+    for address, host in observed["hosts"].items():
+        proof = evidence.get(address)
+        if proof:
+            host["ports_complete"] = False
+        if (proof and proof["latest_xml_occurred_at"]
+                and proof["latest_xml_occurred_at"] <= iso_utc(event.occurred_at or event.created_at)
+                and matches_observation(proof, host)):
+            host["scanned_ports"] = {proof["protocol"]: proof["ranges"]}
+            covered_addresses.append(proof["target"])
+            facts.append({"host": address, "xml_sha256": proof["xml_sha256"],
+                "source_event_ids": proof["source_event_ids"], "result_event_id": event.id,
+                "protocol": proof["protocol"], "scan_type": proof["scan_type"],
+                "scanned_port_count": proof["scanned_port_count"]})
+    if observed["covered_targets"] is None and covered_addresses and len(covered_addresses) == len(observed["hosts"]):
+        observed["covered_targets"] = sorted(set(covered_addresses))
+    return facts
+
+
 def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID, previous_run_id: UUID) -> dict[str, Any]:
     from daedalus.scanner_comparison import normalize_snapshot, compare_snapshots, MAX_HOSTS, MAX_PORTS
     summaries = [scanner_run_summary(db, agent, str(job_id)) for job_id in (previous_run_id, source_job_id)]
@@ -7066,28 +7133,7 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
             ScanEvent.id <= summary["snapshot_event_id"])
             .order_by(func.coalesce(ScanEvent.occurred_at, ScanEvent.created_at).desc(), ScanEvent.id.desc())
             .limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
-        from daedalus.scanner_xml_coverage import coverage_from_xml_events, matches_observation
-        xml_rows = db.scalars(select(ScanEvent).options(defer(ScanEvent.payload)).where(
-            ScanEvent.organization_id == agent.organization_id, ScanEvent.agent_id == agent.id,
-            ScanEvent.source_job_id == summary["source_job_id"], ScanEvent.event_name == "scan_xml_chunk",
-            ScanEvent.id <= summary["snapshot_event_id"]).limit(MAX_SCANNER_COMPARISON_EVENTS + 1)).all()
-        xml_events, xml_bytes = [], 0
-        xml_coverage = {}
-        if len(xml_rows) <= MAX_SCANNER_COMPARISON_EVENTS:
-            try:
-                for row in xml_rows:
-                    if row.artifact_size_bytes and xml_bytes + row.artifact_size_bytes > 64 * 1024 * 1024:
-                        break
-                    payload = load_scanner_event_payload(row)
-                    xml_bytes += len(json.dumps(payload).encode("utf-8"))
-                    if xml_bytes > 64 * 1024 * 1024:
-                        break
-                    xml_events.append({"id": row.id, "event_name": row.event_name, "payload": payload,
-                        "occurred_at": iso_utc(row.occurred_at or row.created_at)})
-                else:
-                    xml_coverage = coverage_from_xml_events(xml_events)
-            except (ValueError, TypeError):
-                pass  # XML coverage remains unknown; result observations remain available.
+        xml_coverage = load_scanner_xml_coverage(db, agent, summary)
         summary["xml_coverage"] = []
         examined_bytes = 0
         skipped = []
@@ -7122,20 +7168,8 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
                     skipped.append(event.id)
                     selection_complete = False
                     continue
-                covered_addresses = []
+                summary["xml_coverage"].extend(apply_scanner_xml_coverage(observed, xml_coverage, event))
                 for address, host in observed["hosts"].items():
-                    proof = xml_coverage.get(address)
-                    if proof:
-                        host["ports_complete"] = False
-                    if (proof and proof["latest_xml_occurred_at"]
-                            and proof["latest_xml_occurred_at"] <= iso_utc(event.occurred_at or event.created_at)
-                            and matches_observation(proof, host)):
-                        host["scanned_ports"] = {proof["protocol"]: proof["ranges"]}
-                        covered_addresses.append(proof["target"])
-                        summary["xml_coverage"].append({"host": address, "xml_sha256": proof["xml_sha256"],
-                            "source_event_ids": proof["source_event_ids"], "result_event_id": event.id,
-                            "protocol": proof["protocol"], "scan_type": proof["scan_type"],
-                            "scanned_port_count": proof["scanned_port_count"]})
                     aggregate_ports -= len(aggregate["hosts"].get(address, {}).get("ports", {}))
                     aggregate["hosts"][address] = host
                     aggregate_ports += len(host["ports"])
@@ -7143,8 +7177,6 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
                     selection_limits.append("Whole-run detailed results exceed host/port limits; no partial comparison was generated.")
                     selection_complete = False
                     break
-                if observed["covered_targets"] is None and covered_addresses and len(covered_addresses) == len(observed["hosts"]):
-                    observed["covered_targets"] = sorted(set(covered_addresses))
                 if observed["covered_targets"] is None:
                     aggregate["covered_targets"] = None
                 elif aggregate["covered_targets"] is not None:
@@ -7156,13 +7188,14 @@ def build_scanner_run_comparison(db: Session, agent: Agent, source_job_id: UUID,
                     snapshot = aggregate
         if snapshot is not None:
             inferred_scope = trusted_single_ip_scan_scope(db, agent, summary)
-            if (
-                snapshot["covered_targets"] is None
-                and inferred_scope is not None
-                and set(snapshot["hosts"]) == {str(ipaddress.ip_interface(inferred_scope).ip)}
-            ):
-                snapshot["covered_targets"] = [inferred_scope]
-                summary["covered_targets_source"] = "successful_daedalus_single_ip_command"
+            if (inferred_scope is not None
+                    and set(snapshot["hosts"]) == {str(ipaddress.ip_interface(inferred_scope).ip)}):
+                if snapshot["covered_targets"] is None:
+                    snapshot["covered_targets"] = [inferred_scope]
+                if snapshot["covered_targets"] == [inferred_scope]:
+                    # Preserve independently verified command provenance even
+                    # when compatible XML already established the same scope.
+                    summary["covered_targets_source"] = "successful_daedalus_single_ip_command"
             event = selected_events[-1]
             summary["selected_result_event_id"] = event.id
             summary["selected_result_artifact_sha256"] = event.artifact_sha256
