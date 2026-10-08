@@ -1,5 +1,11 @@
 # Integration readiness
 
+## October 8, 2026 — grouped intermediate scanner progress source correction
+
+The original event helper now updates the registry and calls its existing grouped status emitter for every phase. Modern bridges continue rejecting raw browser job-status events; stable source UUIDs, UTC occurrence times, run metadata, fan-out, SQLite replay and spool upload remain the existing path. Actual packaged-code regression exercises the shipped helper/broadcaster/database for both scans and reports: 5/35/60/100 progress, completion, browser delivery, bridge envelopes and durable reopen/replay retain identical identities and values.
+
+Only nmapui/app_bindings.py and manifest.json differ from frozen engine ZIP 48ab8f8166dfc17e107d0a37309c13b2441a0c3bc187be0a15ca175a20821d3e. Candidate ZIP is 37a8b078deb94704f4cd334c94f695f48e4e828f79c7292ad504e0e7ca24469c; all report/runtime assets outside that helper are identical. The sibling helper matched the frozen bytes before this single-method edit; unrelated dirty sibling files were excluded. Focused shipped-engine/bridge/report validation passed 70 tests and 11 subtests with one skip; original source grouping/reconnect/runtime-info validation passed 32 tests. Full Daedalus suite passed 838 tests and 306 subtests with one skip. Hosted activation, installed upgrade and live intermediate-upload acceptance remain pending at this source checkpoint. Private bundle provenance: validation/scanner-progress-envelope-20261008/.
+
 ## October 8, 2026 — physical Mac scan upload, PDF pipeline and remaining defects
 
 The migrated physical Mac (agent 2) ran the existing local Socket.IO workflow against its own loopback address without changing scanner settings or approved remote scope. Discovery run 6185933e-0956-4fa7-bba6-4abe0c82a09f completed with zero hosts; direct Nmap discovery confirmed the same outcome. Its 10 events and empty results are retained on production. A normal PDF request returned 422 because original XML was unavailable; no substitute report was created.
