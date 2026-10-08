@@ -1110,23 +1110,28 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
             story.append(_paragraph(f"Hardware subtotal: {money(scenario.get('hardware_subtotal_cents', 0))}{qualifier}", styles["MerakiBody"]))
             rows = [[_paragraph(label, styles["MerakiTableHeader"]) for label in
                      ("Meraki model / qty", "UniFi candidate", "Unit incl. surcharge", "Subtotal", "Availability observed")]]
-            for row in scenario.get("rows", []):
+            for row in scenario.get("rows", []) + scenario.get("additional_items", []):
                 rows.append([_paragraph(f"{row.get('meraki_model')} / {row.get('quantity')}", styles["MerakiCell"]),
                              _paragraph(row.get("candidate_model"), styles["MerakiCell"]),
                              _paragraph(money(row.get("unit_with_surcharge_cents", 0)), styles["MerakiCell"]),
                              _paragraph(money(row.get("subtotal_cents", 0)), styles["MerakiCell"]),
                              _paragraph(row.get("availability_observed"), styles["MerakiCell"])])
             story.append(_table(rows, [1.3 * inch, 1.6 * inch, 1.15 * inch, 1.15 * inch, 1.7 * inch]))
-            for row in scenario.get("rows", []):
-                story.append(_paragraph(f"{row.get('meraki_model')} / {row.get('candidate_model')}: {row.get('review')}", styles["MerakiSmall"]))
+            for row in scenario.get("rows", []) + scenario.get("additional_items", []):
+                detail = []
+                detail.append(_paragraph(f"{row.get('meraki_model')} / {row.get('candidate_model')}: {row.get('review')}", styles["MerakiSmall"]))
                 url = row.get("purchase_url") or ""
                 # Only the fixed vendor origin and product slug are linkable.
                 parsed = urlsplit(url)
                 if (parsed.scheme == "https" and parsed.netloc == "store.ui.com"
                         and re.fullmatch(r"/us/en/products/[a-z0-9-]+", parsed.path)
                         and not parsed.query and not parsed.fragment):
-                    story.append(Paragraph(f'<link href="{escape(url, quote=True)}" color="#464a34">'
+                    detail.append(Paragraph(f'<link href="{escape(url, quote=True)}" color="#464a34">'
                                            f'{escape(url)}</link>', styles["MerakiSmall"]))
+                if plan.get("catalog_version") == 2:
+                    story.append(KeepTogether(detail))
+                else:
+                    story.extend(detail)
             for row in scenario.get("unmatched", []):
                 story.append(_paragraph(f"{row.get('quantity')} x {row.get('meraki_model')}: candidate and price need review.", styles["MerakiSmall"]))
 
@@ -1500,11 +1505,14 @@ def build_meraki_security_pdf(report_snapshot: dict[str, Any]) -> bytes:
         story.append(_paragraph(f"Vendor notices observed {lifecycle['notice_observed_on']}; inventory as of {lifecycle['as_of'] or 'unknown date'}.", styles["MerakiSmall"]))
         labels = {'date_passed': 'Support date passed', 'within_180_days': 'Support date within 180 days', 'later': 'Support date later than 180 days', 'unknown': 'Support date unknown'}
         for row in lifecycle['rows']:
-            story.append(_paragraph(f"{row['network_name']} / {row['model']} / {row['quantity']} assigned devices", styles["MerakiSubsection"]))
-            story.append(_paragraph(f"End of sale: {row['end_of_sale_date'] or 'Unknown'}; end of support: {row['end_of_support_date'] or 'Unknown'}. {labels[row['support_status']]}" + (f" ({row['days_until_support_date']} days)." if row['days_until_support_date'] is not None else '.'), styles["MerakiBody"]))
-            story.append(_paragraph(row['note'], styles["MerakiSmall"]))
+            entry = []
+            entry.append(_paragraph(f"{row['network_name']} / {row['model']} / {row['quantity']} assigned devices", styles["MerakiSubsection"]))
+            entry.append(_paragraph(f"End of sale: {row['end_of_sale_date'] or 'Unknown'}; end of support: {row['end_of_support_date'] or 'Unknown'}. {labels[row['support_status']]}" + (f" ({row['days_until_support_date']} days)." if row['days_until_support_date'] is not None else '.'), styles["MerakiBody"]))
+            entry.append(_paragraph(row['note'], styles["MerakiSmall"]))
             label = 'Official vendor notice' if row['notice_status'] == 'published' else 'Official vendor lifecycle index'
-            story.append(Paragraph('<link href="' + row['source_url'] + '">' + label + '</link>', styles["MerakiSmall"]))
+            entry.append(Paragraph('<link href="' + row['source_url'] + '">' + label + '</link>', styles["MerakiSmall"]))
+
+            story.append(KeepTogether(entry))
 
     def draw_footer(canvas: Any, document: SimpleDocTemplate) -> None:
         canvas.saveState()

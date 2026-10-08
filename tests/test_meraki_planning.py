@@ -13,7 +13,7 @@ def test_bfs_inventory_quantities_and_surcharge_totals():
     switch = next(r for r in standard['rows'] if r['meraki_model'] == 'MS120-24P')
     assert switch['quantity'] == 6
     assert switch['availability_observed'] == 'Sold out Oct 6'
-    assert plan['price_observed_on'] == '2026-10-07'
+    assert plan['price_observed_on'] == '2026-10-08'
 
 
 def test_unknown_model_is_unpriced_instead_of_family_guess():

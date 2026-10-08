@@ -2230,7 +2230,7 @@
         var title = document.createElement("summary");
         title.textContent = scenario.name + " · " + money(scenario.hardware_subtotal_cents) + " hardware subtotal" + (scenario.complete_inventory_pricing ? "" : " · Partial inventory pricing");
         group.append(title);
-        (scenario.rows || []).forEach(function (row) {
+        (scenario.rows || []).concat(scenario.additional_items || []).forEach(function (row) {
           var line = document.createElement("p");
           line.textContent = row.quantity + " × " + row.meraki_model + " → " + row.candidate_model + " · " + money(row.unit_with_surcharge_cents) + " each including surcharge · " + money(row.subtotal_cents) + " · " + row.availability_observed + ". ";
           if (/^https:\/\/store\.ui\.com\/us\/en\/products\/[a-z0-9-]+$/.test(row.purchase_url || "")) {

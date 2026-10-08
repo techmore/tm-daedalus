@@ -301,7 +301,7 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(details["wan_usage"][0]["data"]["interfaces"], second_snapshot["wan_usage"][0]["data"]["interfaces"])
         self.assertNotIn("intervals", details["wan_usage"][0]["data"])
         self.assertEqual(len(snapshot.json()["meraki"]["wan_usage"][0]["data"]["intervals"]), 1)
-        self.assertEqual(details["unifi_plan"]["price_observed_on"], "2026-10-07")
+        self.assertEqual(details["unifi_plan"]["price_observed_on"], "2026-10-08")
         self.assertEqual(len(details["unifi_plan"]["scenarios"]), 2)
         self.assertEqual(details["networks"][0]["name"], "CSP office")
         self.assertEqual(details["devices"][0]["name"], "Edge appliance")

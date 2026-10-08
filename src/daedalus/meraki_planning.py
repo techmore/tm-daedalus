@@ -3,24 +3,7 @@ from collections import Counter
 from typing import Any
 from .meraki_lifecycle import build_lifecycle, project_lifecycle
 
-PRICE_DATE = '2026-10-07'
-# US vendor storefront observations, including the separately displayed surcharge.
-# Each report freezes these values; refresh the catalog only from vendor evidence.
-CATALOG = {
-    'U7-Pro': (18900, 20800, 'u7-pro', 'Add to Cart'),
-    'U7-Pro-Max': (27900, 30700, 'u7-pro-max', 'Add to Cart'),
-    'U7-Outdoor': (19900, 21900, 'u7-outdoor', 'Add to Cart'),
-    'USW-Pro-Max-24-PoE': (79900, 88000, 'usw-pro-max-24-poe', 'Sold out Oct 6'),
-    'USW-Pro-Max-48-PoE': (129900, 143100, 'usw-pro-max-48-poe', 'Add to Cart'),
-    'UDM-Pro-Max': (59900, 66000, 'udm-pro-max', 'Add to Cart'),
-}
-CANDIDATES = {
-    'MX100': ('UDM-Pro-Max', 'Validate WAN, VPN, security policy, throughput and high availability requirements.'),
-    'MS120-24P': ('USW-Pro-Max-24-PoE', 'Validate used ports, PoE load, uplinks, VLANs and spanning tree configuration.'),
-    'MS120-48FP': ('USW-Pro-Max-48-PoE', 'Validate full PoE load, uplinks and redundancy; retain 48 access ports.'),
-    'MR44': ('U7-Pro', 'Validate RF coverage, capacity, mounting and PoE; spatial stream counts differ.'),
-    'MR76': ('U7-Outdoor', 'Validate outdoor coverage, antenna pattern, weather rating, mounting and surge protection.'),
-}
+from .meraki_catalog import OBSERVED_ON as PRICE_DATE, PRICES as CATALOG, CANDIDATES, CATALOG_VERSION, item, sensor_dependencies
 
 def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
     devices = snapshot.get('devices')
@@ -33,28 +16,28 @@ def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
             if candidate is None:
                 unmatched.append({'meraki_model': model, 'quantity': count})
                 continue
-            sku, review = candidate
-            if capacity and model == 'MR44':
-                sku = 'U7-Pro-Max'
-            base, with_surcharge, slug, availability = CATALOG[sku]
-            rows.append({'meraki_model': model, 'quantity': count, 'candidate_model': sku,
-                         'unit_base_cents': base, 'unit_with_surcharge_cents': with_surcharge,
-                         'subtotal_cents': count * with_surcharge,
-                         'purchase_url': 'https://store.ui.com/us/en/products/' + slug,
-                         'availability_observed': availability, 'review': review})
+            standard, higher, review = candidate
+            rows.append(item(higher if capacity else standard, count, model, review))
+        additional, dependency_complete = sensor_dependencies(devices or [])
+        assigned_total = sum(r['subtotal_cents'] for r in rows)
+        additional_total = sum(r['subtotal_cents'] for r in additional)
         scenarios.append({'name': name, 'rows': rows, 'unmatched': unmatched,
-                          'hardware_subtotal_cents': sum(r['subtotal_cents'] for r in rows),
+                          'additional_items': additional, 'required_hardware_quantity_complete': bool(dependency_complete),
+                          'assigned_hardware_subtotal_cents': assigned_total, 'required_hardware_subtotal_cents': additional_total,
+                          'hardware_subtotal_cents': assigned_total + additional_total,
                           'priced_device_count': sum(r['quantity'] for r in rows),
-                          'complete_inventory_pricing': bool(counts) and not unmatched})
+                          'complete_inventory_pricing': bool(counts) and not unmatched and bool(dependency_complete)})
     refresh = build_refresh_plan(scenarios)
-    return {'lifecycle': build_lifecycle(snapshot), 'refresh_plan': refresh, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
+    return {'lifecycle': build_lifecycle(snapshot), 'refresh_plan': refresh, 'catalog_version': CATALOG_VERSION, 'schema_version': 1, 'currency': 'USD', 'price_observed_on': PRICE_DATE,
             'inventory_collected_at': snapshot.get('collected_at'), 'scenarios': scenarios,
             'assumptions': [
                 'Planning candidates require design review; model names do not establish feature equivalence.',
                 'Hardware subtotal includes the vendor displayed surcharge. Tax, shipping, optics, cables, mounting, spares, support and implementation are excluded.',
-                'Quantities reflect assigned inventory, not discovered clients or unassigned stock. Each candidate replaces one assigned device.',
+                'Quantities reflect assigned inventory, not discovered clients or unassigned stock. Each candidate replaces one assigned device; additional required hardware is priced separately.',
                 'Meraki renewal and replacement quotes are not provided; savings and total cost of ownership are not calculated.',
                 'Prices and availability are dated observations; confirm at purchase time.',
+                'Assigned inventory includes dormant and alerting devices. Confirm which equipment will be retained or retired before purchasing these quantities.',
+                'All inventory priced means model quantities have dated prices, not an approved or complete procurement design. Required gateway/controller quantities are budget assumptions; RF, PoE, routing/stacking, redundancy, storage, accessories and migration still require review.',
             ]}
 
 
@@ -75,6 +58,8 @@ def project_unifi_plan(plan: Any) -> dict[str, Any] | None:
         if len(unmatched) > 100:
             row['additional_unmatched_models'] = len(unmatched) - 100
         row['rows'] = row.get('rows', [])[:100]
+        if 'additional_items' in row:
+            row['additional_items'] = row.get('additional_items', [])[:100]
         result['scenarios'].append(row)
     return result
 

@@ -284,3 +284,30 @@ Normal report **61** completed on SER8: **six networks, 264 assigned devices, 27
 Purchase planning is explicitly **partial**: the current catalog prices **35 MR44 devices**, with dated candidate subtotals **$7,280 / $10,745** and two official purchase links. **229 devices across 24 other models remain unpriced**, including Catalyst switching/APs, additional MR/MS models, one MX95 and five MT20 sensors. These are not whole-school replacement totals. Vendor pricing, model-specific capability/accessory/PoE/antenna review and equipment-category treatment must be extended before a complete procurement estimate. Lifecycle version 1 similarly has 35 later-dated devices and 229 unknown; it does not establish that the unknown models are supported or lack published notices. Full Penn lifecycle coverage is pending.
 
 Actual report 61 has **829 pages**; purchase page 636 and lifecycle pages 826–829 were rendered/inspected. Long grouped lifecycle entries can split the source link onto the following page; keeping each entry together is an outstanding layout improvement. Whole-document visual acceptance is not claimed. Private evidence is under `validation/meraki-penn-20261008`. Lifecycle-source managed Linux scanner CI **37788390281** completed successfully, alongside backend **37788390262**. Complete Penn pricing/lifecycle evidence and the whole-project rollout/acceptance gates remain active work.
+
+## October 8, 2026 — Penn Charter complete model pricing
+
+Catalog version 2 uses fresh US storefront observations from October 8. Saved older plans keep their own prices/dates; no historical plan is recomputed on view. All 25 exact models in Penn's assigned inventory now have explicit planning candidates, including Catalyst campus switches/APs, legacy MR models, MS130/MS210/MS225, MX95 and MT20. Prefix guesses are not used. Campus candidates require review of routing/stacking, rack and AC power, per-port/total PoE and uplink/antenna capabilities. Candidate price coverage does not establish functional equivalence or approve procurement. Dormant/alerting inventory is included and requires retain/retire review.
+
+Fresh official product observations (base / displayed total including surcharge):
+
+| Candidate | USD base / total | Source |
+| --- | ---: | --- |
+| U7-Pro | 189 / 208 | [Vendor](https://store.ui.com/us/en/products/u7-pro) |
+| U7-Pro-Max | 279 / 307 | [Vendor](https://store.ui.com/us/en/products/u7-pro-max) |
+| U7-Outdoor | 199 / 219 | [Vendor](https://store.ui.com/us/en/products/u7-outdoor) |
+| USW-Pro-Max-24-PoE | 799 / 880 | [Vendor](https://store.ui.com/us/en/products/usw-pro-max-24-poe), sold out Oct 6 |
+| USW-Pro-Max-48-PoE | 1,299 / 1,431 | [Vendor](https://store.ui.com/us/en/products/usw-pro-max-48-poe) |
+| UDM-Pro-Max | 599 / 660 | [Vendor](https://store.ui.com/us/en/products/udm-pro-max) |
+| E7 | 499 / 549 | [Vendor](https://store.ui.com/us/en/products/e7) |
+| E7-Campus | 799 / 880 | [Vendor](https://store.ui.com/us/en/products/e7-campus-us) |
+| ECS-24-PoE | 2,499 / 2,753 | [Vendor](https://store.ui.com/us/en/products/ecs-24-poe) |
+| ECS-48-PoE | 3,499 / 3,855 | [Vendor](https://store.ui.com/us/en/products/ecs-48-poe) |
+| EFG | 1,999 / 2,202 | [Vendor](https://store.ui.com/us/en/products/efg), sold out Oct 7 |
+| USL-Entry | 39 / 39 | [Vendor](https://store.ui.com/us/en/products/usl-entry) |
+| USL-Gateway | 129 / 142 | [Vendor](https://store.ui.com/us/en/products/usl-gateway) |
+| UNVR | 299 / 329 | [Vendor](https://store.ui.com/us/en/products/unvr) |
+
+EFG is the MX95 planning candidate to cover campus controller scale, with no second HA appliance assumed. Door sensors get separate required hardware: gateway capacity uses the vendor's 96-sensor limit with at least one gateway per assigned sensor network as a budget assumption, plus one dedicated Protect controller. [SuperLink requirements](https://help.ui.com/hc/en-us/articles/29711478053911-UniFi-SuperLink-Setup-and-FAQs) support gateway/Protect dependencies; placement may require more hardware. Unknown sensor locations leave dependency quantity coverage incomplete. Storage, extra aggregation, optics, accessory/installation costs and any additional HA or controller hardware remain excluded. The [E7 specifications](https://techspecs.ui.com/unifi/wifi/e7) and [campus switch specifications](https://techspecs.ui.com/unifi/switching/ecs-48-poe) ground PoE/rack/power review prompts. No Meraki renewal/quote is supplied and no savings are asserted.
+
+Frozen Penn-61 evidence now produces **264 priced assigned devices**, **zero unmatched models**, plus **one $142 gateway and one $329 controller**. Candidate hardware subtotals are **$152,425 / $171,708**, with **54 official purchase links** across both scenarios. Complete model pricing is separate from a complete procurement design. BFS still produces **$11,356 / $12,940**. Required hardware is included in dashboard/PDF line items and aggregate reserves; the device count excludes added dependency hardware. Full source validation and live deployment/collection remain pending at this checkpoint. Lifecycle catalog breadth remains a separate gap.
