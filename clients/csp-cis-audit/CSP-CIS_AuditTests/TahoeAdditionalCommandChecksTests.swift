@@ -22,11 +22,86 @@ struct TahoeAdditionalCommandChecksTests {
         }
     }
 
+    @Test func systemPermissionsUseOnlyFixedReadOnlyMarkers() {
+        let rule = "os_world_writable_system_folder_configure"
+        let check = CISCheck(id: rule, category: "macos", description: "Application permissions", ruleID: rule)
+        for (output, status) in [("root-directory\n", "pass"),
+                                  ("root-directory\nworld-writable-system-directory\n", "fail"),
+                                  ("root-directory\nworld-writable-system-directory\nworld-writable-system-directory\n", "fail")] {
+            let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { path, arguments in
+                #expect(path == "/usr/bin/find")
+                #expect(arguments == ["-P", "/System/Volumes/Data/System", "(", "-path", "/System/Volumes/Data/System", "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", "-false", ")", "-o", "(", "-type", "d", "-perm", "-2", "!", "-path", "*downloadDir*", "!", "-path", "*locks*", "-exec", "/usr/bin/printf", "world-writable-system-directory\n", ";", ")"])
+                return .init(output: output)
+            }, readPreference: { _, _ in nil })
+            #expect(result.status == status)
+            #expect(!result.details.contains("root-directory"))
+            #expect(!result.details.contains(".app"))
+        }
+    }
+
     @Test func applicationPermissionsRequireCompleteTypedTraversal() {
         let rule = "os_system_wide_applications_configure"
         let check = CISCheck(id: rule, category: "macos", description: "Application permissions", ruleID: rule)
         for evidence: MacOSChecks.CommandEvidence in [.init(output: ""), .init(output: "root-directory"),
             .init(output: "world-writable-application\n"), .init(output: "root-directory\nroot-directory\n"),
+            .init(output: "root-directory\n\n"), .init(output: "root-directory\nPrivateApplication.app\n"),
+            .init(output: "root-directory\n\0\n"), .init(output: String(repeating: "x", count: 65537)),
+            .init(output: "root-directory\n", error: "private/path: permission denied"),
+            .init(output: "root-directory\n", exitCode: 1),
+            .init(output: "root-directory\n", unavailable: "timed out")] {
+            let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { _, _ in evidence }, readPreference: { _, _ in nil })
+            #expect(result.status == "manual")
+            #expect(!result.details.contains("PrivateApplication"))
+            #expect(!result.details.contains("private/path"))
+        }
+        let unsupported = MacOSChecks.runTahoe(check: check, osMajorVersion: 27, command: { _, _ in
+            Issue.record("Unsupported OS must not run the filesystem check"); return .init()
+        }, readPreference: { _, _ in nil })
+        #expect(unsupported.status == "manual")
+    }
+
+    @Test func systemFindExpressionChecksRootExclusionsAndDoesNotFollowSymlinks() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("daedalus-system-fixture-" + UUID().uuidString)
+        try manager.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { try? manager.removeItem(at: root) }
+        let writable = root.appendingPathComponent("ordinary-directory")
+        for name in ["ordinary-directory", "downloadDir", "locks", "nested-locks-name"] {
+            let directory = root.appendingPathComponent(name)
+            try manager.createDirectory(at: directory, withIntermediateDirectories: false)
+            try manager.setAttributes([.posixPermissions: 0o777], ofItemAtPath: directory.path)
+        }
+        try manager.createSymbolicLink(at: root.appendingPathComponent("link-to-directory"), withDestinationURL: writable)
+        let rule = "os_world_writable_system_folder_configure"
+        let check = CISCheck(id: rule, category: "macos", description: "Temporary filesystem fixture", ruleID: rule)
+        func observe() -> MacOSChecks.CommandEvidence {
+            var captured: MacOSChecks.CommandEvidence?
+            _ = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { path, arguments in
+                // Only the test substitutes its disposable fixture root. The
+                // production command remains bundled with the fixed system path.
+                let evidence = MacOSChecks.readCommand(path, arguments.map { $0 == "/System/Volumes/Data/System" ? root.path : $0 })
+                captured = evidence
+                return evidence
+            }, readPreference: { _, _ in nil })
+            return captured ?? .init(unavailable: "No filesystem command was captured")
+        }
+        var evidence = observe()
+        #expect(evidence.unavailable == nil && evidence.exitCode == 0 && evidence.error.isEmpty)
+        #expect(evidence.output == "root-directory\nworld-writable-system-directory\n")
+        try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: writable.path)
+        evidence = observe()
+        #expect(evidence.output == "root-directory\n")
+        try manager.setAttributes([.posixPermissions: 0o777], ofItemAtPath: root.path)
+        evidence = observe()
+        #expect(evidence.output == "root-directory\nworld-writable-system-directory\n")
+        #expect(!evidence.output.contains(root.lastPathComponent))
+    }
+
+    @Test func systemPermissionsRequireCompleteTypedTraversal() {
+        let rule = "os_world_writable_system_folder_configure"
+        let check = CISCheck(id: rule, category: "macos", description: "Application permissions", ruleID: rule)
+        for evidence: MacOSChecks.CommandEvidence in [.init(output: ""), .init(output: "root-directory"),
+            .init(output: "world-writable-system-directory\n"), .init(output: "root-directory\nroot-directory\n"),
             .init(output: "root-directory\n\n"), .init(output: "root-directory\nPrivateApplication.app\n"),
             .init(output: "root-directory\n\0\n"), .init(output: String(repeating: "x", count: 65537)),
             .init(output: "root-directory\n", error: "private/path: permission denied"),
@@ -1006,6 +1081,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_world_writable_system_folder_configure": ("/usr/bin/find", ["-P", "/System/Volumes/Data/System", "(", "-path", "/System/Volumes/Data/System", "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", "-false", ")", "-o", "(", "-type", "d", "-perm", "-2", "!", "-path", "*downloadDir*", "!", "-path", "*locks*", "-exec", "/usr/bin/printf", "world-writable-system-directory\n", ";", ")"]),
             "os_system_wide_applications_configure": ("/usr/bin/find", ["-P", "/Applications", "(", "-path", "/Applications", "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", ")", "-o", "(", "-iname", "*.app", "-type", "d", "-perm", "-2", "-exec", "/usr/bin/printf", "world-writable-application\n", ";", ")"]),
             "os_sudo_timeout_configure": ("/usr/bin/sudo", ["-V"]),
             "os_sudo_log_enforce": ("/usr/bin/sudo", ["-V"]),

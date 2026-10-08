@@ -38,6 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
+        "os_world_writable_system_folder_configure",
         "os_system_wide_applications_configure",
         "os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure",
         "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "pwpolicy_alpha_numeric_enforce", "pwpolicy_special_character_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_home_folders_secure", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
@@ -122,6 +123,29 @@ extension MacOSChecks {
             return result(mismatches == 0 ? "pass" : "fail", mismatches == 0
                 ? "Completed bounded traversal found no world-writable application bundle directories under /Applications. Symlinks were not followed."
                 : "Completed bounded traversal found \(mismatches) world-writable application bundle directory match(es) under /Applications. Names remain local; no permissions were changed.")
+
+        case "os_world_writable_system_folder_configure":
+            // Pinned NIST criterion includes the root and excludes paths
+            // containing downloadDir or locks. -false lets root evidence
+            // continue into the mismatch expression rather than hiding it.
+            let root = "/System/Volumes/Data/System"
+            let evidence = command("/usr/bin/find", ["-P", root,
+                "(", "-path", root, "-type", "d", "-exec", "/usr/bin/printf", "root-directory\n", ";", "-false", ")",
+                "-o", "(", "-type", "d", "-perm", "-2", "!", "-path", "*downloadDir*", "!", "-path", "*locks*",
+                "-exec", "/usr/bin/printf", "world-writable-system-directory\n", ";", ")"])
+            guard usable(evidence), evidence.output.utf8.count <= 65536,
+                  evidence.output.hasSuffix("\n") else {
+                return result("manual", "System-directory traversal was unavailable, unsuccessful or incomplete. No directory names were collected into the report.")
+            }
+            let lines = evidence.output.components(separatedBy: "\n").dropLast()
+            guard lines.filter({ $0 == "root-directory" }).count == 1,
+                  lines.allSatisfy({ $0 == "root-directory" || $0 == "world-writable-system-directory" }) else {
+                return result("manual", "System-directory evidence lacked a unique directory root or contained unsupported output. No clean permission result was inferred.")
+            }
+            let mismatches = lines.filter { $0 == "world-writable-system-directory" }.count
+            return result(mismatches == 0 ? "pass" : "fail", mismatches == 0
+                ? "Completed bounded traversal found no world-writable directories under /System/Volumes/Data/System outside the pinned downloadDir and locks path exclusions. Symlinks were not followed."
+                : "Completed bounded traversal found \(mismatches) world-writable system-directory match(es) outside the pinned downloadDir and locks path exclusions. Names remain local; no permissions were changed.")
 
         case "os_sudo_timeout_configure", "os_sudo_log_enforce", "os_sudoers_timestamp_type_configure":
             // Version mode never executes a command or asks for a password.
