@@ -61,6 +61,35 @@ class MerakiClientTests(unittest.TestCase):
             with self.assertRaisesRegex(MerakiAPIError, "unsafe pagination"):
                 client.list_organizations()
 
+    def test_invalid_inventory_fails_before_partial_report_or_availability_collection(self):
+        cases = [None, {}, {"serial": ""}, {"serial": 123},
+                 {"serial": "bad/path"}, {"serial": "Q2XX-SAFE"}]
+        for invalid in cases:
+            with self.subTest(invalid=invalid):
+                seen = []
+                def respond(request):
+                    seen.append(request.url.path)
+                    paths = {
+                        "/api/v1/organizations": [{"id": "org-1", "name": "Test"}],
+                        "/api/v1/organizations/org-1/networks": [],
+                        "/api/v1/organizations/org-1/devices": [{"serial": "Q2XX-SAFE", "model": "MX100"}, invalid],
+                    }
+                    return httpx.Response(200, json=paths.get(request.url.path, []))
+                with MerakiClient("fixture-key", transport=httpx.MockTransport(respond), request_interval=0) as client:
+                    with self.assertRaisesRegex(MerakiAPIError, "device inventory.*no complete audit"):
+                        client.collect_security_report("org-1")
+                self.assertFalse(any("availabilities" in path for path in seen))
+
+    def test_invalid_network_inventory_is_not_silently_dropped(self):
+        for rows in ([None], [{}], [{"id": 123}], [{"id": "N_1"}, {"id": "N_1"}]):
+            with self.subTest(rows=rows):
+                def respond(request):
+                    value = [{"id": "org-1"}] if request.url.path == "/api/v1/organizations" else rows
+                    return httpx.Response(200, json=value)
+                with MerakiClient("fixture-key", transport=httpx.MockTransport(respond), request_interval=0) as client:
+                    with self.assertRaisesRegex(MerakiAPIError, "network inventory"):
+                        client.collect_security_report("org-1")
+
     def test_collects_read_only_inventory_and_flags_disabled_protection(self):
         def respond(request):
             path = request.url.path

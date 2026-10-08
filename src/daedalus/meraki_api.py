@@ -333,6 +333,21 @@ class MerakiClient:
             )
         return organizations
 
+    @staticmethod
+    def _require_unique_inventory(rows: list[Any], identifier: str, collection: str) -> None:
+        """Reject incomplete identities before inventory drives comparisons or budgets."""
+        seen: set[str] = set()
+        for row in rows:
+            value = row.get(identifier) if isinstance(row, dict) else None
+            if (not isinstance(value, str)
+                    or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value)
+                    or value in seen):
+                raise MerakiAPIError(
+                    f"The Meraki {collection} inventory contains missing, invalid or duplicate identities; "
+                    "no complete audit was saved."
+                )
+            seen.add(value)
+
     def collect_security_report(
         self,
         organization_id: str,
@@ -352,11 +367,8 @@ class MerakiClient:
         if progress:
             progress(16, "Reading organization networks")
         networks_raw = self.get_collection(f"/organizations/{organization_id}/networks")
-        networks = [
-            self._safe_network(row)
-            for row in networks_raw
-            if isinstance(row, dict) and row.get("id")
-        ]
+        self._require_unique_inventory(networks_raw, "id", "network")
+        networks = [self._safe_network(row) for row in networks_raw]
         if len(networks) > MAX_NETWORKS_PER_REPORT:
             raise MerakiAPIError(
                 f"This report is limited to {MAX_NETWORKS_PER_REPORT} networks per run."
@@ -365,6 +377,7 @@ class MerakiClient:
         if progress:
             progress(28, "Reading assigned device inventory")
         devices_raw = self.get_collection(f"/organizations/{organization_id}/devices")
+        self._require_unique_inventory(devices_raw, "serial", "device")
 
         if progress:
             progress(38, "Reading current device availability")
