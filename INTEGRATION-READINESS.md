@@ -637,3 +637,11 @@ python scripts/recovery_secrets.py restore /path/to/recovery-secrets.json /path/
 ```
 
 Version 1 fixes Scrypt parameters (n=32768, r=8, p=1) and uses Fernet authenticated encryption with a random salt. Input secrets are capped at 1 MiB; envelopes at 2 MiB. Files must be owned private regular files; source symlinks and existing destinations are refused. The production recovery-secret location/password and an actual independent recovery rehearsal remain pending.
+
+### 2026-10-07 — BFS Meraki inventory and UniFi purchase planning
+
+An actual read-only Meraki collection for Buckingham Friends School completed with two networks, 27 assigned devices (all online), 48 security controls collected and none unavailable. Private audit evidence is retained under `validation/bfs-meraki-live-20261007.json`. It is not yet a production BFS report job: the October 6 backup has no BFS credential or organization grant and current LAN SSH checks timed out.
+
+Source `678d115` saves two dated inventory-based UniFi scenarios with each new Meraki report and displays quantities, official product links, surcharge-inclusive USD subtotals, observed availability and sizing limitations. Unknown exact models remain unpriced. Historical reports retain their saved evidence. Source `d701d31` appends the same plan to Meraki PDFs. A real BFS PDF has 94 original pages with identical content streams plus two visually reviewed planning pages; the ten product links are clickable. The hardware subtotals are $11,356 and $12,940; they exclude tax, shipping, optics, cabling, spares, support and implementation. The 24-port candidate was observed sold out. Detailed vendor references and coverage are in `docs/MERAKI-PURCHASE-PLANNING.md`.
+
+Focused final PDF/planning, Meraki and workspace tests passed 19 tests and four subtests. Source push completed. Production deployment, authenticated rendered dashboard review, live BFS history/comparison/notification and original Meraki report coverage parity remain open. This is progress within the full build-out, not completion of the project.
