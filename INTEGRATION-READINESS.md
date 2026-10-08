@@ -1,5 +1,9 @@
 # Integration readiness
 
+## October 7, 2026 — Meraki inventory identity validation
+
+Source `8db114d` rejects malformed, missing and duplicate network/device identities before a completed audit and purchase plan can be saved. This prevents silently omitted networks and inflated replacement quantities. Ten malformed/duplicate fixture cases are covered; a fresh read-only BFS collection passed with two networks and 27 unique devices. Full local suite: 777 tests passed, one skipped and 276 subtests. Incus activated the verified 79-file release `24895e1fde5e956f9ef6133b19efe5d8f5aea9adc1c4b6ae6f5c1deb8046dae3`, with pre-deploy off-host backup and internal/public readiness checks passing. Existing completed reports and scanner PDF assets were retained.
+
 ## October 7, 2026 — latest production recovery validation
 
 The post-BFS backup was restored into a fresh private directory. All 41 completed PDFs matched recorded sizes and PDF headers. Both saved Meraki credentials decrypted using the existing sealed recovery configuration; BFS purchase plans and temporary-key revocation were retained. The restored production-configured application started and stopped through an isolated TestClient lifespan, returned ready, denied unauthenticated report access and kept collectors disabled. No listening socket or production data mutation was used. Separate secret custody, public failover and restored Google login remain open. See [Incus recovery](docs/INCUS-DEPLOYMENT.md).
