@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — live BFS channel utilization deployed
+
+SER8 Incus activated source 51a671c79d4a8035f452fe37e43d51b9386ce1b5, verified 80-file release SHA-256 e3ad0fc6153998a16619867287cde6df9b2c4157dbf14bf877e29cc2d22c896c. The first attempt terminated before deployment because local Tailscale was stopped; the public portal remained ready. Reopening the existing Tailscale application restored the private route and SSH. The fresh deployment saved verified off-host backup daedalus-data-20261008T052505Z.tar.gz before activation; internal/public readiness passed.
+
+Normal authenticated BFS report 45 completed with 27 devices and 51 collected controls, zero unavailable/unsupported requests. Channel observations cover all 19 assigned APs and 38 bands, with zero missing APs and zero readings meeting the labeled review thresholds. Dashboard rows match saved evidence; purchase budgets remain $11,356/$12,940. Comparison with report 44 retained zero configuration, coverage and inventory changes. The short-lived validation key was revoked and returned 401. Private receipts: /data/codex-bfs-channels-20261008/ and ignored validation/meraki-channels-20261008/.
+
+Both actual production appendix pages were rendered and visually reviewed. The 108-page report retains identical content streams for all 106 preceding pages when compared with the same saved snapshot rendered without the new appendix. This is observational/report acceptance, not a claim of interference cause, replacement capacity or full original Meraki report parity. Full local suite: 876 passed, one skipped, 313 subtests. Backend 37731819528 passed the preceding wireless source at documentation head 1aefb18; superseded backend 37731676563 and installed Linux 37731676541 were cancelled. Current channel-source backend 37732142973 and installed Linux 37732142854 remain unverified at this checkpoint. Full project requirements remain open.
+
+
 ## October 8, 2026 — live BFS wireless outcomes deployed
 
 SER8 Incus runs source 5fe9fe08d224c50552847cee655b85f9469a1221, verified 80-file release SHA-256 1140ce06a26f8ec120fee569498074d38e3564709887f5bb3a6e60f766917d22. Verified off-host backup daedalus-data-20261008T051804Z.tar.gz preceded activation; internal/public health passed. Full local validation passed 871 tests/308 subtests with one skip, followed by a passing actual JavaScript wireless renderer test.
