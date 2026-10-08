@@ -1,5 +1,14 @@
 # Integration readiness
 
+## October 8, 2026 — live BFS wireless outcomes deployed
+
+SER8 Incus runs source 5fe9fe08d224c50552847cee655b85f9469a1221, verified 80-file release SHA-256 1140ce06a26f8ec120fee569498074d38e3564709887f5bb3a6e60f766917d22. Verified off-host backup daedalus-data-20261008T051804Z.tar.gz preceded activation; internal/public health passed. Full local validation passed 871 tests/308 subtests with one skip, followed by a passing actual JavaScript wireless renderer test.
+
+Normal authenticated BFS report 44 completed with two networks, 27 devices, 50 controls and zero unavailable/unsupported requests. All 19 assigned wireless APs supplied complete documented connection counters. The second wireless network has zero assigned APs and no counter observations; missing values remain unavailable. Dashboard totals match saved evidence. Purchase budgets remain $11,356/$12,940; comparison with report 42 retains zero configuration, coverage or inventory changes. The temporary scoped key was revoked and then returned 401. Private production receipts: /data/codex-bfs-wireless-20261008/ and ignored validation/meraki-wireless-20261008/.
+
+The actual 101-page production PDF appendix was rendered and visually reviewed; its preceding 100 page content streams match the same saved snapshot rendered without the appendix. This verifies added observational content and prior-content preservation, not full legacy report parity. Original scanner report assets are unchanged. Scanner source 60897ad backend 37730983379 and installed Linux 37730983365 passed, including repeat comparison. Current wireless source backend 37731676563 and installed Linux 37731676541 are running at this checkpoint. Full project completion remains unproven.
+
+
 ## October 8, 2026 — scanner summary coverage deployed
 
 SER8 Incus activated source 60897ad787d0f61af3801517d63f595e6bc422cf, verified 80-file release SHA-256 8694cae1085cb5bb9c7879c04732ebb95312887b1e0cf9e399e1096a71e3ef5b. Verified off-host backup daedalus-data-20261008T050949Z.tar.gz preceded activation; internal/public health passed. The final full local suite passed 869 tests and 308 subtests, with one skip.
