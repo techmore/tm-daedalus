@@ -38,7 +38,7 @@ extension MacOSChecks {
     // beceac1d21baf9d924c2780f2e248577435bbfb1 (CC BY 4.0).
     // The server supplies a rule ID; every executable and argument stays bundled.
     static let additionalMacOS26CommandRuleIDs: Set<String> = [
-        "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
+        "pwpolicy_account_lockout_enforce", "pwpolicy_account_lockout_timeout_enforce", "pwpolicy_max_lifetime_enforce", "pwpolicy_minimum_length_enforce", "pwpolicy_history_enforce", "system_settings_system_wide_preferences_configure", "os_unlock_active_user_session_disable", "os_password_hint_remove", "os_home_folders_secure", "os_internal_apfs_volumes_encrypted", "audit_auditd_enabled", "os_anti_virus_installed", "os_guest_folder_removed", "os_nfsd_disable", "os_power_nap_disable",
         "system_settings_wake_network_access_disable", "os_time_server_enabled",
         "system_settings_guest_access_smb_disable",
         "os_safari_advertising_privacy_protection_enable",
@@ -275,6 +275,27 @@ extension MacOSChecks {
                 if parts.count > 1 { hints += 1 }
             }
             return result(hints == 0 ? "pass" : "fail", "Enumerated " + String(accounts.count) + " local account records; " + String(hints) + " contain hint text. This does not establish external directory account policy. Account names and hint text are omitted.")
+
+        case "os_home_folders_secure":
+            let evidence = command("/usr/bin/find", ["/System/Volumes/Data/Users", "-mindepth", "1", "-maxdepth", "1", "-type", "d", "!", "-name", "*Shared*", "!", "-name", "*Guest*", "-exec", "/usr/bin/stat", "-f", "%HT:%Lp", "{}", "+"])
+            guard usable(evidence), evidence.output.utf8.count <= 65536 else {
+                return result("manual", "Home-directory metadata was inaccessible, incomplete or exceeded its limit.")
+            }
+            let lines = evidence.output.components(separatedBy: .newlines).filter { !$0.isEmpty }
+            guard !lines.isEmpty, lines.count <= 10000 else {
+                return result("manual", "No eligible home directories were captured, or enumeration exceeded its limit.")
+            }
+            var mismatches = 0
+            for line in lines {
+                let parts = line.components(separatedBy: ":")
+                guard parts.count == 2, parts[0] == "Directory",
+                      parts[1].range(of: "^[0-7]{3,4}$", options: .regularExpression) != nil,
+                      let mode = UInt16(parts[1], radix: 8) else {
+                    return result("manual", "Captured home-directory metadata was malformed or unsupported.")
+                }
+                if mode != 0o700 && mode != 0o711 { mismatches += 1 }
+            }
+            return result(mismatches == 0 ? "pass" : "fail", "Captured " + String(lines.count) + " eligible direct user directories; " + String(mismatches) + " differ from pinned modes 0700/0711. Shared/Guest-name exclusions follow the pinned procedure. This does not assess ACLs, directory accounts or home contents. Directory names remain local.")
 
         case "os_internal_apfs_volumes_encrypted":
             return checkInternalAPFSEncryption(check: check, command: command)

@@ -5,6 +5,29 @@ import CryptoKit
 @testable import CSP_CIS_Audit
 
 struct TahoeAdditionalCommandChecksTests {
+    @Test func secureHomeDirectoriesUsePinnedModesAndKeepNamesLocal() {
+        let rule = "os_home_folders_secure"
+        #expect(MacOSChecks.additionalMacOS26CommandRuleIDs.contains(rule))
+        let check = CISCheck(id: rule, category: "macos", description: "Home permissions", ruleID: rule)
+        let result = MacOSChecks.runTahoe(check: check, osMajorVersion: 26, command: { path, arguments in
+            #expect(path == "/usr/bin/find")
+            #expect(arguments == ["/System/Volumes/Data/Users", "-mindepth", "1", "-maxdepth", "1", "-type", "d", "!", "-name", "*Shared*", "!", "-name", "*Guest*", "-exec", "/usr/bin/stat", "-f", "%HT:%Lp", "{}", "+"])
+            return .init(output: "Directory:700\nDirectory:711\n")
+        }, readPreference: { _, _ in nil })
+        #expect(result.status == "pass")
+        #expect(!result.details.contains("/System/Volumes"))
+        for mode in ["750", "755", "777", "1700", "0710"] {
+            #expect(run(rule, .init(output: "Directory:" + mode + "\n")) == "fail")
+        }
+        for invalid in ["", " ", "Directory:700\n ", "Regular File:700", "Directory:700:extra", "Directory:888", "Directory:700\0", "Directory:000700"] {
+            #expect(run(rule, .init(output: invalid)) == "manual")
+        }
+        #expect(run(rule, .init(output: "Directory:700", error: "permission denied")) == "manual")
+        #expect(run(rule, .init(output: "Directory:700", exitCode: 1)) == "manual")
+        #expect(run(rule, .init(output: "Directory:700", unavailable: "Timed out")) == "manual")
+        #expect(run(rule, .init(output: String(repeating: "Directory:700\n", count: 6000))) == "manual")
+    }
+
     @Test func auditFlagRulesRequireExactUnambiguousLocalPolicy() {
         for (rule, required) in MacOSChecks.tahoeAuditFlagRequirements {
             let check = CISCheck(id: rule, category: "macos", description: "Audit configuration", ruleID: rule)
@@ -863,6 +886,7 @@ struct TahoeAdditionalCommandChecksTests {
 
     @Test func newRulesUseOnlyBundledExecutablesAndArguments() {
         let commands: [String: (String, [String])] = [
+            "os_home_folders_secure": ("/usr/bin/find", ["/System/Volumes/Data/Users", "-mindepth", "1", "-maxdepth", "1", "-type", "d", "!", "-name", "*Shared*", "!", "-name", "*Guest*", "-exec", "/usr/bin/stat", "-f", "%HT:%Lp", "{}", "+"]),
             "pwpolicy_account_lockout_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_account_lockout_timeout_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
             "pwpolicy_max_lifetime_enforce": ("/usr/bin/pwpolicy", ["-getaccountpolicies"]),
