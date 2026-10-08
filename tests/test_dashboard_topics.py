@@ -411,8 +411,8 @@ assert.equal(reportJobStatusSummary([{status:'failed'}]), '0 PDF(s) ready · 1 f
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()
         self.assertLess(template.index('id="posture-report-job-list"'), template.index('data-generate-report'))
         source = (root / 'src/daedalus/static/js/dashboard.js').read_text()
-        self.assertIn('renderReportJobs(reports, "posture-report-job-list", "posture-report-library-status", ["meraki_security", "cis_endpoint"])', source)
-        self.assertIn('"posture-report-job-list", "meraki-report-job-list"', source)
+        self.assertIn('topic: "meraki_security,cis_endpoint", tab: "reports", views: [["posture-report-job-list", "posture-report-library-status"]]', source)
+        self.assertIn('Previously loaded reports remain below; refresh to update them.', source)
 
     def test_endpoint_topic_groups_results_and_changes_before_setup(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()

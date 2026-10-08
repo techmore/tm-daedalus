@@ -192,7 +192,7 @@ class WorkspaceNotificationTests(unittest.TestCase):
             notices = other.get("/api/notifications").json()["notifications"]
             self.assertEqual(len(notices), 1)
             self.assertEqual(notices[0]["source_id"], 991)
-            self.assertEqual(notices[0]["tab"], "members")
+            self.assertEqual(notices[0]["tab"], "overview")
         finally:
             other.close()
 

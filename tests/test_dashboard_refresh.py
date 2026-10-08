@@ -164,6 +164,8 @@ assert.equal(notificationReviewLabel('meraki'), 'Review Meraki');
 assert.equal(notificationReviewLabel('cis'), 'Review CIS');
 assert.equal(notificationReviewLabel('scanners'), 'Review scanners');
 assert.equal(notificationReviewLabel('members'), 'Review access');
+assert.equal(notificationReviewLabel('overview'), 'Review workspace access');
+assert.equal(notificationReviewLabel('reports'), 'Review report history');
 assert.equal(notificationReviewLabel('unknown'), 'Review website');
 assert.match(notificationEmptyMessage(), /security changes, warnings, or audit notices/);
 assert.match(notificationEmptyMessage(), /for this workspace/);
@@ -208,7 +210,7 @@ assert.deepEqual(matchingReportJobs(jobs, 'meraki_security').map(job => job.id),
         self.assertEqual(result.returncode, 0, result.stderr)
         template = (root / 'src/daedalus/templates/dashboard.html').read_text()
         self.assertIn('id="scanner-report-job-list"', template)
-        self.assertIn('renderReportJobs(reports, "scanner-report-job-list", "scanner-report-library-status", "scanner_results")', source)
+        self.assertIn('topic: "scanner_results", tab: "reports", views: [["scanner-report-job-list", "scanner-report-library-status"]]', source)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_dns_history_warns_when_latest_lookup_cannot_confirm_a_saved_record_change(self):

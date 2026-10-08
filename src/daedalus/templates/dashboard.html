@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-178">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261008-179">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -594,8 +594,13 @@
       </section>
       <section class="tab-panel" id="tab-notifications">
         <div class="page-intro"><div><p class="eyebrow">WORKSPACE INBOX</p><h2>Security notifications</h2><p class="muted">DNS, email, website, Meraki, CIS endpoint, internal scan, and workspace access changes. Notices remain here when you are offline.</p></div></div>
+        <div class="history-toolbar">
+          <label for="notification-filter">Show <select id="notification-filter"><option value="all">All notices</option><option value="unread">Unread notices</option></select></label>
+          <button type="button" class="button button-secondary" id="notification-refresh">Refresh notices</button>
+        </div>
         <div id="notification-inbox-status" class="check-status" aria-live="polite">Loading notifications…</div>
         <div id="notification-list" class="notification-list" aria-live="polite"><div class="empty-events">Loading notifications…</div></div>
+        <button type="button" class="button button-secondary hidden" id="notification-older">Load older notices</button>
       </section>
       {% endif %}
     </main>
@@ -648,6 +653,7 @@
   <script src="/static/js/onboarding.js?v=20261008-2" defer></script>
   {% endif %}
   <script src="/static/js/google-admin.js?v=20261008-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261008-178" defer></script>
+  <script src="/static/js/history.js?v=20261008-1" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261008-179" defer></script>
 </body>
 </html>

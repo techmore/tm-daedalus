@@ -128,3 +128,16 @@ Host operators can explicitly provision the named Codex operator for an existing
 ## Customer onboarding
 
 Configured platform administrators can grant complimentary 30-day onboarding in **Add or join workspace → Add a customer**, or review existing customers in the same dialog. The DNS exception requires explicit reapproval every 30 days. A dashboard reminder counts approvals needing review; **Review customer access** opens the review dialog. Loads, refreshes and background polls never open it automatically. Expiry still closes the exception and creates durable workspace notices. Configure `DAEDALUS_PLATFORM_ADMIN_EMAILS` with the intended authenticated owners. [Authority, expiry and rollout](docs/CUSTOMER-ONBOARDING.md).
+
+## Report and notification history
+
+Saved reports are grouped by topic, with counts and **Load older reports** controls. Topic pages query their own history, so a busy topic cannot hide another topic's reports. The Meraki summary uses the latest completed assessment even when newer failed attempts fill the first page. In-page refresh retains the loaded older boundary; failed refreshes preserve the evidence already shown and offer a retry.
+
+The workspace inbox supports **All notices** and **Unread notices**, counts and **Load older notices**. Unread state belongs to each member. The selected inbox filter stays in the URL across reloads, alongside the topic hash. Refreshes retain focused review actions where their notice is still present. Access notices lead to Overview's Workspace access section; failed PDF notices lead to report history.
+
+Authenticated history API parameters:
+
+- `GET /api/reports`: `limit` (1–100, default 50), `before` (the previous page's `next_before`), `report_type` (one supported type or comma-separated types), and `status` (`queued`, `running`, `completed`, `failed`).
+- `GET /api/notifications`: `limit`, `before`, and `unread_only` (default false).
+
+Responses include `total_count`, `has_more`, and `next_before`; report responses also include `latest_completed`, and inbox responses retain the current member's overall `unread_count`. Report ordering follows descending job ID. Inbox ordering follows detection time and then ID, including delayed notices and timestamp ties. Positions are scoped to the authenticated workspace; unread pagination remains valid after marking its anchor read. Responses are not cached. History reads do not regenerate PDFs or mark notices read.

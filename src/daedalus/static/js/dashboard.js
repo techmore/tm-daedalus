@@ -37,6 +37,8 @@
   var shell = document.querySelector(".app-shell");
   var orgId = shell ? shell.dataset.organizationId : null;
   var postureRequestSequence = 0;
+  var reportHistories = Object.create(null);
+  var notificationHistory = null;
   var role = shell ? shell.dataset.role : null;
   var verificationStatus = shell ? shell.dataset.verificationStatus : null;
   var controlsEnabled = shell ? shell.dataset.controlsEnabled === "true" : false;
@@ -2758,7 +2760,7 @@
     return parts.join(" · ") + ".";
   }
 
-  function renderReportJobs(reports, listId, statusId, reportType) {
+  function renderReportJobs(reports, listId, statusId, reportType, latestCompleted) {
     var list = document.getElementById(listId);
     var status = document.getElementById(statusId);
     if (!list) return;
@@ -2767,7 +2769,7 @@
       var overview = document.getElementById("meraki-current-summary");
       if (overview) {
         overview.replaceChildren();
-        var completed = reports.find(function (job) { return job.status === "completed"; });
+        var completed = latestCompleted || reports.find(function (job) { return job.status === "completed"; });
         if (!completed) appendEmpty(overview, "No completed network assessment yet. Connect an organization below to establish a baseline.");
         else {
           var captured = document.createElement("p"); captured.className = "muted";
@@ -2806,6 +2808,7 @@
     reports.forEach(function (job) {
       var card = document.createElement("article");
       card.className = "report-job-card";
+      card.dataset.reportId = String(job.id);
       var main = document.createElement("div");
       main.className = "report-job-main";
       var heading = document.createElement("strong");
@@ -2972,41 +2975,76 @@
 
   window.addEventListener("google-admin-changed", function () { loadReports(); loadWorkspacePosture(); });
 
+  var reportHistoryGroups = [
+    { topic: "external_posture", tab: "reports", views: [["report-job-list", "report-library-status"]] },
+    { topic: "scanner_results", tab: "reports", views: [["scanner-report-job-list", "scanner-report-library-status"]] },
+    { topic: "meraki_security,cis_endpoint", tab: "reports", views: [["posture-report-job-list", "posture-report-library-status"]] },
+    { topic: "meraki_security", tab: "meraki", views: [["meraki-report-job-list", "meraki-report-library-status"]] },
+    { topic: "cis_endpoint", tab: "cis", views: [["cis-pdf-job-list", "cis-pdf-library-status"]] },
+    { topic: "google_admin_security", tab: "google-admin", views: [["google-admin-report-job-list", "google-admin-report-library-status"], ["google-admin-library-list", "google-admin-library-status"]] }
+  ];
+
+  function renderHistoryControls(list, pager, label) {
+    var controls = document.getElementById(list.id + "-history-controls");
+    if (!controls) {
+      controls = document.createElement("div"); controls.id = list.id + "-history-controls"; controls.className = "history-toolbar";
+      var older = document.createElement("button"); older.type = "button"; older.className = "button button-secondary";
+      older.textContent = "Load older " + label; older.dataset.historyOlder = "true";
+      older.addEventListener("click", function () { pager.older(); });
+      var retry = document.createElement("button"); retry.type = "button"; retry.className = "button button-quiet";
+      retry.textContent = "Refresh " + label; retry.dataset.historyRefresh = "true";
+      retry.addEventListener("click", function () { loadReports(); });
+      controls.append(older, retry); list.after(controls);
+    }
+    var state = pager.state;
+    var olderButton = controls.querySelector("[data-history-older]");
+    olderButton.classList.toggle("hidden", !state.body || !state.body.has_more);
+    olderButton.disabled = state.busy;
+    controls.querySelector("[data-history-refresh]").disabled = state.busy;
+  }
+
+  function reportHistory(group) {
+    if (reportHistories[group.topic]) return reportHistories[group.topic];
+    var pager = window.daedalusHistory.create({ url: "/api/reports", field: "reports", changed: function (state, committed) {
+      group.views.forEach(function (view) {
+        var list = document.getElementById(view[0]);
+        if (!list) return;
+        if (committed && state.loaded) {
+          var focused = list.contains(document.activeElement) ? document.activeElement : null;
+          var card = focused && focused.closest("[data-report-id]");
+          var focusId = card && card.dataset.reportId;
+          var focusText = focused && focused.textContent;
+          renderReportJobs(state.rows, view[0], view[1], group.topic.includes(",") ? group.topic.split(",") : group.topic, state.body && state.body.latest_completed);
+          if (focusId) {
+            var replacement = Array.from(list.querySelectorAll("[data-report-id] button, [data-report-id] a, [data-report-id] summary")).find(function (item) {
+              return item.closest("[data-report-id]").dataset.reportId === focusId && item.textContent === focusText;
+            });
+            if (replacement) replacement.focus({ preventScroll: true });
+          }
+        }
+        var summary = state.loaded ? "Showing " + state.rows.length + " of " + state.body.total_count + " reports. " + reportJobStatusSummary(state.rows) : "Loading report history…";
+        if (state.error) summary = state.error + (state.loaded ? " Previously loaded reports remain below; refresh to update them." : " Use Refresh reports to retry.");
+        else if (state.busy) summary += " Updating…";
+        text(document.getElementById(view[1]), summary);
+        if (state.error && !state.loaded) { list.replaceChildren(); appendEmpty(list, "Report history is unavailable. Refresh to retry."); }
+        renderHistoryControls(list, pager, "reports");
+      });
+    } });
+    reportHistories[group.topic] = pager;
+    return pager;
+  }
+
   async function loadReports() {
     if (!orgId) return;
     window.clearTimeout(reportPollTimer);
     if (!driveState) await loadDriveStatus();
-    try {
-      var response = await fetch("/api/reports", { credentials: "same-origin" });
-      var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load workspace reports");
-      var reports = body.reports || [];
-      renderReportJobs(reports, "report-job-list", "report-library-status", "external_posture");
-      renderReportJobs(reports, "scanner-report-job-list", "scanner-report-library-status", "scanner_results");
-      renderReportJobs(reports, "posture-report-job-list", "posture-report-library-status", ["meraki_security", "cis_endpoint"]);
-      renderReportJobs(reports, "meraki-report-job-list", "meraki-report-library-status", "meraki_security");
-      renderReportJobs(reports, "cis-pdf-job-list", "cis-pdf-library-status", "cis_endpoint");
-      renderReportJobs(reports, "google-admin-report-job-list", "google-admin-report-library-status", "google_admin_security");
-      renderReportJobs(reports, "google-admin-library-list", "google-admin-library-status", "google_admin_security");
-      if ((activeTab === "reports" || activeTab === "meraki" || activeTab === "cis" || activeTab === "google-admin") && reports.some(function (job) {
-        return job.status === "queued" || job.status === "running";
-      })) {
-        reportPollTimer = window.setTimeout(loadReports, 900);
-      }
-    } catch (error) {
-      ["report-job-list", "scanner-report-job-list", "posture-report-job-list", "meraki-report-job-list", "cis-pdf-job-list"].forEach(function (id) {
-        var list = document.getElementById(id);
-        if (list) {
-          list.replaceChildren();
-          appendEmpty(list, error.message);
-        }
-      });
-      text(document.getElementById("report-library-status"), "Could not load reports.");
-      text(document.getElementById("scanner-report-library-status"), "Could not load reports.");
-      text(document.getElementById("posture-report-library-status"), "Could not load reports.");
-      text(document.getElementById("meraki-report-library-status"), "Could not load reports.");
-      text(document.getElementById("cis-pdf-library-status"), "Could not load reports.");
-    }
+    var groups = reportHistoryGroups.filter(function (group) {
+      return group.tab === activeTab || (activeTab === "reports" && group.topic === "google_admin_security");
+    });
+    await Promise.all(groups.map(function (group) { return reportHistory(group).refresh({ report_type: group.topic }); }));
+    if (groups.some(function (group) { return reportHistory(group).state.rows.some(function (job) {
+      return job.status === "queued" || job.status === "running";
+    }); })) reportPollTimer = window.setTimeout(loadReports, 900);
   }
 
   var merakiOrgOptions = [];
@@ -5887,7 +5925,9 @@
       meraki: "Review Meraki",
       cis: "Review CIS",
       scanners: "Review scanners",
-      members: "Review access"
+      reports: "Review report history",
+      members: "Review access",
+      overview: "Review workspace access"
     };
     return labels[tab] || "Review website";
   }
@@ -5907,62 +5947,79 @@
       });
   }
 
-  async function loadNotifications() {
-    if (!orgId) return;
+  function renderNotifications(state, committed) {
     var list = document.getElementById("notification-list");
     var status = document.getElementById("notification-inbox-status");
-    try {
-      var response = await fetch("/api/notifications", { credentials: "same-origin" });
-      var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load notifications");
+    var filter = document.getElementById("notification-filter");
+    var unreadOnly = filter && filter.value === "unread";
+    var older = document.getElementById("notification-older");
+    if (older) { older.classList.toggle("hidden", !state.body || !state.body.has_more); older.disabled = state.busy; }
+    var refreshButton = document.getElementById("notification-refresh");
+    if (refreshButton) refreshButton.disabled = state.busy;
+    var summary = state.loaded ? state.body.unread_count + " unread · Showing " + state.rows.length + " of " + state.body.total_count + (unreadOnly ? " unread notices." : " notices.") : "Loading notifications…";
+    if (state.error) summary = state.error + (state.loaded ? " Previously loaded notices remain below; refresh to update them." : " Use Refresh notices to retry.");
+    else if (state.busy) summary += " Updating…";
+    text(status, summary);
+    if (!committed) {
+      if (state.error && !state.loaded && list) { list.replaceChildren(); appendEmpty(list, "Notification history is unavailable. Refresh to retry."); }
+      return;
+    }
+    if (state.body) {
       var badge = document.getElementById("notification-badge");
-      if (badge) {
-        badge.textContent = body.unread_count > 99 ? "99+" : String(body.unread_count);
-        badge.classList.toggle("hidden", body.unread_count < 1);
-      }
-      text(status, body.unread_count ? body.unread_count + " unread notification(s)" : "You are all caught up.");
-      if (!list) return;
-      list.replaceChildren();
-      body.notifications.forEach(function (notice) {
-        var row = document.createElement("article");
-        row.className = "notification-row" + (notice.read_at ? " is-read" : " is-unread");
-        var main = document.createElement("div");
-        main.className = "notification-main";
-        var title = document.createElement("strong");
-        title.textContent = notice.title;
-        var summary = document.createElement("p");
-        summary.textContent = readableNotificationSummary(notice.summary);
-        var time = document.createElement("time");
-        time.dateTime = notice.detected_at;
-        time.textContent = "Detected " + dateLabel(notice.detected_at);
-        var reason = document.createElement("small");
-        reason.textContent = notice.reason.replaceAll("_", " ");
-        main.append(title, summary, reason);
-        var actions = document.createElement("div");
-        actions.className = "notification-actions";
-        actions.append(time);
-        var open = document.createElement("button");
-        open.type = "button";
-        open.className = "button button-secondary";
-        open.textContent = notificationReviewLabel(notice.tab);
-        open.dataset.notificationOpen = String(notice.id);
-        open.dataset.notificationTab = notice.tab;
-        open.dataset.notificationRead = notice.read_at ? "true" : "false";
-        actions.append(open);
-        row.append(main, actions);
-        list.append(row);
-      });
-      if (!body.notifications.length) {
-        var empty = document.createElement("div");
-        empty.className = "empty-events";
-        empty.textContent = notificationEmptyMessage();
-        list.append(empty);
-      }
-    } catch (error) {
-      text(status, error.message);
-      if (list) { list.replaceChildren(); appendEmpty(list, error.message); }
+      if (badge) { badge.textContent = state.body.unread_count > 99 ? "99+" : String(state.body.unread_count); badge.classList.toggle("hidden", state.body.unread_count < 1); }
+    }
+    if (!list) return;
+    var focused = list.contains(document.activeElement) ? document.activeElement.closest("[data-notification-open]") : null;
+    var focusId = focused && focused.dataset.notificationOpen;
+    list.replaceChildren();
+    state.rows.forEach(function (notice) {
+      var row = document.createElement("article");
+      row.className = "notification-row" + (notice.read_at ? " is-read" : " is-unread");
+      var main = document.createElement("div"); main.className = "notification-main";
+      var title = document.createElement("strong"); title.textContent = notice.title;
+      var summary = document.createElement("p"); summary.textContent = readableNotificationSummary(notice.summary);
+      var time = document.createElement("time"); time.dateTime = notice.detected_at; time.textContent = "Detected " + dateLabel(notice.detected_at);
+      var reason = document.createElement("small"); reason.textContent = String(notice.reason || "").replaceAll("_", " ");
+      main.append(title, summary, reason);
+      var actions = document.createElement("div"); actions.className = "notification-actions"; actions.append(time);
+      var open = document.createElement("button"); open.type = "button"; open.className = "button button-secondary";
+      open.textContent = notificationReviewLabel(notice.tab);
+      open.dataset.notificationOpen = String(notice.id); open.dataset.notificationTab = notice.tab; open.dataset.notificationRead = notice.read_at ? "true" : "false";
+      actions.append(open); row.append(main, actions); list.append(row);
+    });
+    if (!state.rows.length) appendEmpty(list, state.loaded ? (unreadOnly ? "No unread notices for this workspace." : notificationEmptyMessage()) : "Loading notifications…");
+    if (focusId) {
+      var replacement = Array.from(list.querySelectorAll("[data-notification-open]")).find(function (button) { return button.dataset.notificationOpen === focusId; });
+      if (replacement) replacement.focus({ preventScroll: true });
+      else if (filter) filter.focus({ preventScroll: true });
     }
   }
+
+  async function loadNotifications() {
+    if (!orgId) return;
+    if (!notificationHistory) notificationHistory = window.daedalusHistory.create({ url: "/api/notifications", field: "notifications", changed: renderNotifications });
+    var filter = document.getElementById("notification-filter");
+    return notificationHistory.refresh({ unread_only: filter && filter.value === "unread" ? "true" : "false" });
+  }
+
+  function restoreNotificationFilter() {
+    var filter = document.getElementById("notification-filter");
+    if (filter) filter.value = new URLSearchParams(window.location.search).get("notices") === "unread" ? "unread" : "all";
+  }
+  restoreNotificationFilter();
+  var notificationFilter = document.getElementById("notification-filter");
+  if (notificationFilter) notificationFilter.addEventListener("change", function () {
+    var url = new URL(window.location.href);
+    if (notificationFilter.value === "unread") url.searchParams.set("notices", "unread");
+    else url.searchParams.delete("notices");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    loadNotifications();
+  });
+  window.addEventListener("popstate", function () { restoreNotificationFilter(); loadNotifications(); });
+  var notificationOlder = document.getElementById("notification-older");
+  if (notificationOlder) notificationOlder.addEventListener("click", function () { if (notificationHistory) notificationHistory.older(); });
+  var notificationRefresh = document.getElementById("notification-refresh");
+  if (notificationRefresh) notificationRefresh.addEventListener("click", loadNotifications);
 
   document.addEventListener("click", async function (event) {
     var notificationOpen = event.target.closest("[data-notification-open]");

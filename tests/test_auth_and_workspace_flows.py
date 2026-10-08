@@ -1022,7 +1022,7 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         grant_notice = self.admin_client.get("/api/notifications").json()["notifications"][0]
         self.assertEqual(grant_notice["source_type"], "probation_override_granted")
         self.assertEqual(grant_notice["reason"], "access_override")
-        self.assertEqual(grant_notice["tab"], "members")
+        self.assertEqual(grant_notice["tab"], "overview")
         self.assertIn("temporary 14-day probation override", grant_notice["summary"])
         self.assertNotIn("Local scanner integration validation", grant_notice["summary"])
         audit_events = self.admin_client.get("/api/audit-log").json()["events"]

@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from authlib.integrations.starlette_client import OAuth
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -3868,11 +3868,33 @@ def external_check_history(
 @app.get("/api/notifications")
 def list_workspace_notifications(
     request: Request,
-    limit: int = 50,
+    response: Response,
+    limit: int = Query(50, ge=1, le=100),
+    before: int | None = Query(None, ge=1, le=9223372036854775807),
+    unread_only: bool = False,
     db: Session = Depends(get_db),
 ):
+    response.headers["Cache-Control"] = "no-store"
     user, organization, _ = get_org_context(request, db)
-    limit = max(1, min(limit, 100))
+    scope = WorkspaceNotification.organization_id == organization.id
+    receipt_join = (
+        (WorkspaceNotificationRead.notification_id == WorkspaceNotification.id)
+        & (WorkspaceNotificationRead.user_id == user.id)
+    )
+    filters = [scope]
+    if unread_only:
+        filters.append(WorkspaceNotificationRead.id.is_(None))
+    total_count = db.scalar(select(func.count(WorkspaceNotification.id))
+        .outerjoin(WorkspaceNotificationRead, receipt_join).where(*filters)) or 0
+    if before is not None:
+        anchor = db.scalar(select(WorkspaceNotification).where(scope, WorkspaceNotification.id == before))
+        if anchor is None:
+            raise HTTPException(status_code=404, detail="Notification history position not found")
+        # Detection time, then ID: delayed notices need not follow insertion order.
+        # A receipt changing after the first page must not invalidate its anchor.
+        filters.append((WorkspaceNotification.detected_at < anchor.detected_at)
+            | ((WorkspaceNotification.detected_at == anchor.detected_at)
+               & (WorkspaceNotification.id < anchor.id)))
     rows = db.execute(
         select(WorkspaceNotification, WorkspaceNotificationRead)
         .outerjoin(
@@ -3880,10 +3902,12 @@ def list_workspace_notifications(
             (WorkspaceNotificationRead.notification_id == WorkspaceNotification.id)
             & (WorkspaceNotificationRead.user_id == user.id),
         )
-        .where(WorkspaceNotification.organization_id == organization.id)
+        .where(*filters)
         .order_by(WorkspaceNotification.detected_at.desc(), WorkspaceNotification.id.desc())
-        .limit(limit)
+        .limit(limit + 1)
     ).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     unread_count = db.scalar(
         select(func.count(WorkspaceNotification.id))
         .outerjoin(
@@ -3898,6 +3922,9 @@ def list_workspace_notifications(
     ) or 0
     return {
         "unread_count": unread_count,
+        "total_count": total_count,
+        "has_more": has_more,
+        "next_before": rows[-1][0].id if has_more and rows else None,
         "notifications": [
             {
                 "id": notification.id,
@@ -3914,7 +3941,7 @@ def list_workspace_notifications(
                     else "meraki" if notification.source_type == "meraki_report"
                     else "cis" if notification.source_type == "cis_report"
                     else "scanners" if notification.source_type == "scanner_comparison"
-                    else "members" if notification.source_type in {
+                    else "overview" if notification.source_type in {
                         "probation_override_granted", "probation_override_revoked", "probation_override_expired", "onboarding_review_due"
                     }
                     else "dns" if notification.title.startswith("DNS and email")
@@ -5287,20 +5314,57 @@ async def create_meraki_report(
 
 
 @app.get("/api/reports")
-def list_reports(request: Request, db: Session = Depends(get_db)):
+def list_reports(
+    request: Request,
+    response: Response,
+    limit: int = Query(50, ge=1, le=100),
+    before: int | None = Query(None, ge=1, le=9223372036854775807),
+    report_type: str | None = None,
+    status: Literal["queued", "running", "completed", "failed"] | None = None,
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
     _, organization, _ = get_org_context(request, db)
+    filters = [ReportJob.organization_id == organization.id]
+    if report_type is not None:
+        types = report_type.split(",")
+        allowed = {"external_posture", "scanner_results", "meraki_security", "cis_endpoint", "google_admin_security"}
+        if len(types) > len(allowed) or any(value not in allowed for value in types):
+            raise HTTPException(status_code=422, detail="Choose a supported report topic")
+        filters.append(ReportJob.report_type.in_(types))
+    latest_row = db.execute(select(ReportJob, User)
+        .outerjoin(User, User.id == ReportJob.created_by_user_id)
+        .where(*filters, ReportJob.status == "completed")
+        .order_by(ReportJob.id.desc()).limit(1)).first()
+    if status is not None:
+        filters.append(ReportJob.status == status)
+    total_count = db.scalar(select(func.count(ReportJob.id)).where(*filters)) or 0
+    if before is not None:
+        anchor = db.scalar(select(ReportJob.id).where(
+            ReportJob.id == before, ReportJob.organization_id == organization.id))
+        if anchor is None:
+            raise HTTPException(status_code=404, detail="Report history position not found")
+        filters.append(ReportJob.id < before)
     rows = db.execute(
         select(ReportJob, User)
         .outerjoin(User, User.id == ReportJob.created_by_user_id)
-        .where(ReportJob.organization_id == organization.id)
+        .where(*filters)
         .order_by(ReportJob.id.desc())
-        .limit(50)
+        .limit(limit + 1)
     ).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     uploads = {row.report_id: row.web_view_link or "" for row in db.scalars(
         select(DriveUpload).where(DriveUpload.report_id.in_([job.id for job, _ in rows])))} if rows else {}
     for job, _actor in rows:
         job._drive_link = uploads.get(job.id)
-    return {"reports": [serialize_report_job(job, actor) for job, actor in rows]}
+    return {
+        "reports": [serialize_report_job(job, actor) for job, actor in rows],
+        "latest_completed": serialize_report_job(*latest_row) if latest_row else None,
+        "total_count": total_count,
+        "has_more": has_more,
+        "next_before": rows[-1][0].id if has_more and rows else None,
+    }
 
 
 @app.get("/api/meraki/reports/{report_id}/changes")
