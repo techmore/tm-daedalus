@@ -13,7 +13,9 @@ import os
 import platform
 import re
 import secrets
+import selectors
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -34,6 +36,69 @@ from daedalus.command_journal import CommandJournal
 
 LOG = logging.getLogger("daedalus.agent")
 COMMAND_PROTOCOL_VERSION = 4
+
+
+class UpdateOutputIncomplete(ValueError):
+    """A bounded tool read cannot establish a complete update result."""
+
+
+def _bounded_update_command(args: list[str], *, timeout: float, env=None) -> subprocess.CompletedProcess:
+    """Capture at most 128 KiB across both streams of an owned tool process.
+
+    Never invoke a shell, inherit stdin or retain raw output in a receipt.
+    The timeout includes draining pipes and waiting for process completion.
+    """
+    limit = 128 * 1024
+    deadline = time.monotonic() + timeout
+    process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, bufsize=0, env=env, start_new_session=True)
+    output = [bytearray(), bytearray()]
+    completed = False
+    try:
+        with selectors.DefaultSelector() as selector:
+            for index, stream in enumerate((process.stdout, process.stderr)):
+                os.set_blocking(stream.fileno(), False)
+                selector.register(stream, selectors.EVENT_READ, index)
+            total = 0
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(args, timeout)
+                for key, _ in selector.select(min(remaining, 0.25)):
+                    try:
+                        chunk = os.read(key.fileobj.fileno(), 4096)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    if total + len(chunk) > limit:
+                        raise UpdateOutputIncomplete("Update catalog exceeded the capture limit")
+                    output[key.data].extend(chunk)
+                    total += len(chunk)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(args, timeout)
+            process.wait(timeout=remaining)
+            completed = True
+        try:
+            stdout, stderr = (bytes(value).decode("utf-8") for value in output)
+        except UnicodeDecodeError as exc:
+            raise UpdateOutputIncomplete("Update catalog contained unsupported encoding") from exc
+        return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+    finally:
+        # Stop only this invocation's isolated process group. This also handles
+        # a child retaining a pipe after its parent exits; never signal a daemon.
+        try:
+            if not completed:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.wait(timeout=2)
+        finally:
+            process.stdout.close()
+            process.stderr.close()
 
 
 def discover_connected_networks() -> list[str]:
@@ -667,13 +732,13 @@ class NmapUIBridge:
         if not executable.is_file():
             return {"schema_version": 1, "observed_at": observed_at, "status": "unavailable", "platform": "Darwin"}
         try:
-            result = subprocess.run(
+            result = _bounded_update_command(
                 [str(executable), "--list"],
-                capture_output=True,
-                text=True,
                 timeout=120,
-                check=False,
+                env={**os.environ, "LC_ALL": "C", "LANG": "C"},
             )
+        except UpdateOutputIncomplete:
+            return {"schema_version": 1, "observed_at": observed_at, "status": "unknown", "platform": "Darwin"}
         except subprocess.TimeoutExpired:
             return {"schema_version": 1, "observed_at": observed_at, "status": "timed_out", "platform": "Darwin"}
         except OSError:
@@ -682,11 +747,16 @@ class NmapUIBridge:
             return {"schema_version": 1, "observed_at": observed_at, "status": "error", "platform": "Darwin"}
         # Apple's tool can write a successful catalog result to stderr.
         output = "\n".join(
-            stream[:64 * 1024] for stream in (result.stdout, result.stderr)
+            stream for stream in (result.stdout, result.stderr)
             if isinstance(stream, str)
         )
         labels = re.findall(r"^\s*\*\s+Label:\s*(.{1,200})\s*$", output, re.MULTILINE)
         titles = re.findall(r"^\s*Title:\s*(.{1,240})\s*$", output, re.MULTILINE)
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        no_updates_lines = {"No new software available.", "No new software available"}
+        no_updates = any(line in no_updates_lines for line in lines)
+        if labels and no_updates:
+            return {"schema_version": 1, "observed_at": observed_at, "status": "unknown", "platform": "Darwin"}
         if labels:
             count = len(labels)
             entries = []
@@ -697,7 +767,8 @@ class NmapUIBridge:
                 entries.append(item)
             return {"schema_version": 1, "observed_at": observed_at, "status": "updates_available",
                     "platform": "Darwin", "update_count": count, "updates": entries, "truncated": count > len(entries)}
-        if re.search(r"No new software available", output, re.IGNORECASE):
+        if no_updates and all(line in no_updates_lines | {"Software Update Tool", "Finding available software"}
+                              for line in lines):
             return {"schema_version": 1, "observed_at": observed_at, "status": "no_updates", "platform": "Darwin", "update_count": 0, "updates": []}
         return {"schema_version": 1, "observed_at": observed_at, "status": "unknown", "platform": "Darwin"}
 
@@ -708,15 +779,21 @@ class NmapUIBridge:
         if not executable.is_file():
             return {**evidence, "status": "unavailable"}
         try:
-            result = subprocess.run([str(executable), "list", "--upgradable"],
-                                    capture_output=True, text=True, timeout=30, check=False,
+            result = _bounded_update_command([str(executable), "list", "--upgradable"], timeout=30,
                                     env={**os.environ, "LC_ALL": "C", "LANG": "C"})
+        except UpdateOutputIncomplete:
+            return {**evidence, "status": "unknown"}
         except subprocess.TimeoutExpired:
             return {**evidence, "status": "timed_out"}
         except OSError:
             return {**evidence, "status": "unavailable"}
         if result.returncode != 0:
             return {**evidence, "status": "error"}
+        if isinstance(result.stderr, str) and any(
+            line.strip() != "WARNING: apt does not have a stable CLI interface. Use with caution in scripts."
+            for line in result.stderr.splitlines() if line.strip()
+        ):
+            return {**evidence, "status": "unknown"}
         output = result.stdout
         if not isinstance(output, str) or len(output) > 128 * 1024:
             return {**evidence, "status": "unknown"}

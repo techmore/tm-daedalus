@@ -70,7 +70,7 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         output = "Listing...\n" + "\n".join(f"package-{i}/stable 2.0 amd64 [upgradable from: 1.0]" for i in range(7))
         with patch("daedalus.agent.platform.system", return_value="Linux"), patch(
             "daedalus.agent.Path.is_file", return_value=True
-        ), patch("daedalus.agent.subprocess.run", return_value=Mock(returncode=0, stdout=output)) as run:
+        ), patch("daedalus.agent._bounded_update_command", return_value=Mock(returncode=0, stdout=output)) as run:
             result = bridge._check_os_updates()
         self.assertEqual(result["status"], "updates_available")
         self.assertEqual(result["update_count"], 7)
@@ -89,7 +89,7 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
                                  ("Listing...\n" + "x" * (128 * 1024), "unknown")):
             with self.subTest(expected=expected, length=len(output)), patch(
                 "daedalus.agent.Path.is_file", return_value=True
-            ), patch("daedalus.agent.subprocess.run", return_value=Mock(returncode=0, stdout=output)):
+            ), patch("daedalus.agent._bounded_update_command", return_value=Mock(returncode=0, stdout=output)):
                 result = bridge._check_linux_updates("2026-10-05T00:00:00Z")
                 self.assertEqual(result["status"], expected)
                 self.assertFalse(result["catalog_refreshed"])
@@ -100,14 +100,14 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         for failure, status in ((OSError("unavailable"), "unavailable"),
                                 (subprocess.TimeoutExpired("apt", 30), "timed_out")):
             with self.subTest(status=status), patch("daedalus.agent.Path.is_file", return_value=True), patch(
-                "daedalus.agent.subprocess.run", side_effect=failure
+                "daedalus.agent._bounded_update_command", side_effect=failure
             ):
                 self.assertEqual(bridge._check_linux_updates("now")["status"], status)
-        with patch("daedalus.agent.Path.is_file", return_value=False), patch("daedalus.agent.subprocess.run") as run:
+        with patch("daedalus.agent.Path.is_file", return_value=False), patch("daedalus.agent._bounded_update_command") as run:
             self.assertEqual(bridge._check_linux_updates("now")["status"], "unavailable")
             run.assert_not_called()
         with patch("daedalus.agent.Path.is_file", return_value=True), patch(
-            "daedalus.agent.subprocess.run", return_value=Mock(returncode=1, stdout="Listing...\n")
+            "daedalus.agent._bounded_update_command", return_value=Mock(returncode=1, stdout="Listing...\n")
         ):
             self.assertEqual(bridge._check_linux_updates("now")["status"], "error")
 
@@ -120,38 +120,37 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
         ))
         with patch("daedalus.agent.platform.system", return_value="Darwin"), patch(
             "daedalus.agent.Path.is_file", return_value=True
-        ), patch("daedalus.agent.subprocess.run", return_value=completed) as run:
+        ), patch("daedalus.agent._bounded_update_command", return_value=completed) as run:
             result = bridge._check_os_updates()
         self.assertEqual(result["status"], "updates_available")
         self.assertEqual(result["update_count"], 2)
         self.assertEqual(result["updates"][0]["label"], "macOS Tahoe 26.1-25B83")
-        run.assert_called_once_with(
-            ["/usr/sbin/softwareupdate", "--list"],
-            capture_output=True, text=True, timeout=120, check=False,
-        )
+        self.assertEqual(run.call_args.args[0], ["/usr/sbin/softwareupdate", "--list"])
+        self.assertEqual(run.call_args.kwargs["timeout"], 120)
+        self.assertEqual(run.call_args.kwargs["env"]["LC_ALL"], "C")
 
     def test_macos_update_check_handles_no_updates_unknown_and_timeout(self):
         bridge = self.make_bridge()
         with patch("daedalus.agent.platform.system", return_value="Darwin"), patch(
             "daedalus.agent.Path.is_file", return_value=True
-        ), patch("daedalus.agent.subprocess.run", return_value=Mock(
+        ), patch("daedalus.agent._bounded_update_command", return_value=Mock(
             returncode=0, stdout="No new software available.\n"
         )):
             self.assertEqual(bridge._check_os_updates()["status"], "no_updates")
         with patch("daedalus.agent.platform.system", return_value="Darwin"), patch(
             "daedalus.agent.Path.is_file", return_value=True
-        ), patch("daedalus.agent.subprocess.run", return_value=Mock(returncode=0, stdout="unrecognized output")):
+        ), patch("daedalus.agent._bounded_update_command", return_value=Mock(returncode=0, stdout="unrecognized output")):
             self.assertEqual(bridge._check_os_updates()["status"], "unknown")
         with patch("daedalus.agent.platform.system", return_value="Darwin"), patch(
             "daedalus.agent.Path.is_file", return_value=True
-        ), patch("daedalus.agent.subprocess.run", side_effect=__import__("subprocess").TimeoutExpired("softwareupdate", 120)):
+        ), patch("daedalus.agent._bounded_update_command", side_effect=__import__("subprocess").TimeoutExpired("softwareupdate", 120)):
             self.assertEqual(bridge._check_os_updates()["status"], "timed_out")
 
     def test_macos_no_updates_message_on_stderr(self):
         bridge = self.make_bridge()
         with patch("daedalus.agent.platform.system", return_value="Darwin"), patch(
             "daedalus.agent.Path.is_file", return_value=True
-        ), patch("daedalus.agent.subprocess.run", return_value=Mock(
+        ), patch("daedalus.agent._bounded_update_command", return_value=Mock(
             returncode=0, stdout="Software Update Tool\nFinding available software\n",
             stderr="No new software available.\n"
         )):
