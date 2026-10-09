@@ -2819,29 +2819,61 @@
     var status = document.getElementById(statusId);
     if (!list) return;
     reports = matchingReportJobs(reports, reportType);
+    var focused = list.contains(document.activeElement) ? document.activeElement : null;
+    var focusedCard = focused && focused.closest(".report-job-card");
+    var focusId = focusedCard && focusedCard.dataset.reportId;
+    var focusAction = focused && focused.dataset.reportAction;
+    var existing = new Map();
+    Array.from(list.querySelectorAll(".report-job-card")).forEach(function (card) { existing.set(card.dataset.reportId, card); });
+    var cards = [];
+    function restoreReviewFocus() {
+      if (!focused) return;
+      if (list.contains(focused)) {
+        if (document.activeElement !== focused) focused.focus({preventScroll: true});
+        return;
+      }
+      var replacement = cards.find(function (card) { return card.dataset.reportId === focusId; });
+      if (replacement) {
+        var control = focusAction && replacement.querySelector('[data-report-action="' + focusAction + '"]');
+        if (!control) control = replacement.querySelector("summary");
+        if (control) control.focus({preventScroll: true});
+        else { replacement.tabIndex = -1; replacement.focus({preventScroll: true}); }
+      } else {
+        var controls = document.getElementById(listId + "-history-controls");
+        var refresh = controls && controls.querySelector("[data-history-refresh]");
+        if (refresh) refresh.focus({preventScroll: true});
+        else { list.tabIndex = -1; list.focus({preventScroll: true}); }
+      }
+    }
     if (reportType === "meraki_security") {
       var overview = document.getElementById("meraki-current-summary");
       if (overview) {
-        overview.replaceChildren();
         var completed = latestCompleted || reports.find(function (job) { return job.status === "completed"; });
-        if (!completed) appendEmpty(overview, "No completed network assessment yet. Connect an organization below to establish a baseline.");
-        else {
-          var captured = document.createElement("p"); captured.className = "muted";
-          captured.textContent = "Latest completed report · " + dateLabel(completed.completed_at || completed.created_at);
-          var totals = completed.meraki_summary || {};
-          var grid = document.createElement("div"); grid.className = "audit-metric-grid";
-          [["Review observations", "review_observation_count"], ["Controls unavailable", "security_controls_unavailable"], ["Networks", "network_count"], ["Devices", "device_count"]].forEach(function (metric) {
-            grid.append(makeAuditMetric(metric[0], totals[metric[1]] == null ? "Not captured" : String(totals[metric[1]]), (metric[1] === "security_controls_unavailable" && totals.security_controls_collected != null ? String(totals.security_controls_collected) + " controls read · latest saved report" : "Latest saved report"), (metric[1] === "review_observation_count" || metric[1] === "security_controls_unavailable") && (totals[metric[1]] == null || totals[metric[1]] > 0) ? "attention" : "neutral"));
-          });
-          overview.append(captured, grid);
-          var observations = document.createElement("div"); observations.className = "check-summary";
-          overview.append(observations);
-          loadMerakiSummaryObservations(completed.id, observations);
+        var overviewSignature = JSON.stringify(completed ? [completed.id, completed.completed_at, completed.created_at, completed.meraki_summary] : null);
+        if (overview.dataset.reportSignature !== overviewSignature) {
+          var overviewFocused = overview.contains(document.activeElement);
+          overview.replaceChildren();
+          overview.dataset.reportSignature = overviewSignature;
+          if (!completed) appendEmpty(overview, "No completed network assessment yet. Connect an organization below to establish a baseline.");
+          else {
+            var captured = document.createElement("p"); captured.className = "muted";
+            captured.textContent = "Latest completed report · " + dateLabel(completed.completed_at || completed.created_at);
+            var totals = completed.meraki_summary || {};
+            var grid = document.createElement("div"); grid.className = "audit-metric-grid";
+            [["Review observations", "review_observation_count"], ["Controls unavailable", "security_controls_unavailable"], ["Networks", "network_count"], ["Devices", "device_count"]].forEach(function (metric) {
+              grid.append(makeAuditMetric(metric[0], totals[metric[1]] == null ? "Not captured" : String(totals[metric[1]]), (metric[1] === "security_controls_unavailable" && totals.security_controls_collected != null ? String(totals.security_controls_collected) + " controls read · latest saved report" : "Latest saved report"), (metric[1] === "review_observation_count" || metric[1] === "security_controls_unavailable") && (totals[metric[1]] == null || totals[metric[1]] > 0) ? "attention" : "neutral"));
+            });
+            overview.append(captured, grid);
+            var observations = document.createElement("div"); observations.className = "check-summary";
+            overview.append(observations);
+            loadMerakiSummaryObservations(completed.id, observations);
+          }
+          if (overviewFocused) { overview.tabIndex = -1; overview.focus({preventScroll: true}); }
         }
       }
     }
-    list.replaceChildren();
     if (!reports.length) {
+      list.replaceChildren();
       var reportTypes = Array.isArray(reportType) ? reportType : [reportType];
       var emptyMessage = Array.isArray(reportType) ? "No reports in these topics have been generated for this workspace yet." : reportType === "meraki_security"
         ? "No Meraki reports have been generated for this workspace yet."
@@ -2853,16 +2885,23 @@
               ? "No external posture or NmapUI scan reports have been generated for this workspace yet."
               : "No external posture reports have been generated for this workspace yet.")));
       appendEmpty(list, emptyMessage);
-      if (status) text(status, "Reports are scoped to this workspace.");
+      if (status && status.textContent !== "Reports are scoped to this workspace.") text(status, "Reports are scoped to this workspace.");
+      restoreReviewFocus();
       return;
     }
 
-    if (status) text(status, reportJobStatusSummary(reports));
+    var statusSummary = reportJobStatusSummary(reports);
+    if (status && status.textContent !== statusSummary) text(status, statusSummary);
 
     reports.forEach(function (job) {
+      var prior = existing.get(String(job.id));
+      var signature = JSON.stringify([job, !!(driveState && driveState.connected), !!(driveState && driveState.is_admin)]);
+      if (prior && prior.dataset.reportSignature === signature) { cards.push(prior); return; }
       var card = document.createElement("article");
       card.className = "report-job-card";
       card.dataset.reportId = String(job.id);
+      card.dataset.reportSignature = signature;
+      card.dataset.detailSource = job.meraki_snapshot_url || "";
       var main = document.createElement("div");
       main.className = "report-job-main";
       var heading = document.createElement("strong");
@@ -2906,6 +2945,7 @@
       actions.append(badge);
       if (job.status === "completed" && job.download_url) {
         var download = document.createElement("a");
+        download.dataset.reportAction = "download";
         download.className = "button button-small";
         download.href = job.download_url;
         download.download = job.file_name || "daedalus-report.pdf";
@@ -2914,15 +2954,18 @@
         if (driveState && driveState.connected) {
           if (job.drive_link) {
             var openDrive = document.createElement("a");
+            openDrive.dataset.reportAction = "drive-link";
             openDrive.className = "button button-small button-quiet"; openDrive.href = job.drive_link;
             openDrive.target = "_blank"; openDrive.rel = "noopener noreferrer"; openDrive.textContent = "In Drive ↗";
             actions.append(openDrive);
           } else if (driveState.is_admin) {
             var saveDrive = document.createElement("button");
+            saveDrive.dataset.reportAction = "save-drive";
             saveDrive.type = "button"; saveDrive.className = "button button-small button-quiet"; saveDrive.textContent = "Save to Drive";
             saveDrive.addEventListener("click", async function () {
               saveDrive.disabled = true; saveDrive.textContent = "Saving…";
               try { await postJson("/api/reports/" + job.id + "/drive"); } catch (error) { saveDrive.textContent = "Retry"; saveDrive.title = error.message; saveDrive.disabled = false; return; }
+              saveDrive.textContent = "Saved to Drive";
               await loadReports();
             });
             actions.append(saveDrive);
@@ -2931,11 +2974,13 @@
       }
       if (job.google_admin_snapshot_url) {
         var googleEvidence = document.createElement("a"); googleEvidence.className = "button button-small button-quiet";
+        googleEvidence.dataset.reportAction = "google-evidence";
         googleEvidence.href = job.google_admin_snapshot_url; googleEvidence.textContent = "Download audit evidence";
         actions.append(googleEvidence);
       }
       if (job.meraki_changes_url) {
         var changes = document.createElement("a");
+        changes.dataset.reportAction = "changes";
         changes.className = "button button-small button-quiet";
         changes.href = job.meraki_changes_url;
         changes.textContent = "Download change evidence";
@@ -2943,6 +2988,7 @@
       }
       if (job.meraki_snapshot_url) {
         var snapshot = document.createElement("a");
+        snapshot.dataset.reportAction = "snapshot";
         snapshot.className = "button button-small button-quiet";
         snapshot.href = job.meraki_snapshot_url;
         snapshot.textContent = "Download complete JSON";
@@ -2950,33 +2996,42 @@
       }
       card.append(main, actions);
       if (job.meraki_snapshot_url) {
-        var details = document.createElement("details");
-        details.className = "meraki-report-details";
-        details.dataset.reportId = String(job.id);
-        details.open = openMerakiDashboardDetails.has(job.id);
-        var summary = document.createElement("summary");
-        summary.textContent = "View saved report details";
-        var detailContent = document.createElement("div");
-        detailContent.className = "meraki-report-detail-content";
-        detailContent.textContent = "Open to inspect this saved snapshot.";
-        details.append(summary, detailContent);
-        details.addEventListener("toggle", function () {
-          if (details.open) {
-            openMerakiDashboardDetails.add(job.id);
-            if (!detailContent.dataset.loaded) {
-              loadMerakiDashboardDetails(job.id, detailContent);
+        var retainedDetails = prior && prior.dataset.detailSource === job.meraki_snapshot_url && prior.querySelector(".meraki-report-details");
+        if (retainedDetails) card.append(retainedDetails);
+        else {
+          var details = document.createElement("details");
+          details.className = "meraki-report-details";
+          details.dataset.reportId = String(job.id);
+          details.open = openMerakiDashboardDetails.has(job.id);
+          var summary = document.createElement("summary");
+          summary.textContent = "View saved report details";
+          summary.dataset.reportAction = "details";
+          var detailContent = document.createElement("div");
+          detailContent.className = "meraki-report-detail-content";
+          detailContent.textContent = "Open to inspect this saved snapshot.";
+          details.append(summary, detailContent);
+          details.addEventListener("toggle", function () {
+            if (details.open) {
+              openMerakiDashboardDetails.add(job.id);
+              if (!detailContent.dataset.loaded) {
+                loadMerakiDashboardDetails(job.id, detailContent);
+              }
+            } else {
+              openMerakiDashboardDetails.delete(job.id);
             }
-          } else {
-            openMerakiDashboardDetails.delete(job.id);
+          });
+          card.append(details);
+          if (details.open) {
+            loadMerakiDashboardDetails(job.id, detailContent);
           }
-        });
-        card.append(details);
-        if (details.open) {
-          loadMerakiDashboardDetails(job.id, detailContent);
         }
       }
-      list.append(card);
+      cards.push(card);
     });
+    var keptCards = new Set(cards);
+    Array.from(list.children).forEach(function (child) { if (!keptCards.has(child)) child.remove(); });
+    cards.forEach(function (card, index) { if (list.children[index] !== card) list.insertBefore(card, list.children[index] || null); });
+    restoreReviewFocus();
   }
 
   function formatBytes(value) {
@@ -3071,7 +3126,7 @@
           var focusId = card && card.dataset.reportId;
           var focusText = focused && focused.textContent;
           renderReportJobs(state.rows, view[0], view[1], group.topic.includes(",") ? group.topic.split(",") : group.topic, state.body && state.body.latest_completed);
-          if (focusId) {
+          if (focusId && !list.contains(focused)) {
             var replacement = Array.from(list.querySelectorAll("[data-report-id] button, [data-report-id] a, [data-report-id] summary")).find(function (item) {
               return item.closest("[data-report-id]").dataset.reportId === focusId && item.textContent === focusText;
             });

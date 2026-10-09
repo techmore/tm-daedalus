@@ -55,6 +55,25 @@ class IncusDeployTests(unittest.TestCase):
         with self.assertRaisesRegex(DeployError, r'Command failed \(7\): fixture failure'):
             _run_streaming_ssh([sys.executable, '-c', "import sys; print('fixture failure',file=sys.stderr); sys.exit(7)"])
 
+    def test_optional_cleanup_does_not_request_another_identity_check(self):
+        script = "import sys,time; print('# Tailscale SSH requires an additional check.',file=sys.stderr,flush=True); print('# To authenticate, visit: https://login.tailscale.com/a/test12345678',file=sys.stderr,flush=True); time.sleep(5)"
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output), self.assertRaises(DeployError):
+            _run_streaming_ssh([sys.executable, '-c', script], allow_access_check=False, timeout=1)
+        self.assertEqual(output.getvalue(), '')
+
+    def test_optional_cleanup_has_a_bounded_process_deadline(self):
+        with self.assertRaisesRegex(DeployError, 'exceeded its deadline'):
+            _run_streaming_ssh([sys.executable, '-c', 'import time; time.sleep(5)'], allow_access_check=False, timeout=0.1)
+
+    def test_only_optional_cleanup_changes_access_check_and_work_deadline(self):
+        with patch('scripts.deploy_incus._run_streaming_ssh', return_value='') as command:
+            _ssh('operator@incus-host', ['rm', '-f', '/tmp/fixture.tar.gz'], optional_cleanup=True)
+        self.assertEqual(command.call_args.kwargs, {'allow_access_check': False, 'timeout': 20})
+        with patch('scripts.deploy_incus._run_streaming_ssh', return_value='') as command:
+            _ssh('operator@incus-host', ['incus', 'exec', 'daedalus-prod', '--', 'rollback'])
+        self.assertEqual(command.call_args.kwargs, {})
+
     def _deploy_with_mocked_release(self, ssh_side_effect, health_results):
         temporary_directory = tempfile.TemporaryDirectory(prefix="daedalus-deploy-test-")
         self.addCleanup(temporary_directory.cleanup)
@@ -133,10 +152,13 @@ class IncusDeployTests(unittest.TestCase):
         self.assertIn("Restoring the previous source release", errors)
         remote_phases = [call.args[1][6] for call in calls if len(call.args[1]) > 6 and call.args[1][0] == "incus" and call.args[1][5].endswith("deploy-remote.sh")]
         self.assertEqual(remote_phases, ["prepare", "activate", "rollback", "cleanup"])
+        self.assertTrue(calls[-1].kwargs["optional_cleanup"])
+        self.assertTrue(calls[-2].kwargs["optional_cleanup"])
+        self.assertTrue(all(not call.kwargs.get("optional_cleanup") for call in calls[:-2]))
         self.assertIn("Verified release archive: 52 files", output)
 
     def test_failed_rollback_retains_remote_recovery_files(self):
-        def fail_rollback(_host, command):
+        def fail_rollback(_host, command, **_kwargs):
             if "rollback" in command:
                 raise DeployError("rollback command failed")
             return ""

@@ -112,3 +112,9 @@ Set `DAEDALUS_AUDIT_DNS_NAMESERVERS` to up to three comma-separated IPv4/IPv6 re
 The post-BFS/report/key-revocation archive `daedalus-data-20261008T014901Z.tar.gz` was verified and restored into a fresh private local directory. All **41 completed PDFs** were present with their recorded sizes and PDF headers; both encrypted Meraki credentials decrypted using the existing sealed recovery configuration. BFS reports 40/41 retained saved USD purchase plans, and the temporary validation key remained revoked. The restored production-configured application completed its lifespan and returned ready through an isolated TestClient, with collectors disabled and no listening socket. Unauthenticated report access returned 401; the runtime then stopped. Receipt: ignored `validation/recovery-20261008/receipt.json`.
 
 This verifies the latest archive, configuration and application startup. Separate recovery-password custody, public failover and restored Google OAuth login remain unverified.
+
+## Optional staging cleanup and access checks
+
+Deployment activation, restart, rollback and health inspection keep their normal SSH access checks. Optional cleanup of temporary container/host archives has a 20-second process deadline and stops its local SSH connection if another Tailscale identity check is requested. It logs a skipped cleanup, leaving temporary files for later management. This prevents optional cleanup from withholding the deployment's final success/failure result.
+
+A failed rollback still retains its container recovery helper/state. Skipping cleanup does not verify recovery or authorize another rollout. Inspect the active release and health before retrying a failed deployment. These changes do not alter the host SSH policy or grant access.

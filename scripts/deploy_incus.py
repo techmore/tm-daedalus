@@ -49,11 +49,24 @@ def _run(arguments: list[str], *, input_text: str | None = None) -> str:
     return result.stdout.strip()
 
 
-def _run_streaming_ssh(arguments: list[str]) -> str:
+def _run_streaming_ssh(arguments: list[str], *, allow_access_check: bool = True, timeout: float | None = None) -> str:
     """Expose only SSH access-check prompts while retaining normal output."""
     process = subprocess.Popen(arguments, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert process.stdout is not None and process.stderr is not None
     errors: list[str] = []
+    timed_out = threading.Event()
+
+    def stop_after_deadline() -> None:
+        timed_out.set()
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+
+    timer = threading.Timer(timeout, stop_after_deadline) if timeout is not None else None
+    if timer is not None:
+        timer.daemon = True
+        timer.start()
 
     def read_errors() -> None:
         for line in process.stderr:
@@ -62,23 +75,38 @@ def _run_streaming_ssh(arguments: list[str]) -> str:
             if message == "# Tailscale SSH requires an additional check." or re.fullmatch(
                 r"# To authenticate, visit: https://login\.tailscale\.com/a/[A-Za-z0-9_-]{8,128}", message
             ):
-                print(message, file=sys.stderr, flush=True)
+                if allow_access_check:
+                    print(message, file=sys.stderr, flush=True)
+                else:
+                    try:
+                        process.terminate()
+                    except ProcessLookupError:
+                        pass
 
     reader = threading.Thread(target=read_errors, daemon=True)
     reader.start()
-    output = process.stdout.read()
-    status = process.wait()
-    reader.join()
-    process.stdout.close()
-    process.stderr.close()
+    try:
+        output = process.stdout.read()
+        status = process.wait()
+        reader.join()
+    finally:
+        if timer is not None:
+            timer.cancel()
+        process.stdout.close()
+        process.stderr.close()
+    if timed_out.is_set():
+        raise DeployError("Optional SSH cleanup exceeded its deadline; temporary files may remain.")
     if status:
         detail = "".join(errors).strip() or output.strip()
         raise DeployError(f"Command failed ({status}): {detail}")
     return output.strip()
 
 
-def _ssh(host: str, command: list[str]) -> str:
-    return _run_streaming_ssh(["ssh", *SSH_CONNECTION_OPTIONS, host, shlex.join(command)])
+def _ssh(host: str, command: list[str], *, optional_cleanup: bool = False) -> str:
+    arguments = ["ssh", *SSH_CONNECTION_OPTIONS, host, shlex.join(command)]
+    if optional_cleanup:
+        return _run_streaming_ssh(arguments, allow_access_check=False, timeout=20)
+    return _run_streaming_ssh(arguments)
 
 
 def _validate(host: str, instance: str, *, require_clean: bool = True) -> None:
@@ -208,16 +236,16 @@ def deploy(host: str, instance: str, health_url: str, *, plan_only: bool = False
                     _ssh(host, [
                         "incus", "exec", instance, "--", "bash", remote_script,
                         "cleanup", digest, instance,
-                    ])
+                    ], optional_cleanup=True)
                 except DeployError:
-                    pass
+                    print("Optional container cleanup was skipped; temporary staging files may remain.", file=sys.stderr)
             try:
                 host_cleanup = ["rm", "-f", remote_archive]
                 if not retain_remote_recovery:
                     host_cleanup.append(remote_script)
-                _ssh(host, host_cleanup)
+                _ssh(host, host_cleanup, optional_cleanup=True)
             except DeployError:
-                pass
+                print("Optional host cleanup was skipped; temporary archives may remain.", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
