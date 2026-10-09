@@ -467,6 +467,10 @@ not follow redirects. The enrollment token is never placed in a browser URL or
 injected into the local web interface. This device access cannot create reports
 or read another scanner or workspace’s PDF; generation remains in the portal.
 
+## October 9 event replay correction
+
+The current source ZIP SHA-256 is `734c19b7db708ce60f775ef765cdfd0369a6d93936067166b78ebc0a2a3321b1`. Recording/replaying scan and report events now uses independent nested payload snapshots, and every recipient receives its own copy. Relative to the preceding ZIP `37a8b078deb94704f4cd334c94f695f48e4e828f79c7292ad504e0e7ca24469c`, only two runtime source files and the manifest changed; report assets remain identical. A real isolated Mac interruption recovered 12 queued payloads unchanged, with one scan and zero rejected events. Installed-client upgrades, production activation and wider fleet acceptance remain pending. [Correction and validation details](../../../docs/SCANNER-LIVE-VALIDATION.md#frozen-event-payload-correction--october-9).
+
 ## October 7 calendar-date correction
 
 The distributed NmapUI source ZIP is SHA-256

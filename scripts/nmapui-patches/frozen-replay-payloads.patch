@@ -1,0 +1,78 @@
+--- a/nmapui/jobs.py
++++ b/nmapui/jobs.py
+@@ -1,3 +1,4 @@
++import copy
+ from datetime import datetime, timedelta, timezone
+ import uuid
+ import json
+@@ -159,11 +160,11 @@
+             return self._source_jobs.get(job_type, {}).get(owner_sid)
+ 
+     def record(self, owner_sid: str, event: str, data, job_type: str = "scan", source_job_id: str | None = None) -> dict:
+-        """Store an event in the replay buffer for this job."""
++        """Retain an independent snapshot for this event identity and job."""
+         with self._lock:
+             envelope = {"client_event_id": str(uuid.uuid4()),
+                         "occurred_at": datetime.now(timezone.utc).isoformat(),
+-                        "event_name": event, "payload": data}
++                        "event_name": event, "payload": copy.deepcopy(data)}
+             active_source_job_id = self._source_jobs.get(job_type, {}).get(owner_sid)
+             source_job_id = source_job_id or active_source_job_id
+             if source_job_id is not None:
+@@ -171,7 +172,7 @@
+             current_run = source_job_id == active_source_job_id
+             buf = self._buffer.get(job_type, {}).get(owner_sid) if current_run else None
+             if buf is not None:
+-                buf.append((event, data))
++                buf.append((event, envelope["payload"]))
+             bridge_buffer = self._bridge_buffer.get(job_type, {}).get(owner_sid) if current_run else None
+             if bridge_buffer is not None:
+                 bridge_buffer.append(envelope)
+@@ -181,11 +182,11 @@
+                     sizes.pop(0)
+                     bridge_buffer.pop(0)
+                     buf.pop(0)
+-            return envelope
++            return copy.deepcopy(envelope)
+ 
+     def get_bridge_replay_buffer(self, owner_sid: str, job_type: str = "scan") -> list:
+         with self._lock:
+-            return list(self._bridge_buffer.get(job_type, {}).get(owner_sid, []))
++            return copy.deepcopy(self._bridge_buffer.get(job_type, {}).get(owner_sid, []))
+ 
+     def get_subscribers(self, owner_sid: str, job_type: str = "scan") -> set[str]:
+         with self._lock:
+@@ -193,7 +194,7 @@
+ 
+     def get_replay_buffer(self, owner_sid: str, job_type: str = "scan") -> list:
+         with self._lock:
+-            return list(self._buffer.get(job_type, {}).get(owner_sid, []))
++            return copy.deepcopy(self._buffer.get(job_type, {}).get(owner_sid, []))
+ 
+     def subscribe(self, owner_sid: str, new_sid: str, job_type: str = "scan") -> bool:
+         """Add a late-joining tab. Returns False if job no longer active."""
+--- a/nmapui/scan_runtime.py
++++ b/nmapui/scan_runtime.py
+@@ -1,3 +1,4 @@
++import copy
+ import ipaddress
+ 
+ from nmapui.workflow_context import build_scan_workflow_context
+@@ -23,14 +24,14 @@
+                 owner_sid=owner_sid,
+                 job_type=job_type,
+                 event_name=event,
+-                payload=data,
++                payload=source_event["payload"],
+                 source_event=source_event,
+             )
+         for sub_sid in broadcaster.get_subscribers(owner_sid, job_type=job_type):
+             if hasattr(broadcaster, "is_bridge_client") and broadcaster.is_bridge_client(sub_sid):
+-                emit_to_client(sub_sid, "daedalus_event", source_event)
++                emit_to_client(sub_sid, "daedalus_event", copy.deepcopy(source_event))
+             else:
+-                emit_to_client(sub_sid, event, data)
++                emit_to_client(sub_sid, event, copy.deepcopy(source_event["payload"]))
+ 
+     return _emit
+ 

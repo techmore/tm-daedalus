@@ -1,5 +1,6 @@
 """Exercise shipped event helpers, broadcaster and SQLite replay without Flask."""
 import ast
+import copy
 import json
 from pathlib import Path
 from types import ModuleType
@@ -18,7 +19,7 @@ def runtime():
         exec(compile(source('jobs.py'), 'packaged_jobs.py', 'exec'), jobs.__dict__)
         database = ModuleType('packaged_database')
         exec(compile(source('runtime_db.py'), 'packaged_database.py', 'exec'), database.__dict__)
-        namespace = {}
+        namespace = {"copy": copy}
         for filename, names in [('scan_runtime.py', {'make_broadcast_emit'}),
                                 ('runtime_log.py', {'append_runtime_log'}),
                                 ('app_bindings.py', {'_log_runtime_event', 'build_event_helpers'})]:
@@ -70,3 +71,74 @@ def test_packaged_progress_reaches_bridge_and_durable_replay(tmp_path, job_type)
     saved = reopened.list_job_events(job_id=f'source-job:{run_id}')
     assert [row['source_event'] for row in saved] == envelopes
     assert json.loads(json.dumps(envelopes))[0]['payload']['details']['progress'] == 5
+
+
+@pytest.mark.parametrize('job_type', ['scan', 'report'])
+@pytest.mark.parametrize('payload', [
+    {'status': 'running', 'details': {'progress': 5, 'hosts': [{'ip': '127.0.0.1'}]}},
+    [{'ip': '127.0.0.1', 'ports': [{'port': '12345', 'state': 'open'}]}],
+])
+def test_packaged_record_and_replay_are_independent_snapshots(job_type, payload):
+    payload = copy.deepcopy(payload)
+    jobs, _, _ = runtime()
+    broadcaster = jobs.ScanBroadcaster()
+    broadcaster.start_job('owner', job_type)
+    original = copy.deepcopy(payload)
+    returned = broadcaster.record('owner', 'fixture_event', payload, job_type)
+    identity = returned['client_event_id']
+    # Caller data, returned emission data and either replay view must not share
+    # the retained envelope. Its identity always names the original snapshot.
+    if isinstance(payload, dict):
+        payload['details']['progress'] = 100
+        returned['payload']['details']['hosts'][0]['ip'] = 'changed'
+    else:
+        payload[0]['ports'][0]['state'] = 'closed'
+        returned['payload'][0]['ip'] = 'changed'
+    replay = broadcaster.get_bridge_replay_buffer('owner', job_type)
+    assert replay[0]['client_event_id'] == identity
+    assert replay[0]['payload'] == original
+    replay[0]['payload'] = {'changed': True}
+    raw = broadcaster.get_replay_buffer('owner', job_type)
+    assert raw == [('fixture_event', original)]
+    if isinstance(raw[0][1], dict):
+        raw[0][1].clear()
+    else:
+        raw[0][1].append({'changed': True})
+    assert broadcaster.get_bridge_replay_buffer('owner', job_type)[0]['payload'] == original
+    assert broadcaster.get_replay_buffer('owner', job_type) == [('fixture_event', original)]
+
+
+@pytest.mark.parametrize('job_type', ['scan', 'report'])
+def test_packaged_broadcast_persistence_and_each_recipient_use_the_recorded_snapshot(tmp_path, job_type):
+    jobs, database, build = runtime()
+    store = database.create_runtime_state_store(tmp_path / 'runtime.db')
+    broadcaster = jobs.ScanBroadcaster()
+    for sid in ['browser', 'bridge-one', 'bridge-two']:
+        broadcaster.register_client(sid)
+        if sid.startswith('bridge'):
+            broadcaster.set_bridge_client(sid)
+    broadcaster.start_job('owner', job_type)
+    run_id = broadcaster.get_source_job_id('owner', job_type)
+    payload = {'status': 'running', 'details': {'progress': 5}}
+    original = copy.deepcopy(payload)
+    append = store.append_job_event
+    def mutate_caller_before_persistence(**kwargs):
+        payload['details']['progress'] = 100
+        return append(**kwargs)
+    store.append_job_event = mutate_caller_before_persistence
+    emitted = []
+    def mutate_recipient(sid, event, data):
+        emitted.append((sid, event, copy.deepcopy(data)))
+        (data['payload'] if event == 'daedalus_event' else data)['details']['progress'] = 75
+    emit = build.__globals__['make_broadcast_emit'](owner_sid='owner', broadcaster=broadcaster,
+        emit_to_client=mutate_recipient, job_type=job_type, runtime_store=store)
+    emit('owner', 'job_status', payload)
+    saved = store.list_job_events(job_id=f'source-job:{run_id}')[0]['source_event']
+    assert saved['payload'] == original
+    assert broadcaster.get_bridge_replay_buffer('owner', job_type) == [saved]
+    assert broadcaster.get_replay_buffer('owner', job_type) == [('job_status', original)]
+    assert {sid for sid, _, _ in emitted} == {'owner', 'browser', 'bridge-one', 'bridge-two'}
+    for _, event, data in emitted:
+        assert (data['payload'] if event == 'daedalus_event' else data) == original
+        if event == 'daedalus_event':
+            assert data == saved

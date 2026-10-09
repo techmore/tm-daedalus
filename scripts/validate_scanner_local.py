@@ -343,10 +343,13 @@ def validate_recovery_evidence(pending, history, run_id, invocations, listener_p
         matches = [item for item in history if item.get('client_event_id') == event['client_event_id']]
         if len(matches) != 1 or any(saved[event['client_event_id']].get(key) != event.get(key) for key in ('source_job_id', 'source_job_type', 'event_name')) or instant(saved[event['client_event_id']]['occurred_at']) != instant(event['occurred_at']):
             raise RuntimeError('Recovered event identity or original timestamp changed or duplicated')
+        recovered = matches[0]
+        if 'payload' not in event or 'payload' not in recovered or json.dumps(event['payload'], sort_keys=True) != json.dumps(recovered['payload'], sort_keys=True):
+            raise RuntimeError('Recovered event payload differs from its original spooled evidence')
     deep = [args for args in invocations if '-sT' in args]
     if len(deep) != 1 or str(listener_port) not in deep[0]:
         raise RuntimeError('Bridge recovery repeated or changed the scan side effect')
-    return {'pending_events_recovered': len(pending), 'original_event_ids': [event['client_event_id'] for event in pending], 'original_occurred_at': [event['occurred_at'] for event in pending], 'source_job_id': run_id, 'deep_nmap_invocations': 1, 'event_identity_unchanged': True}
+    return {'pending_events_recovered': len(pending), 'original_event_ids': [event['client_event_id'] for event in pending], 'original_occurred_at': [event['occurred_at'] for event in pending], 'source_job_id': run_id, 'deep_nmap_invocations': 1, 'event_identity_unchanged': True, 'event_payloads_unchanged': True}
 
 
 def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, interrupt_bridge: bool = False, skip_host_discovery: bool = True, managed_linux: bool = False, close_listener: bool = False, multi_host: bool = False) -> dict:
@@ -718,7 +721,9 @@ raise SystemExit(completed.returncode)
                 recovery_proof = None
                 if interrupt_bridge:
                     with closing(sqlite3.connect(portal_database)) as db:
-                        source_history = [dict(zip(['client_event_id', 'occurred_at', 'source_job_id', 'source_job_type', 'event_name'], row)) for row in db.execute('SELECT client_event_id,occurred_at,source_job_id,source_job_type,event_name FROM scan_events WHERE agent_id=?', (agent_id,))]
+                        source_history = [dict(zip(['client_event_id', 'occurred_at', 'source_job_id', 'source_job_type', 'event_name', 'payload'], row)) for row in db.execute('SELECT client_event_id,occurred_at,source_job_id,source_job_type,event_name,payload FROM scan_events WHERE agent_id=?', (agent_id,))]
+                        for source_event in source_history:
+                            source_event['payload'] = json.loads(source_event['payload'])
                     recovery_proof = validate_recovery_evidence(recovery_pending, source_history, run_id, invocations, listener_port)
                     claim = json.loads(claims[0].read_text())
                     if claim.get('fingerprint') != recovery_claim.get('fingerprint') or claim.get('claimed_at') != recovery_claim.get('claimed_at') or claim.get('terminal_result', {}).get('status') != 'succeeded':

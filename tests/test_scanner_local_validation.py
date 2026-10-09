@@ -273,13 +273,14 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
 
     def test_recovery_requires_exact_original_identity_and_single_side_effect(self):
         import copy
-        pending = [{'client_event_id': 'event-1', 'occurred_at': '2026-09-29T10:00:00+00:00', 'source_job_id': 'run-one', 'source_job_type': 'scan', 'event_name': 'job_status'}]
+        pending = [{'client_event_id': 'event-1', 'occurred_at': '2026-09-29T10:00:00+00:00', 'source_job_id': 'run-one', 'source_job_type': 'scan', 'event_name': 'job_status', 'payload': {'details': {'progress': 5}, 'active': True}}]
         history = copy.deepcopy(pending)
         history[0]['occurred_at'] = '2026-09-29T10:00:00Z'
         invocation = ['nmap', '-sT', '-p', '12345', '127.0.0.1']
         proof = validation.validate_recovery_evidence(pending, history, 'run-one', [invocation], 12345)
         self.assertEqual(proof['pending_events_recovered'], 1)
-        for mutation in (lambda rows: rows.append(copy.deepcopy(rows[0])), lambda rows: rows[0].update(source_job_id='other'), lambda rows: rows[0].update(occurred_at='2026-09-29T10:00:01Z'), lambda rows: rows[0].update(client_event_id='other'), lambda rows: rows[0].update(event_name='other')):
+        self.assertIs(proof['event_payloads_unchanged'], True)
+        for mutation in (lambda rows: rows.append(copy.deepcopy(rows[0])), lambda rows: rows[0].update(source_job_id='other'), lambda rows: rows[0].update(occurred_at='2026-09-29T10:00:01Z'), lambda rows: rows[0].update(client_event_id='other'), lambda rows: rows[0].update(event_name='other'), lambda rows: rows[0]['payload']['details'].update(progress=100), lambda rows: rows[0]['payload'].update(active=1), lambda rows: rows[0].pop('payload')):
             bad = copy.deepcopy(history)
             mutation(bad)
             with self.assertRaises(RuntimeError): validation.validate_recovery_evidence(pending, bad, 'run-one', [invocation], 12345)
