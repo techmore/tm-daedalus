@@ -76,6 +76,7 @@
   var scannerNetworkInputs = new Map();
   var scannerScopeFeedback = new Map();
   var dashboardRefreshPromise = null;
+  var probationApproval = null;
   var scannerComparisonCache = new Map();
   var titleMap = {
     overview: "Workspace overview",
@@ -1244,7 +1245,10 @@
     if (ownership) ownership.hidden = organization.verification_status === "verified";
     var approval = document.getElementById("probation-override-card");
     var refreshActions = document.getElementById("access-actions-refresh");
-    if (approval && approval.dataset) {
+    if (typeof probationApproval !== "undefined" && probationApproval) {
+      probationApproval.observe(organization);
+      if (refreshActions) refreshActions.hidden = true;
+    } else if (approval && approval.dataset) {
       var approvalChanged = (approval.dataset.overrideExpires || "") !== (organization.probation_override_expires_at || "");
       var unnecessaryGrant = organization.verification_status === "verified" && !organization.probation_override_expires_at;
       approval.hidden = approvalChanged || unnecessaryGrant;
@@ -6120,35 +6124,14 @@
     });
   }
 
-  var grantOverrideForm = document.getElementById("grant-override-form");
-  if (grantOverrideForm && orgId) {
-    grantOverrideForm.addEventListener("submit", async function (event) {
-      event.preventDefault();
-      var feedback = document.getElementById("override-feedback");
-      var reason = new FormData(grantOverrideForm).get("reason");
-      text(feedback, "Recording the 14-day override…");
-      try {
-        var body = await postJson("/api/workspaces/" + orgId + "/probation-overrides", { reason: reason });
-        text(feedback, "Controls are open through " + new Date(body.expires_at).toLocaleString() + ". The grant is in the workspace audit log.");
-        window.location.reload();
-      } catch (error) {
-        showError(feedback, error.message);
-      }
+  if (orgId && role === "admin" && window.DaedalusProbationApproval) {
+    probationApproval = window.DaedalusProbationApproval.create({organizationId:orgId,
+      fetch:function (url, options) {return fetch(url, options);},
+      onSaved:async function () {await refresh(true);await loadAuditLog();}
     });
+    window.daedalusProbationApproval = probationApproval;
+    if (probationApproval) probationApproval.load();
   }
-
-  document.querySelectorAll("[data-revoke-override]").forEach(function (button) {
-    button.addEventListener("click", async function () {
-      button.disabled = true;
-      try {
-        await postJson("/api/workspaces/" + orgId + "/probation-overrides/" + button.dataset.revokeOverride + "/revoke");
-        window.location.reload();
-      } catch (error) {
-        button.disabled = false;
-        text(document.getElementById("override-feedback"), error.message);
-      }
-    });
-  });
 
   async function loadMemberships(background) {
     if (membershipReview) return membershipReview.load(background);

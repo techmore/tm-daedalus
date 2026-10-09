@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-199">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-200">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -149,7 +149,11 @@
           {% endif %}
           {% if membership.role == 'admin' and (organization.verification_status != 'verified' or probation_override) %}
           <details class="workspace-access-details" id="probation-override-card" data-override-expires="{{ probation_override.expires_at.isoformat() + 'Z' if probation_override else '' }}">
-            <summary>{{ 'Manage the current 14-day approval' if probation_override else 'Request a temporary 14-day approval' }}</summary>
+            <summary id="override-summary">{{ 'Manage the current 14-day approval' if probation_override else 'Request a temporary 14-day approval' }}</summary>
+            <div class="overview-read-heading"><h3>Temporary approval status</h3><button id="override-refresh" class="button button-quiet" type="button">Refresh approval status</button></div>
+            <p id="override-observed" class="fine-print">No approval status read yet.</p>
+            <p id="override-read-note" class="overview-read-note" role="status" hidden></p>
+            <div id="override-actions">
             {% if probation_override %}
             <p class="muted">Reason: {{ probation_override.reason }}. Revocation removes this approval. Controls close and scans are cancelled if no other authorization remains.</p>
             <button class="button button-quiet" type="button" data-revoke-override="{{ probation_override.id }}">Revoke approval</button>
@@ -161,7 +165,8 @@
               <button class="button button-primary" type="submit">Approve access for 14 days</button>
             </form>
             {% endif %}
-            <p id="override-feedback" class="verification-feedback" aria-live="polite"></p>
+            </div>
+            <p id="override-feedback" class="verification-feedback" role="status"></p>
           </details>
           <p id="access-actions-refresh" hidden><a href="/dashboard#overview">Refresh workspace access to manage the current approval</a></p>
           {% endif %}
@@ -699,6 +704,7 @@
   <script src="/static/js/memberships.js?v=20261009-2" defer></script>
   <script src="/static/js/workspace-requests.js?v=20261009-2" defer></script>
   <script src="/static/js/customer-create.js?v=20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-199" defer></script>
+  <script src="/static/js/probation-approval.js?v=daedalus-20261009-1" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-200" defer></script>
 </body>
 </html>

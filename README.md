@@ -175,6 +175,8 @@ Host operators can explicitly provision the named Codex operator for an existing
 
 ## Customer onboarding
 
+**Overview → Workspace access → Temporary approval status** shows the dated 14-day approval and its administrator/reason. Grants and revocations save in place. A failed read retains the last observed status and pauses decisions; **Refresh approval status** retries the read. An unconfirmed decision retains the entered reason, and refreshing shows what is actually saved before another decision. [Approval workflow and validation](docs/CUSTOMER-ONBOARDING.md#temporary-approval-review--october-9-implementation-checkpoint).
+
 Adding a customer shows a result for every unique domain and keeps the displayed workspace selected until **Open workspace**. Partial or unconfirmed outcomes retain the form. A saved creation remains visible if the following workspace read fails; **Refresh workspaces** recovers access without repeating creation. Existing domains require their own membership approval. [Creation behavior and validation](docs/CUSTOMER-ONBOARDING.md#customer-creation-review--october-9-implementation-checkpoint).
 
 **Add or join workspace → Your workspaces & requests** shows saved approvals and access requests with recorded dates. **Refresh workspaces** retries saved reads without starting collection. The same review is available before the account has an approved workspace. Failed reads retain the list and confirmed request feedback, mark access as last observed and pause workspace switching until recovery. [Request and membership workflow](docs/MEMBERS-ACCESS-WORKFLOW.md#account-workspace-requests--october-9-follow-up).

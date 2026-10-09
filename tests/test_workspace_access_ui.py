@@ -142,7 +142,7 @@ assert.equal(nodes['domain-verification-details'].hidden,true);assert.equal(node
 
     def test_txt_refresh_reuses_proof_and_replacement_requires_explicit_action(self):
         source = (ROOT / 'src/daedalus/static/js/dashboard.js').read_text()
-        helper = source[source.index('  var issueChallengeButton ='):source.index('  var grantOverrideForm =')]
+        helper = source[source.index('  var issueChallengeButton ='):source.index('  if (orgId && role === "admin" && window.DaedalusProbationApproval)')]
         self.run_script(r'''
 const assert=require('node:assert/strict');
 const nodes={};function node(id){return nodes[id]||(nodes[id]={handlers:{},textContent:'',disabled:false,

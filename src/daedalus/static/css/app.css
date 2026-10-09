@@ -124,6 +124,7 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
 .security-note { display: flex; gap: 10px; padding: 12px 14px; margin-bottom: 17px; border: 1px solid #dbe9ef; border-radius: 9px; color: #637781; background: #f1f7fa; font-size: 11px; line-height: 1.5; }
 .security-note > span:first-child { color: #4a8da2; font-size: 15px; }
 .security-note[hidden] { display: none; }
+#probation-override-card button { min-height: 44px; }
 .agent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .agent-card, .empty-card { min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .agent-card-head { display: flex; align-items: center; justify-content: space-between; }

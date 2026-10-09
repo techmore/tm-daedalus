@@ -236,7 +236,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261009-199", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261009-200", response.text)
         self.assertIn('data-load-older-checks="dns"', response.text)
         self.assertIn('data-load-older-checks="web"', response.text)
         self.assertIn('data-load-older-active="changes"', response.text)
@@ -266,7 +266,10 @@ class CISReportPDFFlowTests(unittest.TestCase):
         membership_script = self.client.get('/static/js/memberships.js')
         self.assertEqual(membership_script.status_code, 200)
         self.assertIn('actionButton(member,"revoke"', membership_script.text)
-        self.assertIn('/revoke', script.text)
+        approval_script = self.client.get('/static/js/probation-approval.js')
+        self.assertEqual(approval_script.status_code, 200)
+        self.assertIn('src="/static/js/probation-approval.js?', response.text)
+        self.assertIn('/revoke', approval_script.text)
         self.assertIn('profiles_endpoint: ', script.text)
 
     def test_scanner_kit_download_is_workspace_admin_only_and_secret_free(self):

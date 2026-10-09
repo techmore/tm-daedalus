@@ -2680,7 +2680,7 @@ def current_domain_challenge(db: Session, organization: Organization) -> dict[st
 
 
 def lock_domain_challenge_workspace(db: Session, organization: Organization, user: User, request: Request) -> Organization:
-    """Serialize challenge writes and refresh authorization before modifying proof."""
+    """Serialize workspace access writes and refresh administrator/key authority."""
     organization_id, user_id = organization.id, user.id
     # A no-op row update holds the workspace write lock until commit on SQLite
     # and row-locking databases. Two ensure requests cannot issue two tokens.
@@ -3731,6 +3731,39 @@ async def revoke_workspace_membership(
         "status": membership.status, "role": membership.role}, headers={"Cache-Control": "no-store"})
 
 
+def probation_approval_reference(organization: Organization, latest: ProbationOverride | None, transition: int | None) -> str:
+    return token_digest(json.dumps([
+        organization.id, organization.verification_status, transition,
+        [latest.id, iso_utc(latest.starts_at), iso_utc(latest.expires_at),
+         iso_utc(latest.revoked_at)] if latest else None,
+    ], separators=(",", ":")))
+
+
+def probation_approval_state(db: Session, organization: Organization) -> dict[str, Any]:
+    latest = db.scalar(select(ProbationOverride).where(
+        ProbationOverride.organization_id == organization.id,
+    ).order_by(ProbationOverride.id.desc()).limit(1))
+    transition = db.scalar(select(func.max(AuditLog.id)).where(
+        AuditLog.organization_id == organization.id,
+        AuditLog.action.like("probation_override.%"),
+    ))
+    return {"organization_id": organization.id, "observed_at": iso_utc(utcnow()),
+            "verification_status": organization.verification_status,
+            "controls_enabled": workspace_controls_available(db, organization),
+            "state_reference": probation_approval_reference(organization, latest, transition)}
+
+
+def lock_probation_approval(request: Request, db: Session, organization_id: int) -> tuple[User, Organization]:
+    user, organization, _ = get_org_context(request, db, admin=True)
+    if organization.id != organization_id:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    organization = lock_domain_challenge_workspace(db, organization, user, request)
+    expected = request.headers.get("X-Daedalus-Approval-State")
+    if expected is not None and expected != probation_approval_state(db, organization)["state_reference"]:
+        raise HTTPException(status_code=409, detail="Temporary approval changed. Refresh approval status before deciding again.")
+    return user, organization
+
+
 @app.get("/api/workspaces/{organization_id}/probation-overrides")
 def list_probation_overrides(
     organization_id: int,
@@ -3740,13 +3773,29 @@ def list_probation_overrides(
     _, organization, _ = get_org_context(request, db, admin=True)
     if organization.id != organization_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    transition = select(func.max(AuditLog.id)).where(
+        AuditLog.organization_id == organization_id,
+        AuditLog.action.like("probation_override.%"),
+    ).scalar_subquery()
+    # A single statement observes proof status, approval rows and their latest
+    # transition together. An interleaving grant must not attach a new reference
+    # to an older list, even on SQLite's legacy SELECT transaction behavior.
     rows = db.execute(
-        select(ProbationOverride, User)
-        .join(User, User.id == ProbationOverride.granted_by_user_id)
-        .where(ProbationOverride.organization_id == organization.id)
+        select(Organization, ProbationOverride, User, transition)
+        .outerjoin(ProbationOverride, ProbationOverride.organization_id == Organization.id)
+        .outerjoin(User, User.id == ProbationOverride.granted_by_user_id)
+        .where(Organization.id == organization_id)
         .order_by(ProbationOverride.id.desc())
+        .execution_options(populate_existing=True)
     ).all()
-    return {
+    organization, latest, _, last_transition = rows[0]
+    observed = utcnow()
+    return JSONResponse({
+        "organization_id": organization.id,
+        "observed_at": iso_utc(observed),
+        "verification_status": organization.verification_status,
+        "controls_enabled": workspace_controls_available(db, organization),
+        "state_reference": probation_approval_reference(organization, latest, last_transition),
         "overrides": [
             {
                 "id": item.id,
@@ -3757,13 +3806,13 @@ def list_probation_overrides(
                 "revoked_at": item.revoked_at.isoformat() + "Z" if item.revoked_at else None,
                 "active": (
                     item.revoked_at is None
-                    and item.starts_at <= utcnow()
-                    and item.expires_at > utcnow()
+                    and item.starts_at <= observed
+                    and item.expires_at > observed
                 ),
             }
-            for item, user in rows
+            for _, item, user, _ in rows if item is not None
         ]
-    }
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/workspaces/{organization_id}/probation-overrides")
@@ -3773,9 +3822,7 @@ async def grant_probation_override(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    user, organization, _ = get_org_context(request, db, admin=True)
-    if organization.id != organization_id:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    user, organization = lock_probation_approval(request, db, organization_id)
     if organization.verification_status == "verified":
         raise HTTPException(status_code=409, detail="Verified workspaces do not need a probation override.")
     if active_probation_override(db, organization.id):
@@ -3823,6 +3870,10 @@ async def grant_probation_override(
         detected_at=now,
         expires_at=override.expires_at,
     )
+    db.flush()
+    result = {**probation_approval_state(db, organization),
+        "id": override.id, "active": True, "reason": override.reason,
+        "starts_at": iso_utc(override.starts_at), "expires_at": iso_utc(override.expires_at)}
     db.commit()
     if notification_created:
         await live_hub.publish(organization.id, {
@@ -3830,13 +3881,7 @@ async def grant_probation_override(
             "source_type": "probation_override_granted",
             "source_id": override.id,
         })
-    return {
-        "id": override.id,
-        "active": True,
-        "reason": override.reason,
-        "starts_at": override.starts_at.isoformat() + "Z",
-        "expires_at": override.expires_at.isoformat() + "Z",
-    }
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/workspaces/{organization_id}/probation-overrides/{override_id}/revoke")
@@ -3846,9 +3891,7 @@ async def revoke_probation_override(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    user, organization, _ = get_org_context(request, db, admin=True)
-    if organization.id != organization_id:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    user, organization = lock_probation_approval(request, db, organization_id)
     override = db.get(ProbationOverride, override_id)
     if (
         override is None
@@ -3887,6 +3930,9 @@ async def revoke_probation_override(
         detected_at=now,
         expires_at=override.expires_at,
     )
+    db.flush()
+    result = {**probation_approval_state(db, organization), "id": override.id,
+        "active": False, "revoked_at": iso_utc(now)}
     db.commit()
     if notification_created:
         await live_hub.publish(organization.id, {
@@ -3894,7 +3940,7 @@ async def revoke_probation_override(
             "source_type": "probation_override_revoked",
             "source_id": override.id,
         })
-    return {"id": override.id, "active": False, "revoked_at": now.isoformat() + "Z"}
+    return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/audit-log")
