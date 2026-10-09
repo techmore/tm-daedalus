@@ -67,7 +67,7 @@ BRIDGE_UNIT="$UNIT_DIR/daedalus-scanner-bridge.service"
 NMAPUI_LABEL=daedalus-nmapui.service
 BRIDGE_LABEL=daedalus-scanner-bridge.service
 
-for path in "$HOME/.local" "$XDG_DATA_HOME" "$APP_SUPPORT" "$NMAPUI_DATA_ROOT" "$APP_SUPPORT/nmapui" "$NMAPUI_RELEASES" "$BRIDGE_INSTALL_ROOT" "$BRIDGE_INSTALL_ROOT/src" "$BRIDGE_SOURCE" "$BRIDGE_SOURCE/scanner_activity.py" "$BRIDGE_VENV" "$XDG_CONFIG_HOME" "$CONFIG_DIR" "$SYSTEMD_DIR" "$UNIT_DIR"; do
+for path in "$HOME/.local" "$XDG_DATA_HOME" "$APP_SUPPORT" "$NMAPUI_DATA_ROOT" "$APP_SUPPORT/nmapui" "$NMAPUI_RELEASES" "$BRIDGE_INSTALL_ROOT" "$BRIDGE_INSTALL_ROOT/src" "$BRIDGE_SOURCE" "$BRIDGE_SOURCE/scanner_activity.py" "$BRIDGE_SOURCE/scanner_delivery.py" "$BRIDGE_VENV" "$XDG_CONFIG_HOME" "$CONFIG_DIR" "$SYSTEMD_DIR" "$UNIT_DIR"; do
   reject_symlink "$path"
 done
 for path in "$CONFIG_PATH" "$ENV_FILE" "$STATE_FILE" "$NMAPUI_UNIT" "$BRIDGE_UNIT"; do
@@ -111,6 +111,7 @@ cp -f "$SCRIPT_DIR/src/daedalus/__init__.py" "$BRIDGE_SOURCE/__init__.py"
 cp -f "$SCRIPT_DIR/src/daedalus/agent.py" "$BRIDGE_SOURCE/agent.py"
 cp -f "$SCRIPT_DIR/src/daedalus/command_journal.py" "$BRIDGE_SOURCE/command_journal.py"
 cp -f "$SCRIPT_DIR/src/daedalus/scanner_activity.py" "$BRIDGE_SOURCE/scanner_activity.py"
+cp -f "$SCRIPT_DIR/src/daedalus/scanner_delivery.py" "$BRIDGE_SOURCE/scanner_delivery.py"
 "$PYTHON_BIN" -m venv "$BRIDGE_VENV"
 "$BRIDGE_VENV/bin/python" -m pip install --disable-pip-version-check "$BRIDGE_INSTALL_ROOT"
 

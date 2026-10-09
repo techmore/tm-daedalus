@@ -33,6 +33,7 @@ import socketio
 from daedalus import __version__
 from daedalus.command_journal import CommandJournal
 from daedalus.scanner_activity import MAX_RUNTIME_BYTES, activity_from_runtime, unknown_activity
+from daedalus.scanner_delivery import DeliveryJournal
 
 
 LOG = logging.getLogger("daedalus.agent")
@@ -382,6 +383,7 @@ class NmapUIBridge:
         self.last_successful_check_in = None
         self.spool_lock = threading.Lock()
         self.upload_lock = threading.Lock()
+        self.delivery_journal = DeliveryJournal(self.spool_dir)
         self.next_upload_at = 0.0
         self.upload_backoff = 2.0
         self._register_socket_handlers()
@@ -461,11 +463,14 @@ class NmapUIBridge:
         }
         # Commit locally before attempting the network. Never overwrite pending evidence.
         try:
-            encoded = json.dumps(event, ensure_ascii=False).encode("utf-8")
             with self.spool_lock:
+                if not self.delivery_journal.begin(event["client_event_id"]):
+                    raise OSError("Upload save intent could not be preserved")
+                encoded = json.dumps(event, ensure_ascii=False).encode("utf-8")
                 if client_event_id:
                     for pending in self.spool_dir.glob(f"*-{client_event_id}.json"):
                         if json.loads(pending.read_text(encoding="utf-8")) == event:
+                            self.delivery_journal.saved(event["client_event_id"])
                             return
                 size = 0
                 for entry in self.spool_dir.iterdir():
@@ -484,6 +489,12 @@ class NmapUIBridge:
                     output.flush()
                     os.fsync(output.fileno())
                 temporary.replace(self.spool_dir / name)
+                directory = os.open(self.spool_dir, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
+                self.delivery_journal.saved(event["client_event_id"])
         except (OSError, TypeError, ValueError) as exc:
             LOG.error("Could not preserve scanner event %s locally: %s", event_name, exc)
 
@@ -498,6 +509,9 @@ class NmapUIBridge:
                     if path.is_symlink():
                         raise ValueError("Spool entry is a symbolic link")
                     event = json.loads(path.read_text(encoding="utf-8"))
+                    if not isinstance(event, dict) or not isinstance(event.get("client_event_id"), str):
+                        raise ValueError("Invalid scanner event envelope")
+                    event_identity = str(uuid.UUID(event["client_event_id"]))
                     payload_size = len(json.dumps(event.get("payload"), ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
                     route = "event-artifacts" if payload_size > 512_000 else "events"
                     response = self._request("POST", f"/api/agents/{self.agent_id}/{route}", json=event)
@@ -512,7 +526,9 @@ class NmapUIBridge:
                             and type(acknowledgement.get("event_id")) is int
                             and acknowledgement["event_id"] > 0
                         ):
-                            path.unlink()
+                            with self.spool_lock:
+                                path.unlink()
+                                self.delivery_journal.acknowledged(event_identity)
                             self.upload_backoff = 2.0
                             continue
                         LOG.warning("Scanner event upload lacked a durable acknowledgement; keeping %s", path.name)
@@ -520,11 +536,13 @@ class NmapUIBridge:
                         self.upload_backoff = min(300.0, self.upload_backoff * 2)
                         return
                     if response.status_code not in {401, 403, 408, 429} and response.status_code < 500:
-                        path.replace(path.with_suffix(".rejected"))
+                        with self.spool_lock:
+                            path.replace(path.with_suffix(".rejected"))
                         LOG.error("Scanner event retained for review after permanent rejection (%s): %s", response.status_code, path.name)
                         continue
                 except (ValueError, UnicodeDecodeError) as exc:
-                    path.replace(path.with_suffix(".rejected"))
+                    with self.spool_lock:
+                        path.replace(path.with_suffix(".rejected"))
                     LOG.error("Malformed scanner event retained for review: %s", exc)
                     continue
                 except (httpx.HTTPError, OSError) as exc:
@@ -558,6 +576,7 @@ class NmapUIBridge:
             "platform": platform.system(),
             "detected_networks": self._detected_networks,
             "nmapui_activity": self._read_nmapui_activity(),
+            "upload_delivery": self._read_delivery(),
             **scanner_health,
         }
         response = self._request(
@@ -567,6 +586,12 @@ class NmapUIBridge:
         )
         response.raise_for_status()
         self.last_successful_check_in = datetime.now(UTC).isoformat()
+
+    def _read_delivery(self) -> dict[str, Any]:
+        with self.spool_lock:
+            observation = self.delivery_journal.observation(self.spool_dir)
+            self.delivery_journal.publish_local_observation(self.spool_dir, observation)
+            return observation
 
     def _read_nmapui_activity(self) -> dict[str, Any]:
         """Read bounded loopback operational state, with no admission changes."""

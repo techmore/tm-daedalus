@@ -1,5 +1,7 @@
 import Cocoa
 import WebKit
+import CryptoKit
+import Darwin
 
 struct ScannerRuntimePresentation {
     let running: Bool
@@ -40,11 +42,67 @@ struct ScannerRuntimePresentation {
     }
 }
 
+struct ScannerDeliveryPresentation {
+    let valid: Bool
+    let needsReview: Bool
+    let pending: Int?
+    let summary: String
+    static func count(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+              number.doubleValue.isFinite, number.doubleValue >= 0, number.doubleValue <= 10000,
+              number.doubleValue == Double(number.intValue) else { return nil }
+        return number.intValue
+    }
+    static func date(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+    init(_ data: [String: Any]?, now: Date = Date()) {
+        let fields: Set<String> = ["schema_version", "state", "pending_events", "review_events", "preservation_failed", "last_acknowledged_at", "observed_at"]
+        if let data = data, Set(data.keys) == fields, Self.count(data["schema_version"]) == 1,
+           data["state"] as? String == "unknown", let timestamp = data["observed_at"] as? String,
+           let observed = Self.date(timestamp), now.timeIntervalSince(observed) >= 0, now.timeIntervalSince(observed) <= 45,
+           data["pending_events"] is NSNull, data["review_events"] is NSNull, data["last_acknowledged_at"] is NSNull,
+           let flag = data["preservation_failed"] as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID(), flag.boolValue {
+            valid = false; needsReview = true; pending = nil; summary = "Results delivery: queue unknown · local save incomplete"; return
+        }
+        guard let data = data, Set(data.keys) == fields, Self.count(data["schema_version"]) == 1,
+              data["state"] as? String == "observed", let timestamp = data["observed_at"] as? String,
+              let observed = Self.date(timestamp), now.timeIntervalSince(observed) >= 0, now.timeIntervalSince(observed) <= 45,
+              let queued = Self.count(data["pending_events"]), let review = Self.count(data["review_events"]),
+              let flag = data["preservation_failed"] as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID(),
+              data["last_acknowledged_at"] is NSNull || (data["last_acknowledged_at"] is String && Self.date(data["last_acknowledged_at"] as! String) != nil) else {
+            valid = false; needsReview = false; pending = nil; summary = "Results delivery: unknown"; return
+        }
+        valid = true; pending = queued; needsReview = review > 0 || flag.boolValue
+        var text = "Results delivery: \(queued) queued · \(review) retained for review"
+        if flag.boolValue { text += " · local save incomplete" }
+        if let timestamp = data["last_acknowledged_at"] as? String, let acknowledged = Self.date(timestamp), acknowledged <= now {
+            text += " · last acknowledged " + DateFormatter.localizedString(from: acknowledged, dateStyle: .short, timeStyle: .short)
+        }
+        summary = text
+    }
+}
+
+func privateUploadObservation(_ url: URL) -> [String: Any]? {
+    let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+    guard descriptor >= 0 else { return nil }
+    defer { close(descriptor) }
+    var metadata = stat()
+    guard fstat(descriptor, &metadata) == 0, (metadata.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG), metadata.st_size <= 16384 else { return nil }
+    let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
+    guard let data = try? handle.read(upToCount: 16385), data.count <= 16384 else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+}
+
 final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessionTaskDelegate, WKNavigationDelegate, WKUIDelegate {
     var item: NSStatusItem!
     let menu = NSMenu()
     var engine = "NmapUI: checking…"
     var portal = "Daedalus: checking…"
+    var deliveryPresentation = ScannerDeliveryPresentation(nil)
+    var uploadObservationURL: URL?
+    var portalDelivery: [String: Any]?
     var activity = "Scan activity: checking…"
     var recent: [String] = []
     var lastRequest = "Last scan request: checking…"
@@ -81,10 +139,15 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
                url.scheme == "https", url.user == nil, url.password == nil, url.query == nil { portalURL = url }
             token = config["agent_token"] as? String ?? ""
             agentID = config["agent_id"] as? Int ?? 0
+            if let address = config["server"] as? String, portalURL != nil, agentID > 0 {
+                let origin = address.replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
+                let identity = SHA256.hash(data: Data("\(origin):\(agentID)".utf8)).map { String(format: "%02x", $0) }.joined().prefix(24)
+                uploadObservationURL = configURL.deletingLastPathComponent().appendingPathComponent("event-spool/\(identity)/upload.status")
+            }
         }
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu.delegate = self
-        for _ in 0..<11 { let row = NSMenuItem(title: "", action: nil, keyEquivalent: ""); menu.addItem(row); rows.append(row) }
+        for _ in 0..<12 { let row = NSMenuItem(title: "", action: nil, keyEquivalent: ""); menu.addItem(row); rows.append(row) }
         menu.addItem(.separator())
         addAction("Open scanner window", #selector(openLocal))
         addAction("Open scanner in browser", #selector(openBrowser))
@@ -128,6 +191,8 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         }.resume()
     }
     @objc func refresh() {
+        deliveryPresentation = ScannerDeliveryPresentation(uploadObservationURL.map { privateUploadObservation($0) } ?? portalDelivery)
+        render()
         if let localURL = localURL {
             get(localURL.appendingPathComponent("api/runtime/status")) { [weak self] data in
                 guard let self = self else { return }
@@ -143,6 +208,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             get(portalURL.appendingPathComponent("api/agents/\(agentID)/client-status"), authenticated: true) { [weak self] data in
                 guard let self = self else { return }
                 if let data = data {
+                    self.portalDelivery = data["upload_delivery"] as? [String: Any]
                     self.portal = (data["bridge_online"] as? Bool == true) ? "Daedalus bridge: connected" : "Daedalus bridge: offline"
                     if let request = data["last_scan_request"] as? [String: Any] {
                         let detail = request["status"] as? String == "failed" ? " · " + (request["result"] as? String ?? "") : ""
@@ -167,22 +233,22 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short; return formatter.string(from: date)
     }
     func render() {
-        let values = ["Daedalus Scanner", engine, portal, activity, lastRequest, portal.contains("unreachable") ? "Recent saved runs (cached)" : "Recent saved runs"] + (recent.isEmpty ? ["No saved runs available"] : recent)
+        let values = ["Daedalus Scanner", engine, portal, activity, deliveryPresentation.summary, lastRequest, portal.contains("unreachable") ? "Recent saved runs (cached)" : "Recent saved runs"] + (recent.isEmpty ? ["No saved runs available"] : recent)
         for (index, row) in rows.enumerated() {
             row.isHidden = index >= values.count
             if index < values.count { row.title = String(values[index].filter { !$0.isNewline }.prefix(180)); row.attributedTitle = NSAttributedString(string: row.title, attributes: [.foregroundColor: NSColor.labelColor]); row.isEnabled = false }
         }
-        let observation: [String: Any] = ["engine": engine, "portal": portal, "activity": activity, "maintenance_active": runtimePresentation.maintenance, "recent": recent, "last_request": lastRequest, "observed_at": ISO8601DateFormatter().string(from: Date()), "scanner_window_open": scannerWindow?.isVisible ?? false, "scanner_page_loaded": scannerPageLoaded, "scanner_page_message": scannerPageMessage]
+        let observation: [String: Any] = ["engine": engine, "portal": portal, "activity": activity, "delivery": deliveryPresentation.summary, "maintenance_active": runtimePresentation.maintenance, "recent": recent, "last_request": lastRequest, "observed_at": ISO8601DateFormatter().string(from: Date()), "scanner_window_open": scannerWindow?.isVisible ?? false, "scanner_page_loaded": scannerPageLoaded, "scanner_page_message": scannerPageMessage]
         let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Daedalus/scanner-status-observation.json")
         if let data = try? JSONSerialization.data(withJSONObject: observation) {
             try? data.write(to: file, options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         }
-        item.button?.title = " " + runtimePresentation.badge
-        item.button?.image = NSImage(systemSymbolName: runtimePresentation.symbol, accessibilityDescription: runtimePresentation.activity)
+        item.button?.title = " " + runtimePresentation.badge + (deliveryPresentation.needsReview ? " · Upload review" : ((deliveryPresentation.pending ?? 0) > 0 ? " · Queued" : ""))
+        item.button?.image = NSImage(systemSymbolName: deliveryPresentation.needsReview ? "exclamationmark.shield" : runtimePresentation.symbol, accessibilityDescription: runtimePresentation.activity)
         windowHistory.stringValue = "Managed scan history (Daedalus)\n" + (recent.isEmpty ? "No saved runs reported yet." : recent.joined(separator: "\n"))
-        windowStatus.stringValue = "\(engine)   ·   \(portal)\n\(activity)" + (scannerPageMessage.isEmpty ? "" : "\n" + scannerPageMessage)
-        item.button?.toolTip = "\(engine)\n\(portal)\n\(activity)"
+        windowStatus.stringValue = "\(engine)   ·   \(portal)\n\(activity)\n\(deliveryPresentation.summary)\nAn empty upload queue does not establish scan completeness." + (scannerPageMessage.isEmpty ? "" : "\n" + scannerPageMessage)
+        item.button?.toolTip = "\(engine)\n\(portal)\n\(activity)\n\(deliveryPresentation.summary)"
     }
     @objc func openLocal() {
         guard let url = localURL else { return }

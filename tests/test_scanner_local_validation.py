@@ -266,3 +266,58 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
             mutation(bad)
             with self.assertRaises(RuntimeError):
                 validation.validate_run_evidence(bad, event)
+
+class BridgeFaultTransportTests(unittest.TestCase):
+    def test_real_transport_loses_only_one_successful_committed_event_response(self):
+        import httpx
+        import json
+        import threading
+        from unittest.mock import patch
+        server=validation.FixtureHTTPServer(('127.0.0.1',0),validation.BridgeTransport)
+        self.addCleanup(server.server_close)
+        server.portal='http://127.0.0.1:1'
+        server.uploads_allowed=threading.Event()
+        server.ack_lock=threading.Lock()
+        server.lose_next_event_ack=True
+        server.lost_ack_event=None
+        worker=threading.Thread(target=server.serve_forever,daemon=True)
+        worker.start()
+        self.addCleanup(server.shutdown)
+        endpoint=f'http://127.0.0.1:{server.server_address[1]}/api/agents/1/events'
+        event={'client_event_id':'b5bcfae9-7257-47b2-8e49-e0a31e335e24','occurred_at':'2026-10-08T12:00:00Z','event_name':'scan_results','payload':[]}
+        with httpx.Client(trust_env=False,timeout=5) as client, patch.object(validation.httpx,'request',return_value=httpx.Response(200,json={'ok':True,'event_id':1})) as portal:
+            self.assertEqual(client.post(endpoint,json=event).status_code,503)
+            portal.assert_not_called()
+            server.uploads_allowed.set()
+            with self.assertRaises(httpx.RemoteProtocolError):client.post(endpoint,json=event)
+            self.assertEqual(server.lost_ack_event,{key:event[key] for key in ('client_event_id','occurred_at')})
+            self.assertFalse(server.lose_next_event_ack)
+            self.assertEqual(client.post(endpoint,json=event).json(),{'ok':True,'event_id':1})
+            self.assertEqual(portal.call_count,2)
+            self.assertTrue(all(json.loads(call.kwargs['content'])==event for call in portal.call_args_list))
+
+class GuardLauncherTests(unittest.TestCase):
+    def test_real_guard_launcher_supports_python_path_with_spaces(self):
+        import ast,subprocess,sys,tempfile
+        source=ast.parse(Path(validation.__file__).read_text())
+        template=next(node.args[0] for node in ast.walk(source) if isinstance(node,ast.Call)
+                      and isinstance(node.func,ast.Attribute) and node.func.attr=='write_text'
+                      and isinstance(node.func.value,ast.Name) and node.func.value.id=='wrapper')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            runtime=root/'runtime with spaces'
+            runtime.mkdir()
+            python=runtime/'python'
+            python.symlink_to(sys.executable)
+            nmap=root/'fixture-nmap'
+            nmap.write_text(f'#!{sys.executable}\nprint("fixture nmap version")\n')
+            nmap.chmod(0o700)
+            code=eval(compile(ast.Expression(template),validation.__file__,'eval'),{
+                'nmap_python':python,'nmap':str(nmap),'root':root,'scan_target':'127.0.0.1',
+                'multi_host':False,'listener_port':12345,'interrupt_bridge':False})
+            launcher=root/'nmap'
+            launcher.write_text(code)
+            launcher.chmod(0o700)
+            result=subprocess.run([str(launcher),'--version'],capture_output=True,text=True,timeout=10)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('fixture nmap version',result.stdout)

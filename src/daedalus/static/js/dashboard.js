@@ -504,6 +504,7 @@
       : "Waiting for first heartbeat";
     card.append(head, name, subtitle, telemetry, readiness, lastSeen, meta);
     appendScannerActivity(card, agent);
+    appendScannerDelivery(card, agent);
 
     var authorizedNetworks = Array.isArray(agent.authorized_networks) ? agent.authorized_networks : [];
     var detectedNetworks = Array.isArray(agent.detected_networks) ? agent.detected_networks : [];
@@ -1071,6 +1072,37 @@
     return section;
   }
 
+  function appendScannerDelivery(card, agent) {
+    var section = document.createElement("section"); section.className = "scanner-upload-delivery";
+    var heading = document.createElement("h4"); heading.textContent = "Results delivery";
+    var summary = document.createElement("p");
+    var delivery = agent.upload_delivery;
+    var observed = delivery && typeof delivery.observed_at === "string" && Date.parse(delivery.observed_at);
+    var fields = ["schema_version", "state", "pending_events", "review_events", "preservation_failed", "last_acknowledged_at", "observed_at"];
+    var fresh = agent.enabled !== false && agent.status !== "disabled" && agent.bridge_online === true &&
+      delivery && Object.keys(delivery).length === fields.length && fields.every(function (field) { return Object.prototype.hasOwnProperty.call(delivery, field); }) &&
+      delivery.schema_version === 1 && Number.isFinite(observed) &&
+      observed <= Date.now() && Date.now() - observed <= 45000;
+    var valid = fresh && delivery.state === "observed" &&
+      Number.isInteger(delivery.pending_events) && delivery.pending_events >= 0 && delivery.pending_events <= 10000 &&
+      Number.isInteger(delivery.review_events) && delivery.review_events >= 0 && delivery.review_events <= 10000 &&
+      typeof delivery.preservation_failed === "boolean" &&
+      (delivery.last_acknowledged_at === null || (typeof delivery.last_acknowledged_at === "string" && Number.isFinite(Date.parse(delivery.last_acknowledged_at))));
+    summary.textContent = !valid ? "Current upload queue unknown · a fresh observation is unavailable"
+      : delivery.pending_events + " upload(s) queued · " + delivery.review_events + " retained for review";
+    var unknownFailure = fresh && delivery.state === "unknown" && delivery.pending_events === null && delivery.review_events === null && delivery.last_acknowledged_at === null && delivery.preservation_failed === true;
+    if (unknownFailure) summary.textContent = "Upload queue unknown · a local event save did not finish";
+    if (valid && delivery.preservation_failed) summary.textContent += " · a local event save did not finish";
+    if (unknownFailure || (valid && (delivery.review_events > 0 || delivery.preservation_failed))) section.classList.add("upload-needs-review");
+    var note = document.createElement("p"); note.className = "check-scope-note";
+    note.textContent = (valid ? "Queue observed " + new Date(observed).toLocaleString() + ". " : "") + "An empty queue does not prove scan completeness. Review the saved run and its coverage.";
+    var ack = valid && delivery.last_acknowledged_at && Date.parse(delivery.last_acknowledged_at);
+    if (Number.isFinite(ack) && ack <= Date.now()) note.textContent += " Last upload acknowledged " + new Date(ack).toLocaleString() + ".";
+    if (valid && delivery.pending_events > 0) note.textContent += " Keep the bridge running; queued evidence is retried automatically.";
+    if (unknownFailure || (valid && (delivery.review_events > 0 || delivery.preservation_failed))) note.textContent += " Keep local evidence and review the scanner's logs and available storage before relying on this run.";
+    section.append(heading, summary, note); card.append(section); return section;
+  }
+
   function refreshScannerActivities(agents) {
     var list = document.getElementById("agent-list");
     if (!list) return;
@@ -1080,6 +1112,9 @@
       var prior = card.querySelector(".scanner-current-activity");
       var updated = appendScannerActivity(card, agent);
       if (prior) prior.replaceWith(updated);
+      var priorDelivery = card.querySelector(".scanner-upload-delivery");
+      var updatedDelivery = appendScannerDelivery(card, agent);
+      if (priorDelivery) priorDelivery.replaceWith(updatedDelivery);
     });
   }
 

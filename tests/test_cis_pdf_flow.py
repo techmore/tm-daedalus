@@ -236,7 +236,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
         self.assertIn("Download NmapUI + Daedalus kit", response.text)
         self.assertIn('id="enrollment-scanner-name"', response.text)
         self.assertIn('id="enrollment-network-scopes"', response.text)
-        self.assertIn("dashboard.js?v=daedalus-20261008-180", response.text)
+        self.assertIn("dashboard.js?v=daedalus-20261009-181", response.text)
         self.assertIn('data-load-older-checks="dns"', response.text)
         self.assertIn('data-load-older-checks="web"', response.text)
         self.assertIn('data-load-older-active="changes"', response.text)
@@ -301,6 +301,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
                 prefix + "src/daedalus/agent.py",
                 prefix + "src/daedalus/command_journal.py",
                 prefix + "src/daedalus/scanner_activity.py",
+                prefix + "src/daedalus/scanner_delivery.py",
             }
             self.assertEqual(names, expected)
             project = bundle.read(prefix + "pyproject.toml").decode()

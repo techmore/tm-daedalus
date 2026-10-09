@@ -39,6 +39,7 @@ from anyio import from_thread
 
 from daedalus import __version__
 from daedalus.scanner_activity import unknown_activity, validated_activity
+from daedalus.scanner_delivery import unknown_delivery, validated_delivery, needs_review
 from daedalus.cis_client_release import load_release, release_status, ReleaseInvalid
 from daedalus.config import (
     APP_ENV,
@@ -203,6 +204,7 @@ def build_agent_bundle() -> bytes:
         "src/daedalus/agent.py": PACKAGE_DIR / "agent.py",
         "src/daedalus/command_journal.py": PACKAGE_DIR / "command_journal.py",
         "src/daedalus/scanner_activity.py": PACKAGE_DIR / "scanner_activity.py",
+        "src/daedalus/scanner_delivery.py": PACKAGE_DIR / "scanner_delivery.py",
     }
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as output:
@@ -293,6 +295,9 @@ def ensure_agent_telemetry_columns(connection) -> None:
         "nmapui_ready": "BOOLEAN",
         "nmapui_activity": "JSON",
         "nmapui_activity_at": "DATETIME",
+        "upload_delivery": "JSON",
+        "upload_delivery_at": "DATETIME",
+        "upload_review_open": "BOOLEAN NOT NULL DEFAULT 0",
         "nmapui_restart_supported": "BOOLEAN NOT NULL DEFAULT 0",
         "command_protocol_version": "INTEGER NOT NULL DEFAULT 0",
         "authorized_networks": "JSON NOT NULL DEFAULT '[]'",
@@ -540,6 +545,16 @@ class AgentHeartbeatRequest(BaseModel):
     nmapui_restart_supported: bool = False
     command_protocol_version: int = Field(default=0, ge=0, le=100)
     nmapui_activity: dict[str, Any] | None = None
+    upload_delivery: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_delivery(self):
+        if self.upload_delivery is not None:
+            normalized = validated_delivery(self.upload_delivery)
+            if normalized is None:
+                raise ValueError("Upload delivery must match the bounded version-1 schema.")
+            self.upload_delivery = normalized
+        return self
 
     @model_validator(mode="after")
     def validate_activity(self):
@@ -2712,6 +2727,49 @@ def scanner_activity_projection(agent: Agent, *, now: datetime | None = None) ->
     return {**activity, "observed_at": iso_utc(observed_at)}
 
 
+def scanner_delivery_projection(agent: Agent, *, now: datetime | None = None) -> dict[str, Any]:
+    current = now or utcnow()
+    observed = agent.upload_delivery_at
+    if not agent_bridge_online(agent, now=current) or observed is None or not current - timedelta(seconds=45) <= observed <= current:
+        return {**unknown_delivery(), "observed_at": None}
+    delivery = validated_delivery(agent.upload_delivery) or unknown_delivery()
+    acknowledged = delivery.get("last_acknowledged_at")
+    if acknowledged and datetime.fromisoformat(acknowledged.replace("Z", "+00:00")).replace(tzinfo=None) > current:
+        delivery["last_acknowledged_at"] = None
+    return {**delivery, "observed_at": iso_utc(observed)}
+
+
+def record_delivery_review(db: Session, agent: Agent, observation: dict[str, Any] | None) -> bool:
+    delivery = validated_delivery(observation)
+    if delivery is None or (delivery["state"] != "observed" and not needs_review(delivery)):
+        return False  # Unknown observations cannot clear a previously reported problem.
+    attention = needs_review(delivery)
+    changed = db.execute(update(Agent).where(Agent.id == agent.id,
+        Agent.upload_review_open.is_(not attention)).values(upload_review_open=attention)
+        .execution_options(synchronize_session=False)).rowcount
+    if not changed:
+        return False
+    action = "scanner.delivery_review_required" if attention else "scanner.delivery_review_cleared"
+    event = AuditLog(organization_id=agent.organization_id, actor_user_id=None, action=action,
+        details={"agent_id": agent.id, "pending_events": delivery["pending_events"],
+            "review_events": delivery["review_events"], "preservation_failed": delivery["preservation_failed"]},
+        created_at=utcnow())
+    db.add(event)
+    db.flush()
+    name = agent.name[:120]
+    if attention:
+        summary = f"{name}: " + (f"{delivery['review_events']} locally retained upload(s) need review." if delivery["review_events"] is not None else "The local upload queue cannot be measured.")
+        if delivery["preservation_failed"]:
+            summary += " A local event save did not finish; review source evidence and storage."
+    else:
+        summary = f"{name}: no unresolved local save or retained upload review is currently reported."
+    summary += (f" {delivery['pending_events']} upload(s) remain queued." if delivery["pending_events"] is not None else " Pending-upload count is unavailable.") + " This observation does not establish scan completeness."
+    db.add(WorkspaceNotification(organization_id=agent.organization_id, source_type="scanner_delivery_review",
+        source_id=event.id, title=("Scanner upload review required" if attention else "Scanner upload review cleared"),
+        summary=summary[:1000], reason="upload_review" if attention else "upload_review_cleared", detected_at=event.created_at))
+    return True
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok", "app": "daedalus", "version": __version__}
@@ -3940,7 +3998,7 @@ def list_workspace_notifications(
                     else "google-admin" if notification.source_type == "google_admin_report"
                     else "meraki" if notification.source_type == "meraki_report"
                     else "cis" if notification.source_type == "cis_report"
-                    else "scanners" if notification.source_type == "scanner_comparison"
+                    else "scanners" if notification.source_type in {"scanner_comparison", "scanner_delivery_review"}
                     else "overview" if notification.source_type in {
                         "probation_override_granted", "probation_override_revoked", "probation_override_expired", "onboarding_review_due"
                     }
@@ -6278,11 +6336,17 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
                         older_scans += 1
                     else:
                         recent_scans += 1
+    delivery_observations = [scanner_delivery_projection(agent, now=scan_recency_now) for agent in agents]
+    queued_uploads = sum(value["pending_events"] for value in delivery_observations if value["state"] == "observed")
+    unknown_queues = sum(value["state"] != "observed" for value in delivery_observations)
+    delivery_reviews = sum(bool(agent.upload_review_open) for agent in agents)
+    delivery_summary = f"{delivery_reviews} scanners need upload review · {queued_uploads} queued uploads observed · {unknown_queues} queues unknown. "
     scanner_state = "not_assessed" if not scan_attempts else "recorded" if completed_scans == len(agents) else "attention"
-    if agents and (ready != len(agents) or scoped != len(agents) or older_scans or unknown_scan_times or (completed_scans and completed_scans != len(agents))):
+    if agents and (delivery_reviews or ready != len(agents) or scoped != len(agents) or older_scans or unknown_scan_times or (completed_scans and completed_scans != len(agents))):
         scanner_state = "attention"
     areas.append({"key":"scanners", "title":"Internal network", "state":scanner_state,
-        "summary":f"{ready}/{len(agents)} scan engines ready · {online} online · {scoped} with approved ranges · {completed_scans} with a completed latest scan · {recent_scans} within 48 hours · {older_scans} older · {unknown_scan_times} with unknown scan time. Saved runs do not establish coverage of all approved ranges." if agents else "No enabled scanners in this workspace.",
+        "upload_delivery": {"queued_uploads_observed": queued_uploads, "review_scanners": delivery_reviews, "unknown_queues": unknown_queues},
+        "summary":delivery_summary + f"{ready}/{len(agents)} scan engines ready · {online} online · {scoped} with approved ranges · {completed_scans} with a completed latest scan · {recent_scans} within 48 hours · {older_scans} older · {unknown_scan_times} with unknown scan time. Saved runs do not establish coverage of all approved ranges." if agents else "No enabled scanners in this workspace.",
         "updated_at":max(scan_times, default=None),
         "availability_updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
     devices = db.scalars(select(CISDevice).where(CISDevice.organization_id == org.id)).all()
@@ -6422,6 +6486,7 @@ def dashboard_data(request: Request, db: Session = Depends(get_db)):
                 "nmapui_version": agent.nmapui_version,
                 "nmapui_ready": agent.nmapui_ready,
                 "nmapui_activity": scanner_activity_projection(agent),
+                "upload_delivery": scanner_delivery_projection(agent),
                 "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
                 "command_protocol_version": agent.command_protocol_version or 0,
                 "connection_scope": scanner_connection_scope(agent),
@@ -6590,6 +6655,9 @@ async def agent_heartbeat(
     # the freshness of a prior observation with an unrelated heartbeat.
     agent.nmapui_activity = payload.nmapui_activity
     agent.nmapui_activity_at = agent.last_seen_at if payload.nmapui_activity is not None else None
+    agent.upload_delivery = payload.upload_delivery
+    agent.upload_delivery_at = agent.last_seen_at if payload.upload_delivery is not None else None
+    delivery_notice_created = record_delivery_review(db, agent, payload.upload_delivery)
     agent.nmapui_restart_supported = payload.nmapui_restart_supported
     agent.command_protocol_version = payload.command_protocol_version
     if payload.version:
@@ -6615,10 +6683,13 @@ async def agent_heartbeat(
             "nmapui_version": agent.nmapui_version,
             "nmapui_ready": agent.nmapui_ready,
             "nmapui_activity": scanner_activity_projection(agent),
+            "upload_delivery": scanner_delivery_projection(agent),
             "nmapui_restart_supported": bool(agent.nmapui_restart_supported),
                 "command_protocol_version": agent.command_protocol_version or 0,
         },
     )
+    if delivery_notice_created:
+        await live_hub.publish(agent.organization_id, {"type": "workspace_notification_created", "agent_id": agent.id})
     return {"ok": True, "status": agent_status(agent)}
 
 
@@ -7314,6 +7385,7 @@ def scanner_client_status(agent_id: int, authorization: str | None = Header(defa
                        "stage": row.stage, "created_at": iso_utc(row.created_at)} for row in report_rows]
     return JSONResponse({"name": agent.name, "status": agent_status(agent),
                          "last_scan_request": last_request,
+                         "upload_delivery": scanner_delivery_projection(agent),
                          "bridge_online": agent_bridge_online(agent),
                          "last_seen_at": iso_utc(agent.last_seen_at) if agent.last_seen_at else None,
                          "recent_runs": [local_run(job_id) for job_id in job_ids], "hosted_reports": hosted_reports},

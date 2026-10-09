@@ -51,6 +51,30 @@ install-deps chromium` from the configured virtual environment first. Use
 These tests include isolated report generation; passing them does not establish
 visual approval of a PDF template or validation of a production scanner fleet.
 
+## Scanner results delivery
+
+Scanner cards show current activity and results delivery separately. The bridge
+reports measured queued events, files retained for review, unfinished local
+saves, and its last acknowledged upload. Missing, stale or unreadable queue
+observations remain unknown. Overview counts fresh queued uploads and unresolved
+review episodes; inbox notices record the first problem and its observed
+clearance without repeating an alert on every heartbeat.
+
+The Mac status app reads a bounded private local observation, so queued uploads
+and save failures remain visible while the portal is unreachable. Observations
+expire after 45 seconds. A clear queue does not prove that a scan completed or
+covered its approved ranges; use the saved run and its supporting evidence.
+
+The bridge persists event identities and collection dates before upload and
+retries retained events after outages and restart. Only an explicit durable
+server acknowledgement permits removal. A private save-intent journal preserves
+unfinished saves across restart when that journal can be written; an unrelated
+successful upload cannot clear them. Corrupt journals remain unknown and the
+bounded journal's overflow remains latched for review. If storage cannot persist
+intent before a process failure, recovery depends on the original scanner's
+bounded replay window; this is not a guarantee of complete historical capture.
+Physical fleet outage/recovery acceptance remains part of the completion audit.
+
 ## Managed Linux scanner lifecycle
 
 The scanner kit includes `manage-service-linux.sh status|restart|uninstall|restore`.

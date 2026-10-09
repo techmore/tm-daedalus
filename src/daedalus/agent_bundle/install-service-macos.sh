@@ -70,7 +70,7 @@ reject_symlink "$APP_SUPPORT"
 reject_symlink "$NMAPUI_DATA_ROOT"
 reject_symlink "$NMAPUI_RELEASES"
 reject_symlink "$BRIDGE_INSTALL_ROOT"
-for bridge_path in "$BRIDGE_INSTALL_ROOT/src" "$BRIDGE_SOURCE" "$BRIDGE_VENV" "$BRIDGE_INSTALL_ROOT/pyproject.toml" "$BRIDGE_SOURCE/__init__.py" "$BRIDGE_SOURCE/agent.py" "$BRIDGE_SOURCE/command_journal.py" "$BRIDGE_SOURCE/scanner_activity.py" "$APP_SUPPORT/nmapui" "$LOG_DIR" "$NMAPUI_DATA_ROOT/data" "$NMAPUI_DATA_ROOT/logs"; do
+for bridge_path in "$BRIDGE_INSTALL_ROOT/src" "$BRIDGE_SOURCE" "$BRIDGE_VENV" "$BRIDGE_INSTALL_ROOT/pyproject.toml" "$BRIDGE_SOURCE/__init__.py" "$BRIDGE_SOURCE/agent.py" "$BRIDGE_SOURCE/command_journal.py" "$BRIDGE_SOURCE/scanner_activity.py" "$BRIDGE_SOURCE/scanner_delivery.py" "$APP_SUPPORT/nmapui" "$LOG_DIR" "$NMAPUI_DATA_ROOT/data" "$NMAPUI_DATA_ROOT/logs"; do
   reject_symlink "$bridge_path"
 done
 reject_symlink "$LAUNCHD_DIR"
@@ -162,6 +162,7 @@ cp -f "$SCRIPT_DIR/src/daedalus/__init__.py" "$BRIDGE_SOURCE/__init__.py"
 cp -f "$SCRIPT_DIR/src/daedalus/agent.py" "$BRIDGE_SOURCE/agent.py"
 cp -f "$SCRIPT_DIR/src/daedalus/command_journal.py" "$BRIDGE_SOURCE/command_journal.py"
 cp -f "$SCRIPT_DIR/src/daedalus/scanner_activity.py" "$BRIDGE_SOURCE/scanner_activity.py"
+cp -f "$SCRIPT_DIR/src/daedalus/scanner_delivery.py" "$BRIDGE_SOURCE/scanner_delivery.py"
 "$PYTHON_BIN" -m venv "$BRIDGE_VENV"
 "$BRIDGE_VENV/bin/python" -m pip install --disable-pip-version-check "$BRIDGE_INSTALL_ROOT"
 

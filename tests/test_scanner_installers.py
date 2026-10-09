@@ -35,7 +35,7 @@ class ScannerInstallerFixtures(unittest.TestCase):
         (kit / 'src/daedalus').mkdir(parents=True)
         for name in ['install.sh', 'pyproject.toml']:
             shutil.copyfile(BUNDLE / name, kit / name)
-        for name in ['__init__.py', 'agent.py', 'command_journal.py', 'scanner_activity.py']:
+        for name in ['__init__.py', 'agent.py', 'command_journal.py', 'scanner_activity.py', 'scanner_delivery.py']:
             shutil.copyfile(ROOT / 'src/daedalus' / name, kit / 'src/daedalus' / name)
         tools = self.root / 'tools'
         tools.mkdir()
@@ -71,6 +71,7 @@ raise SystemExit("Unexpected fixture Python invocation")
         installed = self.root / 'data-home/daedalus/scanner-bridge'
         self.assertTrue((installed / 'src/daedalus/command_journal.py').is_file())
         self.assertTrue((installed / 'src/daedalus/scanner_activity.py').is_file())
+        self.assertTrue((installed / 'src/daedalus/scanner_delivery.py').is_file())
         self.assertEqual(installed.stat().st_mode & 0o777, 0o700)
         self.assertEqual(json.loads(recorder.read_text()), ['--server', 'https://fixture.invalid', '--nmapui-url', 'http://127.0.0.1:9000', '--name', 'Fixture scanner'])
 
@@ -79,7 +80,7 @@ raise SystemExit("Unexpected fixture Python invocation")
         (kit / 'src/daedalus').mkdir(parents=True)
         for name in ['install-service-linux.sh', 'manage-service-linux.sh', 'install-nmapui.sh', 'systemd_service.py', 'pyproject.toml']:
             shutil.copyfile(BUNDLE / name, kit / name)
-        for name in ['__init__.py', 'agent.py', 'command_journal.py', 'scanner_activity.py']:
+        for name in ['__init__.py', 'agent.py', 'command_journal.py', 'scanner_activity.py', 'scanner_delivery.py']:
             shutil.copyfile(ROOT / 'src/daedalus' / name, kit / 'src/daedalus' / name)
         with zipfile.ZipFile(kit / 'nmapui-source.zip', 'w') as source:
             source.writestr('daedalus-nmapui-source/app.py', '# fixture only\n')

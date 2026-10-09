@@ -215,7 +215,7 @@ class Listener(BaseHTTPRequestHandler):
 
 
 class BridgeTransport(BaseHTTPRequestHandler):
-    """Loopback fixture transport; holds only uploads, never changes product state."""
+    """Loopback fixture transport; holds uploads and loses one committed ack."""
     def do_GET(self):
         self.forward()
 
@@ -240,6 +240,16 @@ class BridgeTransport(BaseHTTPRequestHandler):
                 status, content = response.status_code, response.content
             except httpx.HTTPError:
                 status, content = 503, b'{}'
+        event_upload = self.command == 'POST' and self.path.rsplit('/', 1)[-1] in {'events', 'event-artifacts'}
+        if event_upload and 200 <= status < 300:
+            with self.server.ack_lock:
+                if self.server.lose_next_event_ack:
+                    self.server.lose_next_event_ack = False
+                    event = json.loads(body)
+                    self.server.lost_ack_event = {key: event[key] for key in ('client_event_id', 'occurred_at')}
+                    self.close_connection = True
+                    self.connection.shutdown(socket.SHUT_RDWR)
+                    return  # Real portal committed; bridge receives no response.
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(content)))
@@ -351,7 +361,10 @@ def validate(nmap_python: Path, receipt_path: Path, repeat_scan: bool = False, i
             guard_dir = root / "toolchain"
             guard_dir.mkdir()
             wrapper = guard_dir / "nmap"
-            wrapper.write_text(f'''#!{nmap_python.absolute()}
+            wrapper.write_text(f'''#!/bin/sh
+""":"
+exec {__import__('shlex').quote(str(nmap_python.absolute()))} "$0" "$@"
+":"""
 import sys, subprocess, json, time, os, tempfile
 from pathlib import Path
 args=sys.argv[1:]
@@ -440,6 +453,9 @@ raise SystemExit(completed.returncode)
                         transport = FixtureHTTPServer(('127.0.0.1', 0), BridgeTransport)
                         transport.portal = portal
                         transport.uploads_allowed = threading.Event()
+                        transport.ack_lock = threading.Lock()
+                        transport.lose_next_event_ack = True
+                        transport.lost_ack_event = None
                         threading.Thread(target=transport.serve_forever, daemon=True).start()
                         config['server'] = f'http://127.0.0.1:{transport.server_address[1]}'
                     secret_file = root / "bridge-credentials.json"
@@ -476,6 +492,13 @@ raise SystemExit(completed.returncode)
                         pending = [json.loads(path.read_text()) for path in (root / 'spool').glob('*.json')]
                         return [event for event in pending if event.get('source_job_id')] or None
                     recovery_pending = wait_for(pending_source_events)
+                    def held_delivery():
+                        current = online()
+                        delivery = current.get('upload_delivery', {}) if current else {}
+                        return delivery if delivery.get('state') == 'observed' and delivery.get('pending_events', 0) > 0 else None
+                    delayed_delivery = wait_for(held_delivery, 30)
+                    if delayed_delivery['review_events'] != 0 or delayed_delivery['preservation_failed'] is not False:
+                        raise RuntimeError('Held uploads were misreported as rejected or unpreserved')
                     if len({event['source_job_id'] for event in recovery_pending}) != 1:
                         raise RuntimeError('Interrupted source events mixed run identity')
                     claims = list((root / 'spool').glob(f'commands-*/claim-{command_id}.json'))
@@ -630,6 +653,16 @@ raise SystemExit(completed.returncode)
                         raise RuntimeError('Original command claim or recovered terminal acknowledgement changed')
                     if list((root / 'spool').glob('*.json')) or list((root / 'spool').rglob('*.rejected')) or list((root / 'spool').glob('commands-*/result-*.json')):
                         raise RuntimeError('Recovery queues did not drain cleanly')
+                    def acknowledged_delivery():
+                        current = online()
+                        delivery = current.get('upload_delivery', {}) if current else {}
+                        return delivery if delivery.get('state') == 'observed' and delivery.get('pending_events') == 0 and delivery.get('last_acknowledged_at') else None
+                    final_delivery = wait_for(acknowledged_delivery, 30)
+                    lost_ack = transport.lost_ack_event
+                    if not lost_ack or len([row for row in source_history if row['client_event_id'] == lost_ack['client_event_id']]) != 1:
+                        raise RuntimeError('Lost acknowledgement did not recover one persisted event')
+                    recovery_proof.update(delayed_delivery=delayed_delivery, final_delivery=final_delivery,
+                        committed_ack_lost=True, lost_ack_event_id=lost_ack['client_event_id'], lost_ack_replay_saved_once=True)
                     recovery_proof.update(command_claim_unchanged=True, terminal_acknowledged=True, own_bridge_interruption='SIGKILL', source_process_restarted=False, pending_queues_drained=True, upload_hold='loopback transport shim returned 503', interruption_scope='owned bridge killed while source workflow awaited guarded real Nmap output')
                 receipt = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "target": scan_target, "scanner_bundle_sha256": hashlib.sha256(bundled).hexdigest(), "source_tree_sha256": json.loads((source / "manifest.json").read_text())["source_tree_sha256"], "bridge_protocol": agent["command_protocol_version"], "product_skip_host_discovery": True, "per_scan_skip_host_discovery": skip_host_discovery, "command_acknowledgement_states": acknowledgements, "command_status": command["status"], "command_completed_at": command["completed_at"], "host_count": len(matched), "open_port_count": len(open_ports), "loopback_listener_port": listener_port, "observed_port_protocol": "tcp", "persisted_json_artifact_downloaded": bool(event.get("artifact_download_url")), "saved_event_names": sorted({e["event_name"] for e in history if e["agent_id"] == agent_id}), "realtime_messages": len(live), "realtime_types": sorted({str(m.get("type", "")) for m in live}), "nmap_invocations": [[Path(v).name if i == 0 else "<isolated-output>" if 'actual-scan' in v else v for i,v in enumerate(argv)] for argv in invocations], "nmap_xml_sha256": hashlib.sha256(xml).hexdigest(), "source_job_id": run_id, "grouped_run_status": run_detail["run"]["status"], "grouped_run_event_count": run_detail["run"]["event_count"], "pdf_scope": "explicit-run-snapshot", "pdf_status": report["status"], "pdf_bytes": len(pdf), "pdf_sha256": hashlib.sha256(pdf).hexdigest(), "limits": ["Single ephemeral loopback listener port; PATHguard executes real Nmap with bounded options", "No default scan coverage, service install, external targets, persistence soak, or production readiness claimed", "Ephemeral credentials/database/logs/spool removed; only sanitized receipt and PDF retained"]}
                 if multi_host:

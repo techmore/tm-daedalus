@@ -5,6 +5,30 @@ It excludes local NmapUI settings, customer data, credentials, and Node build
 dependencies. NmapUI runs on this machine at `http://127.0.0.1:9000`; the
 bridge only connects to that loopback service and to your Daedalus server.
 
+## Results delivery status
+
+The portal and Mac status app show queued uploads, retained review files and
+unfinished local saves independently from engine activity. The Mac app reads
+`upload.status` in the enrollment's private event spool even when the portal is
+unreachable. That observation contains counts and dates, never event payloads or
+credentials, and expires after 45 seconds. Unknown observations are not empty
+queues. Empty queues do not establish scan completeness or network coverage.
+
+Keep the bridge running during upload delays; retained events retry with their
+original identities and collection times. Upload review notices are recorded
+once per problem episode and again when a fresh observation clears the review.
+Unknown observations do not close a previously reported problem. Preserve local
+evidence and investigate logs/storage if an event cannot be saved or is retained
+after rejection. Do not delete evidence to silence a review notice.
+
+The private `delivery.journal` writes save intent before an event is queued.
+Only a matching successful save or acknowledged event resolves that intent.
+Corruption remains unknown, and bounded journal overflow stays latched for
+operator review. A filesystem unable to persist intent cannot preserve that
+failure across a crash; source replay is bounded and may not recover every
+unpreserved event. Review saved runs and source evidence before relying on their
+coverage. Lifecycle actions retain this journal and queued evidence.
+
 ## Managed install on macOS
 
 Install Nmap and extract the kit in `~/Downloads`:
