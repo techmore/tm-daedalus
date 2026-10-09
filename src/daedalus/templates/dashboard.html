@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-201">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-202">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -510,13 +510,16 @@
           </details>
           <details class="topic-secondary" id="{{ key }}-monitoring-details"><summary>Monitoring schedule</summary>
           <section class="external-schedule-card" aria-label="Recurring check schedule">
+            <div class="overview-read-heading"><h3>Saved monitoring configuration</h3><button id="{{ key }}-schedule-refresh" class="button button-quiet" type="button">Refresh schedule</button></div>
+            <p id="{{ key }}-schedule-observed" class="fine-print">No saved schedule read yet.</p>
+            <p id="{{ key }}-schedule-read-note" class="overview-read-note" role="status" hidden></p>
             <div class="external-schedule-copy">
               <span class="check-status" id="{{ key }}-schedule-status">Recurring checks are off</span>
               <p class="muted" id="{{ key }}-schedule-next-run">Schedules start one full interval after they are saved.</p>
             </div>
             {% if membership.role == 'admin' %}
             <div class="external-schedule-controls">
-              <label class="schedule-toggle" for="{{ key }}-schedule-enabled"><input id="{{ key }}-schedule-enabled" type="checkbox" data-schedule-enabled="{{ key }}" {% if organization.verification_status != 'verified' %}disabled{% endif %}><span>Enable recurring checks</span></label>
+              <label class="schedule-toggle" for="{{ key }}-schedule-enabled"><input id="{{ key }}-schedule-enabled" type="checkbox" data-schedule-enabled="{{ key }}" disabled><span>Enable recurring checks</span></label>
               <select id="{{ key }}-schedule-interval" aria-label="Check interval" data-schedule-interval="{{ key }}" disabled>
                 <option value="24">Daily</option>
                 <option value="168">Weekly</option>
@@ -524,7 +527,8 @@
               <button class="button button-secondary" type="button" data-save-schedule="{{ key }}">Save schedule</button>
             </div>
             {% endif %}
-            <p class="check-scope-note schedule-note">Recurring checks run only for TXT-verified workspaces and use the same passive checks, saved history, comparisons, and audit log as manual runs. An admin can disable them at any time.</p>
+            <p id="{{ key }}-schedule-feedback" class="verification-feedback" role="status"></p>
+            <p class="check-scope-note schedule-note">Recurring public DNS and website checks use the same saved history, comparisons and audit log as manual runs. A workspace admin can configure or disable them during ownership review. This schedule does not run active website audits. Saved configuration does not confirm that the scheduler is running.</p>
           </section>          </details>
         </section>
         {% elif key == 'google-admin' %}
@@ -707,7 +711,8 @@
   <script src="/static/js/workspace-requests.js?v=20261009-2" defer></script>
   <script src="/static/js/customer-create.js?v=20261009-1" defer></script>
   <script src="/static/js/domain-verification.js?v=20261009-1" defer></script>
+  <script src="/static/js/monitoring-schedule.js?v=20261009-1" defer></script>
   <script src="/static/js/probation-approval.js?v=daedalus-20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-201" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-202" defer></script>
 </body>
 </html>

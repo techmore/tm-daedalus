@@ -38,6 +38,8 @@ const document={activeElement:null, body:new Node('body'), querySelectorAll:sele
 function dateLabel(value) { return value; }
 function appendEmpty(host, message) { const child=new Node(); child.textContent=message; host.append(child); }
 let opened=null, postureLoads=0, requests=[], responses=[];
+let monitoringCalls=[],monitoringEnable=async()=>true;
+function monitoringScheduleReview(type){return{enable:async(cadence,reviewed)=>{monitoringCalls.push({type,cadence,reviewed});return monitoringEnable(cadence,reviewed);}};}
 const orgId='1'; let postureRequestSequence=0; let reloads=0,locationChanges=[]; const window={setTimeout,clearTimeout,location:{pathname:'/dashboard',search:'',reload:()=>{reloads++;}},history:{replaceState:(state,title,path)=>locationChanges.push(path)}};
 const workspacePostureRead={body:null,signature:null,error:null,loading:false,controller:null,mutationBusy:false};
 const portfolioRead={body:null,signature:null,error:null,loading:false,controller:null,sequence:0}; let workspaceSelectionBusy=false; let workspaceRequests=null;let customerCreation=null;
@@ -141,9 +143,8 @@ assert.equal(overview.children[0].children[0].textContent,'Saved evidence availa
 assert.match(flatten(overview),/Automatic checks off/); assert.match(flatten(overview),/Automatic checks every 168 hours/);
 assert.doesNotMatch(flatten(overview),/Daily|All good/);
 const enable=find(overview,node=>node.dataset.statusKey==='dns-schedule'); assert.ok(enable);
-responses.push({ok:true}); await enable.events.click();
-assert.equal(requests[0].path,'/api/external-checks/dns/schedule');
-assert.deepEqual(JSON.parse(requests[0].options.body),{enabled:true,interval_hours:168}); assert.equal(postureLoads,1);
+await enable.events.click();
+assert.equal(monitoringCalls[0].type,'dns');assert.equal(monitoringCalls[0].cadence,168);assert.equal(monitoringCalls[0].reviewed,rows[0].schedule);assert.equal(postureLoads,1);assert.equal(requests.length,0);
 assert.equal(workspaceAreaPresentation(area('dns','recorded',{schedule:{enabled:false,interval_hours:72}}),now).enableSchedule,false);
 assert.equal(workspaceAreaPresentation(area('cis','recorded',{schedule:{enabled:false,interval_hours:24}}),now).enableSchedule,false);
 })().catch(error=>{console.error(error);process.exitCode=1;});
@@ -153,6 +154,18 @@ renderStatusBoard([area('dns','recorded',{schedule:{enabled:false,interval_hours
 assert.equal(find(overview,node=>node.dataset.statusKey==='dns-schedule'),null);
 assert.ok(find(overview,node=>node.dataset.statusKey==='dns-review'));
 ''')
+
+    def test_unconfirmed_overview_schedule_opens_review_instead_of_repeating_enable(self):
+        self.run_node(r'''
+(async()=>{
+renderStatusBoard([area('dns','recorded',{schedule:{enabled:false,interval_hours:168}})]);
+monitoringEnable=async()=>{throw new Error('Saved response lost; refresh the schedule');};
+const enable=find(overview,node=>node.dataset.statusKey==='dns-schedule');await enable.events.click();
+assert.equal(enable.textContent,'Review monitoring schedule');assert.equal(enable.dataset.reviewRequired,'true');assert.match(enable.title,/response lost/);
+assert.match(enable.attributes['aria-label'],/Review DNS monitoring schedule/);
+await enable.events.click();assert.equal(monitoringCalls.length,1);assert.equal(opened.key,'dns');assert.equal(postureLoads,0);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+''',role='admin')
 
     def test_public_refresh_reports_partial_failure_and_retries_only_failed_request(self):
         self.run_node(r'''

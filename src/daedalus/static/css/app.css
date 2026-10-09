@@ -992,6 +992,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 #domain-verification-details .fine-print { margin: 0; }
 #domain-verification-details .inline-confirmation { flex: 1 1 100%; }
 #domain-verification-details .verification-feedback:empty { display: none; }
+.external-schedule-card button, .external-schedule-card select, .external-schedule-card .schedule-toggle { min-height: 44px; }
+.external-schedule-card { grid-template-columns: minmax(0, 1fr); }
+.external-schedule-card [hidden] { display: none !important; }
+.external-schedule-card .verification-feedback:empty { display: none; }
 .workspace-access-details .override-form { max-width: 620px; }
 .workspace-access-details .muted { font-size: 12px; }
 .challenge-replacement { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: center; gap: 10px; }

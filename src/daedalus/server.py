@@ -848,6 +848,34 @@ def serialize_external_schedule(
     }
 
 
+def current_external_schedule(db: Session, organization_id: int, user_id: int, check_type: str) -> dict[str, Any]:
+    """Read configuration/reference/authority together; worker progress is separate."""
+    transition = select(func.max(AuditLog.id)).where(
+        AuditLog.organization_id == organization_id,
+        AuditLog.action.in_(["external_check.schedule_updated", "external_check.schedule_defaulted"]),
+        AuditLog.details["check_type"].as_string() == check_type,
+    ).scalar_subquery()
+    row = db.execute(select(Organization, ExternalCheckSchedule, User, Membership.role, transition)
+        .select_from(Organization)
+        .join(Membership, (Membership.organization_id == Organization.id) &
+            (Membership.user_id == user_id) & (Membership.status == "approved"))
+        .outerjoin(ExternalCheckSchedule, (ExternalCheckSchedule.organization_id == Organization.id) &
+            (ExternalCheckSchedule.check_type == check_type))
+        .outerjoin(User, User.id == ExternalCheckSchedule.updated_by_user_id)
+        .where(Organization.id == organization_id).execution_options(populate_existing=True)).first()
+    if row is None:
+        raise HTTPException(status_code=403, detail="Approved workspace access required")
+    organization, schedule, actor, role, latest = row
+    reference = token_digest(json.dumps([organization_id, check_type, latest,
+        [schedule.id, schedule.enabled, schedule.interval_hours, schedule.updated_by_user_id,
+         iso_utc(schedule.updated_at)] if schedule else None], separators=(",", ":")))
+    return {**serialize_external_schedule(schedule, check_type), "organization_id":organization_id,
+        "user_id":user_id, "domain":organization.domain, "observed_at":iso_utc(utcnow()),
+        "can_manage":role == "admin",
+        "updated_by":(actor.display_name or actor.email) if actor else None,
+        "state_reference":reference}
+
+
 def meraki_review_summary(snapshot: dict[str, Any] | None) -> dict[str, int]:
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     totals = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
@@ -6265,6 +6293,15 @@ def cancel_queued_website_audit(
     return serialize_external_run(run, db.get(User, run.triggered_by_user_id))
 
 
+@app.get("/api/external-checks/{check_type}/schedule")
+def get_external_check_schedule(check_type: str, request: Request, db: Session = Depends(get_db)):
+    if check_type not in {"dns", "web"}:
+        raise HTTPException(status_code=404, detail="Unknown external check")
+    user, organization, _ = get_org_context(request, db)
+    return JSONResponse(current_external_schedule(db, organization.id, user.id, check_type),
+        headers={"Cache-Control":"no-store"})
+
+
 @app.put("/api/external-checks/{check_type}/schedule")
 async def update_external_check_schedule(
     check_type: str,
@@ -6275,6 +6312,11 @@ async def update_external_check_schedule(
     if check_type not in {"dns", "web"}:
         raise HTTPException(status_code=404, detail="Unknown external check")
     user, organization, _ = get_org_context(request, db, admin=True)
+    organization = lock_domain_challenge_workspace(db, organization, user, request)
+    body = current_external_schedule(db, organization.id, user.id, check_type)
+    expected = request.headers.get("X-Daedalus-Schedule-State")
+    if expected is not None and expected != body["state_reference"]:
+        raise HTTPException(status_code=409, detail="The monitoring configuration changed. Refresh schedule before deciding again.")
     now = utcnow()
     schedule = db.scalar(
         select(ExternalCheckSchedule).where(
@@ -6282,6 +6324,11 @@ async def update_external_check_schedule(
             ExternalCheckSchedule.check_type == check_type,
         )
     )
+    if schedule is not None and (schedule.enabled, schedule.interval_hours) == (payload.enabled, payload.interval_hours):
+        # Repeating a saved configuration must not postpone its next collection
+        # or manufacture another configuration decision after a lost response.
+        db.commit()
+        return JSONResponse({**body, "changed":False}, headers={"Cache-Control":"no-store"})
     if schedule is None:
         schedule = ExternalCheckSchedule(
             organization_id=organization.id,
@@ -6313,14 +6360,14 @@ async def update_external_check_schedule(
             "next_run_at": iso_utc(schedule.next_run_at),
         },
     )
+    db.flush()
+    response = {**current_external_schedule(db, organization.id, user.id, check_type), "changed":True}
     db.commit()
-    db.refresh(schedule)
-    response = serialize_external_schedule(schedule, check_type)
     await live_hub.publish(
         organization.id,
         {"type": "external_check_schedule_updated", "schedule": response},
     )
-    return response
+    return JSONResponse(response, headers={"Cache-Control":"no-store"})
 
 
 @app.post("/api/workspaces/select")

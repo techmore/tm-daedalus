@@ -78,6 +78,7 @@
   var dashboardRefreshPromise = null;
   var probationApproval = null;
   var domainVerification = null;
+  var monitoringScheduleReviews = Object.create(null);
   var scannerComparisonCache = new Map();
   var titleMap = {
     overview: "Workspace overview",
@@ -1626,18 +1627,29 @@
         turnOn.dataset.overviewMutation = "true";
         turnOn.setAttribute("aria-label", "Enable " + row.area.title + " checks every " + row.interval + " hours");
         turnOn.addEventListener("click", async function () {
+          if (turnOn.dataset.reviewRequired === "true") {
+            activateTab(key, true);
+            var details = document.getElementById(key + "-monitoring-details");
+            if (details) { details.open = true; var summary = details.querySelector("summary"); if (summary) summary.focus(); }
+            return;
+          }
           if (!overviewMutationAllowed(renderedSignature)) return;
           workspacePostureRead.mutationBusy = true; updateOverviewReadState();
           turnOn.setAttribute("aria-busy", "true"); turnOn.textContent = "Enabling…";
           try {
-            var response = await fetch("/api/external-checks/" + key + "/schedule", {method: "PUT", credentials: "same-origin",
-              headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: row.interval})});
-            if (!response.ok) throw new Error();
+            var monitoring = monitoringScheduleReview(key);
+            if (!monitoring) throw new Error("Monitoring controls are unavailable. Refresh the page.");
+            await monitoring.enable(row.interval, row.area.schedule);
             workspacePostureRead.mutationBusy = false;
             workspacePostureRead.signature = null;
             turnOn.textContent = "Automatic checks enabled";
             await loadWorkspacePosture();
-          } catch (_error) { turnOn.textContent = "Retry automatic checks"; }
+          } catch (error) {
+            turnOn.textContent = "Review monitoring schedule";
+            turnOn.setAttribute("aria-label", "Review " + row.area.title + " monitoring schedule");
+            turnOn.title = error.message;
+            turnOn.dataset.reviewRequired = "true";
+          }
           finally { workspacePostureRead.mutationBusy = false; turnOn.setAttribute("aria-busy", "false"); updateOverviewReadState(); }
         });
         action.append(turnOn);
@@ -5413,6 +5425,8 @@
   }
 
   function renderExternalCheckSchedule(type, schedule) {
+    var monitoring = typeof monitoringScheduleReview === "function" ? monitoringScheduleReview(type) : null;
+    if (monitoring) { monitoring.observe(schedule); return; }
     var presentation = externalSchedulePresentation(schedule);
     var status = document.getElementById(type + "-schedule-status");
     var nextRun = document.getElementById(type + "-schedule-next-run");
@@ -5465,7 +5479,7 @@
       : state.loading && !state.loaded ? "Loading saved evidence…" : "";
     if (note && note.textContent !== message) text(note, message);
     var scheduleNote = document.getElementById(type + "-action-schedule");
-    if (scheduleNote && state.error) {
+    if (scheduleNote && state.error && !(typeof monitoringScheduleReviews !== "undefined" && monitoringScheduleReviews[type])) {
       var savedSchedule = state.loaded && state.body ? externalSchedulePresentation(state.body.schedule) : null;
       text(scheduleNote, savedSchedule ? "Last observed: " + savedSchedule.label + " · " + savedSchedule.detail
         : "Monitoring schedule unavailable. Retry saved evidence to load it.");
@@ -5861,47 +5875,17 @@
     });
   });
 
-  document.querySelectorAll("[data-schedule-enabled]").forEach(function (checkbox) {
-    checkbox.addEventListener("change", function () {
-      var type = checkbox.dataset.scheduleEnabled;
-      var interval = document.querySelector('[data-schedule-interval="' + type + '"]');
-      if (interval) interval.disabled = checkbox.disabled || !checkbox.checked;
+  function monitoringScheduleReview(type) {
+    if (monitoringScheduleReviews[type]) return monitoringScheduleReviews[type];
+    if (!orgId || !window.DaedalusMonitoringSchedule || !["dns", "web"].includes(type)) return null;
+    var review = window.DaedalusMonitoringSchedule.create({type:type, organizationId:orgId,
+      userId:shell.dataset.userId, domain:shell.dataset.organizationDomain,
+      present:externalSchedulePresentation, fetch:function (url,options) {return fetch(url,options);},
+      onSaved:async function () {await loadAuditLog();await loadWorkspacePosture();}
     });
-  });
-
-  document.querySelectorAll("[data-save-schedule]").forEach(function (button) {
-    button.addEventListener("click", async function () {
-      if (button.disabled || button.dataset.scheduleSaving === "true") return;
-      var type = button.dataset.saveSchedule;
-      var checkbox = document.querySelector('[data-schedule-enabled="' + type + '"]');
-      var interval = document.querySelector('[data-schedule-interval="' + type + '"]');
-      if (!checkbox || !interval) return;
-      button.dataset.scheduleSaving = "true";
-      button.setAttribute("aria-disabled", "true");
-      button.setAttribute("aria-busy", "true");
-      var original = button.textContent;
-      text(button, "Saving…");
-      try {
-        var saved = await requestJson("/api/external-checks/" + type + "/schedule", "PUT", {
-          enabled: checkbox.checked,
-          interval_hours: Number(interval.value)
-        });
-        renderExternalCheckSchedule(type, saved);
-        await loadAuditLog();
-      } catch (error) {
-        var status = document.getElementById(type + "-schedule-status");
-        if (status) {
-          status.className = "check-status status-failed";
-          text(status, error.message);
-        }
-      } finally {
-        text(button, original);
-        button.dataset.scheduleSaving = "false";
-        button.setAttribute("aria-disabled", "false");
-        button.setAttribute("aria-busy", "false");
-      }
-    });
-  });
+    if (review) {monitoringScheduleReviews[type]=review;window.daedalusMonitoringSchedules=monitoringScheduleReviews;}
+    return review;
+  }
 
   var workspaceDialog = document.getElementById("workspace-dialog");
   document.querySelectorAll("[data-open-workspace-dialog]").forEach(function (button) {
@@ -6068,6 +6052,10 @@
 
   function auditEventSummary(entry) {
     var data = entry.details || {};
+    if (entry.action === "external_check.schedule_updated" || entry.action === "external_check.schedule_defaulted") {
+      var topic = data.check_type === "dns" ? "DNS & email" : data.check_type === "web" ? "Website" : "Public checks";
+      return topic + " monitoring configuration saved: " + (data.enabled === false ? "automatic checks off" : data.enabled === true && [24,168].includes(data.interval_hours) ? (data.interval_hours === 24 ? "daily" : "weekly") : "cadence unavailable") + "." + (data.enabled === true && data.next_run_at ? " Next expected collection " + dateLabel(data.next_run_at) + "." : "");
+    }
     if (entry.action === "domain_challenge.issued") return "TXT ownership instructions prepared for " + (data.record_name || "this domain") + ".";
     if (entry.action === "domain.verified") return "Domain ownership verified for " + (data.domain || "this workspace") + ".";
     if (entry.action === "domain.verification_checked") return "DNS TXT check recorded " + dateLabel(data.checked_at) + ": " + ({verified:"ownership verified",not_found:"record not found; ownership remains pending",lookup_failed:"lookup failed; ownership was not verified"}[data.outcome] || "outcome unavailable") + ".";

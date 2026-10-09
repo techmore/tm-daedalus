@@ -112,28 +112,15 @@ assert.match(note.textContent,/Monitoring schedule unavailable/);
         return self.source_part("  var externalReportCreationBusy = false;", "  function buildCheckActionBar(")
 
     def test_schedule_save_preserves_focus_and_guards_repeat_requests_and_failure(self):
-        helper = self.source_part('  document.querySelectorAll("[data-save-schedule]")', '  var workspaceDialog =')
-        self.run_node(helper, r'''
-(async()=>{
-document.activeElement=button;let resolve;pendingSave=new Promise(done=>resolve=done);
-const first=button.events.click();assert.equal(button.disabled,false);assert.equal(button.attrs['aria-disabled'],'true');
-assert.equal(document.activeElement,button);await button.events.click();assert.equal(saves.length,1);
-resolve({enabled:true,interval_hours:168});await first;
-assert.equal(document.activeElement,button);assert.equal(button.attrs['aria-disabled'],'false');assert.equal(button.attrs['aria-busy'],'false');
-assert.equal(button.textContent,'Save schedule');assert.equal(rendered.interval_hours,168);assert.deepEqual(saves[0].payload,{enabled:true,interval_hours:168});
-pendingSave=Promise.reject(new Error('Save unavailable'));await button.events.click();
-assert.equal(document.activeElement,button);assert.equal(button.attrs['aria-disabled'],'false');assert.equal(interval.value,'168');
-assert.equal(nodes.get('dns-schedule-status').textContent,'Save unavailable');assert.equal(saves.length,2);
-button.disabled=true;await button.events.click();assert.equal(saves.length,2);
-})().catch(error=>{console.error(error);process.exitCode=1;});
-''', setup=r'''
-const button=new Node('button');button.textContent='Save schedule';button.dataset.saveSchedule='dns';
-const checkbox=new Node('input');checkbox.checked=true;const interval=new Node('select');interval.value='168';
-selectors.set('[data-save-schedule]',[button]);selectors.set('[data-schedule-enabled="dns"]',checkbox);selectors.set('[data-schedule-interval="dns"]',interval);
-nodes.set('dns-schedule-status',new Node());let saves=[],pendingSave=null,rendered=null;
-async function requestJson(path,method,payload){saves.push({path,method,payload});return await pendingSave;}
-function renderExternalCheckSchedule(type,saved){rendered=saved;}async function loadAuditLog(){}
-''')
+        source = SOURCE.read_text()
+        template = (ROOT / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertEqual(source.count('DaedalusMonitoringSchedule.create('), 1)
+        self.assertIn('monitoring.enable(row.interval, row.area.schedule)', source)
+        self.assertIn('if (turnOn.dataset.reviewRequired === "true")', source)
+        self.assertLess(template.index('/static/js/monitoring-schedule.js'),template.index('/static/js/dashboard.js'))
+        self.assertIn('id="{{ key }}-schedule-refresh"', template)
+        # Behavioral save/focus/retained-choice coverage executes the shipped
+        # controller in test_monitoring_schedule_review_ui.py.
 
     def test_report_creation_has_one_request_then_library_progress_without_download_polling(self):
         self.run_node(self.report_helper(), r'''
@@ -174,7 +161,7 @@ assert.doesNotMatch(library.textContent,/generation failed|could not be generate
 ''')
 
     def test_check_action_uses_shared_collector_and_separate_feedback(self):
-        helper = self.source_part('  document.querySelectorAll("[data-run-external-check]")', '  document.querySelectorAll("[data-schedule-enabled]")')
+        helper = self.source_part('  document.querySelectorAll("[data-run-external-check]")', '  function monitoringScheduleReview(')
         self.run_node(helper, r'''
 (async()=>{
 const last=nodes.get('dns-check-last-run');last.textContent='Last checked yesterday';
