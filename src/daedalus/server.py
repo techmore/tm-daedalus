@@ -5023,19 +5023,70 @@ def clear_meraki_organization_grants(
         db.delete(grant)
 
 
+def meraki_workspace_state(db: Session, organization_id: int) -> tuple[MerakiCredential | None, list[MerakiOrganizationGrant], str | None, str]:
+    credential = db.scalar(select(MerakiCredential).where(MerakiCredential.organization_id == organization_id))
+    grants = list(db.scalars(select(MerakiOrganizationGrant).where(
+        MerakiOrganizationGrant.organization_id == organization_id).order_by(MerakiOrganizationGrant.meraki_organization_id)).all())
+    credential_reference = token_digest(json.dumps([organization_id, credential.id, credential.encrypted_api_key,
+        iso_utc(credential.updated_at)], separators=(",", ":"))) if credential else None
+    state_reference = token_digest(json.dumps([organization_id, credential_reference,
+        [[grant.id, grant.meraki_organization_id, grant.meraki_organization_name, iso_utc(grant.granted_at)] for grant in grants]], separators=(",", ":")))
+    return credential, grants, credential_reference, state_reference
+
+
+def observe_meraki_action_state(request: Request, db: Session, organization_id: int) -> str:
+    reference = meraki_workspace_state(db, organization_id)[3]
+    expected = request.headers.get("X-Daedalus-Meraki-State")
+    if expected is not None and expected != reference:
+        raise HTTPException(status_code=409, detail="The saved Meraki connection or approvals changed. Refresh saved connection data before retrying.")
+    return reference
+
+
+def lock_meraki_action_state(request: Request, db: Session, organization_id: int, user_id: int, reference: str) -> tuple[User, Organization, Membership]:
+    # Provider requests finish before admission. This lock serializes Meraki
+    # writes and refreshes the acting user's authorization after any lock wait.
+    db.rollback()
+    admin = select(Membership.id).where(Membership.organization_id == organization_id,
+        Membership.user_id == user_id, Membership.role == "admin", Membership.status == "approved").exists()
+    changed = db.execute(update(Organization).where(Organization.id == organization_id, admin)
+        .values(verification_status=Organization.verification_status).execution_options(synchronize_session=False))
+    if changed.rowcount != 1:
+        raise HTTPException(status_code=403, detail="Workspace admin role required")
+    db.expire_all()
+    user = get_session_user(request, db)
+    if user.id != user_id or request.session.get("organization_id") != organization_id:
+        raise HTTPException(status_code=403, detail="Workspace access changed during this request")
+    membership = db.scalar(select(Membership).where(Membership.organization_id == organization_id,
+        Membership.user_id == user_id, Membership.role == "admin", Membership.status == "approved"))
+    organization = db.get(Organization, organization_id)
+    if membership is None or organization is None:
+        raise HTTPException(status_code=403, detail="Workspace admin role required")
+    if meraki_workspace_state(db, organization_id)[3] != reference:
+        raise HTTPException(status_code=409, detail="The saved Meraki connection or approvals changed. Refresh saved connection data before retrying.")
+    return user, organization, membership
+
+
+def active_meraki_report(db: Session, organization_id: int) -> ReportJob | None:
+    return db.scalar(select(ReportJob).where(ReportJob.organization_id == organization_id,
+        ReportJob.report_type == "meraki_security", ReportJob.status.in_(("queued", "running"))).order_by(ReportJob.id.desc()))
+
+
 @app.get("/api/meraki/status")
-def meraki_status(request: Request, db: Session = Depends(get_db)):
+def meraki_status(request: Request, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     _user, organization, membership = get_org_context(request, db)
-    credential = db.scalar(
-        select(MerakiCredential).where(
-            MerakiCredential.organization_id == organization.id
-        )
-    )
+    credential, grants, credential_reference, state_reference = meraki_workspace_state(db, organization.id)
+    active = active_meraki_report(db, organization.id)
     return {
+        "organization_id": organization.id, "observed_at": iso_utc(utcnow()),
         "configured": credential is not None,
         "key_hint": credential.key_hint if credential and membership.role == "admin" else None,
         "last_verified_at": iso_utc(credential.last_verified_at) if credential else None,
         "can_manage": membership.role == "admin",
+        "credential_reference": credential_reference, "state_reference": state_reference,
+        "organizations": [{"id": grant.meraki_organization_id, "name": grant.meraki_organization_name,
+            "authorized": True, "granted_at": iso_utc(grant.granted_at)} for grant in grants] if credential else [],
+        "active_report": {"id": active.id, "status": active.status, "stage": active.stage, "progress": active.progress} if active else None,
     }
 
 
@@ -5046,6 +5097,7 @@ async def save_meraki_credential(
     db: Session = Depends(get_db),
 ):
     user, organization, _ = get_org_context(request, db, admin=True)
+    observed_reference = observe_meraki_action_state(request, db, organization.id)
     api_key = payload.api_key.strip()
     if len(api_key) < 16:
         raise HTTPException(status_code=422, detail="Enter a valid Meraki API key.")
@@ -5058,6 +5110,9 @@ async def save_meraki_credential(
     except CredentialEncryptionError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    user, organization, _ = lock_meraki_action_state(request, db, organization.id, user.id, observed_reference)
+    if active_meraki_report(db, organization.id):
+        raise HTTPException(status_code=409, detail="Wait for the active Meraki report to finish before changing its key.")
     now = utcnow()
     credential = db.scalar(
         select(MerakiCredential).where(
@@ -5100,8 +5155,11 @@ async def save_meraki_credential(
         "meraki.credential.saved",
         {"key_hint": api_key[-4:], "organization_count": len(organizations)},
     )
+    db.flush()
+    credential_reference, state_reference = meraki_workspace_state(db, organization.id)[2:]
     db.commit()
     return {
+        "organization_id": organization.id, "credential_reference": credential_reference, "state_reference": state_reference,
         "configured": True,
         "organizations": organizations,
         "last_verified_at": iso_utc(now),
@@ -5111,6 +5169,8 @@ async def save_meraki_credential(
 @app.delete("/api/meraki/credential")
 def delete_meraki_credential(request: Request, db: Session = Depends(get_db)):
     user, organization, _ = get_org_context(request, db, admin=True)
+    observed_reference = observe_meraki_action_state(request, db, organization.id)
+    user, organization, _ = lock_meraki_action_state(request, db, organization.id, user.id, observed_reference)
     active_job = db.scalar(
         select(ReportJob.id).where(
             ReportJob.organization_id == organization.id,
@@ -5142,7 +5202,8 @@ def delete_meraki_credential(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/meraki/organizations")
 async def get_meraki_organizations(request: Request, db: Session = Depends(get_db)):
-    _user, organization, _ = get_org_context(request, db, admin=True)
+    user, organization, _ = get_org_context(request, db, admin=True)
+    observed_reference = observe_meraki_action_state(request, db, organization.id)
     credential = db.scalar(
         select(MerakiCredential).where(
             MerakiCredential.organization_id == organization.id
@@ -5158,6 +5219,8 @@ async def get_meraki_organizations(request: Request, db: Session = Depends(get_d
         organizations = await run_in_threadpool(list_meraki_organizations, api_key)
     except MerakiAPIError as exc:
         raise meraki_http_error(exc) from exc
+    user, organization, _ = lock_meraki_action_state(request, db, organization.id, user.id, observed_reference)
+    credential = meraki_workspace_state(db, organization.id)[0]
     grants = {
         grant.meraki_organization_id: grant
         for grant in db.scalars(
@@ -5167,8 +5230,12 @@ async def get_meraki_organizations(request: Request, db: Session = Depends(get_d
         )
     }
     credential.last_verified_at = utcnow()
+    db.flush()
+    credential_reference, state_reference = meraki_workspace_state(db, organization.id)[2:]
     db.commit()
     return {
+        "organization_id": organization.id, "observed_at": iso_utc(utcnow()),
+        "credential_reference": credential_reference, "state_reference": state_reference,
         "organizations": [
             {
                 **item,
@@ -5189,6 +5256,7 @@ async def grant_meraki_organization_scope(
     db: Session = Depends(get_db),
 ):
     user, organization, _ = get_org_context(request, db, admin=True)
+    observed_reference = observe_meraki_action_state(request, db, organization.id)
     credential = db.scalar(
         select(MerakiCredential).where(
             MerakiCredential.organization_id == organization.id
@@ -5218,6 +5286,8 @@ async def grant_meraki_organization_scope(
             detail="Select an organization currently available to this Meraki key.",
         )
 
+    user, organization, _ = lock_meraki_action_state(request, db, organization.id, user.id, observed_reference)
+    credential = meraki_workspace_state(db, organization.id)[0]
     grant = db.scalar(
         select(MerakiOrganizationGrant).where(
             MerakiOrganizationGrant.organization_id == organization.id,
@@ -5264,6 +5334,8 @@ def revoke_meraki_organization_scope(
     db: Session = Depends(get_db),
 ):
     user, organization, _ = get_org_context(request, db, admin=True)
+    observed_reference = observe_meraki_action_state(request, db, organization.id)
+    user, organization, _ = lock_meraki_action_state(request, db, organization.id, user.id, observed_reference)
     active_meraki_job = db.scalar(
         select(ReportJob.id).where(
             ReportJob.organization_id == organization.id,
@@ -5308,6 +5380,7 @@ async def create_meraki_report(
     db: Session = Depends(get_db),
 ):
     user, organization, _ = get_org_context(request, db, admin=True)
+    observed_reference = observe_meraki_action_state(request, db, organization.id)
     credential = db.scalar(
         select(MerakiCredential).where(
             MerakiCredential.organization_id == organization.id
@@ -5342,6 +5415,8 @@ async def create_meraki_report(
     if selected is None:
         raise HTTPException(status_code=422, detail="Select an organization available to this Meraki key.")
 
+    user, organization, _ = lock_meraki_action_state(request, db, organization.id, user.id, observed_reference)
+    credential = meraki_workspace_state(db, organization.id)[0]
     active_meraki_count = db.scalar(
         select(func.count(ReportJob.id)).where(
             ReportJob.organization_id == organization.id,

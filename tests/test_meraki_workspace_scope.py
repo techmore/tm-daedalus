@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from daedalus.db import Base, get_db
-from daedalus.models import AuditLog, Membership, Organization, ReportJob, User
+from daedalus.models import AuditLog, Membership, Organization, ReportJob, User, MerakiCredential, MerakiOrganizationGrant, UserAPIKey
 from daedalus import server
 
 
@@ -111,6 +111,212 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             )
             db.commit()
             return workspace.id
+
+    def test_saved_status_restores_approvals_without_a_provider_request_and_redacts_keys(self):
+        self._connect_key()
+        self.client.post('/api/meraki/organization-scope', json={'meraki_organization_id': 'cisco-org-csp'})
+        calls = self.list_orgs_patch.target.list_meraki_organizations.call_count
+        response = self.client.get('/api/meraki/status')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        body = response.json()
+        self.assertEqual(body['organization_id'], 1)
+        self.assertTrue(body['observed_at'])
+        self.assertEqual(body['organizations'][0]['id'], 'cisco-org-csp')
+        self.assertTrue(body['organizations'][0]['authorized'])
+        self.assertEqual(len(body['state_reference']), 64)
+        self.assertEqual(len(body['credential_reference']), 64)
+        self.assertIsNone(body['active_report'])
+        self.assertNotIn('encrypted-test-credential', response.text)
+        self.assertNotIn('test-meraki-key-123456', response.text)
+        self.assertEqual(self.list_orgs_patch.target.list_meraki_organizations.call_count, calls)
+        repeated = self.client.get('/api/meraki/status').json()
+        self.assertEqual(repeated['state_reference'], body['state_reference'])
+        self.assertEqual(repeated['organizations'], body['organizations'])
+
+    def test_replaced_key_refuses_every_stale_browser_setup_action_before_provider_reads(self):
+        self._connect_key()
+        old = self.client.get('/api/meraki/status').json()
+        self._connect_key('replacement-meraki-key-654321')
+        calls = self.list_orgs_patch.target.list_meraki_organizations.call_count
+        for method, path, payload in [
+            ('PUT', '/api/meraki/credential', {'api_key': 'another-meraki-key-123456'}),
+            ('DELETE', '/api/meraki/credential', None),
+            ('POST', '/api/meraki/organizations', None),
+            ('POST', '/api/meraki/organization-scope', {'meraki_organization_id': 'cisco-org-csp'}),
+            ('DELETE', '/api/meraki/organization-scope', {'meraki_organization_id': 'cisco-org-csp'}),
+            ('POST', '/api/meraki/reports', {'organization_id': 'cisco-org-csp'}),
+        ]:
+            with self.subTest(path=path, method=method):
+                response = self.client.request(method, path, json=payload, headers={'X-Daedalus-Meraki-State': old['state_reference']})
+                self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(self.list_orgs_patch.target.list_meraki_organizations.call_count, calls)
+        self.assertEqual(self.client.get('/api/meraki/status').json()['organizations'], [])
+
+    def test_provider_refresh_keeps_credential_and_approval_references_stable(self):
+        self._connect_key()
+        before = self.client.get('/api/meraki/status').json()
+        response = self.client.post('/api/meraki/organizations', headers={'X-Daedalus-Meraki-State': before['state_reference']})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body['organization_id'], 1)
+        self.assertEqual(body['credential_reference'], before['credential_reference'])
+        self.assertEqual(body['state_reference'], before['state_reference'])
+        self.assertEqual(self.client.get('/api/meraki/status').json()['state_reference'], before['state_reference'])
+
+    def test_current_header_grants_then_collects_and_active_job_protects_key_and_scope(self):
+        self._connect_key()
+        before = self.client.get('/api/meraki/status').json()
+        granted = self.client.post('/api/meraki/organization-scope', json={'meraki_organization_id': 'cisco-org-csp'}, headers={'X-Daedalus-Meraki-State': before['state_reference']})
+        self.assertEqual(granted.status_code, 200, granted.text)
+        after = self.client.get('/api/meraki/status').json()
+        self.assertEqual(after['credential_reference'], before['credential_reference'])
+        self.assertNotEqual(after['state_reference'], before['state_reference'])
+        stale = self.client.post('/api/meraki/reports', json={'organization_id': 'cisco-org-csp'}, headers={'X-Daedalus-Meraki-State': before['state_reference']})
+        self.assertEqual(stale.status_code, 409)
+        report = self.client.post('/api/meraki/reports', json={'organization_id': 'cisco-org-csp'}, headers={'X-Daedalus-Meraki-State': after['state_reference']})
+        self.assertEqual(report.status_code, 200, report.text)
+        active = self.client.get('/api/meraki/status').json()
+        self.assertEqual(active['active_report']['id'], report.json()['id'])
+        self.assertEqual(active['active_report']['status'], 'queued')
+        for method, path, payload in [
+            ('PUT','/api/meraki/credential',{'api_key':'replacement-meraki-key-12345'}),
+            ('DELETE','/api/meraki/credential',None),
+            ('DELETE','/api/meraki/organization-scope',{'meraki_organization_id':'cisco-org-csp'}),
+        ]:
+            with self.subTest(path=path, method=method):
+                result=self.client.request(method,path,json=payload,headers={'X-Daedalus-Meraki-State':active['state_reference']})
+                self.assertEqual(result.status_code,409,result.text)
+        self.assertEqual(self.client.get('/api/meraki/status').json()['credential_reference'],after['credential_reference'])
+
+    def test_provider_work_cannot_commit_after_the_connection_changes(self):
+        self._connect_key()
+        mock = self.list_orgs_patch.target.list_meraki_organizations
+        def replace_while_reading(_key):
+            with self.session_factory() as db:
+                credential=db.scalar(select(MerakiCredential).where(MerakiCredential.organization_id==1))
+                credential.encrypted_api_key='another-encrypted-fixture'
+                credential.updated_at=server.utcnow()
+                db.commit()
+            return [{'id':'cisco-org-csp','name':'CSP tenant'}]
+        for method,path,payload in [
+            ('PUT','/api/meraki/credential',{'api_key':'newly-verified-meraki-key-123456'}),
+            ('POST','/api/meraki/organizations',None),
+            ('POST','/api/meraki/organization-scope',{'meraki_organization_id':'cisco-org-csp'}),
+        ]:
+            with self.subTest(path=path):
+                before=self.client.get('/api/meraki/status').json()
+                mock.side_effect=replace_while_reading
+                result=self.client.request(method,path,json=payload,headers={'X-Daedalus-Meraki-State':before['state_reference']})
+                self.assertEqual(result.status_code,409,result.text)
+                mock.side_effect=None
+        self.assertEqual(self.client.get('/api/meraki/status').json()['organizations'],[])
+
+    def test_provider_work_rechecks_admin_role_before_granting(self):
+        self._connect_key()
+        def downgrade_while_reading(_key):
+            with self.session_factory() as db:
+                member=db.scalar(select(Membership).where(Membership.organization_id==1))
+                member.role='user';db.commit()
+            return [{'id':'cisco-org-csp','name':'CSP tenant'}]
+        self.list_orgs_patch.target.list_meraki_organizations.side_effect=downgrade_while_reading
+        result=self.client.post('/api/meraki/organization-scope',json={'meraki_organization_id':'cisco-org-csp'})
+        self.assertEqual(result.status_code,403,result.text)
+        status=self.client.get('/api/meraki/status').json()
+        self.assertFalse(status['can_manage']);self.assertIsNone(status['key_hint']);self.assertEqual(status['organizations'],[])
+
+    def test_parallel_report_admission_saves_only_one_queued_job(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        self._connect_key()
+        self.client.post('/api/meraki/organization-scope',json={'meraki_organization_id':'cisco-org-csp'})
+        barrier=Barrier(2)
+        def concurrent_provider_read(_key):
+            barrier.wait(timeout=5)
+            return [{'id':'cisco-org-csp','name':'CSP tenant'}]
+        self.list_orgs_patch.target.list_meraki_organizations.side_effect=concurrent_provider_read
+        clients=[TestClient(server.app),TestClient(server.app)]
+        try:
+            for client in clients:client.cookies.update(self.client.cookies)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results=list(executor.map(lambda client:client.post('/api/meraki/reports',json={'organization_id':'cisco-org-csp'}),clients))
+            self.assertEqual(sorted(response.status_code for response in results),[200,429])
+            with self.session_factory() as db:
+                self.assertEqual(len(db.scalars(select(ReportJob).where(ReportJob.report_type=='meraki_security')).all()),1)
+        finally:
+            for client in clients:client.close()
+
+    def test_status_reference_and_saved_scopes_are_isolated_between_workspaces(self):
+        self._connect_key()
+        self.client.post('/api/meraki/organization-scope',json={'meraki_organization_id':'cisco-org-csp'})
+        first=self.client.get('/api/meraki/status').json()
+        other=self._create_second_workspace();self.client.post('/api/workspaces/select',json={'organization_id':other})
+        self._connect_key()
+        second=self.client.get('/api/meraki/status').json()
+        self.assertEqual(second['organization_id'],other);self.assertEqual(second['organizations'],[])
+        self.assertNotEqual(second['state_reference'],first['state_reference'])
+        self.assertNotEqual(second['credential_reference'],first['credential_reference'])
+        denied=self.client.post('/api/meraki/organization-scope',json={'meraki_organization_id':'cisco-org-csp'},headers={'X-Daedalus-Meraki-State':first['state_reference']})
+        self.assertEqual(denied.status_code,409)
+        anonymous=TestClient(server.app)
+        try:self.assertEqual(anonymous.get('/api/meraki/status').status_code,401)
+        finally:anonymous.close()
+
+    def test_scoped_access_key_revocation_during_provider_work_prevents_a_grant(self):
+        from datetime import timedelta
+        self._connect_key()
+        token='dd_user_'+'fixture_revocation_'+('x'*32)
+        with self.session_factory() as db:
+            user=db.scalar(select(User).where(User.google_subject=='daedalus-local-demo-admin'))
+            key=UserAPIKey(user_id=user.id,organization_id=1,name='Fixture scoped access',token_hash=server.token_digest(token),created_at=server.utcnow(),expires_at=server.utcnow()+timedelta(minutes=5))
+            db.add(key);db.commit();key_id=key.id
+        def revoke_while_reading(_key):
+            with self.session_factory() as db:
+                db.get(UserAPIKey,key_id).revoked_at=server.utcnow();db.commit()
+            return [{'id':'cisco-org-csp','name':'CSP tenant'}]
+        self.list_orgs_patch.target.list_meraki_organizations.side_effect=revoke_while_reading
+        result=self.client.post('/api/meraki/organization-scope',json={'meraki_organization_id':'cisco-org-csp'},headers={'Authorization':'Bearer '+token})
+        self.assertEqual(result.status_code,401,result.text)
+        with self.session_factory() as db:
+            self.assertEqual(list(db.scalars(select(MerakiOrganizationGrant)).all()),[])
+
+    def test_actual_saved_status_payload_passes_the_real_ui_read_and_retry_callbacks(self):
+        import json,shutil
+        if not shutil.which('node'):self.skipTest('Node.js required')
+        from test_meraki_connection_refresh_ui import MerakiConnectionRefreshUITests
+        self._connect_key()
+        self.client.post('/api/meraki/organization-scope',json={'meraki_organization_id':'cisco-org-csp'})
+        payload=self.client.get('/api/meraki/status').json()
+        MerakiConnectionRefreshUITests().run_ui('state='+json.dumps(payload)+';'+r'''
+assert.equal(await loadMerakiStatus(),true);assert.equal(select.value,'cisco-org-csp');
+assert.equal(merakiActionAllowed('collect'),true);const selected=select.children[0],reference=merakiWorkspaceRead.body.state_reference;
+select.focus();readFailure=true;await loadMerakiStatus();assert.equal(select.children[0],selected);assert.equal(document.activeElement,select);
+assert.equal(merakiActionAllowed('collect'),false);readFailure=false;await loadMerakiStatus();assert.equal(merakiActionAllowed('collect'),true);
+assert.equal(merakiWorkspaceRead.body.state_reference,reference);assert.equal(writes().length,0);
+''')
+
+    def test_provider_reply_keeps_its_credential_identity_if_another_writer_changes_after_commit(self):
+        self._connect_key()
+        before=self.client.get('/api/meraki/status').json()
+        session_class=self.session_factory.class_
+        original_commit=session_class.commit
+        changed=False
+        def replace_after_commit(db):
+            nonlocal changed
+            original_commit(db)
+            if not changed:
+                changed=True
+                db.expire_all()
+                with self.session_factory() as other:
+                    credential=other.scalar(select(MerakiCredential).where(MerakiCredential.organization_id==1))
+                    credential.encrypted_api_key='replacement-after-provider-commit'
+                    credential.updated_at=server.utcnow()
+                    other.commit()
+        with patch.object(session_class,'commit',replace_after_commit):
+            result=self.client.post('/api/meraki/organizations',headers={'X-Daedalus-Meraki-State':before['state_reference']})
+        self.assertEqual(result.status_code,200,result.text)
+        self.assertEqual(result.json()['credential_reference'],before['credential_reference'])
+        self.assertNotEqual(self.client.get('/api/meraki/status').json()['credential_reference'],before['credential_reference'])
 
     def test_meraki_org_requires_workspace_grant_and_grants_are_isolated(self):
         self._connect_key()

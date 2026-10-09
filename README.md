@@ -189,3 +189,5 @@ Responses include `total_count`, `has_more`, and `next_before`; report responses
 Saved Network evidence can recover after a failed read through inline retry: [Meraki evidence recovery](docs/MERAKI-EVIDENCE-RETRY.md).
 
 Report refreshes retain unchanged cards, expanded Meraki evidence and focused actions: [report review context](docs/REPORT-REVIEW-CONTEXT.md).
+
+Saved Meraki connection refresh restores approved organizations and protects setup actions through failed reads: [connection and approval workflow](docs/MERAKI-CONNECTION-REVIEW.md).

@@ -1901,7 +1901,7 @@
           }
         }
         if (message.type === "cis_report_received") {
-          if (activeTab === "cis") loadCIS(true);
+          if (activeTab === "cis") loadCIS(true); if (activeTab === "meraki") loadMerakiStatus(true);
           loadNotifications();
           if (role === "admin") loadAuditLog();
           notifyCISReport(message);
@@ -3159,6 +3159,7 @@
   }
 
   var merakiOrgOptions = [];
+  var merakiWorkspaceRead = {body: null, loading: false, error: null, invalidated: false, busy: false, sequence: 0, controller: null, providerOptions: null, providerCredential: null};
 
   function preferredMerakiOrganizationId(organizations, preferredId) {
     organizations = organizations || [];
@@ -3167,217 +3168,215 @@
     return authorized ? authorized.id : (organizations[0] ? organizations[0].id : "");
   }
 
+  function validateMerakiOrganizations(organizations, provider) {
+    if (!Array.isArray(organizations)) throw new Error("Saved Meraki organizations could not be validated.");
+    var ids = new Set();
+    organizations.forEach(function (item) {
+      if (!item || typeof item.id !== "string" || !item.id || item.id.length > 128 || typeof item.name !== "string" || item.name.length > 200 || ids.has(item.id)
+          || (!provider && (typeof item.authorized !== "boolean" || (item.authorized && (typeof item.granted_at !== "string" || !Number.isFinite(Date.parse(item.granted_at))))))) throw new Error("Saved Meraki organizations could not be validated.");
+      ids.add(item.id);
+    });
+  }
+
+  function validateMerakiStatus(body) {
+    if (!body || body.organization_id !== Number(orgId) || typeof body.configured !== "boolean" || typeof body.can_manage !== "boolean"
+        || typeof body.observed_at !== "string" || !Number.isFinite(Date.parse(body.observed_at)) || !/^[a-f0-9]{64}$/.test(body.state_reference || "")
+        || (body.configured ? !/^[a-f0-9]{64}$/.test(body.credential_reference || "") : body.credential_reference !== null)
+        || (body.key_hint !== null && (typeof body.key_hint !== "string" || body.key_hint.length !== 4))
+        || (body.last_verified_at !== null && (typeof body.last_verified_at !== "string" || !Number.isFinite(Date.parse(body.last_verified_at))))) throw new Error("Saved Meraki connection data could not be validated.");
+    validateMerakiOrganizations(body.organizations, false);
+    if (body.organizations.some(function (item) { return !item.authorized; }) || (!body.configured && body.organizations.length)) throw new Error("Saved Meraki approvals could not be validated.");
+    if (body.active_report !== null && (!body.active_report || !Number.isSafeInteger(body.active_report.id) || body.active_report.id <= 0 || !["queued", "running"].includes(body.active_report.status)
+        || typeof body.active_report.stage !== "string" || !Number.isFinite(body.active_report.progress) || body.active_report.progress < 0 || body.active_report.progress > 100)) throw new Error("Meraki report progress could not be validated.");
+    return body;
+  }
+
   function renderMerakiOrganizations(organizations, preferredId) {
     var select = document.getElementById("meraki-org-select");
     if (!select) return;
-    merakiOrgOptions = organizations || [];
-    select.replaceChildren();
-    if (!merakiOrgOptions.length) {
-      var empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = "No organizations returned for this key";
-      select.append(empty);
-      select.disabled = true;
-      updateMerakiScopeControls();
-      return;
+    var wanted = typeof preferredId === "string" ? preferredId : select.value;
+    merakiOrgOptions = organizations;
+    var signature = JSON.stringify([organizations, wanted && !organizations.some(function (item) { return item.id === wanted; }) ? wanted : null]);
+    if (select.dataset.optionsSignature !== signature) {
+      select.replaceChildren();
+      if (!organizations.length) {
+        var empty = document.createElement("option"); empty.value = "";
+        empty.textContent = merakiWorkspaceRead.body && merakiWorkspaceRead.body.configured ? "No saved approvals. Refresh Cisco organizations to choose." : "Connect a key to choose an organization";
+        select.append(empty);
+      }
+      if (wanted && !organizations.some(function (item) { return item.id === wanted; })) {
+        var retired = document.createElement("option"); retired.value = wanted; retired.disabled = true;
+        retired.textContent = "Previous selection is unavailable — choose an organization"; select.append(retired);
+      }
+      organizations.forEach(function (item) {
+        var option = document.createElement("option"); option.value = item.id;
+        option.textContent = item.name + " · " + item.id + (item.authorized ? " · approved" : " · approval required") + (item.available === false ? " · absent from last Cisco list" : ""); select.append(option);
+      });
+      select.value = wanted || preferredMerakiOrganizationId(organizations);
+      select.dataset.optionsSignature = signature;
     }
-    merakiOrgOptions.forEach(function (organization) {
-      var option = document.createElement("option");
-      option.value = organization.id;
-      option.textContent = organization.name + " · " + organization.id + (organization.authorized ? " · authorized" : " · approval required");
-      select.append(option);
-    });
-    select.value = preferredMerakiOrganizationId(merakiOrgOptions, preferredId);
     select.disabled = false;
     updateMerakiScopeControls();
   }
 
-  function updateMerakiScopeControls() {
+  function merakiActionAllowed(action) {
+    var read = merakiWorkspaceRead, body = read.body;
+    if (!body || read.loading || read.error || read.invalidated || read.busy || role !== "admin" || !body.can_manage) return false;
+    if (action === "save") return !body.active_report;
+    if (!body.configured) return false;
+    if (action === "load") return true;
+    if (action === "remove") return !body.active_report;
     var select = document.getElementById("meraki-org-select");
-    if (!select) return;
-    var selected = merakiOrgOptions.find(function (item) { return item.id === select.value; });
-    var authorized = !!(selected && selected.authorized);
+    var selected = select && merakiOrgOptions.find(function (item) { return item.id === select.value; });
+    if (!selected) return false;
+    if (action === "authorize") return !selected.authorized && selected.available !== false;
+    if (action === "revoke") return selected.authorized && !body.active_report;
+    if (action === "collect") return selected.authorized && selected.available !== false && !body.active_report;
+    return false;
+  }
+
+  function updateMerakiScopeControls() {
+    var body = merakiWorkspaceRead.body, select = document.getElementById("meraki-org-select");
+    var selected = select && merakiOrgOptions.find(function (item) { return item.id === select.value; });
+    var stale = merakiWorkspaceRead.error || merakiWorkspaceRead.invalidated;
     var state = document.getElementById("meraki-org-scope-state");
-    var authorize = document.getElementById("meraki-authorize-org");
-    var revoke = document.getElementById("meraki-revoke-org");
-    var generate = document.getElementById("meraki-generate-report");
     if (state) {
-      text(state, !selected ? "Load organizations to manage workspace access." : authorized ? "Authorized for this workspace" + (selected.granted_at ? " · since " + dateLabel(selected.granted_at) : "") : "Not authorized for this workspace. Reports are disabled until approved.");
-      state.classList.toggle("is-authorized", authorized);
+      var label = !selected ? "Choose an organization; refresh Cisco organizations for available choices." : selected.authorized ? "Approved for this workspace" + (selected.granted_at ? " · since " + dateLabel(selected.granted_at) : "") : "Not approved for this workspace.";
+      if (selected && selected.available === false) label += " · Not returned by the last Cisco lookup. Refresh Cisco organizations to check again.";
+      if (stale && selected) label = "Last observed: " + label;
+      if (body && body.active_report) label += " · Report " + body.active_report.id + " " + body.active_report.status + ": " + body.active_report.stage;
+      if (state.textContent !== label) text(state, label);
+      state.classList.toggle("is-authorized", !!(selected && selected.authorized && !stale));
     }
-    if (authorize) authorize.disabled = role !== "admin" || !selected || authorized;
-    if (revoke) revoke.disabled = role !== "admin" || !selected || !authorized;
-    if (generate) generate.disabled = role !== "admin" || !selected || !authorized;
+    [["meraki-remove-key", "remove"], ["meraki-load-organizations", "load"], ["meraki-authorize-org", "authorize"], ["meraki-revoke-org", "revoke"], ["meraki-generate-report", "collect"]].forEach(function (pair) {
+      var button = document.getElementById(pair[0]);
+      if (button) { button.disabled = false; button.setAttribute("aria-disabled", String(!merakiActionAllowed(pair[1]))); }
+    });
+    var form = document.getElementById("meraki-key-form"), submit = form && form.querySelector("[type='submit']");
+    if (submit) { submit.disabled = false; submit.setAttribute("aria-disabled", String(!merakiActionAllowed("save"))); }
+    var refresh = document.getElementById("meraki-refresh-connection");
+    if (refresh) { refresh.disabled = false; refresh.setAttribute("aria-disabled", String(merakiWorkspaceRead.loading || merakiWorkspaceRead.busy)); refresh.setAttribute("aria-busy", String(merakiWorkspaceRead.loading)); }
   }
 
-  async function loadMerakiStatus() {
-    var state = document.getElementById("meraki-connection-state");
-    var remove = document.getElementById("meraki-remove-key");
-    if (!state) return;
+  function renderMerakiConnection() {
+    var read = merakiWorkspaceRead, body = read.body, state = document.getElementById("meraki-connection-state");
+    if (state) {
+      var label = !body ? "Saved connection unavailable" : body.configured ? "Saved key" + (body.key_hint ? " · ending " + body.key_hint : "") + (body.last_verified_at ? " · Cisco verification " + dateLabel(body.last_verified_at) : "") : "No saved Meraki key";
+      if (body && (read.error || read.invalidated)) label = "Last observed: " + label;
+      if (state.textContent !== label) text(state, label);
+      state.className = "meraki-connection-state";
+    }
+    var warning = document.getElementById("meraki-connection-refresh-status");
+    var message = read.error ? read.error + (body ? " Last successful saved connection read: " + dateLabel(body.observed_at) + "." : "") + " Refresh saved connection data to retry." : read.busy ? "Updating connection or assessment setup…" : read.invalidated ? "Refresh saved connection data before another setup action." : "";
+    if (warning && warning.textContent !== message) text(warning, message);
+    var observation = document.getElementById("meraki-connection-observation");
+    if (observation && body) observation.textContent = "Saved connection read " + dateLabel(body.observed_at) + ". This does not query Cisco or refresh assessment evidence.";
+    updateMerakiScopeControls();
+  }
+
+  async function loadMerakiStatus(background) {
+    var read = merakiWorkspaceRead;
+    if (!orgId || read.busy || (background && read.loading)) return false;
+    if (read.controller) read.controller.abort();
+    var sequence = ++read.sequence, controller = new AbortController(), timedOut = false;
+    read.controller = controller; read.loading = true; updateMerakiScopeControls();
+    var deadline = window.setTimeout(function () { timedOut = true; controller.abort(); }, 20000);
     try {
-      var response = await fetch("/api/meraki/status", { credentials: "same-origin" });
+      var response = await fetch("/api/meraki/status", {credentials: "same-origin", cache: "no-store", signal: controller.signal});
       var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not read Meraki connection status");
-      if (!body.configured) {
-        text(state, "Not connected");
-        state.className = "meraki-connection-state is-disconnected";
-      } else {
-        text(state, "Connected" + (body.key_hint ? " · key ending " + body.key_hint : "") + (body.last_verified_at ? " · verified " + dateLabel(body.last_verified_at) : ""));
-        state.className = "meraki-connection-state is-connected";
-      }
-      if (remove) remove.disabled = !body.configured;
-    } catch (error) {
-      text(state, error.message);
-      state.className = "meraki-connection-state is-disconnected";
-    }
-  }
-
-  async function loadMerakiOrganizations(preferredId) {
-    var feedback = document.getElementById("meraki-feedback");
-    var loadButton = document.getElementById("meraki-load-organizations");
-    if (!loadButton) return;
-    loadButton.disabled = true;
-    text(loadButton, "Loading…");
-    try {
-      var body = await postJson("/api/meraki/organizations");
-      renderMerakiOrganizations(body.organizations || [], preferredId);
-      var authorizedCount = (body.organizations || []).filter(function (item) { return item.authorized; }).length;
-      text(feedback, "Loaded " + (body.organizations || []).length + " organization(s); " + authorizedCount + " authorized for this workspace.");
-      await loadMerakiStatus();
-    } catch (error) {
-      text(feedback, error.message);
+      if (!response.ok) throw new Error("Saved Meraki connection data could not be read.");
+      validateMerakiStatus(body);
+      if (sequence !== read.sequence) return false;
+      var options = body.organizations.map(function (item) { return Object.assign({available: null}, item); });
+      if (body.credential_reference && read.providerCredential === body.credential_reference && read.providerOptions) {
+        var approved = new Map(body.organizations.map(function (item) { return [item.id, item]; }));
+        options = read.providerOptions.map(function (item) { return Object.assign({available: true}, approved.get(item.id) || {id: item.id, name: item.name, authorized: false, granted_at: null}); });
+        body.organizations.forEach(function (item) { if (!options.some(function (choice) { return choice.id === item.id; })) options.push(Object.assign({available: false}, item)); });
+      } else { read.providerOptions = null; read.providerCredential = null; }
+      read.body = body; read.error = null; read.invalidated = false;
+      renderMerakiOrganizations(options);
+      return true;
+    } catch (_error) {
+      if (sequence !== read.sequence) return false;
+      read.error = timedOut ? "Saved Meraki connection read timed out." : "Saved Meraki connection data is unavailable or could not be validated.";
+      return false;
     } finally {
-      text(loadButton, "Load organizations");
-      loadButton.disabled = role !== "admin" || !document.getElementById("meraki-remove-key") || document.getElementById("meraki-remove-key").disabled;
+      window.clearTimeout(deadline);
+      if (sequence === read.sequence) { read.loading = false; read.controller = null; renderMerakiConnection(); }
     }
   }
 
-  async function loadMeraki() {
-    await Promise.all([loadMerakiStatus(), loadReports()]);
-    var loadButton = document.getElementById("meraki-load-organizations");
-    if (loadButton) {
-      var removeButton = document.getElementById("meraki-remove-key");
-      loadButton.disabled = role !== "admin" || !removeButton || removeButton.disabled;
+  async function merakiRequest(path, method, payload) {
+    var options = {method: method, credentials: "same-origin", cache: "no-store", headers: {"X-Daedalus-Meraki-State": merakiWorkspaceRead.body.state_reference}};
+    if (payload !== undefined) { options.headers["Content-Type"] = "application/json"; options.body = JSON.stringify(payload); }
+    var response = await fetch(path, options), body = await response.json();
+    if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Meraki action could not be completed.");
+    return body;
+  }
+
+  function acceptMerakiProviderChoices(body) {
+    if (!body || body.organization_id !== Number(orgId) || !/^[a-f0-9]{64}$/.test(body.credential_reference || "")) throw new Error("Cisco organization choices could not be validated. Refresh saved connection data.");
+    validateMerakiOrganizations(body.organizations, true);
+    merakiWorkspaceRead.providerOptions = body.organizations;
+    merakiWorkspaceRead.providerCredential = body.credential_reference;
+  }
+
+  async function performMerakiAction(action, path, method, payload, success) {
+    if (!merakiActionAllowed(action)) return false;
+    var read = merakiWorkspaceRead, feedback = document.getElementById("meraki-feedback");
+    read.busy = true; read.invalidated = true; renderMerakiConnection();
+    try {
+      var body = await merakiRequest(path, method, payload);
+      if (action === "load" || action === "save") acceptMerakiProviderChoices(body);
+      if (success) success(body);
+      return true;
+    } catch (error) {
+      if (feedback) text(feedback, error.message);
+      return false;
+    } finally {
+      read.busy = false;
+      await loadMerakiStatus();
+      if (action === "collect") await loadReports();
     }
   }
+
+  async function loadMerakiOrganizations() {
+    return performMerakiAction("load", "/api/meraki/organizations", "POST", undefined, function (body) {
+      text(document.getElementById("meraki-feedback"), "Cisco returned " + body.organizations.length + " organization(s). Saved approvals apply only to this workspace.");
+    });
+  }
+
+  async function loadMeraki() { await Promise.all([loadMerakiStatus(), loadReports()]); }
 
   var merakiKeyForm = document.getElementById("meraki-key-form");
-  if (merakiKeyForm) {
-    merakiKeyForm.addEventListener("submit", async function (event) {
-      event.preventDefault();
-      var input = document.getElementById("meraki-api-key");
-      var submit = merakiKeyForm.querySelector("[type='submit']");
-      var feedback = document.getElementById("meraki-feedback");
-      var apiKey = input ? input.value : "";
-      submit.disabled = true;
-      text(submit, "Verifying…");
-      try {
-        var body = await requestJson("/api/meraki/credential", "PUT", { api_key: apiKey });
-        if (input) input.value = "";
-        await loadMerakiOrganizations();
-        text(feedback, "Key verified and encrypted. " + (body.organizations || []).length + " organization(s) are available; authorize each one for this workspace before reporting.");
-        var loadButton = document.getElementById("meraki-load-organizations");
-        if (loadButton) loadButton.disabled = false;
-        await loadMerakiStatus();
-      } catch (error) {
-        text(feedback, error.message);
-      } finally {
-        text(submit, "Verify and save key");
-        submit.disabled = false;
-      }
+  if (merakiKeyForm) merakiKeyForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    var input = document.getElementById("meraki-api-key"), apiKey = input ? input.value : "";
+    await performMerakiAction("save", "/api/meraki/credential", "PUT", {api_key: apiKey}, function () {
+      if (input && input.value === apiKey) input.value = "";
+      text(document.getElementById("meraki-feedback"), "Key verified and saved. Choose an organization and approve it for this workspace before requesting an assessment.");
     });
-  }
-
+  });
   var merakiLoadButton = document.getElementById("meraki-load-organizations");
   if (merakiLoadButton) merakiLoadButton.addEventListener("click", loadMerakiOrganizations);
-
   var merakiOrgSelect = document.getElementById("meraki-org-select");
   if (merakiOrgSelect) merakiOrgSelect.addEventListener("change", updateMerakiScopeControls);
-
-  var merakiAuthorizeButton = document.getElementById("meraki-authorize-org");
-  if (merakiAuthorizeButton) {
-    merakiAuthorizeButton.addEventListener("click", async function () {
-      var select = document.getElementById("meraki-org-select");
-      var feedback = document.getElementById("meraki-feedback");
-      if (!select || !select.value) return;
-      var selectedId = select.value;
-      merakiAuthorizeButton.disabled = true;
-      text(merakiAuthorizeButton, "Authorizing…");
-      try {
-        await postJson("/api/meraki/organization-scope", { meraki_organization_id: selectedId });
-        await loadMerakiOrganizations(selectedId);
-        text(feedback, "Meraki organization authorized for this workspace. The action was recorded in the audit log.");
-      } catch (error) {
-        text(feedback, error.message);
-      } finally {
-        text(merakiAuthorizeButton, "Authorize for workspace");
-        updateMerakiScopeControls();
-      }
+  var merakiRefreshConnection = document.getElementById("meraki-refresh-connection");
+  if (merakiRefreshConnection) merakiRefreshConnection.addEventListener("click", function () { if (!merakiWorkspaceRead.loading && !merakiWorkspaceRead.busy) return loadMerakiStatus(); });
+  [["meraki-authorize-org", "authorize", "POST"], ["meraki-revoke-org", "revoke", "DELETE"], ["meraki-generate-report", "collect", "POST"]].forEach(function (item) {
+    var button = document.getElementById(item[0]);
+    if (button) button.addEventListener("click", function () {
+      var selectedId = merakiOrgSelect && merakiOrgSelect.value;
+      if (!selectedId) return false;
+      return performMerakiAction(item[1], item[1] === "collect" ? "/api/meraki/reports" : "/api/meraki/organization-scope", item[2], item[1] === "collect" ? {organization_id: selectedId} : {meraki_organization_id: selectedId}, function () {
+        text(document.getElementById("meraki-feedback"), item[1] === "collect" ? "Assessment queued for " + selectedId + ". Review collection progress and its PDF in Saved network assessments." : "Organization " + selectedId + (item[1] === "authorize" ? " approved" : " access revoked") + " for this workspace. The action was recorded in its audit log.");
+      });
     });
-  }
-
-  var merakiRevokeButton = document.getElementById("meraki-revoke-org");
-  if (merakiRevokeButton) {
-    merakiRevokeButton.addEventListener("click", async function () {
-      var select = document.getElementById("meraki-org-select");
-      var feedback = document.getElementById("meraki-feedback");
-      if (!select || !select.value) return;
-      var selectedId = select.value;
-      merakiRevokeButton.disabled = true;
-      text(merakiRevokeButton, "Revoking…");
-      try {
-        await requestJson("/api/meraki/organization-scope", "DELETE", { meraki_organization_id: selectedId });
-        await loadMerakiOrganizations(selectedId);
-        text(feedback, "Meraki organization access revoked for this workspace. The action was recorded in the audit log.");
-      } catch (error) {
-        text(feedback, error.message);
-      } finally {
-        text(merakiRevokeButton, "Revoke access");
-        updateMerakiScopeControls();
-      }
-    });
-  }
-
+  });
   var merakiRemoveButton = document.getElementById("meraki-remove-key");
-  if (merakiRemoveButton) {
-    merakiRemoveButton.addEventListener("click", async function () {
-      merakiRemoveButton.disabled = true;
-      text(merakiRemoveButton, "Removing…");
-      try {
-        await requestJson("/api/meraki/credential", "DELETE");
-        renderMerakiOrganizations([]);
-        text(document.getElementById("meraki-feedback"), "Saved Meraki key removed from this workspace.");
-        await loadMerakiStatus();
-        if (merakiLoadButton) merakiLoadButton.disabled = true;
-      } catch (error) {
-        text(document.getElementById("meraki-feedback"), error.message);
-        merakiRemoveButton.disabled = false;
-      } finally {
-        text(merakiRemoveButton, "Remove saved key");
-      }
-    });
-  }
-
-  var merakiGenerateButton = document.getElementById("meraki-generate-report");
-  if (merakiGenerateButton) {
-    merakiGenerateButton.addEventListener("click", async function () {
-      var select = document.getElementById("meraki-org-select");
-      var feedback = document.getElementById("meraki-feedback");
-      if (!select || !select.value) return;
-      merakiGenerateButton.disabled = true;
-      text(merakiGenerateButton, "Queueing report…");
-      try {
-        await postJson("/api/meraki/reports", { organization_id: select.value });
-        text(feedback, "Meraki report queued. Collection progress and the finished PDF will appear below.");
-        await loadReports();
-      } catch (error) {
-        text(feedback, error.message);
-      } finally {
-        text(merakiGenerateButton, "Generate security report");
-        merakiGenerateButton.disabled = !select.value;
-      }
-    });
-  }
+  if (merakiRemoveButton) merakiRemoveButton.addEventListener("click", function () {
+    return performMerakiAction("remove", "/api/meraki/credential", "DELETE", undefined, function () { text(document.getElementById("meraki-feedback"), "Saved Meraki key removed from this workspace."); });
+  });
 
   function makeCISResultRow(result) {
     var row = document.createElement("article");
@@ -6322,8 +6321,8 @@
   if (orgId) {
     refresh();
     // Heartbeat status expires on the server even when the live stream is quiet.
-    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); } }, 15000);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); } });
+    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); if (activeTab === "meraki") loadMerakiStatus(true); } }, 15000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); if (activeTab === "meraki") loadMerakiStatus(true); } });
   }
   loadWorkspaces();
   loadMemberships();

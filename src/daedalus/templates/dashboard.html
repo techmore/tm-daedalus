@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-185">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-189">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -272,13 +272,16 @@
               <h3>Connect a Meraki Dashboard API key</h3>
               <p class="muted">The key is sent to Daedalus over this session, verified with Cisco, and encrypted before it is stored. It is never returned to this page or included in reports.</p>
             </div>
-            <span class="meraki-connection-state" id="meraki-connection-state" aria-live="polite">Checking connection…</span>
+            <span class="meraki-connection-state" id="meraki-connection-state">Checking saved connection…</span>
+            <button class="button button-quiet" type="button" id="meraki-refresh-connection" disabled>Refresh saved connection data</button>
           </div>
+          <p class="check-scope-note" id="meraki-connection-observation"></p>
+          <p class="check-scope-note" id="meraki-connection-refresh-status" role="status" aria-live="polite"></p>
           {% if membership.role == 'admin' %}
           <form class="meraki-key-form" id="meraki-key-form">
             <label for="meraki-api-key">API key</label>
             <input id="meraki-api-key" name="api_key" type="password" minlength="16" maxlength="256" autocomplete="new-password" spellcheck="false" required placeholder="Paste a read-only Dashboard API key">
-            <button class="button button-primary" type="submit">Verify and save key</button>
+            <button class="button button-primary" type="submit" disabled>Verify and save key</button>
             <button class="button button-quiet" type="button" id="meraki-remove-key" disabled>Remove saved key</button>
           </form>
           <p class="meraki-feedback" id="meraki-feedback" aria-live="polite"></p>
@@ -286,11 +289,11 @@
             <div><strong>Meraki organization</strong><p class="muted">Choose an organization and explicitly authorize it for this workspace. Approval applies only here.</p></div>
             <div class="meraki-org-actions">
               <select id="meraki-org-select" aria-label="Meraki organization" disabled><option value="">Connect a key to load organizations</option></select>
-              <button class="button button-secondary" type="button" id="meraki-load-organizations" disabled>Load organizations</button>
+              <button class="button button-secondary" type="button" id="meraki-load-organizations" disabled>Refresh Cisco organizations</button>
               <button class="button button-secondary" type="button" id="meraki-authorize-org" disabled>Authorize for workspace</button>
               <button class="button button-quiet" type="button" id="meraki-revoke-org" disabled>Revoke access</button>
               <button class="button button-primary" type="button" id="meraki-generate-report" disabled>Generate security report</button>
-              <span class="meraki-scope-state" id="meraki-org-scope-state" aria-live="polite">Load organizations to manage workspace access.</span>
+              <span class="meraki-scope-state" id="meraki-org-scope-state">Load organizations to manage workspace access.</span>
             </div>
           </div>
           {% else %}
@@ -673,6 +676,6 @@
   <script src="/static/js/google-admin.js?v=20261009-2" defer></script>
   <script src="/static/js/history.js?v=20261008-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-187" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-188" defer></script>
 </body>
 </html>

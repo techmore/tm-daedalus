@@ -1078,3 +1078,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .cis-workspace .button[aria-disabled="true"] { opacity: .55; cursor: default; }
 
 #tab-google-admin .button[aria-disabled="true"] { opacity: .55; cursor: default; }
+
+#tab-meraki .button[aria-disabled="true"] { opacity: .55; cursor: default; }
