@@ -1,1 +1,51 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Daedalus · Access keys</title><link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261005-112"></head><body class="login-page access-keys-page"><main class="login-card"><a class="access-keys-back" href="/dashboard">Back to dashboard</a><h1>Personal access keys</h1><p>Keys use your current permissions in {{ organization.name }}. Copy a new key once and keep it private. Revoking it also ends its sign-in sessions.</p><form id="create-key"><label>Name <input name="name" required maxlength="120"></label><label>Expires in days <input name="expires_days" type="number" min="1" max="90" value="30" required></label><button class="button button-primary">Create key</button></form><p id="key-feedback" aria-live="polite"></p><pre id="new-key"></pre><div id="key-list"></div></main><script src="/static/js/user_keys.js?v=daedalus-20261005-002" defer></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Daedalus · Access keys</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-193">
+  <link rel="stylesheet" href="/static/css/user_keys.css?v=20261009-1">
+</head>
+<body class="login-page access-keys-page">
+<main class="login-card" id="access-key-account" data-organization-id="{{ organization.id }}">
+  <a class="access-keys-back" href="/dashboard">Back to dashboard</a>
+  <p class="eyebrow">{{ organization.domain }}</p>
+  <h1>Personal access keys</h1>
+  <p>For {{ organization.name }} · {{ user.email }}</p>
+  <p class="muted">Use a key to sign in or connect an application to this workspace. It follows your current permissions. Revocation ends its API access and sign-in sessions.</p>
+  <section aria-labelledby="saved-keys-title">
+    <div class="key-section-heading"><h2 id="saved-keys-title">Your keys</h2><button id="refresh-keys" type="button" class="button button-secondary">Refresh keys</button></div>
+    <p id="key-observed" class="fine-print"></p>
+    <p id="key-read-feedback" role="status" hidden></p>
+    <p id="key-feedback" role="status"></p>
+    <div id="key-list" aria-busy="true"><p>Loading your keys…</p></div>
+  </section>
+  <section aria-labelledby="create-key-title">
+    <h2 id="create-key-title">Create a key</h2>
+    {% if can_create_keys %}
+    <p class="muted">Give it a name you’ll recognize. A new key is displayed once.</p>
+    <p id="key-create-note" class="notice" hidden>Sign in with Google to create another key.</p>
+    <form id="create-key">
+      <label>Name <input name="name" required maxlength="120" placeholder="e.g. Mac audit client"></label>
+      <label>Expires in days <input name="expires_days" type="number" min="1" max="90" value="30" required></label>
+      <button class="button button-primary" type="submit" disabled>Create key</button>
+    </form>
+    {% else %}
+    <p class="notice">Sign in with Google to create another key. You can review and revoke your existing keys here.</p>
+    {% endif %}
+    <div id="new-key-panel" hidden>
+      <h3>Save your new key</h3>
+      <p id="new-key-detail"></p>
+      <label for="new-key">Access key · copy and keep private</label>
+      <textarea id="new-key" readonly rows="3" spellcheck="false" autocomplete="off"></textarea>
+      <button id="hide-new-key" type="button" class="button button-secondary">I saved this key</button>
+    </div>
+  </section>
+</main>
+<script src="/static/js/user_keys.js?v=20261009-1" defer></script>
+</body>
+</html>

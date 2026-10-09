@@ -2003,13 +2003,16 @@ def refresh_workspace_icon(organization_id: int, domain: str) -> None:
 @app.get("/api/workspaces/{organization_id}/icon")
 def workspace_icon(organization_id: int, request: Request, db: Session = Depends(get_db)):
     user = get_session_user(request, db)
+    scoped_key = getattr(request.state, "user_api_key", None)
+    if scoped_key is not None and scoped_key.organization_id != organization_id:
+        raise HTTPException(status_code=404, detail="No icon")
     member = db.scalar(select(Membership).where(Membership.user_id == user.id,
         Membership.organization_id == organization_id, Membership.status == "approved"))
     icon = db.get(WorkspaceIcon, organization_id) if member else None
     if icon is None:
         raise HTTPException(status_code=404, detail="No icon")
     return Response(icon.data, media_type=icon.content_type, headers={
-        "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400",
+        "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" if scoped_key else "private, max-age=86400",
         "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
@@ -2875,14 +2878,23 @@ def token_login(payload: TokenLoginInput, request: Request, db: Session = Depend
 @app.get("/account/keys", response_class=HTMLResponse)
 def user_keys_page(request: Request, db: Session = Depends(get_db)):
     user, org, _ = get_org_context(request, db)
-    return templates.TemplateResponse(request, "user_keys.html", {"user": user, "organization": org})
+    return templates.TemplateResponse(request, "user_keys.html", {
+        "user": user, "organization": org,
+        "can_create_keys": getattr(request.state, "user_api_key", None) is None,
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/user-keys")
 def list_user_keys(request: Request, db: Session = Depends(get_db)):
     user, org, _ = get_org_context(request, db)
-    keys = db.scalars(select(UserAPIKey).where(UserAPIKey.user_id == user.id, UserAPIKey.organization_id == org.id)).all()
-    return {"keys": [{"id": k.id, "name": k.name, "expires_at": iso_utc(k.expires_at), "revoked_at": iso_utc(k.revoked_at)} for k in keys]}
+    scoped_key = getattr(request.state, "user_api_key", None)
+    keys = db.scalars(select(UserAPIKey).where(UserAPIKey.user_id == user.id,
+        UserAPIKey.organization_id == org.id).order_by(UserAPIKey.id.desc())).all()
+    return JSONResponse({"organization_id": org.id, "observed_at": iso_utc(utcnow()),
+        "can_create": scoped_key is None, "current_key_id": scoped_key.id if scoped_key else None,
+        "keys": [{"id": k.id, "name": k.name, "created_at": iso_utc(k.created_at),
+                  "expires_at": iso_utc(k.expires_at), "revoked_at": iso_utc(k.revoked_at)} for k in keys]},
+        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/user-keys")
@@ -2897,7 +2909,8 @@ def create_user_key(payload: UserKeyInput, request: Request, db: Session = Depen
     db.flush()
     audit(db, org.id, user.id, "user_key.created", {"key_id": key.id, "name": key.name})
     db.commit()
-    response = JSONResponse({"id": key.id, "token": token, "expires_at": iso_utc(key.expires_at)})
+    response = JSONResponse({"id": key.id, "organization_id": org.id, "token": token,
+                             "expires_at": iso_utc(key.expires_at)})
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -2908,10 +2921,19 @@ def revoke_user_key(key_id: int, request: Request, db: Session = Depends(get_db)
     key = db.get(UserAPIKey, key_id)
     if key is None or key.user_id != user.id or key.organization_id != org.id:
         raise HTTPException(status_code=404, detail="Access key not found")
-    key.revoked_at = utcnow()
-    audit(db, org.id, user.id, "user_key.revoked", {"key_id": key.id})
+    revoked_at = utcnow()
+    changed = db.execute(update(UserAPIKey).where(UserAPIKey.id == key.id,
+        UserAPIKey.user_id == user.id, UserAPIKey.organization_id == org.id,
+        UserAPIKey.revoked_at.is_(None)).values(revoked_at=revoked_at)
+        .execution_options(synchronize_session=False))
+    if changed.rowcount == 1:
+        audit(db, org.id, user.id, "user_key.revoked", {"key_id": key.id})
     db.commit()
-    return {"status": "revoked"}
+    db.refresh(key)
+    current_key = getattr(request.state, "user_api_key", None)
+    return JSONResponse({"status": "revoked", "id": key.id, "organization_id": org.id,
+        "revoked_at": iso_utc(key.revoked_at), "ends_current_session": current_key is not None and current_key.id == key.id},
+        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/dev/login")

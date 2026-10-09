@@ -37,6 +37,8 @@ class ReleaseBundleTests(unittest.TestCase):
             self.assertIn("daedalus/scripts/deploy_incus_remote.sh", names)
             self.assertIn("daedalus/scripts/recovery_secrets.py", names)
             self.assertIn("daedalus/src/daedalus/server.py", names)
+            self.assertIn("daedalus/src/daedalus/static/css/user_keys.css", names)
+            self.assertIn("daedalus/src/daedalus/static/js/user_keys.js", names)
             self.assertNotIn("daedalus/src/daedalus/client_bundle/manifest.json", names)
             self.assertNotIn("daedalus/Dockerfile", names)
             self.assertNotIn("daedalus/compose.yaml", names)

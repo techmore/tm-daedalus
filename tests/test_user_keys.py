@@ -19,6 +19,10 @@ class UserKeyTests(unittest.TestCase):
         self.assertIn('if (error.status === 401) { location.assign("/"); return; }', script)
         self.assertIn('#create-key, #token-login { display: grid;', css)
         self.assertIn('#new-key { white-space: pre-wrap; overflow-wrap: anywhere; }', css)
+        for name in ('login.html', 'user_keys.html'):
+            template = (root / 'templates' / name).read_text()
+            self.assertIn('app.css?v=daedalus-20261009-193', template)
+            self.assertIn('user_keys.js?v=20261009-1', template)
 
     setUp = fixtures.ActiveWebsiteFlowsTests.setUp
     tearDown = fixtures.ActiveWebsiteFlowsTests.tearDown
@@ -158,3 +162,116 @@ class UserKeyTests(unittest.TestCase):
             db.scalar(select(Membership).where(Membership.user_id==user,Membership.organization_id==org)).status='denied'
             db.commit()
         self.assertEqual(self.client.get('/api/cis/client/profiles',headers={'X-API-Key':key['token']}).status_code,401)
+
+    def test_key_inventory_scoped_metadata_and_no_store(self):
+        original, _ = self.context()
+        first = self.issue()
+        second = self.issue()
+        response = self.client.get('/api/user-keys')
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        body = response.json()
+        self.assertEqual(body['organization_id'], original)
+        self.assertIs(body['can_create'], True)
+        self.assertIsNone(body['current_key_id'])
+        self.assertEqual([row['id'] for row in body['keys']], [second['id'], first['id']])
+        self.assertTrue(all(row['created_at'].endswith('Z') for row in body['keys']))
+        self.assertNotIn(first['token'], response.text)
+        self.assertNotIn('token_hash', response.text)
+        page = self.client.get('/account/keys')
+        self.assertEqual(page.headers['cache-control'], 'no-store')
+        self.assertIn('data-organization-id="'+str(original)+'"', page.text)
+        self.client.post('/logout')
+        self.client.post('/auth/token', json={'token': first['token']})
+        body = self.client.get('/api/user-keys').json()
+        self.assertIs(body['can_create'], False)
+        self.assertEqual(body['current_key_id'], first['id'])
+        page = self.client.get('/account/keys')
+        self.assertNotIn('id="create-key"', page.text)
+        self.assertIn('Sign in with Google to create another key', page.text)
+
+    def test_repeated_revocation_preserves_date_and_single_audit(self):
+        key = self.issue()
+        response = self.client.delete('/api/user-keys/'+str(key['id']))
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        self.assertIs(response.json()['ends_current_session'], False)
+        first_date = response.json()['revoked_at']
+        second = self.client.delete('/api/user-keys/'+str(key['id']))
+        self.assertEqual(second.json()['revoked_at'], first_date)
+        with self.session_factory() as db:
+            rows = db.scalars(select(AuditLog).where(AuditLog.action == 'user_key.revoked')).all()
+            self.assertEqual(len(rows), 1)
+
+    def test_self_revocation_explicitly_ends_key_login(self):
+        key = self.issue()
+        self.client.post('/logout')
+        self.client.post('/auth/token', json={'token': key['token']})
+        response = self.client.delete('/api/user-keys/'+str(key['id']))
+        self.assertIs(response.json()['ends_current_session'], True)
+        self.assertEqual(self.client.get('/api/user-keys').status_code, 401)
+        self.assertEqual(self.client.get('/dashboard', follow_redirects=False).status_code, 303)
+
+    def test_old_account_tab_cannot_read_create_or_revoke_after_workspace_switch(self):
+        original, _ = self.context()
+        key = self.issue()
+        other = self.client.post('/api/workspaces', json={'name': 'Other keys', 'domain': 'keys-other.example'}).json()['organization_id']
+        before = self.client.get('/api/user-keys').json()
+        stale = {'X-Daedalus-Workspace': str(original)}
+        self.assertEqual(self.client.get('/api/user-keys', headers=stale).status_code, 409)
+        self.assertEqual(self.client.post('/api/user-keys', headers=stale, json={'name': 'Wrong customer'}).status_code, 409)
+        self.assertEqual(self.client.delete('/api/user-keys/'+str(key['id']), headers=stale).status_code, 409)
+        after = self.client.get('/api/user-keys').json()
+        self.assertEqual(after['keys'], before['keys'])
+        self.assertEqual(after['organization_id'], other)
+        with self.session_factory() as db:
+            self.assertIsNone(db.get(UserAPIKey, key['id']).revoked_at)
+            self.assertEqual(len(db.scalars(select(UserAPIKey)).all()), 1)
+
+    def test_key_does_not_read_other_approved_workspace_icon(self):
+        from daedalus.models import WorkspaceIcon
+        original, _ = self.context()
+        key = self.issue()
+        other = self.client.post('/api/workspaces', json={'name': 'Private icon', 'domain': 'icon-other.example'}).json()['organization_id']
+        with self.session_factory() as db:
+            for workspace in (original, other):
+                db.add(WorkspaceIcon(organization_id=workspace, content_type='image/png', data=b'fixture', fetched_at=server.utcnow()))
+            db.commit()
+        self.assertEqual(self.client.get(f'/api/workspaces/{other}/icon').status_code, 200)
+        headers = {'Authorization': 'Bearer '+key['token']}
+        response = self.client.get(f'/api/workspaces/{original}/icon', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        self.assertEqual(self.client.get(f'/api/workspaces/{other}/icon', headers=headers).status_code, 404)
+        self.client.post('/logout')
+        self.client.post('/auth/token', json={'token': key['token']})
+        self.assertEqual(self.client.get(f'/api/workspaces/{other}/icon').status_code, 404)
+
+    def test_key_permissions_follow_admin_demotion(self):
+        key = self.issue()
+        org, user = self.context()
+        with self.session_factory() as db:
+            db.scalar(select(Membership).where(Membership.user_id == user, Membership.organization_id == org)).role = 'user'
+            db.commit()
+        headers = {'Authorization': 'Bearer '+key['token']}
+        self.assertEqual(self.client.get('/api/workspace-posture', headers=headers).status_code, 200)
+        self.assertIs(self.client.get('/api/workspace-posture', headers=headers).json()['can_manage'], False)
+        self.assertEqual(self.client.put('/api/external-checks/web/schedule', headers=headers, json={'enabled': True, 'interval_hours': 24}).status_code, 403)
+        self.assertEqual(self.client.post('/api/cis/api-key', headers=headers).status_code, 403)
+
+    def test_key_live_feed_scope_and_revocation(self):
+        from starlette.websockets import WebSocketDisconnect
+        original, _ = self.context()
+        key = self.issue()
+        other = self.client.post('/api/workspaces', json={'name': 'Other live feed', 'domain': 'live-keys-other.example'}).json()['organization_id']
+        self.client.post('/logout')
+        self.client.post('/auth/token', json={'token': key['token']})
+        with self.assertRaises(WebSocketDisconnect) as denied:
+            with self.client.websocket_connect(f'/ws/live?organization_id={other}', headers={'origin': 'http://testserver'}) as feed:
+                feed.receive_json()
+        self.assertEqual(denied.exception.code, 4401)
+        with self.client.websocket_connect(f'/ws/live?organization_id={original}&membership_updates=1', headers={'origin': 'http://testserver'}) as feed:
+            self.assertEqual(feed.receive_json()['organization_id'], original)
+            self.assertEqual(self.client.delete('/api/user-keys/'+str(key['id'])).status_code, 200)
+            feed.send_text('revalidate')
+            with self.assertRaises(WebSocketDisconnect) as ended:
+                feed.receive_json()
+            self.assertEqual(ended.exception.code, 4401)
