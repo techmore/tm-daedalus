@@ -161,6 +161,12 @@ Failed DNS and website attempts retain the last successful evidence and record a
 
 Unchanged scheduled checks retain their run history without creating inbox notices or completion banners. Manual checks still show completion feedback. Each workspace/check type has a database admission guard across workers; a busy scheduled check is deferred for retry instead of recorded as a collector failure. Network collection starts after the admission transaction commits.
 
+### Reviewing saved evidence during connection problems
+
+DNS, website, exposure and Nikto views retain displayed evidence and loaded older history when a refresh fails. An inline message identifies the retained evidence as potentially out of date and offers **Retry saved evidence**. The warning remains until a complete retry succeeds. These refresh controls read saved data; they do not run an audit. Run/check controls remain separate.
+
+Refreshes preserve independent run/change history boundaries and stage all pages before replacing the view. Malformed pages or outdated overlapping requests cannot replace the saved view. Nikto retains expanded run details and uses the latest successful saved assessment independently from the visible history page. Background polls leave an in-progress request alone and stay quiet when successful. See [behavior and validation scope](docs/SAVED-EVIDENCE-REFRESH.md).
+
 Saved reports are grouped by topic, with counts and **Load older reports** controls. Topic pages query their own history, so a busy topic cannot hide another topic's reports. The Meraki summary uses the latest completed assessment even when newer failed attempts fill the first page. In-page refresh retains the loaded older boundary; failed refreshes preserve the evidence already shown and offer a retry.
 
 The workspace inbox supports **All notices** and **Unread notices**, counts and **Load older notices**. Unread state belongs to each member. The selected inbox filter stays in the URL across reloads, alongside the topic hash. Refreshes retain focused review actions where their notice is still present. Access notices lead to Overview's Workspace access section; failed PDF notices lead to report history.

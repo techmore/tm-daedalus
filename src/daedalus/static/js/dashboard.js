@@ -44,6 +44,7 @@
   var controlsEnabled = shell ? shell.dataset.controlsEnabled === "true" : false;
   var notifiedCheckRuns = Object.create(null);
   var externalCheckHistory = Object.create(null);
+  var savedCheckHistories = Object.create(null);
   var activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
   var niktoHistory = { runs: [], cursor: null, hasMore: false, busy: false, sequence: 0 };
   var openCommandHistories = new Set();
@@ -5063,14 +5064,80 @@
       + (snapshot.coverage_complete === true ? ". Fixed-path coverage completed; observations need review." : ". Coverage incomplete; absence does not establish resolution."));
   }
 
-  function renderExposureReview(run) {
+  function savedSuccessfulCheck(body) {
+    return body.latest_snapshot && body.latest_snapshot_run
+      ? Object.assign({}, body.latest_snapshot_run, { snapshot: body.latest_snapshot }) : null;
+  }
+
+  function updateSavedCheckStatus(type, state, focused) {
+    var note = document.getElementById(type + "-history-status");
+    var message = state.error
+      ? (state.loaded ? "Could not refresh. Previously loaded evidence remains visible and may be out of date. " : "Saved evidence is unavailable. ") + state.error
+      : state.loading && !state.loaded ? "Loading saved evidence…" : "";
+    if (note && note.textContent !== message) text(note, message);
+    if (state.error && !state.loaded) {
+      var emptyIds = type === "web-active" ? ["web-exposure-review", "web-exposure-outcome", "web-active-runs"]
+        : type === "web-nikto" ? ["web-audit-review", "web-nikto-outcome", "web-nikto-runs"]
+        : [type + "-priorities", type + "-assessment-evidence", type + "-comparison-summary", type + "-check-runs"];
+      emptyIds.forEach(function (id) { text(document.getElementById(id), "Saved evidence is unavailable. Use Retry saved evidence to load it."); });
+    }
+    var refreshButton = document.querySelector('[data-refresh-check="' + type + '"]');
+    if (refreshButton) {
+      refreshButton.setAttribute("aria-disabled", state.loading ? "true" : "false");
+      refreshButton.setAttribute("aria-busy", state.loading ? "true" : "false");
+      refreshButton.textContent = state.error ? "Retry saved evidence" : "Refresh saved evidence";
+    }
+    var buttons = type === "web-active" ? document.querySelectorAll("[data-load-older-active]")
+      : type === "web-nikto" ? [document.getElementById("older-nikto")]
+      : document.querySelectorAll('[data-load-older-checks="' + type + '"]');
+    Array.from(buttons).forEach(function (button) {
+      if (!button) return;
+      var field = button.dataset.pageKind || button.dataset.loadOlderActive || "runs";
+      var more = Boolean(state.body && state.body[field + "_has_more"]);
+      if (!more && focused === button && refreshButton) refreshButton.focus({ preventScroll: true });
+      button.classList.toggle("hidden", !more);
+      button.disabled = false;
+      button.setAttribute("aria-disabled", state.loading ? "true" : "false");
+    });
+  }
+
+  function savedCheckHistory(type) {
+    if (savedCheckHistories[type]) return savedCheckHistories[type];
+    var state = type === "web-active" ? activeExposureHistory : type === "web-nikto" ? niktoHistory
+      : (externalCheckHistory[type] || (externalCheckHistory[type] = {}));
+    var pager = window.daedalusCheckHistory.create({
+      url: "/api/external-checks/" + type, type: type, state: state,
+      changed: function (current, committed) {
+        var focused = document.activeElement;
+        if (committed) {
+          if (type === "web-active") renderActiveExposure(current.body);
+          else if (type === "web-nikto") renderNiktoHistory(current.body);
+          else renderCheckHistory(type, current.body);
+        }
+        updateSavedCheckStatus(type, current, focused);
+      }
+    });
+    savedCheckHistories[type] = pager;
+    return pager;
+  }
+
+  document.querySelectorAll("[data-refresh-check]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (!orgId) return;
+      var pager = savedCheckHistory(button.dataset.refreshCheck);
+      if (!pager.state.loading) pager.refresh();
+    });
+  });
+
+  function renderExposureReview(run, savedRun) {
     var host = document.getElementById("web-exposure-review");
     if (!host) return;
     host.replaceChildren();
     if (!run) { appendEmpty(host, "No saved exposure assessment yet."); return; }
     if (run.status !== "completed" && run.status !== "completed_with_warnings") {
       appendEmpty(host, "Latest exposure attempt " + String(run.status || "has unknown status") + ". No completed assessment is inferred from this attempt.");
-      return;
+      if (!savedRun) return;
+      run = savedRun;
     }
     var snapshot = run.snapshot || {};
     var findings = Array.isArray(snapshot.findings) ? snapshot.findings : [];
@@ -5104,14 +5171,14 @@
     if (!list) return;
     var runs = body.runs || [];
     renderWebsiteAuditOutcome("web-exposure-outcome", "Public exposure paths", runs[0]);
-    renderExposureReview(runs[0]);
+    renderExposureReview(runs[0], savedSuccessfulCheck(body));
     if (status) {
       var latest = runs[0];
       status.className = "check-status" + (latest && latest.status === "failed" ? " status-failed" : "");
       status.textContent = !latest ? "No active check run yet" : latest.status.replaceAll("_", " ") + " · " + (latest.change_count || 0) + " finding change(s)";
     }
     list.replaceChildren();
-    if (!runs.length) { appendEmpty(list, "No active check history yet."); return; }
+    if (!runs.length) appendEmpty(list, "No active check history yet.");
     runs.forEach(function (run) {
       var row = document.createElement("article"); row.className = "check-run-row";
       var main = document.createElement("div"); main.className = "check-run-main";
@@ -5160,61 +5227,11 @@
     }
   }
 
-  async function loadActiveExposure(olderKind) {
+  async function loadActiveExposure(olderKind, background) {
     if (!orgId) return;
-    if (olderKind && (!activeExposureHistory[olderKind + "HasMore"] || activeExposureHistory.loading)) return;
-    if (!olderKind) activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
-    activeExposureHistory.loading = olderKind || null;
-    var requestState = activeExposureHistory;
-    try {
-      var params = new URLSearchParams();
-      if (olderKind === "runs") params.set("runs_before", activeExposureHistory.runsCursor);
-      if (olderKind === "changes") params.set("changes_before", activeExposureHistory.changesCursor);
-      var suffix = params.toString() ? "?" + params.toString() : "";
-      var response = await fetch("/api/external-checks/web-active" + suffix, { credentials: "same-origin" });
-      var body = await response.json();
-      if (requestState !== activeExposureHistory) return;
-      if (!response.ok) throw new Error(body.detail || "Could not load active check history");
-      if (!olderKind) {
-        activeExposureHistory.runs = body.runs || [];
-        activeExposureHistory.changes = body.changes || [];
-        activeExposureHistory.runsCursor = body.runs_next_before;
-        activeExposureHistory.changesCursor = body.changes_next_before;
-        activeExposureHistory.runsHasMore = body.runs_has_more;
-        activeExposureHistory.changesHasMore = body.changes_has_more;
-      } else if (olderKind === "runs") {
-        activeExposureHistory.runs = activeExposureHistory.runs.concat(body.runs || []);
-        activeExposureHistory.runsCursor = body.runs_next_before;
-        activeExposureHistory.runsHasMore = body.runs_has_more;
-      } else {
-        activeExposureHistory.changes = activeExposureHistory.changes.concat(body.changes || []);
-        activeExposureHistory.changesCursor = body.changes_next_before;
-        activeExposureHistory.changesHasMore = body.changes_has_more;
-      }
-      activeExposureHistory.loading = null;
-      renderActiveExposure(Object.assign({}, body, {
-        runs: activeExposureHistory.runs,
-        changes: activeExposureHistory.changes,
-        runs_has_more: activeExposureHistory.runsHasMore,
-        changes_has_more: activeExposureHistory.changesHasMore
-      }));
-    } catch (error) {
-      if (requestState !== activeExposureHistory) return;
-      activeExposureHistory.loading = null;
-      if (olderKind) {
-        var retryButton = document.querySelector('[data-load-older-active="' + olderKind + '"]');
-        if (retryButton) {
-          retryButton.disabled = false;
-          retryButton.textContent = olderKind === "runs" ? "Load older exposure runs" : "Load older finding changes";
-        }
-      }
-      if (!olderKind) {
-        var review = document.getElementById("web-exposure-review");
-        if (review) { review.replaceChildren(); appendEmpty(review, "Current exposure evidence could not be refreshed. Review is unavailable until the request succeeds."); }
-        text(document.getElementById("web-exposure-outcome"), "Public exposure paths: current evidence unavailable.");
-      }
-      text(document.getElementById("web-active-feedback"), error.message);
-    }
+    var pager = savedCheckHistory("web-active");
+    if (background && pager.state.loading) return;
+    return olderKind ? pager.older(olderKind) : pager.refresh();
   }
 
   document.querySelectorAll("[data-load-older-active]").forEach(function (button) {
@@ -5229,11 +5246,11 @@
     return "Needs application context";
   }
 
-  function renderNiktoReview(runs) {
+  function renderNiktoReview(runs, savedRun) {
     var host = document.getElementById("web-audit-review");
     if (!host) return;
     host.replaceChildren();
-    var completed = runs.find(function (run) { return run.status === "completed" || run.status === "completed_with_warnings"; });
+    var completed = savedRun || runs.find(function (run) { return run.status === "completed" || run.status === "completed_with_warnings"; });
     if (!completed) { appendEmpty(host, "No completed deeper audit is available yet."); return; }
     var caption = document.createElement("p"); caption.className = "muted";
     caption.textContent = "Latest completed audit · " + dateLabel(completed.completed_at || completed.started_at)
@@ -5262,75 +5279,75 @@
     });
   }
 
-  async function loadNikto(older) {
+  function renderNiktoHistory(body) {
     var host = document.getElementById("web-nikto-runs");
-    if (!host || !orgId || (older && !niktoHistory.hasMore)) return;
-    var sequence = ++niktoHistory.sequence;
-    try {
-      var response = await fetch("/api/external-checks/web-nikto" + (older ? "?runs_before=" + encodeURIComponent(niktoHistory.cursor) : ""), { credentials: "same-origin" });
-      var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load Nikto history");
-      if (sequence !== niktoHistory.sequence) return;
-      niktoHistory.runs = older ? niktoHistory.runs.concat(body.runs || []) : (body.runs || []);
-      renderWebsiteAuditOutcome("web-nikto-outcome", "Deeper website audit", niktoHistory.runs[0]);
-      renderNiktoReview(niktoHistory.runs);
-      niktoHistory.cursor = body.runs_next_before;
-      niktoHistory.hasMore = body.runs_has_more;
-      host.replaceChildren();
-      niktoHistory.runs.forEach(function (run) {
-        var card = document.createElement("article"); card.className = "external-schedule-card";
-        var title = document.createElement("h4"); title.textContent = "Run #" + run.id + " · " + String(run.status).replace(/_/g, " ") + " · " + dateLabel(run.completed_at || run.started_at);
-        var note = document.createElement("p"); note.className = "muted";
-        note.textContent = run.error_summary || "Coverage remains unconfirmed. Comparisons record new observations; absent findings do not prove resolution.";
-        card.append(title, note);
-        if (role === "admin" && run.status === "queued") {
-          var cancel = document.createElement("button"); cancel.type = "button";
-          cancel.className = "button button-small button-secondary"; cancel.textContent = "Cancel queued audit";
-          cancel.addEventListener("click", async function () {
-            cancel.disabled = true;
-            try {
-              await postJson("/api/external-checks/web-nikto/runs/" + run.id + "/cancel");
-              text(document.getElementById("web-nikto-feedback"), "Queued audit #" + run.id + " cancelled.");
-              await loadNikto(); await loadAuditLog();
-            } catch (error) {
-              text(document.getElementById("web-nikto-feedback"), error.message);
-              cancel.disabled = false;
-            }
-          });
-          card.append(cancel);
-        }
-        if (run.queued_at) {
-          var timing = document.createElement("p"); timing.className = "muted";
-          timing.textContent = "Queued " + dateLabel(run.queued_at) + (run.collection_started_at ? " · Collection started " + dateLabel(run.collection_started_at) : " · Collection start not recorded");
-          card.append(timing);
-        }
-        var findings = (run.snapshot || {}).findings || [];
-        var details = document.createElement("details");
-        var summary = document.createElement("summary"); summary.textContent = findings.length + " retained observation(s) · " + (run.change_count || 0) + " new compared observation(s)";
-        details.append(summary);
-        details.addEventListener("toggle", function () {
-          if (!details.open || details.dataset.loaded) return;
-          details.dataset.loaded = "true";
-          findings.forEach(function (finding) {
-            var entry = document.createElement("p"); entry.textContent = "Nikto test " + finding.test_id + " · " + finding.method + " " + finding.path + (finding.description ? " · " + finding.description : "");
-            details.append(entry);
-          });
+    if (!host) return;
+    var focused = document.activeElement && host.contains(document.activeElement) ? document.activeElement : null;
+    var focusedRun = focused && focused.dataset.niktoCancel;
+    var openRuns = new Set(Array.from(host.querySelectorAll("[data-saved-run-id]")).filter(function (node) { return node.open; }).map(function (node) { return node.dataset.savedRunId; }));
+    renderWebsiteAuditOutcome("web-nikto-outcome", "Deeper website audit", niktoHistory.runs[0]);
+    renderNiktoReview(niktoHistory.runs, savedSuccessfulCheck(body));
+    host.replaceChildren();
+    niktoHistory.runs.forEach(function (run) {
+      var card = document.createElement("article"); card.className = "external-schedule-card";
+      var title = document.createElement("h4"); title.textContent = "Run #" + run.id + " · " + String(run.status).replace(/_/g, " ") + " · " + dateLabel(run.completed_at || run.started_at);
+      var note = document.createElement("p"); note.className = "muted";
+      note.textContent = run.error_summary || "Coverage remains unconfirmed. Comparisons record new observations; absent findings do not prove resolution.";
+      card.append(title, note);
+      if (role === "admin" && run.status === "queued") {
+        var cancel = document.createElement("button"); cancel.type = "button";
+        cancel.dataset.niktoCancel = String(run.id);
+        cancel.className = "button button-small button-secondary"; cancel.textContent = "Cancel queued audit";
+        cancel.addEventListener("click", async function () {
+          cancel.disabled = true;
+          try {
+            await postJson("/api/external-checks/web-nikto/runs/" + run.id + "/cancel");
+            text(document.getElementById("web-nikto-feedback"), "Queued audit #" + run.id + " cancelled.");
+            await loadNikto(); await loadAuditLog();
+          } catch (error) {
+            text(document.getElementById("web-nikto-feedback"), error.message);
+            cancel.disabled = false;
+          }
         });
-        card.append(details); host.append(card);
-      });
-      text(document.getElementById("web-nikto-status"), niktoHistory.runs.length ? "Latest: " + String(niktoHistory.runs[0].status).replace(/_/g, " ") : "No Nikto run yet");
-      document.getElementById("older-nikto").classList.toggle("hidden", !niktoHistory.hasMore);
-      var button = document.getElementById("run-nikto");
-      if (button) button.disabled = !controlsEnabled || niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "queued" || run.status === "running"; });
-    } catch (error) {
-      if (sequence !== niktoHistory.sequence) return;
-      if (!older) {
-        var review = document.getElementById("web-audit-review");
-        if (review) { review.replaceChildren(); appendEmpty(review, "Current deeper audit evidence could not be refreshed. Review is unavailable until the request succeeds."); }
-        text(document.getElementById("web-nikto-outcome"), "Deeper website audit: current evidence unavailable.");
+        card.append(cancel);
       }
-      text(document.getElementById("web-nikto-feedback"), error.message);
+      if (run.queued_at) {
+        var timing = document.createElement("p"); timing.className = "muted";
+        timing.textContent = "Queued " + dateLabel(run.queued_at) + (run.collection_started_at ? " · Collection started " + dateLabel(run.collection_started_at) : " · Collection start not recorded");
+        card.append(timing);
+      }
+      var findings = (run.snapshot || {}).findings || [];
+      var details = document.createElement("details");
+      var summary = document.createElement("summary"); summary.textContent = findings.length + " retained observation(s) · " + (run.change_count || 0) + " new compared observation(s)";
+      details.dataset.savedRunId = String(run.id);
+      details.append(summary);
+      details.addEventListener("toggle", function () {
+        if (!details.open || details.dataset.loaded) return;
+        details.dataset.loaded = "true";
+        findings.forEach(function (finding) {
+          var entry = document.createElement("p"); entry.textContent = "Nikto test " + finding.test_id + " · " + finding.method + " " + finding.path + (finding.description ? " · " + finding.description : "");
+          details.append(entry);
+        });
+      });
+      details.open = openRuns.has(String(run.id));
+      card.append(details); host.append(card);
+    });
+    text(document.getElementById("web-nikto-status"), niktoHistory.runs.length ? "Latest: " + String(niktoHistory.runs[0].status).replace(/_/g, " ") : "No Nikto run yet");
+    document.getElementById("older-nikto").classList.toggle("hidden", !niktoHistory.hasMore);
+    var button = document.getElementById("run-nikto");
+    if (button) button.disabled = !controlsEnabled || niktoHistory.busy || niktoHistory.runs.some(function (run) { return run.status === "queued" || run.status === "running"; });
+    if (focusedRun) {
+      var replacement = Array.from(host.querySelectorAll("[data-nikto-cancel]")).find(function (node) { return node.dataset.niktoCancel === focusedRun; });
+      if (!replacement) replacement = document.querySelector('[data-refresh-check="web-nikto"]');
+      if (replacement) replacement.focus({ preventScroll: true });
     }
+  }
+
+  async function loadNikto(older, background) {
+    if (!document.getElementById("web-nikto-runs") || !orgId) return;
+    var pager = savedCheckHistory("web-nikto");
+    if (background && pager.state.loading) return;
+    return older ? pager.older("runs") : pager.refresh();
   }
   var niktoButton = document.getElementById("run-nikto");
   if (niktoButton) niktoButton.addEventListener("click", async function () {
@@ -5361,67 +5378,8 @@
 
   async function loadExternalCheck(type, olderKind) {
     if (!orgId || !["dns", "web"].includes(type)) return;
-    var state = externalCheckHistory[type] || { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
-    if (olderKind && (!state[olderKind + "HasMore"] || state.loading)) return;
-    if (!olderKind) state = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
-    state.loading = olderKind || null;
-    externalCheckHistory[type] = state;
-    try {
-      var params = new URLSearchParams();
-      if (olderKind === "runs") params.set("runs_before", state.runsCursor);
-      if (olderKind === "changes") params.set("changes_before", state.changesCursor);
-      var suffix = params.toString() ? "?" + params.toString() : "";
-      var response = await fetch("/api/external-checks/" + type + suffix, { credentials: "same-origin" });
-      var body = await response.json();
-      if (state !== externalCheckHistory[type]) return;
-      if (!response.ok) throw new Error(body.detail || "Could not load check history");
-      if (!olderKind) {
-        state.runs = body.runs || [];
-        state.changes = body.changes || [];
-        state.runsCursor = body.runs_next_before;
-        state.changesCursor = body.changes_next_before;
-        state.runsHasMore = body.runs_has_more;
-        state.changesHasMore = body.changes_has_more;
-      } else if (olderKind === "runs") {
-        state.runs = state.runs.concat(body.runs || []);
-        state.runsCursor = body.runs_next_before;
-        state.runsHasMore = body.runs_has_more;
-      } else {
-        state.changes = state.changes.concat(body.changes || []);
-        state.changesCursor = body.changes_next_before;
-        state.changesHasMore = body.changes_has_more;
-      }
-      state.loading = null;
-      renderCheckHistory(type, Object.assign({}, body, {
-        runs: state.runs,
-        changes: state.changes,
-        runs_has_more: state.runsHasMore,
-        changes_has_more: state.changesHasMore
-      }));
-    } catch (error) {
-      if (state !== externalCheckHistory[type]) return;
-      state.loading = null;
-      if (olderKind) {
-        var retryButton = document.querySelector('[data-load-older-checks="' + type + '"][data-page-kind="' + olderKind + '"]');
-        if (retryButton) {
-          retryButton.disabled = false;
-          retryButton.textContent = olderKind === "runs" ? "Load older check runs" : "Load older changes";
-        }
-      }
-      if (!olderKind) {
-        text(document.getElementById(type + "-assessment-evidence"), "Could not refresh evidence collection time. Previously displayed results may be out of date.");
-        text(document.getElementById(type + "-comparison-summary"), "Could not refresh the latest comparison. Previously displayed results may be out of date.");
-        var latestChanges = document.getElementById(type + "-latest-changes");
-        if (latestChanges) latestChanges.replaceChildren();
-        var priorities = document.getElementById(type + "-priorities");
-        if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Current assessment evidence could not be refreshed. Review is unavailable until the request succeeds."); }
-      }
-      var target = document.getElementById(type + "-check-runs");
-      if (target) {
-        target.replaceChildren();
-        appendEmpty(target, error.message);
-      }
-    }
+    var pager = savedCheckHistory(type);
+    return olderKind ? pager.older(olderKind) : pager.refresh();
   }
 
   document.querySelectorAll("[data-load-older-checks]").forEach(function (button) {
@@ -6149,8 +6107,8 @@
   if (orgId) {
     refresh();
     // Heartbeat status expires on the server even when the live stream is quiet.
-    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(); loadNikto(); } } }, 15000);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(); loadNikto(); } } });
+    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } } }, 15000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } } });
   }
   loadWorkspaces();
   loadMemberships();

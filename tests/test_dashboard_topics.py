@@ -211,66 +211,6 @@ assert.throws(()=>scannerInstaller('windows'),/Choose the scanner/);
         self.assertNotIn('<details', evidence)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
-    def test_assessment_refreshes_ignore_outdated_successes_and_failures(self):
-        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
-        cases = [
-            ('loadActiveExposure', '', '  document.querySelectorAll("[data-load-older-active]"'),
-            ('loadExternalCheck', "'dns'", '  document.querySelectorAll("[data-load-older-checks]"'),
-        ]
-        for name, args, end in cases:
-            with self.subTest(loader=name):
-                helper = source[source.index('  async function ' + name + '('):source.index(end)]
-                script = """const assert=require('node:assert/strict');
-const orgId=1,externalCheckHistory=Object.create(null);
-let activeExposureHistory={},rendered=[];
-const nodes=new Map(),document={querySelector:()=>null,getElementById(id){if(!nodes.has(id))nodes.set(id,{textContent:'',replaceChildren(){this.textContent='';}});return nodes.get(id);}};
-function appendEmpty(node,value){node.textContent=value;}function text(node,value){node.textContent=value;}
-function renderActiveExposure(body){rendered.push(body.marker);}function renderCheckHistory(type,body){rendered.push(body.marker);}
-let requests=[];function fetch(){return new Promise((resolve,reject)=>requests.push({resolve,reject}));}
-function result(marker){return {ok:true,json:async()=>({marker,runs:[],changes:[]})};}
-""" + helper + """
-(async()=>{
-const old=CALL,newer=CALL;requests[1].resolve(result('new'));await newer;
-requests[0].resolve(result('old'));await old;assert.deepEqual(rendered,['new']);
-requests=[];const failedOld=CALL,newest=CALL;requests[1].resolve(result('newest'));await newest;
-requests[0].reject(new Error('stale error'));await failedOld;assert.deepEqual(rendered,['new','newest']);
-assert.equal(nodes.size,0);
-requests=[];const current=CALL;requests[0].reject(new Error('current error'));await current;
-assert.ok([...nodes.values()].some(node=>node.textContent.includes('unavailable')));
-})().catch(error=>{console.error(error);process.exitCode=1;});
-"""
-                script = script.replace('CALL', name + '(' + args + ')')
-                result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
-                self.assertEqual(result.returncode, 0, result.stderr)
-
-    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
-    def test_deeper_audit_refresh_failure_is_visible_and_stale_errors_ignored(self):
-        source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
-        helper = source[source.index('  async function loadNikto('):source.index('  var niktoButton =')]
-        script = """const assert=require('node:assert/strict');
-class Node {constructor(){this.children=['old'];this.textContent='';}replaceChildren(){this.children=[];this.textContent='';}}
-const ids=new Map(),document={getElementById(id){if(!ids.has(id))ids.set(id,new Node());return ids.get(id);}};
-const orgId=1,niktoHistory={hasMore:true,cursor:1,sequence:0};
-function text(node,value){node.textContent=value;}function appendEmpty(node,value){node.textContent=value;}
-let rejectRequest;let fetch=async()=>{throw new Error('Unavailable');};
-"""+helper+"""
-(async()=>{
-await loadNikto();assert.match(document.getElementById('web-nikto-outcome').textContent,/unavailable/);
-assert.equal(document.getElementById('web-audit-review').children.length,0);
-assert.match(document.getElementById('web-audit-review').textContent,/could not be refreshed/);
-document.getElementById('web-audit-review').textContent='Current saved review';
-await loadNikto(true);assert.equal(document.getElementById('web-audit-review').textContent,'Current saved review');
-fetch=()=>new Promise((resolve,reject)=>{rejectRequest=reject;});
-const pending=loadNikto();niktoHistory.sequence++;
-document.getElementById('web-nikto-outcome').textContent='Newer evidence';
-rejectRequest(new Error('Old request failed'));await pending;
-assert.equal(document.getElementById('web-nikto-outcome').textContent,'Newer evidence');
-})().catch(error=>{console.error(error);process.exitCode=1;});
-"""
-        result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_exposure_review_preserves_latest_attempt_and_literal_evidence(self):
         source = (Path(__file__).parents[1] / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function renderExposureReview('):source.index('  function renderActiveExposure(')]
@@ -284,14 +224,15 @@ renderExposureReview({id:3,status:'completed_with_warnings',snapshot:{coverage_c
 assert.match(flatten(host),/Coverage incomplete/);assert.equal(host.children[1].children[0].textContent,'<script>literal</script>');
 renderExposureReview({status:'failed',snapshot:{findings:[{signature_id:'stale'}]}});
 assert.match(flatten(host),/Latest exposure attempt failed/);assert.doesNotMatch(flatten(host),/stale/);assert.equal(host.children.length,0);
+renderExposureReview({id:9,status:'failed'}, {id:3,status:'completed',completed_at:'saved-date',snapshot:{coverage_complete:true,findings:[{signature_id:'saved-signature',path:'/saved',http_status:200}]}});
+assert.match(flatten(host),/Latest exposure attempt failed/);assert.match(flatten(host),/saved-date/);assert.match(flatten(host),/run #3/);assert.match(flatten(host),/saved-signature/);
 renderExposureReview({status:'completed',snapshot:{coverage_complete:true,findings:[]}});
 assert.match(flatten(host),/does not establish/);assert.match(flatten(host),/No configured signature/);
 renderExposureReview(null);assert.match(flatten(host),/No saved exposure assessment/);
 """
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('Current exposure evidence could not be refreshed.', source)
-        self.assertIn('Public exposure paths: current evidence unavailable.', source)
+        self.assertIn('Previously loaded evidence remains visible and may be out of date.', source)
 
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
@@ -786,7 +727,7 @@ assert.equal(assess('2028-02-29T12:00:00.123456+00:00').state,'recorded');
     def test_assessment_summaries_preserve_unknown_and_partial_coverage(self):
         source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
         priority=source[source.index('  function websiteCertificateAssessment('):source.index('  function renderDnsSnapshot(')]
-        outcome=source[source.index('  function renderWebsiteAuditOutcome('):source.index('  function renderActiveExposure(')]
+        outcome=source[source.index('  function renderWebsiteAuditOutcome('):source.index('  function savedSuccessfulCheck(')]
         script='''const assert=require('node:assert/strict');
 class Node { constructor(){this.children=[];this.textContent='';} replaceChildren(){this.children=[];} append(...items){this.children.push(...items);} setAttribute(){} }
 const nodes={}; const document={getElementById:id=>nodes[id]||(nodes[id]=new Node()),createElement:()=>new Node()};
