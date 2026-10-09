@@ -1,6 +1,6 @@
 # Daedalus project report
 
-## Current state — October 9, 2026, 01:25 UTC
+## Current state — October 9, 2026, 01:54 UTC
 
 **Daedalus is a working, internet-hosted pilot. The full project remains incomplete.** This report covers the whole intended platform. The [historical checkpoints](PROJECT-HISTORY.md) preserve earlier receipts; their release identifiers and counts apply to their own dates.
 
@@ -9,8 +9,8 @@ Daedalus brings independent customer workspaces, domain and website health, mana
 - **Public marketing:** [Cyber Security Pilot](https://cybersecuritypilot.org/) is published from `site/` through GitHub Pages.
 - **Application:** [Daedalus portal](https://daedalus.cybersecuritypilot.org/) runs on SER8 using Incus and persistent server storage.
 - **Source:** [techmore/tm-daedalus](https://github.com/techmore/tm-daedalus) contains the marketing site, application, scanner integration, macOS CIS client and profiles.
-- **Verified application release:** `fa02771f191fcce5a2a99e78f752e62d1cf47247`; 102-file archive SHA-256 `421cace59071262464b275c069fae61741af0e143eef65093106b1828656683e`. Internal/public readiness passed and all four served dashboard assets match source. Subsequent documentation commits do not change this application release.
-- **Validation:** 1,304 local tests passed, one skipped, 426 subtests passed. Backend CI **37869582645** passed Python 3.11/3.12; managed Linux CI **37869582525** passed all five scenarios for this exact application source. These checks cover exercised behaviors; broader product acceptance remains open.
+- **Verified application release:** `2780f044fb90722e2d52ca6c13c7b63852eb77f4`; 103-file archive SHA-256 `c428c04f11c8975d5a03e44eb6e572f56fbb5b578c3093198dfa9dec6ad62f27`. Internal/public readiness passed and all five served dashboard assets match source. Subsequent documentation commits do not change this application release.
+- **Validation:** 1,314 local tests passed, one skipped, 424 subtests passed. Backend CI **37871823950** passed Python 3.11/3.12; managed Linux CI **37871823944** passed all five scenarios for this exact source. These checks cover exercised behaviors; broader product acceptance remains open.
 
 ## Full platform scope
 
@@ -32,7 +32,17 @@ Daedalus brings independent customer workspaces, domain and website health, mana
 | Theme and product experience | CSP ivory/olive/brown styling, topic summaries, refreshable URLs, inline controls, history grouping and native scanner status. Implemented/API behavior and some visual receipts exist. | Populated desktop/mobile review of every topic, consistent priority/freshness/change/action hierarchy, keyboard/screen-reader review and final marketing/content acceptance. |
 | Hosting and recovery | Incus deployment, verified off-host backups, staged activation, health checks and automatic rollback. A disposable restore recovered all 71 pre-deployment report pairs and passed SQLite integrity/foreign-key checks. | Independent recovery-secret custody, restored real Google sign-in, public DNS/TLS failover, storage/retention policy, capacity and sustained operating acceptance. |
 
-## Latest completed customer workflow
+## Saved evidence review workflow — verified October 9
+
+DNS, website, exposure and Nikto views now retain displayed findings, dates and loaded older history when a saved-data request fails. An inline warning remains until a complete retry succeeds. **Refresh saved evidence** reads stored data; new audits use their separate run controls. Refresh stages both independently paged run/change prefixes before replacing the view. Superseded or malformed responses cannot replace saved evidence. Background polls leave an active review request alone and avoid repeated loading announcements.
+
+Nikto retains expanded run details and cancellation-button focus, while exposure/Nikto review selects the separately returned successful assessment even when it is outside the run page. The first-load unavailable state, retry controls and last-page focus transitions have actual Node callback evidence. These fixtures do not close populated portal visual or screen-reader acceptance.
+
+The actual shared pager also made **20 normal production read requests** across all four CSP history endpoints. A controlled local transport failure preserved the original body and review depth; the subsequent real read retained the loaded IDs and cleared the warning state. The production service remained running. No new audit, scan or PDF was requested. CSP/Penn normal history/isolation reads passed; temporary scoped keys were revoked and returned 401.
+
+All **72** existing PDF/snapshot pairs remain identical. Verified backup `daedalus-data-20261009T015219Z.tar.gz` has SHA-256 `8f134543482ba2cd948556e366e94438138efdec42325ac60fcae891d577b521`. An independent temporary restore passed SQLite integrity/foreign-key checks and recovered all 72 pairs with matching hashes. [Refresh contract and validation scope](docs/SAVED-EVIDENCE-REFRESH.md).
+
+## Collection recovery workflow — verified October 9
 
 Collection recovery now retains a dated failure attempt and the last successful evidence. Identical repeated failures stay quiet. The next successful run creates one **collection resumed** notice, including remaining limitations and recorded changes. A first successful collection is labelled as a baseline with no earlier comparison. Resumed collection does not establish that security findings were resolved.
 
