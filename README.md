@@ -175,6 +175,8 @@ Host operators can explicitly provision the named Codex operator for an existing
 
 ## Customer onboarding
 
+**Add or join workspace → Your workspaces & requests** shows saved approvals and access requests with recorded dates. **Refresh workspaces** retries saved reads without starting collection. The same review is available before the account has an approved workspace. Failed reads retain the list and confirmed request feedback, mark access as last observed and pause workspace switching until recovery. [Request and membership workflow](docs/MEMBERS-ACCESS-WORKFLOW.md#account-workspace-requests--october-9-follow-up).
+
 Configured platform administrators can grant complimentary 30-day onboarding in **Add or join workspace → Add a customer**, or review existing customers in the same dialog. The DNS exception requires explicit reapproval every 30 days. A dashboard reminder counts approvals needing review; **Review customer access** opens the review dialog. Loads, refreshes and background polls never open it automatically. Expiry still closes the exception and creates durable workspace notices. Configure `DAEDALUS_PLATFORM_ADMIN_EMAILS` with the intended authenticated owners. [Authority, expiry and rollout](docs/CUSTOMER-ONBOARDING.md).
 
 ## Report and notification history

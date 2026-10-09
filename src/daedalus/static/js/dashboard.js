@@ -92,6 +92,7 @@
   };
   var activeTab = null;
   var auditReview = null;
+  var workspaceRequests = null;
   var membershipReview = window.DaedalusMembershipReview ? window.DaedalusMembershipReview.create({
     organizationId: orgId,
     fetch: function (url, options) { return fetch(url, options); },
@@ -266,7 +267,7 @@
           run: function () {
             var form = document.getElementById("request-access-form");
             if (form && message.domain) form.elements.domain.value = message.domain;
-            if (workspaceDialog && !workspaceDialog.open) workspaceDialog.showModal();
+            if (workspaceDialog && !workspaceDialog.open) {workspaceDialog.showModal();loadWorkspaces();}
           }
         });
       }
@@ -5898,7 +5899,7 @@
   var workspaceDialog = document.getElementById("workspace-dialog");
   document.querySelectorAll("[data-open-workspace-dialog]").forEach(function (button) {
     button.addEventListener("click", function () {
-      if (workspaceDialog && !workspaceDialog.open) workspaceDialog.showModal();
+      if (workspaceDialog && !workspaceDialog.open) {workspaceDialog.showModal();loadWorkspaces();}
     });
   });
   document.querySelectorAll("[data-close-workspace-dialog]").forEach(function (button) {
@@ -5912,58 +5913,14 @@
     });
   }
 
-  function renderWorkspaceList(workspaces) {
-    ["dialog-workspace-list", "account-workspace-list"].forEach(function (id) {
-      var list = document.getElementById(id);
-      if (!list) return;
-      list.replaceChildren();
-      workspaces.forEach(function (workspace) {
-        var row = document.createElement("div");
-        row.className = "workspace-request-row";
-        var details = document.createElement("div");
-        var name = document.createElement("strong");
-        name.textContent = workspace.name;
-        var domain = document.createElement("small");
-        domain.textContent = workspace.domain;
-        details.append(name, domain);
-        var state = document.createElement("span");
-        state.className = "workspace-state";
-        state.textContent = workspace.status === "approved" ? workspace.role : workspace.status;
-        row.append(details, state);
-        if (workspace.status === "approved") {
-          var select = document.createElement("button");
-          select.type = "button";
-          select.className = "button button-small button-quiet";
-          select.dataset.selectWorkspace = workspace.id;
-          select.textContent = "Open";
-          row.append(select);
-        }
-        list.append(row);
-      });
-    });
-    var workspaceSelect = document.getElementById("workspace-select");
-    if (workspaceSelect) {
-      workspaceSelect.replaceChildren();
-      workspaces.filter(function (workspace) { return workspace.status === "approved"; }).forEach(function (workspace) {
-        var option = document.createElement("option");
-        option.value = workspace.id;
-        option.textContent = workspace.name + " · " + workspace.role;
-        option.selected = String(workspace.id) === String(orgId);
-        workspaceSelect.append(option);
-      });
-    }
-  }
-
   async function loadWorkspaces() {
-    try {
-      var response = await fetch("/api/my-workspaces", { credentials: "same-origin" });
-      if (!response.ok) return;
-      var workspaces = (await response.json()).workspaces;
-      renderWorkspaceList(workspaces);
-      syncPendingMembershipFeeds(workspaces);
-    } catch (_error) {
-      // The account workspace list can retry when the page is refreshed.
+    if (!workspaceRequests && window.DaedalusWorkspaceRequests) {
+      workspaceRequests = window.DaedalusWorkspaceRequests.create({userId:shell && shell.dataset.userId,organizationId:orgId,
+        fetch:function (url,options) {return fetch(url,options);},selectionBusy:function () {return workspaceSelectionBusy;},
+        select:function (id,button) {return selectWorkspace(id,null,button);},onRead:syncPendingMembershipFeeds});
+      window.daedalusWorkspaceRequests = workspaceRequests;
     }
+    if (workspaceRequests) return workspaceRequests.load();
   }
 
   var createWorkspaceForm = document.getElementById("create-workspace-form");
@@ -6014,10 +5971,10 @@
         headers:{"Content-Type":"application/json"},body:JSON.stringify({domain:domain}),signal:controller.signal});
       var body; try {body = await response.json();} catch (_) {body = {};}
       if (!response.ok) throw new Error(body && typeof body.detail === "string" ? body.detail : "The access request could not be confirmed.");
-      if (!body || !["pending","approved"].includes(body.status) || typeof body.organization !== "string" || !body.organization) throw new Error("The access request could not be confirmed. Refresh the page to check your saved workspace requests.");
+      if (!body || !["pending","approved"].includes(body.status) || typeof body.organization !== "string" || !body.organization) throw new Error("The access request could not be confirmed. Use Refresh workspaces to check your saved access request.");
       return body;
     } catch (error) {
-      if (controller.signal.aborted) throw new Error("The request timed out. Refresh the page to check whether your access request was saved before trying again.");
+      if (controller.signal.aborted) throw new Error("The request timed out. Use Refresh workspaces to check whether your access request was saved before trying again.");
       throw error;
     } finally {window.clearTimeout(timer);}
   }
@@ -6058,12 +6015,17 @@
     }
     document.querySelectorAll("[data-select-workspace]").forEach(function (button) { button.setAttribute("aria-disabled", String(busy)); });
     updatePortfolioReadState();
+    if (workspaceRequests) workspaceRequests.updateControls();
   }
 
   async function selectWorkspace(id, targetTab, trigger) {
     if (typeof id !== "number" && (typeof id !== "string" || !/^\d+$/.test(id))) return;
     var selectedId = Number(id);
     if (workspaceSelectionBusy || !Number.isSafeInteger(selectedId) || selectedId <= 0) return;
+    if (trigger && (trigger.dataset.workspaceReviewOpen || trigger.id === "workspace-select") && workspaceRequests && !workspaceRequests.canSelect(selectedId)) {
+      if (trigger.id === "workspace-select") trigger.value = orgId;
+      return;
+    }
     var fromPortfolio = trigger && trigger.closest("#portfolio-board");
     if (fromPortfolio && (!portfolioRead.body || portfolioRead.error || portfolioRead.loading
       || !portfolioRead.body.workspaces.some(function (workspace) { return workspace.id === selectedId; })

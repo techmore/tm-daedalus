@@ -675,7 +675,8 @@ def get_session_user(request: Request, db: Session) -> User:
     if not user_id:
         raise HTTPException(status_code=401, detail="Sign in required")
     if key is not None:
-        request.session["organization_id"] = key.organization_id
+        if request.session.get("organization_id") != key.organization_id:
+            request.session["organization_id"] = key.organization_id
         request.state.user_api_key = key
         if request.url.path in {"/api/workspaces", "/api/workspaces/select", "/api/membership-requests", "/api/my-workspaces", "/api/customers"}:
             raise HTTPException(status_code=403, detail="Access key is limited to its workspace")
@@ -708,7 +709,10 @@ def get_org_context(
     expected_workspace = request.headers.get("x-daedalus-workspace")
     if expected_workspace is not None and expected_workspace != str(organization.id):
         raise HTTPException(status_code=409, detail="Workspace selection changed. Refresh this page before continuing.")
-    request.session["organization_id"] = organization.id
+    # Routine reads must not reissue an unchanged identity cookie: a late
+    # response could otherwise overwrite a newer login or workspace choice.
+    if request.session.get("organization_id") != organization.id:
+        request.session["organization_id"] = organization.id
     if (
         organization.verification_status == "pending"
         and organization.verification_expires_at is not None
@@ -3509,9 +3513,15 @@ def list_my_workspaces(request: Request, db: Session = Depends(get_db)):
         select(Membership, Organization)
         .join(Organization, Organization.id == Membership.organization_id)
         .where(Membership.user_id == user.id)
-        .order_by(Organization.name)
+        .order_by(Organization.name, Organization.id)
     ).all()
-    return {
+    membership_id = AuditLog.details["membership_id"].as_integer()
+    request_dates = dict(db.execute(select(membership_id, func.max(AuditLog.created_at)).where(
+        AuditLog.actor_user_id == user.id, AuditLog.action == "membership.requested",
+    ).group_by(membership_id)).all())
+    return JSONResponse({
+        "user_id": user.id,
+        "observed_at": iso_utc(utcnow()),
         "workspaces": [
             {
                 "id": membership.organization_id,
@@ -3519,10 +3529,12 @@ def list_my_workspaces(request: Request, db: Session = Depends(get_db)):
                 "domain": organization.domain,
                 "role": membership.role,
                 "status": membership.status,
+                "membership_created_at": iso_utc(membership.created_at),
+                "requested_at": iso_utc(request_dates.get(membership.id)),
             }
             for membership, organization in rows
         ]
-    }
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/memberships/{membership_id}/decision")

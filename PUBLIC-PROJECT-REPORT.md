@@ -137,6 +137,8 @@ Verified pre-deployment backup `daedalus-data-20261009T012409Z.tar.gz` has SHA-2
 
 ## Completion priorities
 
+Account workspace-request review now has a dated saved view, fixed read-only refresh, retained context on failed reads and guarded switching. The isolated demo exercised a saved BFS request with a failed following read, no-approved-workspace reload/retry, CSP re-request and admin approval, and a separate BFS denial. Desktop/mobile views were reviewed. Routine context reads also avoid reissuing an unchanged session cookie, addressing the identity-switch race found during review. Final local validation passed **1,501 tests, one skipped and 459 subtests**. The previous action-history source `6b90c89` passed backend CI **37900891080** and all five Linux scenarios in **37900891036**. This is local implementation evidence; actual customer onboarding and SER8 activation remain pending. [Workflow and limits](docs/MEMBERS-ACCESS-WORKFLOW.md#account-workspace-requests--october-9-follow-up).
+
 Production source/recovery inspection and activation of the pushed application changes remain an operating prerequisite; public readiness alone does not close that work.
 
 1. Finish and review the complete customer journey across populated desktop/mobile topics, keeping priority, freshness, changes and next actions consistent.

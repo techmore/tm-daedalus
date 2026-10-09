@@ -29,7 +29,7 @@ Final local validation passed **1,470 tests, one skipped and 446 subtests**. The
 
 ## Remaining acceptance
 
-Production activation requires verified SER8 access and recovery/source inspection. Actual additional customer Google users, TXT publication, approved sharing, succession, future expiry/renewal and wider accessibility review remain open. This local walkthrough does not establish those outcomes. Request-list recovery in the add/join-workspace dialog still needs the same complete customer review contract. The audit-history follow-up below completes its separate local review workflow.
+Production activation requires verified SER8 access and recovery/source inspection. Actual additional customer Google users, TXT publication, approved sharing, succession, future expiry/renewal and wider accessibility review remain open. This local walkthrough does not establish those outcomes. The request-list and audit-history follow-ups below have separate local review evidence. Complete customer creation and onboarding acceptance remain open.
 
 ## Recorded action history — October 9 follow-up
 
@@ -46,3 +46,17 @@ Final local regression validation passed **1,489 tests, one skipped and 451 subt
 The previous source `41d0070` passed backend CI **37891108104**. Linux CI **37891108169** passed four scenarios but failed interrupted-bridge recovery with one rejected event. That failed run remains recorded and its particular rejection cause is unproven; see [scanner recovery diagnostics](SCANNER-LIVE-VALIDATION.md#rejected-recovery-evidence).
 
 The published member implementation `8fa2080dd6b0401b26b6ff3012f73f45c5ce76c3` subsequently passed backend CI **37895490255** on Python 3.11/3.12 and all five Linux scenarios in **37895490130**. This includes interruption with the preceding scanner bundle; a separate frozen-payload correction now has its own regression and real Mac proof. Production/member acceptance remains as listed above.
+
+The action-history source `6b90c89b457651f472f1868d796f21288a89fe31` passed backend CI **37900891080** on Python 3.11/3.12 and all five Linux scanner scenarios in **37900891036**. These results apply to that source; production activation remains unverified.
+
+## Account workspace requests — October 9 follow-up
+
+**Add or join workspace** and the account page without an approved workspace now share a saved-request controller. **Refresh workspaces** reads existing memberships and requests; it does not run an audit. The summary shows approved workspace and pending-request counts with the observation date. Rows distinguish awaiting approval, approved role, declined requests and removed access. The recorded request time comes from the latest request event; membership creation is not presented as the submission date. Missing historical request dates remain explicitly unavailable.
+
+The API is account-owned, includes user identity and observation metadata, and returns `Cache-Control: no-store`. Workspace-bound keys cannot read the account's other workspaces. The browser validates identity, row fields, dates and unique workspace IDs. Transport and response-body reads have a 20-second deadline; a superseded read cannot restore old access. Failed reads retain rows, focus and dates, label access as last observed, and pause switching until a successful retry. Unchanged successful reads reuse row and selector nodes. Request confirmations and typed form contents survive an independent read failure.
+
+Actual browser review exposed an unchanged-session cookie rewrite during dashboard polling, which could overwrite a later identity or workspace selection. Ordinary context reads now assign the workspace only when it changes. Tests confirm that normal and key-session dashboard reads do not issue an unchanged identity cookie, while login, initial workspace selection and logout retain their required cookie writes. This corrects the exercised read-response race; it does not establish a complete session-lifecycle audit.
+
+An isolated local demo member submitted a BFS request, retained confirmed feedback through a controlled following read failure, and retrieved the saved pending request with its new timestamp on retry. The same node, typed input and refresh focus survived failure/retry. After normal admin removal from CSP, the account page reloaded with no approved workspace, retained both requests, and supported another failed read/retry. A new CSP request appeared in both account and dialog views; the admin approved it as user. The separate BFS request was declined. Final CSP roles remain owner admin/shared member user; no school access was granted in this walkthrough.
+
+Populated 1440-pixel desktop and 390-pixel mobile dialog/account screenshots were reviewed. The final desktop dialog had no horizontal overflow. All 34 original report-directory files remain byte-identical; original and review databases retain 49/33 and 51/35 external-run/report counts. No collector, scanner or PDF was requested. Final local validation passed **1,501 tests, one skipped and 459 subtests**; the focused suite passed **91 tests and eight subtests**. Production deployment, real Google-user onboarding, customer creation, ownership and broader accessibility acceptance remain open.

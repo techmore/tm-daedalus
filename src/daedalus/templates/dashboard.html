@@ -7,11 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-195">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-196">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <div class="app-shell" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
+  <div class="app-shell" data-user-id="{{ user.id }}" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
     <aside class="sidebar">
       <a class="brand" href="/dashboard">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
@@ -84,6 +84,9 @@
           <button class="button button-primary" type="button" data-open-workspace-dialog>Create a workspace</button>
           <button class="button button-secondary" type="button" data-open-workspace-dialog>Request access</button>
         </div>
+        <div class="overview-read-heading"><h3>Your workspaces &amp; requests</h3><button id="account-workspace-refresh" type="button" class="button button-quiet">Refresh workspaces</button></div>
+        <p id="account-workspace-observed" class="status-when">No workspace read yet.</p>
+        <p id="account-workspace-read-note" class="overview-read-note" role="status" hidden></p>
         <div id="account-workspace-list" class="workspace-request-list" aria-live="polite"></div>
       </div>
       {% else %}
@@ -675,7 +678,10 @@
     {% if platform_admin %}
     <section aria-labelledby="onboarding-customers-title"><h3 id="onboarding-customers-title">Customer onboarding</h3><p class="muted">Grant, review or end complimentary onboarding during a vendor transition.</p><div id="onboarding-customers"></div><p id="onboarding-feedback" aria-live="polite"></p></section>
     {% endif %}
-    <div id="dialog-workspace-list" class="workspace-request-list"></div>
+    <div class="overview-read-heading"><h3>Your workspaces &amp; requests</h3><button id="dialog-workspace-refresh" type="button" class="button button-quiet">Refresh workspaces</button></div>
+    <p id="dialog-workspace-observed" class="status-when">No workspace read yet.</p>
+    <p id="dialog-workspace-read-note" class="overview-read-note" role="status" hidden></p>
+    <div id="dialog-workspace-list" class="workspace-request-list" aria-live="polite"></div>
   </dialog>
   {% endif %}
   {% if platform_admin %}
@@ -691,6 +697,7 @@
   <script src="/static/js/audit-history.js?v=20261009-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-2" defer></script>
   <script src="/static/js/memberships.js?v=20261009-2" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-195" defer></script>
+  <script src="/static/js/workspace-requests.js?v=20261009-1" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-196" defer></script>
 </body>
 </html>
