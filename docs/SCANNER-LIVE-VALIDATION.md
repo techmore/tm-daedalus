@@ -26,7 +26,21 @@ Six new scan/report mutation cases failed against the preceding bundle and passe
 
 The interruption harness now additionally compares each original spooled payload with the saved portal payload, including JSON value types, without writing payload values to the public receipt. Missing/changed payloads fail acceptance. The final actual Mac run at **07:02 UTC** recovered 12 original events with unchanged IDs, times and payloads, retained one deep Nmap invocation, replayed one lost committed acknowledgement only once and drained event/result queues with zero rejected events. It received 21 realtime messages, confirmed command success and generated the existing two-page report. Both pages were rendered and viewed; PDF SHA-256 is `f4ebb71030f3aeaab5b8df40ea6ee726a284ce6867f463a1576d8c88b0194dc8`.
 
-The preceding member source `8fa2080` independently passed backend CI **37895490255** and all five Linux scenarios in **37895490130**, with the preceding scanner ZIP. That successful interruption run does not erase the earlier `41d0070` rejection or prove its cause. The corrected ZIP requires its own exact-source Linux CI and installed-client/production activation acceptance. Wider fleet, VLAN, privilege and sustained outage behavior remain open.
+The preceding member source `8fa2080` independently passed backend CI **37895490255** and all five Linux scenarios in **37895490130**, with the preceding scanner ZIP. That successful interruption run does not erase the earlier `41d0070` rejection or prove its cause.
+
+The corrected source `795f97e015e04e845028f32a04bf10e6230f1037` subsequently passed [backend CI 37897413734](https://github.com/techmore/tm-daedalus/actions/runs/37897413734) on Python 3.11/3.12 and all five scenarios in [managed Linux CI 37897413670](https://github.com/techmore/tm-daedalus/actions/runs/37897413670). These are completed exact-source runs, including interrupted-bridge recovery; they do not establish wider fleet, VLAN, privilege or sustained outage acceptance.
+
+All five downloaded Linux receipts identify the corrected source tree, successful command/completed run/report and no external audit/background collection. Each retained PDF matches its receipt hash. The interruption receipt specifically proves 12 recovered original payloads/identities, one deep Nmap invocation, a lost committed acknowledgement saved once and zero final pending/review events. The receipt field `scanner_bundle_sha256` hashes the generated complete scanner kit; it is distinct from the nested source ZIP hash above.
+
+## Installed Mac activation — October 9
+
+After staging and completed CI, the ordinary managed upgrade activated the corrected source on the existing Mac scanner. Its idle/maintenance checks ran before switching LaunchAgents; the original descriptors and release remain available for recovery. The bridge runtime was already current and its environment was retained. No new scan, external target, customer audit or report generation was requested during this upgrade.
+
+At **07:20 UTC**, both services were running, local readiness was true, no jobs were active and maintenance was inactive. All **127 archive entries** in the installed source matched the prepared kit (126 runtime files plus the manifest). Enrollment and the NmapUI environment were unchanged except the new Chromium runtime path. SQLite integrity passed; all **29 original job records and 354 event records** survived with identical contents. Two cached hosted PDFs and 25 spool evidence files remained byte-identical. Two mutable delivery metadata files advanced their acknowledgement/observation timestamps; they remained present with no unresolved uploads or preservation failure.
+
+The real production client-status response showed a newer heartbeat, an online connected bridge, zero queued/review uploads and unchanged recent-run/report lists. Reloading the existing native app showed running NmapUI, connected bridge, idle activity, the saved scans and hosted PDF actions. This confirms this Mac's activation and its retained evidence. It does not activate newer portal code on SER8 or prove complete historical scan coverage, new scan execution, physical fleet recovery, or signed distribution.
+
+Private receipts are retained under `validation/customer-review-20261009/scanner-freeze-installed-*`; no enrollment credentials or customer payloads are published here. SER8 source/recovery inspection and portal activation remain pending.
 
 ## Run on a development machine
 
