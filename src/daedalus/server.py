@@ -3455,7 +3455,11 @@ def list_workspace_memberships(
         Membership.role == "admin",
         Membership.status == "approved",
     )) or 0
-    return {
+    return JSONResponse({
+        "organization_id": organization.id,
+        "observed_at": iso_utc(utcnow()),
+        "can_manage": membership.role == "admin",
+        "controls_enabled": workspace_controls_available(db, organization),
         "organization": organization.name,
         "verification_status": organization.verification_status,
         "approved_admin_count": approved_admin_count,
@@ -3467,10 +3471,35 @@ def list_workspace_memberships(
                 "role": item.role,
                 "status": item.status,
                 "is_self": item.user_id == user.id,
+                "state_reference": membership_state_reference(db, item),
             }
             for item, member in rows
         ],
-    }
+    }, headers={"Cache-Control": "no-store"})
+
+
+def membership_state_reference(db: Session, membership: Membership) -> str:
+    # Include the latest recorded transition so returning to the same role and
+    # status cannot revive a browser decision from an earlier access episode.
+    transition = db.scalar(select(func.max(AuditLog.id)).where(
+        AuditLog.organization_id == membership.organization_id,
+        AuditLog.action.like("membership.%"),
+        AuditLog.details["membership_id"].as_integer() == membership.id,
+    ))
+    return token_digest(json.dumps([membership.id, membership.organization_id,
+        membership.user_id, membership.role, membership.status, transition], separators=(",", ":")))
+
+
+def lock_membership_action(request: Request, db: Session, membership_id: int) -> tuple[User, Organization, Membership]:
+    actor, organization, _ = get_org_context(request, db, admin=True)
+    organization = lock_domain_challenge_workspace(db, organization, actor, request)
+    target = db.get(Membership, membership_id)
+    if target is None or target.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Workspace membership not found")
+    expected = request.headers.get("X-Daedalus-Membership-State")
+    if expected is not None and expected != membership_state_reference(db, target):
+        raise HTTPException(status_code=409, detail="This member's access changed. Refresh members before deciding again.")
+    return actor, organization, target
 
 
 @app.get("/api/my-workspaces")
@@ -3503,15 +3532,12 @@ async def decide_membership_request(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _, organization, _ = get_org_context(request, db, admin=True)
+    actor, organization, membership = lock_membership_action(request, db, membership_id)
     if payload.approve and not workspace_controls_available(db, organization):
         raise HTTPException(
             status_code=403,
             detail="Verify the domain or grant a 14-day probation override or approve customer onboarding before sharing access.",
         )
-    membership = db.get(Membership, membership_id)
-    if membership is None or membership.organization_id != organization.id:
-        raise HTTPException(status_code=404, detail="Membership request not found")
     if membership.status not in {"pending", "denied"}:
         raise HTTPException(status_code=409, detail="This membership is already decided.")
     decided_status = "approved" if payload.approve else "denied"
@@ -3532,13 +3558,13 @@ async def decide_membership_request(
     db.refresh(membership)
     requester_user_id = membership.user_id
     decided_status = membership.status
-    actor = get_session_user(request, db)
     audit(
         db,
         organization.id,
         actor.id,
         "membership.approved" if payload.approve else "membership.denied",
-        {"membership_id": membership.id, "user_id": membership.user_id, "role": "user"},
+        {"membership_id": membership.id, "user_id": membership.user_id, "role": "user",
+         "email": db.get(User, membership.user_id).email},
     )
     admin_user_ids = set(db.scalars(
         select(Membership.user_id).where(
@@ -3564,7 +3590,8 @@ async def decide_membership_request(
             "status": decided_status,
         },
     )
-    return {"id": membership.id, "status": decided_status, "role": membership.role}
+    return JSONResponse({"organization_id": organization.id, "id": membership.id,
+        "status": decided_status, "role": membership.role}, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/memberships/{membership_id}/role")
@@ -3574,21 +3601,20 @@ async def change_workspace_membership_role(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    actor, organization, _ = get_org_context(request, db, admin=True)
+    actor, organization, membership = lock_membership_action(request, db, membership_id)
     if not workspace_controls_available(db, organization):
         raise HTTPException(
             status_code=403,
             detail="Verify the domain or grant a 14-day probation override or approve customer onboarding before changing administrator access.",
         )
-    membership = db.get(Membership, membership_id)
-    if membership is None or membership.organization_id != organization.id:
-        raise HTTPException(status_code=404, detail="Workspace membership not found")
     if membership.status != "approved":
         raise HTTPException(status_code=409, detail="Only an approved member can change roles")
 
     previous_role = membership.role
     if previous_role == payload.role:
-        return {"id": membership.id, "role": previous_role, "changed": False}
+        db.commit()
+        return JSONResponse({"organization_id": organization.id, "id": membership.id,
+            "role": previous_role, "changed": False}, headers={"Cache-Control": "no-store"})
 
     conditions = [
         Membership.id == membership.id,
@@ -3619,6 +3645,7 @@ async def change_workspace_membership_role(
     audit(db, organization.id, actor.id, "membership.role_changed", {
         "membership_id": membership.id,
         "user_id": user_id,
+        "email": db.get(User, user_id).email,
         "from_role": previous_role,
         "to_role": payload.role,
     })
@@ -3637,7 +3664,8 @@ async def change_workspace_membership_role(
         "organization_id": organization.id,
         "role": payload.role,
     })
-    return {"id": membership.id, "role": payload.role, "changed": True}
+    return JSONResponse({"organization_id": organization.id, "id": membership.id,
+        "role": payload.role, "changed": True}, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/memberships/{membership_id}/revoke")
@@ -3646,10 +3674,7 @@ async def revoke_workspace_membership(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    user, organization, _ = get_org_context(request, db, admin=True)
-    membership = db.get(Membership, membership_id)
-    if membership is None or membership.organization_id != organization.id:
-        raise HTTPException(status_code=404, detail="Workspace membership not found")
+    user, organization, membership = lock_membership_action(request, db, membership_id)
     if membership.user_id == user.id:
         raise HTTPException(status_code=409, detail="Workspace admins cannot revoke their own access")
     if membership.role == "admin":
@@ -3666,11 +3691,13 @@ async def revoke_workspace_membership(
         organization.id,
         user.id,
         "membership.revoked",
-        {"membership_id": membership.id, "user_id": membership.user_id, "role": membership.role},
+        {"membership_id": membership.id, "user_id": membership.user_id, "role": membership.role,
+         "email": db.get(User, membership.user_id).email},
     )
     db.commit()
     await live_hub.revoke_user_access(organization.id, membership.user_id)
-    return {"id": membership.id, "status": membership.status, "role": membership.role}
+    return JSONResponse({"organization_id": organization.id, "id": membership.id,
+        "status": membership.status, "role": membership.role}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/workspaces/{organization_id}/probation-overrides")

@@ -195,13 +195,15 @@ const document={querySelectorAll:s=>{selector=s;return [approval];}};
 pauseRestrictedWorkspaceControls();assert.equal(approval.disabled,true);assert.equal(denial.disabled,false);
 assert.ok(selector.includes('[data-membership-decision="true"]'));assert.ok(!selector.includes('[data-membership-decision]'));
 ''')
-        self.assertIn('button.disabled = approve && !controlsEnabled;', source)
+        review = (ROOT / 'src/daedalus/static/js/memberships.js').read_text()
+        self.assertIn('button.disabled = requiresApproval && state.body && !state.body.controls_enabled;', review)
 
     def test_static_controls_reopen_without_enabling_in_flight_actions(self):
         source = (ROOT / 'src/daedalus/static/js/dashboard.js').read_text()
         helper = source[source.index('  function updateWorkspaceControls('):source.index('  function render(data)')]
         self.run_script(r'''
 const assert=require('node:assert/strict');let controlsEnabled=false;
+let approvalPauses=0;const membershipReview={pauseApproval(){approvalPauses++;}};
 const nodes=Object.fromEntries(['add-scanner','issue-scanner-enrollment','run-nikto','scanner-access-paused','workspace-controls-notice'].map(id=>[id,{disabled:true,dataset:{},classList:{add(){},remove(){}}}]));
 const exposure={disabled:true,dataset:{requestBusy:'true'}};
 const document={getElementById:id=>nodes[id],querySelector:()=>exposure};
@@ -216,41 +218,17 @@ assert.equal(nodes['scanner-access-paused'].hidden,true);
 delete nodes['issue-scanner-enrollment'].dataset.requestBusy;delete exposure.dataset.requestBusy;niktoHistory.runs=[];
 updateWorkspaceControls({controls_enabled:true});assert.equal(nodes['issue-scanner-enrollment'].disabled,false);assert.equal(exposure.disabled,false);assert.equal(nodes['run-nikto'].disabled,false);
 updateWorkspaceControls({controls_enabled:false});assert.equal(nodes['add-scanner'].disabled,true);assert.equal(nodes['scanner-access-paused'].hidden,false);
+assert.equal(approvalPauses,1);
 ''')
         template = (ROOT / 'src/daedalus/templates/dashboard.html').read_text()
         self.assertIn('id="add-scanner" class="button button-primary" {% if not workspace_controls_enabled %}disabled', template)
         style = (ROOT / 'src/daedalus/static/css/app.css').read_text()
         self.assertIn('.security-note[hidden] { display: none; }', style)
 
-    def test_overview_membership_action_posts_once_when_click_bubbles(self):
+    def test_membership_views_use_one_shared_controller(self):
         source = (ROOT / 'src/daedalus/static/js/dashboard.js').read_text()
-        overview = source[source.index('  async function loadPendingApprovals('):source.index('  function refresh(force)')]
-        start = source.index('    var decision = event.target.closest("[data-membership-decision][data-membership-id]");')
-        delegated = source[start:source.index('\n  });', start)]
-        self.run_script(r'''
-const assert=require('node:assert/strict');const role='admin';let controlsEnabled=false, pending=true, posts=[];
-class Node {
-  constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.handlers={};this.textContent='';}
-  append(...items){this.children.push(...items);}replaceChildren(){this.children=[];}
-  addEventListener(name,fn){this.handlers[name]=fn;}
-  closest(selector){return selector==='[data-membership-decision][data-membership-id]'&&this.dataset.membershipId&&this.dataset.membershipDecision!==undefined?this:null;}
-}
-const host=new Node('div');const document={getElementById:()=>host,createElement:tag=>new Node(tag)};
-async function fetch(){return {ok:true,json:async()=>({members:pending?[{id:7,email:'pending@example.org',status:'pending'}]:[]})};}
-async function postJson(path,body){posts.push({path,body});pending=false;}
-async function loadMemberships(){}async function loadAuditLog(){}function text(){}
-''' + overview + '\nasync function delegated(event){\n' + delegated + r'''
-}
-function all(n){return [n,...n.children.flatMap(all)];}
-(async()=>{
-  await loadPendingApprovals();let buttons=all(host).filter(n=>n.tag==='button');
-  assert.equal(buttons[0].disabled,true);assert.equal(buttons[1].dataset.pendingApproval,'false');
-  await Promise.all([buttons[1].handlers.click(),delegated({target:buttons[1]})]);
-  assert.equal(posts.length,1);assert.equal(posts[0].path,'/api/memberships/7/decision');assert.equal(posts[0].body.approve,false);
-  posts=[];pending=true;controlsEnabled=true;await loadPendingApprovals();buttons=all(host).filter(n=>n.tag==='button');
-  await Promise.all([buttons[0].handlers.click(),delegated({target:buttons[0]})]);
-  assert.equal(posts.length,1);assert.equal(posts[0].body.approve,true);
-  const member=new Node('button');member.dataset.membershipId=8;member.dataset.membershipDecision='false';
-  await delegated({target:member});assert.equal(posts.length,2);assert.equal(posts[1].path,'/api/memberships/8/decision');
-})().catch(e=>{console.error(e);process.exitCode=1;});
-''')
+        template = (ROOT / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertIn('return membershipReview.load(true)', source)
+        self.assertIn('return membershipReview.load(background)', source)
+        self.assertNotIn('var decision = event.target.closest("[data-membership-decision][data-membership-id]")', source)
+        self.assertLess(template.index('/static/js/memberships.js'), template.index('/static/js/dashboard.js'))

@@ -8,6 +8,14 @@ Portal completion is recorded before the bridge removes its acknowledged local r
 
 The previous source `9b62da3` passed four Linux scenarios but failed interrupted-bridge CI **37887109103** at its immediate queue check. Its failure receipt is retained. A new real Mac loopback run with the bounded observation succeeded: 12 original pending events recovered with unchanged identity, one deep Nmap invocation, one lost committed event response replayed without duplication, zero final pending events, 21 realtime messages and the existing two-page PDF. The PDF SHA-256 is `bc0d198cc31e458a83713585da909faf05e4979556e0fbc279f735de9baff024`. Approved scanner source/report assets were not edited. New Linux exact-source CI remains a separate acceptance requirement.
 
+## Rejected recovery evidence
+
+The later interruption run for source `41d0070` failed Linux CI **37891108169** with zero pending events, zero command-result files and **one rejected event**. Its other four scenarios passed; backend CI **37891108104** passed. The actual Nmap result and accepted/succeeded command acknowledgements do not close this recovery failure. It is different from the earlier immediate queue-cleanup observation. No rejection acceptance condition was relaxed and the failed run was not blindly rerun.
+
+The harness now records at most 20 rejected event identities, numeric permanent-rejection HTTP status when the owned bridge log contains it, whether the portal saved that identity, and names of conflicting fields. It omits payload values, raw log content and credentials, reads the database without writes, skips symbolic links, and records log/comparison error classes without masking the original failure. Ephemeral evidence is still cleaned up. The original failed artifact lacks those comparisons; new diagnostics cannot retroactively identify its cause.
+
+A separate direct fixture executed the shipped broadcaster and SQLite replay code. Mutating the caller's nested payload after recording an event changed the in-memory replay while the persisted source event retained its original payload and the same event identity. This is a confirmed replay defect requiring correction and frozen-payload regression coverage. Its relation to the particular Linux rejection remains unproven. The shipped source bundle and approved report assets have not yet been changed for this investigation.
+
 ## Run on a development machine
 
 Use the project Python environment for the harness and a Python environment containing the shipped NmapUI requirements for `--nmapui-python`. Nmap must be on PATH. The harness extracts the shipped source bundle; it does not use an independently modified sibling source tree. PDF generation requires the configured Chromium runtime. Do not paste enrollment/API credentials into command arguments.

@@ -363,3 +363,66 @@ class GuardLauncherTests(unittest.TestCase):
             result=subprocess.run([str(launcher),'--version'],capture_output=True,text=True,timeout=10)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertIn('fixture nmap version',result.stdout)
+
+    def test_rejection_receipt_preserves_status_and_conflict_fields_without_payload_values(self):
+        import json
+        import sqlite3
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spool=root/'spool';spool.mkdir()
+            identity='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+            envelope={'client_event_id':identity,'event_name':'job_status','payload':{'secret':'do-not-retain'},'occurred_at':'2026-10-09T00:00:00+00:00','source_job_id':None,'source_job_type':None}
+            rejected=spool/('0001-'+identity+'.rejected');rejected.write_text(json.dumps(envelope));before=rejected.read_bytes()
+            database=root/'portal.db'
+            with sqlite3.connect(database) as db:
+                db.execute('CREATE TABLE scan_events (client_event_id TEXT,event_name TEXT,payload TEXT,occurred_at TEXT,source_job_id TEXT,source_job_type TEXT)')
+                db.execute('INSERT INTO scan_events VALUES (?,?,?,?,?,?)',(identity,'job_status',json.dumps({'secret':'different-private-value'}),'2026-10-09 00:00:00',None,None))
+            log=root/'bridge.log';log.write_text('private-credential-do-not-retain\nScanner event retained for review after permanent rejection (409): '+rejected.with_suffix('.json').name)
+            result=validation.recovery_rejection_diagnostics(spool,database,[log])
+            self.assertEqual(result['rejected_count'],1)
+            self.assertEqual(result['entries'][0]['http_status'],409)
+            self.assertIs(result['entries'][0]['saved_identity_found'],True)
+            self.assertEqual(result['entries'][0]['conflicting_fields'],['payload'])
+            self.assertNotIn('do-not-retain',json.dumps(result))
+            self.assertNotIn('different-private-value',json.dumps(result))
+            self.assertEqual(rejected.read_bytes(),before)
+
+    def test_rejection_receipt_handles_malformed_and_symlink_entries_without_following_them(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spool=root/'spool';spool.mkdir()
+            (spool/'malformed.rejected').write_text('{')
+            private=root/'private.json';private.write_text('private-credential-do-not-retain')
+            (spool/'link.rejected').symlink_to(private)
+            result=validation.recovery_rejection_diagnostics(spool,root/'missing.db')
+            self.assertEqual(result['rejected_count'],2)
+            self.assertEqual({entry['envelope_error_type'] for entry in result['entries']},{'ValueError','JSONDecodeError'})
+            self.assertNotIn('private-credential',str(result))
+
+    def test_rejection_receipt_handles_non_object_and_non_string_identities(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for index,envelope in enumerate((None,[],{'client_event_id':123}, {'client_event_id':None})):
+                (root/f'{index}.rejected').write_text(json.dumps(envelope))
+            result=validation.recovery_rejection_diagnostics(root,root/'missing.db')
+            self.assertEqual(result['rejected_count'],4)
+            self.assertTrue(all(entry=={'envelope_error_type':'ValueError'} for entry in result['entries']))
+
+    def test_rejection_receipt_log_failure_does_not_mask_original_evidence(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);log=root/'bridge.log';log.write_text('private-credential')
+            (root/'one.rejected').write_text(json.dumps({'client_event_id':'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}))
+            original_open=Path.open
+            def fail_log(path,*args,**kwargs):
+                if path==log:raise PermissionError('private-credential')
+                return original_open(path,*args,**kwargs)
+            with patch.object(Path,'open',fail_log):
+                result=validation.recovery_rejection_diagnostics(root,root/'missing.db',[log])
+            self.assertEqual(result['log_error_types'],['PermissionError'])
+            self.assertEqual(result['rejected_count'],1)
+            self.assertNotIn('private-credential',str(result))

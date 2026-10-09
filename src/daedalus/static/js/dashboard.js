@@ -91,6 +91,16 @@
     notifications: "Security notifications"
   };
   var activeTab = null;
+  var membershipReview = window.DaedalusMembershipReview ? window.DaedalusMembershipReview.create({
+    organizationId: orgId,
+    fetch: function (url, options) { return fetch(url, options); },
+    confirm: requestInlineConfirmation,
+    onRoleObserved: function (canManage) {if ((role === "admin") !== canManage) window.location.reload();},
+    onSaved: function () { return loadAuditLog(); },
+    onSelfRoleChange: function () { window.location.reload(); }
+  }) : null;
+  window.daedalusMembers = membershipReview;
+
 
   function text(node, value) {
     if (node) node.textContent = value == null ? "" : String(value);
@@ -200,6 +210,7 @@
     if (name === "web") { loadActiveExposure(); loadNikto(); }
     if (name === "reports") loadReports();
     if (name === "notifications") loadNotifications();
+    if (name === "members") loadMemberships();
   }
 
   function showMembershipNotice(message, action) {
@@ -1241,6 +1252,7 @@
   function updateWorkspaceControls(organization) {
     var controlsJustClosed = controlsEnabled && organization.controls_enabled !== true;
     controlsEnabled = organization.controls_enabled === true;
+    if (!controlsEnabled && membershipReview) membershipReview.pauseApproval();
     var controlsNotice = document.getElementById("workspace-controls-notice");
     if (controlsNotice && controlsJustClosed) {
       controlsNotice.textContent = "Temporary workspace access has closed. Scanner enrollment, new scans and active website audits are paused. Review domain verification, onboarding approval or the temporary override. Saved results remain available.";
@@ -1751,41 +1763,7 @@
   }
 
   async function loadPendingApprovals() {
-    var host = document.getElementById("pending-approvals");
-    if (!host || role !== "admin") return;
-    try {
-      var response = await fetch("/api/memberships", { credentials: "same-origin" });
-      var body = await response.json();
-      var pending = response.ok && Array.isArray(body.members) ? body.members.filter(function (member) { return member.status === "pending"; }) : [];
-      host.replaceChildren();
-      if (!pending.length) return;
-      var card = document.createElement("section"); card.className = "approval-card";
-      var title = document.createElement("strong"); title.textContent = pending.length === 1 ? "1 person is waiting for access" : pending.length + " people are waiting for access";
-      card.append(title);
-      var note = document.createElement("p"); note.className = "status-when approval-note"; note.hidden = true;
-      pending.forEach(function (member) {
-        var row = document.createElement("div"); row.className = "approval-row";
-        var who = document.createElement("span"); who.className = "approval-who"; who.textContent = member.email || member.name || "Unknown user";
-        var approve = document.createElement("button"); approve.type = "button"; approve.className = "button button-primary status-action"; approve.textContent = "Approve";
-        var deny = document.createElement("button"); deny.type = "button"; deny.className = "button button-quiet status-action"; deny.textContent = "Deny";
-        approve.dataset.pendingApproval = "true"; approve.disabled = !controlsEnabled;
-        deny.dataset.pendingApproval = "false";
-        [[approve, true], [deny, false]].forEach(function (pair) {
-          pair[0].addEventListener("click", async function () {
-            approve.disabled = true; deny.disabled = true;
-            try {
-              await postJson("/api/memberships/" + member.id + "/decision", { approve: pair[1] });
-              await loadPendingApprovals();
-            } catch (error) {
-              note.textContent = error.message; note.hidden = false; approve.disabled = !controlsEnabled; deny.disabled = false;
-            }
-          });
-        });
-        row.append(who, approve, deny); card.append(row);
-      });
-      card.append(note);
-      host.append(card);
-    } catch (_error) { /* the Members tab remains the fallback */ }
+    if (membershipReview) return membershipReview.load(true);
   }
 
   function refresh(force) {
@@ -1807,6 +1785,7 @@
         render(data);
         if (activeTab === "overview") { await loadWorkspacePosture(true); await loadPendingApprovals(); }
         if (activeTab === "portfolio") await loadPortfolio(true);
+        if (activeTab === "members") await loadMemberships(true);
       } catch (_error) {
         // Periodic refresh retries transient failures without changing saved evidence.
       }
@@ -6026,15 +6005,36 @@
     openCreatedWorkspace.addEventListener("click", function () { window.location.reload(); });
   }
 
+  async function requestMembership(domain) {
+    var controller = new AbortController();
+    var timer = window.setTimeout(function () {controller.abort();},20000);
+    try {
+      var response = await fetch("/api/membership-requests", {method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({domain:domain}),signal:controller.signal});
+      var body; try {body = await response.json();} catch (_) {body = {};}
+      if (!response.ok) throw new Error(body && typeof body.detail === "string" ? body.detail : "The access request could not be confirmed.");
+      if (!body || !["pending","approved"].includes(body.status) || typeof body.organization !== "string" || !body.organization) throw new Error("The access request could not be confirmed. Refresh the page to check your saved workspace requests.");
+      return body;
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error("The request timed out. Refresh the page to check whether your access request was saved before trying again.");
+      throw error;
+    } finally {window.clearTimeout(timer);}
+  }
+
   var requestAccessForm = document.getElementById("request-access-form");
+  var requestAccessBusy = false;
   if (requestAccessForm) {
     requestAccessForm.addEventListener("submit", async function (event) {
       event.preventDefault();
+      if (requestAccessBusy) return;
+      requestAccessBusy = true;
+      var submitButton = requestAccessForm.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
       var feedback = document.getElementById("workspace-feedback");
       text(feedback, "Sending access request…");
       try {
         var form = new FormData(requestAccessForm);
-        var body = await postJson("/api/membership-requests", { domain: form.get("domain") });
+        var body = await requestMembership(form.get("domain"));
         clearMembershipNotice();
         var message = body.status === "approved"
           ? "You already have access to " + body.organization + "."
@@ -6044,7 +6044,7 @@
         await loadWorkspaces();
       } catch (error) {
         showError(feedback, error.message);
-      }
+      } finally {requestAccessBusy = false; if (submitButton) submitButton.disabled = false;}
     });
   }
 
@@ -6215,98 +6215,17 @@
     });
   });
 
-  async function loadMemberships() {
-    var list = document.getElementById("membership-list");
-    if (!list || !orgId) return;
-    try {
-      var response = await fetch("/api/memberships", { credentials: "same-origin" });
-      var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load workspace members");
-      list.replaceChildren();
-      if (role !== "admin") {
-        text(document.getElementById("member-access-note"), "Your access is scoped to this workspace and uses the user role. Only workspace admins can approve access requests or revoke access.");
-        document.getElementById("member-access-note").classList.remove("hidden");
-      }
-      body.members.forEach(function (member) {
-        var row = document.createElement("article");
-        row.className = "membership-row";
-        var person = document.createElement("div");
-        person.className = "membership-person";
-        var name = document.createElement("strong");
-        name.textContent = member.name || member.email;
-        var email = document.createElement("small");
-        email.textContent = member.email;
-        person.append(name, email);
-        var meta = document.createElement("div");
-        meta.className = "membership-meta";
-        meta.textContent = member.role + " · " + member.status;
-        row.append(person, meta);
-        if (role === "admin" && member.status === "pending") {
-          var actions = document.createElement("div");
-          actions.className = "membership-actions";
-          [true, false].forEach(function (approve) {
-            var button = document.createElement("button");
-            button.type = "button";
-            button.className = approve ? "button button-small" : "button button-small button-quiet";
-            button.dataset.membershipDecision = String(approve);
-            button.dataset.membershipId = member.id;
-            button.disabled = approve && !controlsEnabled;
-            button.textContent = approve ? "Approve as user" : "Deny";
-            actions.append(button);
-          });
-          row.append(actions);
-        } else if (role === "admin" && member.status === "approved") {
-          var actions = document.createElement("div");
-          actions.className = "membership-actions";
-          var roleButton = null;
-          if (member.role === "user") {
-            roleButton = document.createElement("button");
-            roleButton.dataset.membershipRole = "admin";
-            roleButton.textContent = "Promote to admin";
-          } else if (member.role === "admin" && body.approved_admin_count > 1) {
-            roleButton = document.createElement("button");
-            roleButton.dataset.membershipRole = "user";
-            roleButton.textContent = member.is_self ? "Transfer admin and switch to user" : "Change to user";
-          }
-          if (roleButton) {
-            roleButton.type = "button";
-            roleButton.className = "button button-small button-quiet";
-            roleButton.dataset.membershipId = member.id;
-            roleButton.dataset.membershipEmail = member.email;
-            roleButton.dataset.membershipSelf = String(member.is_self);
-            roleButton.disabled = !controlsEnabled;
-            actions.append(roleButton);
-          }
-          if (member.role === "user") {
-            var revoke = document.createElement("button");
-            revoke.type = "button";
-            revoke.className = "button button-small button-quiet membership-revoke";
-            revoke.dataset.membershipRevoke = member.id;
-            revoke.dataset.membershipEmail = member.email;
-            revoke.textContent = "Remove access";
-            actions.append(revoke);
-          }
-          if (actions.childElementCount) row.append(actions);
-        }
-        list.append(row);
-      });
-      if (!body.members.length) {
-        var empty = document.createElement("div");
-        empty.className = "empty-events";
-        empty.textContent = "No members have been added to this workspace yet.";
-        list.append(empty);
-      }
-    } catch (error) {
-      list.replaceChildren();
-      var message = document.createElement("div");
-      message.className = "empty-events";
-      message.textContent = error.message;
-      list.append(message);
-    }
+  async function loadMemberships(background) {
+    if (membershipReview) return membershipReview.load(background);
   }
 
   function auditEventSummary(entry) {
     var data = entry.details || {};
+    if (entry.action === "membership.requested") return (data.email || "A member") + " requested workspace access.";
+    if (entry.action === "membership.approved") return (data.email || "The requesting member") + " was approved as a user.";
+    if (entry.action === "membership.denied") return "The access request for " + (data.email || "the requesting member") + " was declined.";
+    if (entry.action === "membership.revoked") return "Workspace access was removed for " + (data.email || "the shared member") + ".";
+    if (entry.action === "membership.role_changed") return (data.email || "The approved member") + " changed from " + (data.from_role || "an unknown role") + " to " + (data.to_role || "an unknown role") + ".";
     if (entry.action === "workspace.probation_expired") return "Domain verification probation expired for " + (data.domain || "this workspace") + " at " + dateLabel(data.expires_at) + ". Recorded when observed: " + dateLabel(data.observed_at) + ".";
     if (entry.action === "probation_override.expired") return "Temporary override #" + data.override_id + " expired at " + dateLabel(data.expires_at) + ". Recorded when observed: " + dateLabel(data.observed_at) + ".";
     if (entry.action === "onboarding.approved" || entry.action === "onboarding.reapproved") return "Complimentary onboarding approved for 30 days, through " + dateLabel(data.review_due_at) + ". Reason: " + (data.reason || "Recorded by platform administrator") + ".";
@@ -6495,63 +6414,6 @@
       }
       return;
     }
-    var decision = event.target.closest("[data-membership-decision][data-membership-id]");
-    if (!decision) return;
-    decision.disabled = true;
-    try {
-      await postJson("/api/memberships/" + decision.dataset.membershipId + "/decision", {
-        approve: decision.dataset.membershipDecision === "true"
-      });
-      await Promise.all([loadMemberships(), loadAuditLog()]);
-    } catch (error) {
-      text(document.getElementById("member-access-note"), error.message);
-      document.getElementById("member-access-note").classList.remove("hidden");
-      decision.disabled = false;
-    }
-  });
-
-  document.addEventListener("click", function (event) {
-    var roleButton = event.target.closest("[data-membership-role]");
-    if (!roleButton) return;
-    var targetRole = roleButton.dataset.membershipRole;
-    var selfChange = roleButton.dataset.membershipSelf === "true";
-    var actionDescription = targetRole === "admin" ? "promote " : "change to user: ";
-    var confirmation = selfChange
-      ? "Transfer admin control to another approved member and switch your account to the user role?"
-      : "Confirm " + actionDescription + roleButton.dataset.membershipEmail + "?";
-    requestInlineConfirmation(roleButton, confirmation, selfChange ? "Transfer admin" : (targetRole === "admin" ? "Promote to admin" : "Change to user"), async function () {
-      try {
-        await postJson("/api/memberships/" + roleButton.dataset.membershipId + "/role", { role: targetRole });
-        if (selfChange) {
-          window.location.reload();
-          return;
-        }
-        text(document.getElementById("member-access-note"), "Administrator access updated. The change is recorded in the workspace audit log.");
-        document.getElementById("member-access-note").classList.remove("hidden");
-        await Promise.all([loadMemberships(), loadAuditLog()]);
-      } catch (error) {
-        text(document.getElementById("member-access-note"), error.message);
-        document.getElementById("member-access-note").classList.remove("hidden");
-        throw error;
-      }
-    });
-  });
-
-  document.addEventListener("click", function (event) {
-    var revoke = event.target.closest("[data-membership-revoke]");
-    if (!revoke) return;
-    requestInlineConfirmation(revoke, "Remove " + revoke.dataset.membershipEmail + " from this workspace? They will need admin approval to rejoin.", "Remove access", async function () {
-      try {
-        await postJson("/api/memberships/" + revoke.dataset.membershipRevoke + "/revoke");
-        text(document.getElementById("member-access-note"), "Workspace access was removed. The action is recorded in the audit log.");
-        document.getElementById("member-access-note").classList.remove("hidden");
-        await Promise.all([loadMemberships(), loadAuditLog()]);
-      } catch (error) {
-        text(document.getElementById("member-access-note"), error.message);
-        document.getElementById("member-access-note").classList.remove("hidden");
-        throw error;
-      }
-    });
   });
 
   if (orgId) {
@@ -6561,7 +6423,7 @@
     document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); if (activeTab === "meraki") loadMerakiStatus(true); } });
   }
   loadWorkspaces();
-  loadMemberships();
+  loadMemberships(true);
   loadAuditLog();
   loadNotifications();
 })();

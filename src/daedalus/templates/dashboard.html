@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-193">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-194">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -612,7 +612,11 @@
       {% endfor %}
       <section class="tab-panel" id="tab-members">
         <div class="page-intro"><div><p class="eyebrow">WORKSPACE ACCESS</p><h2>Members &amp; access</h2><p class="muted">Membership is approved separately for each domain. Every approved shared member starts as a user. Admins can appoint a successor and transfer control; a workspace must always keep one approved admin.</p></div></div>
-        <div id="member-access-note" class="security-note hidden"></div>
+        <div class="overview-read-heading"><h3>Current workspace access</h3><button id="membership-refresh" type="button" class="button button-quiet">Refresh members</button></div>
+        <p id="membership-summary" class="check-scope-note">Checking access requests and administrator coverage…</p>
+        <p id="membership-observed" class="status-when">No member read yet.</p>
+        <p id="membership-read-note" class="overview-read-note" role="status" hidden></p>
+        <div id="member-access-note" class="security-note hidden" role="status"></div>
         <div id="membership-list" class="membership-list" aria-live="polite"><div class="empty-events">Loading workspace members…</div></div>
         {% if membership.role == 'admin' %}
         <div class="section-heading"><div><p class="eyebrow">ADMIN ACTION HISTORY</p><h2>Workspace audit log</h2></div></div>
@@ -682,6 +686,7 @@
   <script src="/static/js/google-admin.js?v=20261009-3" defer></script>
   <script src="/static/js/history.js?v=20261009-2" defer></script>
   <script src="/static/js/check-history.js?v=20261009-2" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-193" defer></script>
+  <script src="/static/js/memberships.js?v=20261009-2" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-194" defer></script>
 </body>
 </html>

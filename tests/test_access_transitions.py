@@ -57,7 +57,7 @@ class AccessTransitionTests(unittest.TestCase):
             response = self.admin_client.post(
                 f'/api/memberships/{membership_id}/decision', json={'approve': False})
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json(), {'id': membership_id, 'status': 'denied', 'role': 'user'})
+        self.assertEqual(response.json(), {'organization_id': self.org_id, 'id': membership_id, 'status': 'denied', 'role': 'user'})
         notice.assert_awaited_once()
         self.assertEqual(notice.await_args.args[:2], (self.org_id, user_id))
         self.assertEqual(notice.await_args.args[2]['status'], 'denied')

@@ -25,6 +25,7 @@ import tempfile
 import threading
 import time
 import zipfile
+import uuid
 import xml.etree.ElementTree as ET
 from contextlib import closing
 from datetime import datetime, timezone
@@ -90,6 +91,60 @@ def wait_for_recovery_queues(spool: Path, process, timeout=30):
         results = len(list(spool.glob("commands-*/result-*.json")))
         rejected = len(list(spool.rglob("*.rejected")))
         raise RuntimeError(f"Recovery queues did not drain cleanly: pending events={pending}, command results={results}, rejected={rejected}; {exc}") from exc
+
+
+def recovery_rejection_diagnostics(spool: Path, database: Path, logs=()):
+    """Retain bounded failure identities and comparisons, never payload values."""
+    paths = sorted(spool.rglob("*.rejected")) if spool.is_dir() else []
+    log_text = ""
+    log_errors = []
+    for log in logs:
+        try:
+            if log.is_file() and not log.is_symlink():
+                with log.open("rb") as handle:
+                    handle.seek(0, 2)
+                    handle.seek(max(0, handle.tell() - 100_000))
+                    log_text += handle.read(100_000).decode(errors="replace")
+        except OSError as error:
+            log_errors.append(type(error).__name__)
+    entries = []
+    for path in paths[:20]:
+        entry = {}
+        entries.append(entry)
+        try:
+            if path.is_symlink():
+                raise ValueError("Rejected envelope is a symbolic link")
+            envelope = json.loads(path.read_text())
+            if not isinstance(envelope, dict) or not isinstance(envelope.get("client_event_id"), str):
+                raise ValueError("Rejected envelope lacks an event identity")
+            identity = str(uuid.UUID(envelope["client_event_id"]))
+            entry["client_event_id"] = identity
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            entry["envelope_error_type"] = type(error).__name__
+            continue
+        original = path.with_suffix(".json").name
+        statuses = re.findall(r"permanent rejection \((\d{3})\): " + re.escape(original), log_text)
+        entry["http_status"] = int(statuses[-1]) if statuses else None
+        try:
+            with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as db:
+                row = db.execute("SELECT event_name,payload,occurred_at,source_job_id,source_job_type FROM scan_events WHERE client_event_id=?", (identity,)).fetchone()
+            entry["saved_identity_found"] = row is not None
+            if row:
+                saved = dict(zip(("event_name", "payload", "occurred_at", "source_job_id", "source_job_type"), row))
+                saved["payload"] = json.loads(saved["payload"])
+                def normalize_time(value):
+                    if value is None:
+                        return None
+                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    return parsed.replace(tzinfo=parsed.tzinfo or timezone.utc).astimezone(timezone.utc)
+                entry["conflicting_fields"] = [field for field in saved if
+                    (normalize_time(saved[field]) != normalize_time(envelope.get(field)) if field == "occurred_at" else saved[field] != envelope.get(field))]
+        except (sqlite3.Error, OSError, ValueError, TypeError, AttributeError) as error:
+            entry["comparison_error_type"] = type(error).__name__
+    result = {"rejected_count": len(paths), "entries": entries, "truncated": len(paths) > 20}
+    if log_errors:
+        result["log_error_types"] = log_errors
+    return result
 
 
 def validate_host_evidence(payload, listener_port):
@@ -830,6 +885,9 @@ raise SystemExit(completed.returncode)
                 return receipt
         except Exception as exc:
             failure = {"validated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "real-managed-linux-loopback-scanner" if managed_linux else "real-packaged-loopback-scanner", "result": "incomplete", "error_type": type(exc).__name__, "target": scan_target, "realtime_messages": len(live), "own_processes": [{"name": log.name.rsplit("/", 1)[-1], "pid": process.pid, "exit_code_before_cleanup": process.poll()} for process, log in processes], "limits": ["No full scan success claimed; isolated temporary data/credentials removed after own-process cleanup"]}
+            if interrupt_bridge:
+                failure["rejected_evidence"] = recovery_rejection_diagnostics(root / "spool", portal_database,
+                    [Path(log.name) for _process, log in processes if "bridge" in log.name])
             if managed_linux:
                 service_diagnostics = {}
                 for name in ('daedalus-nmapui.service', 'daedalus-scanner-bridge.service'):

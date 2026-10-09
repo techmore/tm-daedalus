@@ -339,7 +339,7 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
         approved = False
         def approve_before_update(db, statement, *args, **kwargs):
             nonlocal approved
-            if not approved and getattr(statement, 'is_update', False) and statement.table.name == Membership.__tablename__:
+            if not approved and getattr(statement, 'is_update', False) and statement.table.name == Organization.__tablename__:
                 approved = True
                 with self.session_factory() as approval_db:
                     original_execute(approval_db, update(Membership).where(Membership.id == membership_id).values(status='approved', role='admin'))
@@ -789,7 +789,7 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             )
         self.assertEqual(promoted.status_code, 200, promoted.text)
         self.assertEqual(promoted.json(), {
-            "id": successor_membership_id, "role": "admin", "changed": True,
+            "organization_id": organization.id, "id": successor_membership_id, "role": "admin", "changed": True,
         })
         refresh_admins.assert_awaited_once()
         successor_notice.assert_awaited_once()

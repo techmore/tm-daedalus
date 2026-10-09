@@ -117,6 +117,10 @@ Overview status refresh also retains saved priorities and evidence after an inte
 
 The account page identifies the selected customer and shows dated key status. Refresh reads saved records; interrupted reads retain the view and pause writes. A new token stays visible until saved and cleared, while self-revocation returns to sign-in. Key requests bind to the displayed workspace. See the [access-key customer workflow](docs/ACCESS-KEY-WORKFLOW.md) for scope, interruption behavior and remaining acceptance.
 
+## Review members and transfer administrator access
+
+Members & access and Overview share dated access requests and decision state. Failed reads retain saved members and pause changes; normal background reads preserve usable controls and focus. Approval grants user access. Admin succession, removal and rejoining retain dated audit events, and current-role/stale-decision checks protect concurrent changes. See the [member workflow and validation](docs/MEMBERS-ACCESS-WORKFLOW.md).
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:
