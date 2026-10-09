@@ -2658,25 +2658,54 @@ def serialize_domain_challenge(organization: Organization, challenge: DomainChal
         "record_name": challenge_record_name(organization.domain),
         "record_value": value if available else None,
         "value_available": available,
+        "created_at": iso_utc(challenge.created_at),
         "expires_at": iso_utc(challenge.expires_at),
     }
 
 
-def current_domain_challenge(db: Session, organization: Organization) -> dict[str, Any]:
-    if organization.verification_status == "verified":
-        return {"verified": True, "domain": organization.domain, "state": "verified", "txt": None}
-    query = select(DomainChallenge).where(
-        DomainChallenge.organization_id == organization.id,
-        DomainChallenge.verified_at.is_(None),
-    ).order_by(DomainChallenge.id.desc()).limit(1)
-    challenge = db.scalar(query.where(DomainChallenge.expires_at > utcnow()))
-    if challenge is None:
-        challenge = db.scalar(query)
-    if challenge is None:
-        return {"verified": False, "domain": organization.domain, "state": "none", "txt": None}
-    return {"verified": False, "domain": organization.domain,
-            "state": "active" if challenge.expires_at > utcnow() else "expired",
-            "txt": serialize_domain_challenge(organization, challenge)}
+def current_domain_challenge(db: Session, organization: Organization, user: User | None = None) -> dict[str, Any]:
+    observed = utcnow()
+    transition = select(func.max(AuditLog.id)).where(
+        AuditLog.organization_id == organization.id,
+        AuditLog.action.in_(["domain_challenge.issued", "domain.verified"]),
+    ).scalar_subquery()
+    verified_at = select(AuditLog.created_at).where(
+        AuditLog.organization_id == organization.id, AuditLog.action == "domain.verified",
+    ).order_by(AuditLog.id.desc()).limit(1).scalar_subquery()
+    last_check = select(AuditLog.details).where(
+        AuditLog.organization_id == organization.id, AuditLog.action == "domain.verification_checked",
+    ).order_by(AuditLog.id.desc()).limit(1).scalar_subquery()
+    # Read the selected proof, ownership state and their transition together;
+    # a newer transition must not attach its reference to an older proof.
+    row = db.execute(select(Organization, DomainChallenge, transition, verified_at, last_check)
+        .outerjoin(DomainChallenge, (DomainChallenge.organization_id == Organization.id) &
+            DomainChallenge.verified_at.is_(None))
+        .where(Organization.id == organization.id)
+        .order_by((DomainChallenge.expires_at > observed).desc(), DomainChallenge.id.desc())
+        .limit(1).execution_options(populate_existing=True)).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    organization, challenge, last_transition, verification_date, check = row
+    # Date the returned snapshot after the query. A proof/check committed while
+    # the read was waiting must not appear newer than its observation date.
+    observed = utcnow()
+    verified = organization.verification_status == "verified"
+    state = "verified" if verified else "none" if challenge is None else "active" if challenge.expires_at > observed else "expired"
+    reference = token_digest(json.dumps([
+        organization.id, organization.domain, organization.verification_status, last_transition,
+        [challenge.id, challenge.token_hash, challenge.record_value, iso_utc(challenge.expires_at)] if challenge else None,
+    ], separators=(",", ":")))
+    return {"organization_id": organization.id, "user_id": user.id if user else None,
+        "domain": organization.domain, "observed_at": iso_utc(observed),
+        "verified": verified, "verified_at": iso_utc(verification_date) if verified else None,
+        "state": state, "state_reference": reference, "last_check": check,
+        "txt": serialize_domain_challenge(organization, challenge) if challenge and not verified else None}
+
+
+def require_domain_challenge_reference(request: Request, body: dict[str, Any]) -> None:
+    expected = request.headers.get("X-Daedalus-Domain-State")
+    if expected is not None and expected != body["state_reference"] and not body["verified"]:
+        raise HTTPException(status_code=409, detail="The TXT instructions changed. Refresh instructions before deciding again.")
 
 
 def lock_domain_challenge_workspace(db: Session, organization: Organization, user: User, request: Request) -> Organization:
@@ -3202,10 +3231,10 @@ def get_domain_challenge(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    _, organization, _ = get_org_context(request, db, admin=True)
+    user, organization, _ = get_org_context(request, db, admin=True)
     if organization.id != organization_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    return JSONResponse(current_domain_challenge(db, organization), headers={"Cache-Control": "no-store"})
+    return JSONResponse(current_domain_challenge(db, organization, user), headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/workspaces/{organization_id}/domain-challenge/ensure")
@@ -3218,14 +3247,16 @@ def ensure_domain_challenge(
     if organization.id != organization_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
     organization = lock_domain_challenge_workspace(db, organization, user, request)
-    body = current_domain_challenge(db, organization)
+    body = current_domain_challenge(db, organization, user)
+    require_domain_challenge_reference(request, body)
     created = body["state"] not in {"active", "verified"}
     if created:
-        body["txt"] = issue_workspace_challenge(db, organization, user)
-        body["state"] = "active"
+        issue_workspace_challenge(db, organization, user)
         audit(db, organization.id, user.id, "domain_challenge.issued", {
             "record_name": challenge_record_name(organization.domain),
         })
+    db.flush()
+    body = current_domain_challenge(db, organization, user)
     db.commit()
     return JSONResponse({**body, "created": created}, headers={"Cache-Control": "no-store"})
 
@@ -3240,10 +3271,12 @@ def create_domain_challenge(
     if organization.id != organization_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
     organization = lock_domain_challenge_workspace(db, organization, user, request)
+    body = current_domain_challenge(db, organization, user)
+    require_domain_challenge_reference(request, body)
     if organization.verification_status == "verified":
         db.commit()
-        return JSONResponse({**current_domain_challenge(db, organization), "created": False}, headers={"Cache-Control": "no-store"})
-    challenge = issue_workspace_challenge(db, organization, user)
+        return JSONResponse({**body, "created": False}, headers={"Cache-Control": "no-store"})
+    issue_workspace_challenge(db, organization, user)
     audit(
         db,
         organization.id,
@@ -3251,14 +3284,10 @@ def create_domain_challenge(
         "domain_challenge.issued",
         {"record_name": challenge_record_name(organization.domain)},
     )
+    db.flush()
+    body = current_domain_challenge(db, organization, user)
     db.commit()
-    return JSONResponse({
-        "verified": False,
-        "domain": organization.domain,
-        "state": "active",
-        "created": True,
-        "txt": challenge,
-    }, headers={"Cache-Control": "no-store"})
+    return JSONResponse({**body, "created": True}, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/workspaces/{organization_id}/verify-domain")
@@ -3270,8 +3299,12 @@ async def verify_workspace_domain(
     user, organization, _ = get_org_context(request, db, admin=True)
     if organization.id != organization_id:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    if organization.verification_status == "verified":
-        return {"verified": True, "domain": organization.domain}
+    organization = lock_domain_challenge_workspace(db, organization, user, request)
+    body = current_domain_challenge(db, organization, user)
+    require_domain_challenge_reference(request, body)
+    if body["verified"]:
+        db.commit()
+        return JSONResponse(body, headers={"Cache-Control": "no-store"})
     now = utcnow()
     challenges = db.scalars(
         select(DomainChallenge)
@@ -3290,22 +3323,20 @@ async def verify_workspace_domain(
     expected_domain = organization.domain
     expected_challenges = [(challenge.id, challenge.token_hash, challenge.expires_at) for challenge in challenges]
     organization_id, user_id = organization.id, user.id
+    # Capture the reviewed proof under the same workspace lock as replacement,
+    # then release the lock before public DNS collection.
+    db.commit()
+    lookup_error = None
     try:
         matched = await run_in_threadpool(
             has_matching_txt,
-            organization.domain,
-            {challenge.token_hash for challenge in challenges},
+            expected_domain,
+            {item[1] for item in expected_challenges},
             token_digest,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    if not matched:
-        return {
-            "verified": False,
-            "domain": organization.domain,
-            "record_name": challenge_record_name(organization.domain),
-            "detail": "The verification TXT record was not found yet.",
-        }
+        lookup_error = str(exc)
+        matched = False
     # DNS collection can take several seconds. End the old read transaction,
     # then atomically require the same unexpired proof and administrator before
     # opening controls. Replacement or expiry during lookup must not verify.
@@ -3323,8 +3354,28 @@ async def verify_workspace_domain(
         raise HTTPException(status_code=409, detail="The workspace changed during the DNS check. Refresh and check again.")
     if current_organization.verification_status == "verified":
         # A concurrent successful check already recorded the transition.
+        body = current_domain_challenge(db, current_organization, current_user)
         db.commit()
-        return {"verified": True, "domain": current_organization.domain}
+        return JSONResponse(body, headers={"Cache-Control": "no-store"})
+    current_challenges = db.scalars(select(DomainChallenge).where(
+        DomainChallenge.organization_id == organization_id,
+        DomainChallenge.verified_at.is_(None), DomainChallenge.expires_at > verified_at,
+    ).order_by(DomainChallenge.id.desc())).all()
+    if [(item.id, item.token_hash, item.expires_at) for item in current_challenges] != expected_challenges:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="The TXT challenge changed or expired during the DNS check. Refresh instructions and check again.")
+    check = {"outcome": "lookup_failed" if lookup_error is not None else "verified" if matched else "not_found",
+        "checked_at": iso_utc(verified_at), "challenge_id": expected_challenges[0][0],
+        "record_name": challenge_record_name(expected_domain)}
+    audit(db, organization_id, user_id, "domain.verification_checked", check)
+    if not matched:
+        db.flush()
+        body = current_domain_challenge(db, current_organization, current_user)
+        body["detail"] = (lookup_error or "DNS lookup failed. Try again in a moment.") if lookup_error is not None else "The verification TXT record was not found yet."
+        body["record_name"] = challenge_record_name(expected_domain)
+        db.commit()
+        return JSONResponse(body, status_code=503 if lookup_error is not None else 200,
+            headers={"Cache-Control": "no-store"})
     unchanged_proof = [select(DomainChallenge.id).where(
         DomainChallenge.organization_id == organization_id,
         DomainChallenge.id == challenge_id,
@@ -3363,6 +3414,8 @@ async def verify_workspace_domain(
         "domain.verified",
         {"domain": expected_domain},
     )
+    db.flush()
+    body = current_domain_challenge(db, current_organization, current_user)
     db.commit()
     await live_hub.publish(
         organization_id,
@@ -3372,7 +3425,7 @@ async def verify_workspace_domain(
             "domain": expected_domain,
         },
     )
-    return {"verified": True, "domain": expected_domain}
+    return JSONResponse(body, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/membership-requests")

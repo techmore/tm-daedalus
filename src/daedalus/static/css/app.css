@@ -986,6 +986,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .workspace-access-details > summary { cursor: pointer; color: var(--brown-900); font-size: 13px; font-weight: 600; }
 .workspace-access-details[open] > summary { margin-bottom: 16px; }
 .workspace-access-details .verification-card { margin: 0; padding: 0; border: 0; background: transparent; }
+#domain-verification-details .verification-card { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#domain-verification-details button { min-height: 44px; }
+#domain-verification-details [hidden] { display: none !important; }
+#domain-verification-details .fine-print { margin: 0; }
+#domain-verification-details .inline-confirmation { flex: 1 1 100%; }
+#domain-verification-details .verification-feedback:empty { display: none; }
 .workspace-access-details .override-form { max-width: 620px; }
 .workspace-access-details .muted { font-size: 12px; }
 .challenge-replacement { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: center; gap: 10px; }

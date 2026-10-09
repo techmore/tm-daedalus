@@ -33,6 +33,9 @@ class WorkspaceAccessTemplateTests(unittest.TestCase):
         self.assertIn('Controls paused', page)
         self.assertIn('id="domain-verification-details"', page)
         self.assertIn('id="replace-domain-challenge"', page)
+        self.assertIn('data-organization-domain="access.example.org"', page)
+        self.assertIn('/static/js/domain-verification.js?v=20261009-1', page)
+        self.assertIn('id="domain-instructions-refresh"', page)
         self.assertIn('Replacement invalidates the previous record', page)
         self.assertNotIn("workspace's Members page", (ROOT / 'src/daedalus/static/js/dashboard.js').read_text())
 
@@ -48,7 +51,10 @@ class WorkspaceAccessTemplateTests(unittest.TestCase):
         self.assertIn('Controls available', page)
         self.assertIn('Manage the current 14-day approval', page)
         self.assertIn('data-revoke-override=', page)
-        self.assertNotIn('id="issue-domain-challenge"', page)
+        self.assertIn('id="issue-domain-challenge" type="button" hidden', page)
+        self.assertIn('id="verify-domain" type="button" hidden', page)
+        self.assertIn('id="challenge-replacement" hidden', page)
+        self.assertIn('id="domain-instructions-refresh"', page)
         self.assertNotIn('id="grant-override-form"', page)
 
     def test_members_see_status_without_admin_controls(self):
@@ -140,49 +146,16 @@ renderWorkspaceAccess({verification_status:'verified',controls_enabled:true,prob
 assert.equal(nodes['domain-verification-details'].hidden,true);assert.equal(nodes['access-actions-refresh'].hidden,true);
 ''')
 
-    def test_txt_refresh_reuses_proof_and_replacement_requires_explicit_action(self):
+    def test_txt_view_uses_one_scoped_controller_and_read_only_refresh(self):
         source = (ROOT / 'src/daedalus/static/js/dashboard.js').read_text()
-        helper = source[source.index('  var issueChallengeButton ='):source.index('  if (orgId && role === "admin" && window.DaedalusProbationApproval)')]
-        self.run_script(r'''
-const assert=require('node:assert/strict');
-const nodes={};function node(id){return nodes[id]||(nodes[id]={handlers:{},textContent:'',disabled:false,
-  classList:{names:new Set(),toggle(name,on){on?this.names.add(name):this.names.delete(name);}},addEventListener(name,fn){this.handlers[name]=fn;}});}
-const document={getElementById:node};const orgId=9;let reloads=0;
-const window={location:{reload(){reloads++;}}};function text(n,v){if(n)n.textContent=v;}
-function showError(n,v){text(n,v);}
-let confirmation, getCount=0, ensureCount=0, replacements=0;
-const current={verified:false,state:'active',txt:{record_name:'_daedalus-verification.example.org',
-  record_value:'daedalus=original',value_available:true,expires_at:'2026-11-07T12:00:00Z'}};
-let readBody=current;
-async function fetch(path,options){assert.equal(options.cache,'no-store');getCount++;return {ok:true,json:async()=>readBody};}
-async function postJson(path){
-  if(path.endsWith('/ensure')){ensureCount++;return current;}
-  if(path.endsWith('/verify-domain'))return {verified:true};
-  replacements++;return {...current,txt:{...current.txt,record_value:'daedalus=replacement'}};
-}
-function requestInlineConfirmation(button,message,label,fn){assert.ok(message.includes('previous value'));confirmation=fn;}
-''' + helper + r'''
-(async()=>{
-  await new Promise(r=>setImmediate(r));
-  assert.equal(getCount,1);assert.equal(ensureCount,0);assert.equal(replacements,0);
-  assert.equal(node('challenge-record-value').textContent,'daedalus=original');
-  await node('issue-domain-challenge').handlers.click();await node('issue-domain-challenge').handlers.click();
-  assert.equal(ensureCount,2);assert.equal(replacements,0);assert.equal(node('challenge-record-value').textContent,'daedalus=original');
-  renderDomainChallenge({...current,txt:{...current.txt,record_value:null,value_available:false}});
-  assert.ok(node('verification-feedback').textContent.includes('remains valid'));
-  assert.ok(node('challenge-record-value').textContent.includes('cannot be redisplayed'));assert.equal(replacements,0);
-  renderDomainChallenge({verified:false,state:'expired',txt:current.txt});
-  assert.ok(node('dns-challenge').classList.names.has('hidden'));assert.ok(node('verification-feedback').textContent.includes('expired'));
-  node('replace-domain-challenge').handlers.click();assert.equal(replacements,0);
-  await confirmation();assert.equal(replacements,1);assert.equal(node('challenge-record-value').textContent,'daedalus=replacement');
-  readBody=current;renderDomainChallenge(await domainChallengeRequest('/api/workspaces/9/domain-challenge','GET'));
-  assert.equal(replacements,1);assert.equal(getCount,2);
-  await node('verify-domain').handlers.click();assert.equal(reloads,1);
-  assert.equal(domainChallengeBusy,false);assert.equal(node('verify-domain').disabled,false);
-  renderDomainChallenge({...current,txt:{...current.txt,record_value:'<script>literal</script>'}});
-  assert.equal(node('challenge-record-value').textContent,'<script>literal</script>');
-})().catch(e=>{console.error(e);process.exitCode=1;});
-''')
+        template = (ROOT / 'src/daedalus/templates/dashboard.html').read_text()
+        self.assertEqual(source.count('DaedalusDomainVerification.create('), 1)
+        self.assertIn('domain:shell.dataset.organizationDomain', source)
+        self.assertIn('userId:shell.dataset.userId', source)
+        self.assertIn('id="domain-instructions-refresh"', template)
+        self.assertIn('id="domain-instructions-read-note"', template)
+        self.assertIn('id="domain-last-check"', template)
+        self.assertLess(template.index('/static/js/domain-verification.js'), template.index('/static/js/dashboard.js'))
 
     def test_paused_controls_keep_denial_enabled(self):
         source = (ROOT / 'src/daedalus/static/js/dashboard.js').read_text()

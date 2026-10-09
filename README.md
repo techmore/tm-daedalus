@@ -121,6 +121,10 @@ The account page identifies the selected customer and shows dated key status. Re
 
 Members & access and Overview share dated access requests and decision state. Failed reads retain saved members and pause changes; normal background reads preserve usable controls and focus. Approval grants user access. Admin succession, removal and rejoining retain dated audit events, and current-role/stale-decision checks protect concurrent changes. See the [member workflow and validation](docs/MEMBERS-ACCESS-WORKFLOW.md).
 
+## Review domain ownership
+
+Workspace access shows dated TXT instructions and saved DNS check outcomes. Refresh reads the current proof; replacement requires an inline confirmation. Failed reads preserve instructions, and a lost decision response is recovered by reading saved status. Verification updates in place and retains its recorded date after reload. See the [ownership workflow and validation limits](docs/CUSTOMER-ONBOARDING.md#txt-ownership-review--october-9-implementation-checkpoint). Real customer TXT publication and production activation remain pending.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:

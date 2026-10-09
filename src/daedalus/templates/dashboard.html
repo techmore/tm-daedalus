@@ -7,11 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-200">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-201">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <div class="app-shell" data-user-id="{{ user.id }}" data-organization-id="{{ organization.id if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
+  <div class="app-shell" data-user-id="{{ user.id }}" data-organization-id="{{ organization.id if organization else '' }}" data-organization-domain="{{ organization.domain if organization else '' }}" data-organization-slug="{{ organization.slug if organization else '' }}" data-role="{{ membership.role if membership else '' }}" data-verification-status="{{ organization.verification_status if organization else '' }}" data-controls-enabled="{{ 'true' if workspace_controls_enabled else 'false' }}">
     <aside class="sidebar">
       <a class="brand" href="/dashboard">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
@@ -127,25 +127,27 @@
           <p id="access-verification-deadline" class="fine-print" {% if organization.verification_status == 'verified' or not organization.verification_expires_at %}hidden{% endif %}>Ownership verification window ends {% if organization.verification_expires_at %}<time data-local-time datetime="{{ organization.verification_expires_at.isoformat() }}Z">{{ organization.verification_expires_at.strftime("%b %d, %Y %H:%M UTC") }}</time>{% endif %}.</p>
           <p id="access-onboarding-status" class="fine-print" {% if not onboarding or onboarding.status != 'onboarding' %}hidden{% endif %}>{% if onboarding and onboarding.status == 'onboarding' %}{{ 'Onboarding approval is overdue. Review was due' if onboarding.review_required else 'Onboarding review due' }} <time data-local-time datetime="{{ onboarding.review_due_at }}">{{ onboarding.review_due_at }}</time>.{% endif %}</p>
           <p id="access-override-status" class="fine-print" {% if not probation_override %}hidden{% endif %}>{% if probation_override %}Temporary admin approval ends <time data-local-time datetime="{{ probation_override.expires_at.isoformat() }}Z">{{ probation_override.expires_at.strftime("%b %d, %Y %H:%M UTC") }}</time>.{% endif %}</p>
-          {% if organization.verification_status != 'verified' %}
           {% if membership.role == 'admin' %}
           <details class="workspace-access-details" id="domain-verification-details">
-            <summary>Verify {{ organization.domain }} with a DNS TXT record</summary>
+            <summary id="domain-verification-summary">{% if organization.verification_status == 'verified' %}Domain ownership verified{% else %}Verify {{ organization.domain }} with a DNS TXT record{% endif %}</summary>
             <section class="verification-card" aria-labelledby="verify-domain-title">
-              <div><h3 id="verify-domain-title">Publish the ownership record</h3><p class="muted">Add this TXT record at your DNS provider, then check it here. Viewing these instructions keeps the current record. Website Nmap remains excluded; active website checks require domain verification or a current approval.</p></div>
-              <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button">Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button">Check DNS now</button></div>
-              <p class="verification-feedback" id="verification-feedback" aria-live="polite"></p>
+              <div class="overview-read-heading"><h3 id="verify-domain-title">DNS ownership record</h3><button id="domain-instructions-refresh" class="button button-quiet" type="button">Refresh TXT instructions</button></div>
+              <p id="domain-instructions-observed" class="fine-print">No ownership instructions read yet.</p>
+              <p id="domain-instructions-read-note" class="overview-read-note" role="status" hidden></p>
+              <p id="verification-instructions" class="muted"></p>
               <div class="dns-challenge hidden" id="dns-challenge">
                 <div><small>TXT record name</small><code id="challenge-record-name"></code></div>
                 <div><small>TXT record value</small><code id="challenge-record-value"></code></div>
                 <p class="fine-print" id="challenge-expires"></p>
               </div>
-              <div class="challenge-replacement" id="challenge-replacement"><button class="button button-quiet" id="replace-domain-challenge" type="button">Replace TXT record</button><p class="fine-print">Replacement invalidates the previous record and requires updating DNS.</p></div>
+              <p id="domain-last-check" class="fine-print" hidden></p>
+              <div class="verification-actions"><button class="button button-secondary" id="issue-domain-challenge" type="button"{% if organization.verification_status == 'verified' %} hidden{% endif %}>Show DNS TXT record</button><button class="button button-primary" id="verify-domain" type="button"{% if organization.verification_status == 'verified' %} hidden{% endif %}>Check DNS now</button></div>
+              <p class="verification-feedback" id="verification-feedback" role="status"></p>
+              <div class="challenge-replacement" id="challenge-replacement"{% if organization.verification_status == 'verified' %} hidden{% endif %}><button class="button button-quiet" id="replace-domain-challenge" type="button">Replace TXT record</button><p class="fine-print">Replacement invalidates the previous record and requires updating DNS.</p></div>
             </section>
           </details>
-          {% else %}
+          {% elif organization.verification_status != 'verified' %}
           <p class="muted">A workspace admin can publish the ownership TXT record or review temporary access.</p>
-          {% endif %}
           {% endif %}
           {% if membership.role == 'admin' and (organization.verification_status != 'verified' or probation_override) %}
           <details class="workspace-access-details" id="probation-override-card" data-override-expires="{{ probation_override.expires_at.isoformat() + 'Z' if probation_override else '' }}">
@@ -704,7 +706,8 @@
   <script src="/static/js/memberships.js?v=20261009-2" defer></script>
   <script src="/static/js/workspace-requests.js?v=20261009-2" defer></script>
   <script src="/static/js/customer-create.js?v=20261009-1" defer></script>
+  <script src="/static/js/domain-verification.js?v=20261009-1" defer></script>
   <script src="/static/js/probation-approval.js?v=daedalus-20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-200" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-201" defer></script>
 </body>
 </html>

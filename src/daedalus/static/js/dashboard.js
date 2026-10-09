@@ -77,6 +77,7 @@
   var scannerScopeFeedback = new Map();
   var dashboardRefreshPromise = null;
   var probationApproval = null;
+  var domainVerification = null;
   var scannerComparisonCache = new Map();
   var titleMap = {
     overview: "Workspace overview",
@@ -1242,7 +1243,8 @@
     var state = document.getElementById("access-controls-state");
     if (state) state.classList.toggle("is-paused", organization.controls_enabled !== true);
     var ownership = document.getElementById("domain-verification-details");
-    if (ownership) ownership.hidden = organization.verification_status === "verified";
+    if (typeof domainVerification !== "undefined" && domainVerification) domainVerification.observe(organization);
+    else if (ownership) ownership.hidden = organization.verification_status === "verified";
     var approval = document.getElementById("probation-override-card");
     var refreshActions = document.getElementById("access-actions-refresh");
     if (typeof probationApproval !== "undefined" && probationApproval) {
@@ -6041,87 +6043,14 @@
     });
   }
 
-  var issueChallengeButton = document.getElementById("issue-domain-challenge");
-  var verifyDomainButton = document.getElementById("verify-domain");
-  var replaceChallengeButton = document.getElementById("replace-domain-challenge");
-  var verificationFeedback = document.getElementById("verification-feedback");
-  var domainChallengeBusy = false;
-
-  function renderDomainChallenge(body) {
-    var record = body.txt;
-    var current = body.state === "active" && record;
-    var challenge = document.getElementById("dns-challenge");
-    if (challenge) challenge.classList.toggle("hidden", !current);
-    text(document.getElementById("challenge-record-name"), current ? record.record_name : "");
-    text(document.getElementById("challenge-record-value"), current ? record.value_available === true && typeof record.record_value === "string" ? record.record_value : "The original value cannot be redisplayed." : "");
-    var expiry = current && record.expires_at ? new Date(record.expires_at) : null;
-    text(document.getElementById("challenge-expires"), current ? expiry && Number.isFinite(expiry.getTime()) ? "Record expires " + expiry.toLocaleString() + "." : "Record expiry is unavailable." : "");
-    if (body.verified) {
-      text(verificationFeedback, "Domain ownership is already verified. Refresh the workspace to see its current access.");
-    } else if (current && record.value_available !== true) {
-      text(verificationFeedback, "The current record remains valid. If you already published it, check DNS now. Use Replace TXT record if you need a new value.");
-    } else if (current) {
-      text(verificationFeedback, "Publish this record at your DNS provider, then check DNS here. Refreshing keeps the same record.");
-    } else {
-      text(verificationFeedback, body.state === "expired" ? "The previous record expired. Show DNS TXT record prepares a new one." : "Show DNS TXT record prepares the ownership instructions.");
-    }
-  }
-
-  async function domainChallengeRequest(path, method) {
-    if (domainChallengeBusy) throw new Error("A DNS request is already in progress.");
-    domainChallengeBusy = true;
-    [issueChallengeButton, verifyDomainButton, replaceChallengeButton].forEach(function (button) { if (button) button.disabled = true; });
-    try {
-      if (method === "POST") return await postJson(path);
-      var response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
-      var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load the ownership instructions");
-      return body;
-    } finally {
-      domainChallengeBusy = false;
-      [issueChallengeButton, verifyDomainButton, replaceChallengeButton].forEach(function (button) { if (button) button.disabled = false; });
-    }
-  }
-
-  if (issueChallengeButton && orgId) {
-    issueChallengeButton.addEventListener("click", async function () {
-      text(verificationFeedback, "Preparing a DNS TXT record…");
-      try {
-        var body = await domainChallengeRequest("/api/workspaces/" + orgId + "/domain-challenge/ensure", "POST");
-        if (body.verified) return window.location.reload();
-        renderDomainChallenge(body);
-      } catch (error) {
-        showError(verificationFeedback, error.message);
-      }
+  if (orgId && role === "admin" && window.DaedalusDomainVerification) {
+    domainVerification = window.DaedalusDomainVerification.create({organizationId:orgId,userId:shell.dataset.userId,
+      domain:shell.dataset.organizationDomain,fetch:function (url,options) {return fetch(url,options);},
+      onVerified:async function () {await refresh(true);await loadAuditLog();},
+      onChecked:function () {return loadAuditLog();}
     });
-    domainChallengeRequest("/api/workspaces/" + orgId + "/domain-challenge", "GET").then(renderDomainChallenge).catch(function (error) {
-      showError(verificationFeedback, error.message);
-    });
-  }
-  if (replaceChallengeButton && orgId) {
-    replaceChallengeButton.addEventListener("click", function () {
-      requestInlineConfirmation(replaceChallengeButton, "Replace the current TXT record? The previous value will stop verifying this domain. Update DNS with the new value afterward.", "Replace record", async function () {
-        var body = await domainChallengeRequest("/api/workspaces/" + orgId + "/domain-challenge", "POST");
-        if (body.verified) return window.location.reload();
-        renderDomainChallenge(body);
-      });
-    });
-  }
-  if (verifyDomainButton && orgId) {
-    verifyDomainButton.addEventListener("click", async function () {
-      text(verificationFeedback, "Checking the public DNS TXT record…");
-      try {
-        var body = await domainChallengeRequest("/api/workspaces/" + orgId + "/verify-domain", "POST");
-        if (body.verified) {
-          text(verificationFeedback, "Domain verified. Reloading workspace…");
-          window.location.reload();
-        } else {
-          text(verificationFeedback, body.detail || "The TXT record is not visible yet. Try again after DNS updates.");
-        }
-      } catch (error) {
-        showError(verificationFeedback, error.message);
-      }
-    });
+    window.daedalusDomainVerification = domainVerification;
+    if (domainVerification) domainVerification.load();
   }
 
   if (orgId && role === "admin" && window.DaedalusProbationApproval) {
@@ -6139,6 +6068,9 @@
 
   function auditEventSummary(entry) {
     var data = entry.details || {};
+    if (entry.action === "domain_challenge.issued") return "TXT ownership instructions prepared for " + (data.record_name || "this domain") + ".";
+    if (entry.action === "domain.verified") return "Domain ownership verified for " + (data.domain || "this workspace") + ".";
+    if (entry.action === "domain.verification_checked") return "DNS TXT check recorded " + dateLabel(data.checked_at) + ": " + ({verified:"ownership verified",not_found:"record not found; ownership remains pending",lookup_failed:"lookup failed; ownership was not verified"}[data.outcome] || "outcome unavailable") + ".";
     if (entry.action === "membership.requested") return (data.email || "A member") + " requested workspace access.";
     if (entry.action === "membership.approved") return (data.email || "The requesting member") + " was approved as a user.";
     if (entry.action === "membership.denied") return "The access request for " + (data.email || "the requesting member") + " was declined.";
