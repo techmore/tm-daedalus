@@ -25,23 +25,27 @@ class Node {
  contains(node) { return this === node || this.children.some(child => child instanceof Node && child.contains(node)); }
  addEventListener(name, callback) { this.events[name]=callback; }
  setAttribute(name, value) { this.attributes[name]=value; }
+ querySelectorAll(selector) { const result=[]; function visit(node) { if(selector==='[data-overview-mutation]' && node.dataset.overviewMutation) result.push(node); node.children.forEach(visit); } visit(this); return result; }
  querySelector(selector) { const match=selector.match(/^\[data-status-key="([a-z-]+)"\]$/); return match ? find(this, node => node.dataset.statusKey === match[1]) : null; }
  focus() { document.activeElement=this; }
 }
 function flatten(node) { return node.textContent + ' ' + node.children.map(flatten).join(' '); }
 function find(node, predicate) { if (predicate(node)) return node; for (const child of node.children) { const result=find(child,predicate); if (result) return result; } return null; }
-const overview=new Node(), portfolio=new Node(), evidence=new Node();
-const document={activeElement:null, createElement:tag=>new Node(tag), getElementById:id=>id==='workspace-priorities'?overview:id==='portfolio-board'?portfolio:id==='workspace-posture'?evidence:null};
+const overview=new Node(), portfolio=new Node(), evidence=new Node(), refreshButton=new Node('button'), readNote=new Node(), observed=new Node(), board=new Node();
+const document={activeElement:null, createElement:tag=>new Node(tag), getElementById:id=>id==='workspace-priorities'?overview:id==='portfolio-board'?portfolio:id==='workspace-posture'?evidence:id==='overview-refresh'?refreshButton:id==='overview-read-note'?readNote:id==='overview-observed'?observed:id==='overview-status-board'?board:null};
 function dateLabel(value) { return value; }
 function appendEmpty(host, message) { const child=new Node(); child.textContent=message; host.append(child); }
 let opened=null, postureLoads=0, requests=[], responses=[];
+const orgId='1'; let postureRequestSequence=0; const window={setTimeout,clearTimeout};
+const workspacePostureRead={body:null,signature:null,error:null,loading:false,controller:null,mutationBusy:false};
 function activateTab(key, location) { opened={key,location}; }
 async function loadWorkspacePosture() { postureLoads++; }
 async function fetch(path, options) { requests.push({path,options}); const response=responses.shift(); if (response instanceof Error) throw response; return response; }
 const dated='2026-10-08T21:00:00Z';
+const postureBody=(areas,extra={})=>({organization_id:1,domain:'cybersecuritypilot.org',can_manage:role==='admin',assessed_at:dated,areas,...extra});
 const area=(key,state,extra={})=>({key,title:key.toUpperCase(),state,updated_at:state==='not_assessed'?null:dated,summary:key+' evidence summary',...extra});
 '''
-        script = prelude + "\nconst role=" + repr(role) + ";\n" + renderer + "\n" + assertions
+        script = prelude + "\nconst role=" + repr(role) + ";\nworkspacePostureRead.body={can_manage:role==='admin'};\n" + renderer + "\n" + assertions
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -79,7 +83,7 @@ assert.match(flatten(overview),/Saved evidence is not a security verdict/);
 assert.match(flatten(overview),/<script>literal evidence<\/script>/);
 assert.match(flatten(overview),/Saved evidence 2026-10-08T21:00:00Z/);
 assert.match(flatten(overview),/cis evidence summary/); assert.match(flatten(overview),/scanners evidence summary/);
-assert.equal(find(overview,node=>node.textContent==='Refresh DNS & website'),null);
+assert.equal(find(overview,node=>node.textContent==='Check DNS & website now'),null);
 const action=find(overview,node=>node.dataset.statusKey==='cis-review');
 assert.equal(action.textContent,'Review setup'); assert.equal(action.attributes['aria-label'],'Review setup: CIS');
 action.events.click(); assert.deepEqual(opened,{key:'cis',location:true});
@@ -104,11 +108,10 @@ assert.match(flatten(overview),/No saved assessment time/);
 
     def test_full_evidence_cards_share_unknown_and_stale_presentation(self):
         self.run_node(r'''
-const orgId='1'; let postureRequestSequence=0;
 (async()=>{
 const rows=[area('dns','recorded',{updated_at:null}),area('web','recorded',{updated_at:'2026-10-09T12:00:00Z'}),
  area('cis','recorded',{updated_at:'2026-10-05T12:00:00Z'}),area('meraki','unavailable',{audit_summary:'Older audit',audit_updated_at:'invalid'})];
-responses.push({ok:true,json:async()=>({areas:rows})}); await loadWorkspacePosture();
+responses.push({ok:true,json:async()=>postureBody(rows)}); await loadWorkspacePosture();
 assert.equal(evidence.children.length,4);
 for (const key of ['dns','web']) {
  const card=find(evidence,node=>node.dataset.postureKey===key);
@@ -149,7 +152,7 @@ assert.ok(find(overview,node=>node.dataset.statusKey==='dns-review'));
 (async()=>{
 renderStatusBoard([area('dns','recorded')]);
 const button=find(overview,node=>node.dataset.statusKey==='public-refresh');
-assert.equal(button.textContent,'Refresh DNS & website');
+assert.equal(button.textContent,'Check DNS & website now');
 responses.push({ok:true},{ok:false}); await button.events.click();
 assert.equal(button.disabled,false); assert.equal(button.textContent,'Retry website');
 assert.match(flatten(overview),/DNS & email check requested/); assert.match(flatten(overview),/Could not request website checks/);

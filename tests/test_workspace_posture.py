@@ -21,11 +21,28 @@ class WorkspacePostureTests(unittest.TestCase):
         response=self.client.get('/api/workspace-posture')
         self.assertEqual(response.status_code,200,response.text)
         self.assertEqual(response.headers["cache-control"],"no-store")
+        org, _ = self.context()
+        self.assertEqual(response.json()["organization_id"], org)
+        self.assertIs(response.json()["can_manage"], True)
+        self.assertTrue(response.json()["assessed_at"])
         areas={area['key']:area for area in response.json()['areas']}
         for key in ('dns','web','cis','meraki'):
             self.assertEqual(areas[key]['state'],'not_assessed')
         self.assertNotIn('token_hash',response.text)
         self.assertNotIn('device_fingerprint',response.text)
+
+    def test_role_metadata_uses_current_approved_membership(self):
+        org, user = self.context()
+        with self.session_factory() as db:
+            membership = db.scalar(select(Membership).where(Membership.organization_id == org, Membership.user_id == user))
+            membership.role = "member"
+            db.commit()
+        response = self.client.get('/api/workspace-posture')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['organization_id'], org)
+        self.assertIs(response.json()['can_manage'], False)
+        self.assertEqual(response.headers['cache-control'], 'no-store')
+        self.assertEqual(self.client.post('/api/external-checks/dns/run').status_code, 403)
 
     def test_running_attempt_keeps_dated_saved_evidence_even_after_many_failures(self):
         org,_=self.context()

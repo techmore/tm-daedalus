@@ -109,6 +109,8 @@ The endpoint topic preserves the latest saved assessment, profiles, device obser
 
 DNS and Website use shared **Check now**, **Monitoring schedule**, and **Create PDF report** actions. Schedule summaries retain daily/weekly cadence and identify past expected collection times. PDF creation opens the existing report library for progress and download. Saved-data refresh retains findings and dates after a failed read. See the [domain review workflow](docs/DOMAIN-REVIEW-WORKFLOW.md) for the local browser/collector/report receipts and remaining production acceptance.
 
+Overview status refresh also retains saved priorities and evidence after an interruption. Last-observed availability stays explicit, review links remain usable, and check/schedule writes wait for a fresh workspace and role read. Unchanged polls preserve keyboard focus and partial collection retries.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:

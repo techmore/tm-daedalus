@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-191">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-192">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -106,7 +106,12 @@
       </header>
 
       <section class="tab-panel active" id="tab-overview">
-        <section class="status-board" aria-labelledby="overview-assessment-title"><h2 id="overview-assessment-title" class="visually-hidden">Workspace status</h2><div id="workspace-priorities" aria-live="polite"><p class="muted">Checking status…</p></div><div id="pending-approvals" aria-live="polite"></div></section>
+        <section class="status-board" id="overview-status-board" aria-labelledby="overview-assessment-title">
+          <div class="overview-read-heading"><h2 id="overview-assessment-title">Workspace status</h2><button type="button" class="button button-quiet" id="overview-refresh">Refresh workspace status</button></div>
+          <p id="overview-observed" class="status-when">No workspace status read yet.</p>
+          <p id="overview-read-note" class="overview-read-note" role="status" hidden></p>
+          <div id="workspace-priorities" aria-live="polite"><p class="muted">Checking status…</p></div><div id="pending-approvals" aria-live="polite"></div>
+        </section>
         <section class="workspace-access-card" id="workspace-access" aria-labelledby="workspace-access-title">
           <div class="workspace-access-heading"><h2 id="workspace-access-title">Workspace access</h2><span id="access-controls-state" class="workspace-access-state{{ ' is-paused' if not workspace_controls_enabled else '' }}">{{ 'Controls available' if workspace_controls_enabled else 'Controls paused' }}</span></div>
           <dl class="workspace-access-facts">
@@ -673,6 +678,6 @@
   <script src="/static/js/google-admin.js?v=20261009-2" defer></script>
   <script src="/static/js/history.js?v=20261008-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-190" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-192" defer></script>
 </body>
 </html>

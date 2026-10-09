@@ -6518,9 +6518,11 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
 @app.get("/api/workspace-posture")
 def workspace_posture(request: Request, db: Session = Depends(get_db)):
     """Summarize saved workspace evidence without exposing raw results or credentials."""
-    _, org, _ = get_org_context(request, db)
+    _, org, membership = get_org_context(request, db)
     areas = build_workspace_posture_areas(db, org)
-    return JSONResponse({"domain":org.domain, "areas":areas, "assessed_at":iso_utc(utcnow())}, headers={"Cache-Control":"no-store"})
+    return JSONResponse({"organization_id": org.id, "domain": org.domain,
+        "can_manage": membership.role == "admin", "areas": areas,
+        "assessed_at": iso_utc(utcnow())}, headers={"Cache-Control": "no-store"})
 
 
 

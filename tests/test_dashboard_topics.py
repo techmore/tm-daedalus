@@ -333,7 +333,8 @@ assert.equal(JSON.stringify(areas),original);
         result = subprocess.run(['node','-e',script],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('!Array.isArray(body.areas) || !body.areas.length', source)
-        self.assertIn('Current assessment coverage is unavailable.', source)
+        self.assertIn('Workspace status is unavailable.', source)
+        self.assertIn('if (!workspacePostureRead.body)', source)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required')
     def test_report_status_counts_only_ready_downloads_as_available(self):
@@ -805,16 +806,17 @@ assert.match(flatten(host),/No completed deeper audit/);
 let focused=null;
 class Node { constructor(){this.children=[];this.textContent='';this.dataset={};this.events={};}
 replaceChildren(){this.children=[];} append(...items){this.children.push(...items);}
-contains(node){return this.children.includes(node);} addEventListener(name,cb){this.events[name]=cb;} setAttribute(){}
+querySelectorAll(){return [];} contains(node){return this.children.includes(node);} addEventListener(name,cb){this.events[name]=cb;} setAttribute(){}
 querySelector(){return this.children.find(n=>n.dataset.postureKey==='dns');}
 focus(){focused=this.dataset.postureKey;document.activeElement=this;}}
-const host=new Node(), priorities=new Node(); const document={activeElement:null,getElementById:id=>id==='workspace-posture'?host:priorities,createElement:()=>new Node()};
+const host=new Node(), priorities=new Node(); const document={activeElement:null,getElementById:id=>id==='workspace-posture'?host:id==='workspace-priorities'?priorities:null,createElement:()=>new Node()};
 function makeAuditMetric(label,value,detail,tone){const n=new Node();n.textContent=label+':'+value;n.tone=tone;return n;}
 let postureRequestSequence=0; const orgId='1'; const role='admin'; const requests=[];
+const window={setTimeout,clearTimeout}; const workspacePostureRead={body:null,signature:null,error:null,loading:false,controller:null,mutationBusy:false};
 const fetch=()=>new Promise(resolve=>requests.push(resolve));
 function dateLabel(value){return value;} function appendEmpty(node,value){node.textContent=value;}
 let opened=null; function activateTab(key){opened=key;}
-const response=(summary)=>({ok:true,json:async()=>({areas:[{key:'dns',title:'DNS',state:'not_assessed',summary,updated_at:null}]})});
+const response=(summary)=>({ok:true,json:async()=>({organization_id:1,domain:'cybersecuritypilot.org',can_manage:true,assessed_at:new Date().toISOString(),areas:[{key:'dns',title:'DNS',state:'not_assessed',summary,updated_at:null}]})});
 '''+renderer+'''
 (async()=>{
 const first=loadWorkspacePosture();requests.shift()(response('Initial'));await first;

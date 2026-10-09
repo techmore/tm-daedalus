@@ -47,3 +47,15 @@ Final local validation passed **1,416 tests, one skipped and 446 subtests**. The
 Production activation requires verified host recovery and authorized SSH access. `/readyz` returned HTTP 200 with database/report storage ready at 04:37 UTC; this does not verify the active source link or deployment recovery. No new production rollout was started for this review.
 
 Every topic still needs populated desktop/mobile acceptance, consistent finding priorities, and a complete screen-reader review. Real customer identity/sharing, sustained scheduling, live provider consent and physical fleet acceptance remain in the [full project report](../PUBLIC-PROJECT-REPORT.md).
+
+## Overview read recovery
+
+The Overview has a fixed **Refresh workspace status** control. It reads saved workspace evidence; **Check DNS & website now** separately requests collection. A status-read timestamp is distinct from each assessment’s evidence timestamp.
+
+An interrupted read keeps the previously displayed priority rows and full evidence cards. The inline warning identifies scanner availability and schedules as **Last observed**, with neutral availability styling. Review navigation remains available. Check and schedule writes pause until a successful current read confirms the workspace and administrator role. The server continues to authorize each write independently.
+
+Reads bypass browser cache, have a 20-second abort deadline, and ignore superseded responses. Background polling leaves an active read or mutation alone. Wrong-workspace, duplicate-area and malformed payloads cannot replace the saved view. An unchanged successful response preserves the actual row/card nodes and keyboard focus. Partial DNS/Website collection retries retain only the unsuccessful request types, including when other saved evidence changes during a poll.
+
+An isolated populated local browser exercised failed reads and real retries at 1,440-pixel desktop and 390-pixel mobile widths. All six priority rows and evidence cards survived; the retry kept focus and cleared the last-observed warning. Website review navigation and page reload retained `#web`. Node callback fixtures additionally cover first-load failure, deadlines, superseded requests, role changes, malformed responses, duplicate writes and partial retries. Actual API fixtures verify current approved membership metadata and member write rejection. This does not close all-topic screen-reader acceptance or production activation.
+
+Final local validation for this checkpoint passed **1,425 tests, one skipped and 446 subtests**; the focused Overview/topic/access suite passed **103 tests and 16 subtests**. The actual loaded browser script matched the final source hash. No new collection or report was requested during this Overview review: the original local database remains at 49 check runs/33 reports, and the isolated copy retains the preceding domain-review cohort’s 51 runs/35 reports.

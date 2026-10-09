@@ -37,6 +37,8 @@
   var shell = document.querySelector(".app-shell");
   var orgId = shell ? shell.dataset.organizationId : null;
   var postureRequestSequence = 0;
+  var workspacePostureRead = {body: null, signature: null, error: null, loading: false, controller: null, mutationBusy: false,
+    publicCheckRetryTypes: null, publicCheckFeedback: ""};
   var reportHistories = Object.create(null);
   var notificationHistory = null;
   var role = shell ? shell.dataset.role : null;
@@ -1451,20 +1453,26 @@
     if (!host) return;
     var focusKey = host.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.statusKey : null;
     var assessment = workspaceStatusSummary(areas);
+    var renderedSignature = workspacePostureRead.signature;
     host.replaceChildren();
     var banner = document.createElement("div");
     banner.className = "status-banner is-" + assessment.level;
     var headline = document.createElement("strong"); headline.textContent = assessment.headline;
     var sub = document.createElement("span"); sub.textContent = assessment.detail + ". Saved evidence is not a security verdict.";
     banner.append(headline, sub);
-    if (role === "admin") {
+    if (role === "admin" && workspacePostureRead.body && workspacePostureRead.body.can_manage === true) {
       var runAll = document.createElement("button"); runAll.type = "button"; runAll.className = "button button-primary status-run-all";
-      runAll.textContent = "Refresh DNS & website"; runAll.dataset.statusKey = "public-refresh";
-      var pendingTypes = ["dns", "web"];
+      runAll.textContent = workspacePostureRead.publicCheckRetryTypes ? "Retry " + workspacePostureRead.publicCheckRetryTypes.map(function (type) { return type === "dns" ? "DNS & email" : "website"; }).join(" & ") : "Check DNS & website now";
+      runAll.dataset.statusKey = "public-refresh";
+      runAll.dataset.overviewMutation = "true";
+      var pendingTypes = workspacePostureRead.publicCheckRetryTypes || ["dns", "web"];
       var feedback = document.createElement("span"); feedback.className = "status-refresh-feedback";
       feedback.setAttribute("role", "status");
+      feedback.textContent = workspacePostureRead.publicCheckFeedback || "";
       runAll.addEventListener("click", async function () {
-        runAll.disabled = true; runAll.textContent = "Requesting checks…";
+        if (!overviewMutationAllowed(renderedSignature)) return;
+        workspacePostureRead.mutationBusy = true; updateOverviewReadState();
+        runAll.setAttribute("aria-busy", "true"); runAll.textContent = "Requesting checks…";
         var outcomes = await Promise.all(pendingTypes.map(async function (type) {
           try {
             var response = await fetch("/api/external-checks/" + type + "/run", {method: "POST", credentials: "same-origin"});
@@ -1472,12 +1480,22 @@
           } catch (_error) { return {type: type, accepted: false}; }
         }));
         pendingTypes = outcomes.filter(function (outcome) { return !outcome.accepted; }).map(function (outcome) { return outcome.type; });
+        workspacePostureRead.mutationBusy = false;
+        runAll.setAttribute("aria-busy", "false"); updateOverviewReadState();
         if (pendingTypes.length) {
+          workspacePostureRead.publicCheckRetryTypes = pendingTypes;
           var failed = pendingTypes.map(function (type) { return type === "dns" ? "DNS & email" : "website"; });
           var accepted = outcomes.filter(function (outcome) { return outcome.accepted; }).map(function (outcome) { return outcome.type === "dns" ? "DNS & email" : "website"; });
           feedback.textContent = (accepted.length ? accepted.join(" and ") + " check requested. " : "") + "Could not request " + failed.join(" and ") + " checks. Review those areas or try again.";
+          workspacePostureRead.publicCheckFeedback = feedback.textContent;
           runAll.disabled = false; runAll.textContent = "Retry " + failed.join(" & ");
         } else {
+          pendingTypes = ["dns", "web"];
+          workspacePostureRead.publicCheckRetryTypes = null;
+          workspacePostureRead.publicCheckFeedback = "DNS & website checks requested.";
+          workspacePostureRead.signature = null;
+          feedback.textContent = "DNS & website checks requested. Refreshing workspace status…";
+          runAll.textContent = "Check DNS & website now";
           await loadWorkspacePosture();
         }
       });
@@ -1500,18 +1518,25 @@
       review.setAttribute("aria-label", row.reviewLabel + ": " + (row.area.title || "Unknown area"));
       if (key) { review.dataset.statusKey = key + "-review"; review.addEventListener("click", function () { activateTab(key, true); }); }
       action.append(review);
-      if (row.enableSchedule && role === "admin") {
+      if (row.enableSchedule && role === "admin" && workspacePostureRead.body && workspacePostureRead.body.can_manage === true) {
         var turnOn = document.createElement("button"); turnOn.type = "button"; turnOn.className = "button button-quiet status-action";
         turnOn.textContent = "Enable automatic checks"; turnOn.dataset.statusKey = key + "-schedule";
+        turnOn.dataset.overviewMutation = "true";
         turnOn.setAttribute("aria-label", "Enable " + row.area.title + " checks every " + row.interval + " hours");
         turnOn.addEventListener("click", async function () {
-          turnOn.disabled = true; turnOn.textContent = "Enabling…";
+          if (!overviewMutationAllowed(renderedSignature)) return;
+          workspacePostureRead.mutationBusy = true; updateOverviewReadState();
+          turnOn.setAttribute("aria-busy", "true"); turnOn.textContent = "Enabling…";
           try {
             var response = await fetch("/api/external-checks/" + key + "/schedule", {method: "PUT", credentials: "same-origin",
               headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: true, interval_hours: row.interval})});
             if (!response.ok) throw new Error();
+            workspacePostureRead.mutationBusy = false;
+            workspacePostureRead.signature = null;
+            turnOn.textContent = "Automatic checks enabled";
             await loadWorkspacePosture();
-          } catch (_error) { turnOn.disabled = false; turnOn.textContent = "Retry automatic checks"; }
+          } catch (_error) { turnOn.textContent = "Retry automatic checks"; }
+          finally { workspacePostureRead.mutationBusy = false; turnOn.setAttribute("aria-busy", "false"); updateOverviewReadState(); }
         });
         action.append(turnOn);
       }
@@ -1534,15 +1559,75 @@
     }
   }
 
-  async function loadWorkspacePosture() {
+  function overviewMutationAllowed(signature) {
+    return !!workspacePostureRead.body && workspacePostureRead.body.can_manage === true && role === "admin"
+      && !workspacePostureRead.error && !workspacePostureRead.loading && !workspacePostureRead.mutationBusy
+      && workspacePostureRead.signature === signature;
+  }
+
+  function updateOverviewReadState() {
+    var read = workspacePostureRead;
+    var button = document.getElementById("overview-refresh");
+    var note = document.getElementById("overview-read-note");
+    var observed = document.getElementById("overview-observed");
+    if (button) {
+      if (!button.dataset.bound) { button.dataset.bound = "true"; button.addEventListener("click", function () { return loadWorkspacePosture(); }); }
+      button.textContent = read.error ? "Retry workspace status" : "Refresh workspace status";
+      button.setAttribute("aria-busy", String(read.loading));
+      button.setAttribute("aria-disabled", String(read.mutationBusy));
+    }
+    if (observed) observed.textContent = read.body ? (read.error ? "Last observed " : "Status read ") + dateLabel(read.body.assessed_at)
+      + ". Assessment dates below describe the saved evidence." : "No workspace status read yet.";
+    if (note) {
+      note.hidden = !read.error && (!read.loading || !!read.body);
+      note.textContent = read.error ? read.error + (read.body ? " Saved evidence remains available; scanner availability and schedules are last observed. Refresh before requesting checks or enabling schedules."
+        : " Retry to load this workspace’s evidence and controls.") : read.loading && !read.body ? "Reading workspace status…" : "";
+    }
+    ["overview-status-board", "workspace-posture"].forEach(function (id) {
+      var node = document.getElementById(id);
+      if (node) node.dataset.readStale = read.error ? "true" : "false";
+    });
+    var priorities = document.getElementById("workspace-priorities");
+    if (priorities) priorities.querySelectorAll("[data-overview-mutation]").forEach(function (control) {
+      control.setAttribute("aria-disabled", String(!overviewMutationAllowed(read.signature)));
+    });
+  }
+
+  function validWorkspacePosture(body) {
+    if (!body || String(body.organization_id) !== String(orgId) || typeof body.can_manage !== "boolean"
+      || typeof body.domain !== "string" || !body.domain || typeof body.assessed_at !== "string"
+      || !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(body.assessed_at)
+      || !Number.isFinite(Date.parse(body.assessed_at)) || Date.parse(body.assessed_at) > Date.now() + 60000
+      || !Array.isArray(body.areas) || !body.areas.length) return false;
+    var seen = new Set();
+    return body.areas.every(function (area) {
+      if (!area || ["dns", "web", "scanners", "cis", "meraki", "google-admin"].indexOf(area.key) < 0 || seen.has(area.key)
+        || typeof area.title !== "string" || typeof area.summary !== "string" || typeof area.state !== "string") return false;
+      seen.add(area.key); return true;
+    });
+  }
+
+  async function loadWorkspacePosture(background) {
     var host = document.getElementById("workspace-posture");
-    if (!host || !orgId) return;
+    if (!host || !orgId || workspacePostureRead.mutationBusy || background && workspacePostureRead.loading) return;
     var sequence = ++postureRequestSequence;
+    if (workspacePostureRead.controller) workspacePostureRead.controller.abort();
+    var controller = new AbortController();
+    workspacePostureRead.controller = controller; workspacePostureRead.loading = true;
+    updateOverviewReadState();
+    var deadline = window.setTimeout(function () { controller.abort(); }, 20000);
     try {
-      var response = await fetch("/api/workspace-posture", { credentials: "same-origin" });
+      var response = await fetch("/api/workspace-posture", { credentials: "same-origin", cache: "no-store", signal: controller.signal });
       var body = await response.json();
-      if (!response.ok || !Array.isArray(body.areas) || !body.areas.length) throw new Error("Workspace assessments could not be loaded.");
+      if (controller.signal.aborted) throw new Error("Workspace status read timed out.");
+      if (!response.ok || !validWorkspacePosture(body)) throw new Error("Workspace status could not be refreshed.");
       if (sequence !== postureRequestSequence) return;
+      var signature = JSON.stringify([body.can_manage, body.areas, body.areas.map(function (area) {
+        var presentation = workspaceAreaPresentation(area); return [presentation.level, presentation.verdict];
+      })]);
+      workspacePostureRead.body = body; workspacePostureRead.error = null;
+      if (signature === workspacePostureRead.signature) return;
+      workspacePostureRead.signature = signature;
       var focusedKey = host.contains(document.activeElement) ? document.activeElement.dataset.postureKey : null;
       host.replaceChildren();
       var assessment = workspaceAssessmentSummary(body.areas);
@@ -1566,11 +1651,17 @@
         host.append(card);
       });
       if (focusedKey) { var focused = host.querySelector('[data-posture-key="' + focusedKey + '"]'); if (focused) focused.focus({preventScroll:true}); }
-    } catch (error) { if (sequence === postureRequestSequence) {
-      host.replaceChildren(); appendEmpty(host, error.message);
+    } catch (_error) { if (sequence === postureRequestSequence) {
+      workspacePostureRead.error = controller.signal.aborted ? "Workspace status read timed out." : "Workspace status could not be refreshed.";
       var priorities = document.getElementById("workspace-priorities");
-      if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Current assessment coverage is unavailable. Refresh to try again."); }
-    } }
+      if (!workspacePostureRead.body) {
+        host.replaceChildren(); appendEmpty(host, "Saved evidence has not been loaded.");
+        if (priorities) { priorities.replaceChildren(); appendEmpty(priorities, "Workspace status is unavailable."); }
+      }
+    } } finally {
+      window.clearTimeout(deadline);
+      if (sequence === postureRequestSequence) { workspacePostureRead.loading = false; workspacePostureRead.controller = null; updateOverviewReadState(); }
+    }
   }
 
   async function loadPendingApprovals() {
@@ -1628,7 +1719,7 @@
         refreshScannerActivities(data.agents);
         if (!force && document.querySelector(".inline-confirmation")) return;
         render(data);
-        if (activeTab === "overview") { await loadWorkspacePosture(); await loadPendingApprovals(); }
+        if (activeTab === "overview") { await loadWorkspacePosture(true); await loadPendingApprovals(); }
       } catch (_error) {
         // Periodic refresh retries transient failures without changing saved evidence.
       }
