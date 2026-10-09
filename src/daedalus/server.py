@@ -705,6 +705,9 @@ def get_org_context(
     if row is None:
         raise HTTPException(status_code=403, detail="No approved workspace membership")
     membership, organization = row
+    expected_workspace = request.headers.get("x-daedalus-workspace")
+    if expected_workspace is not None and expected_workspace != str(organization.id):
+        raise HTTPException(status_code=409, detail="Workspace selection changed. Refresh this page before continuing.")
     request.session["organization_id"] = organization.id
     if (
         organization.verification_status == "pending"
@@ -6140,7 +6143,7 @@ def select_workspace(
     if membership is None:
         raise HTTPException(status_code=403, detail="Approved workspace membership required")
     request.session["organization_id"] = payload.organization_id
-    return {"ok": True}
+    return {"ok": True, "organization_id": payload.organization_id}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -6531,19 +6534,25 @@ def workspace_posture(request: Request, db: Session = Depends(get_db)):
 def workspace_portfolio(request: Request, db: Session = Depends(get_db)):
     """Every workspace the signed-in user belongs to, with its current evidence states."""
     user = get_session_user(request, db)
-    rows = db.execute(
+    query = (
         select(Membership, Organization)
         .join(Organization, Organization.id == Membership.organization_id)
         .where(Membership.user_id == user.id, Membership.status == "approved")
         .order_by(Organization.name)
-    ).all()
+    )
+    scoped_key = getattr(request.state, "user_api_key", None)
+    if scoped_key is not None:
+        query = query.where(Organization.id == scoped_key.organization_id)
+    rows = db.execute(query).all()
     workspaces = []
     for membership, organization in rows:
         areas = build_workspace_posture_areas(db, organization)
         workspaces.append({"id": organization.id, "name": organization.name, "domain": organization.domain,
                            "role": membership.role, "verification_status": organization.verification_status,
                            "areas": areas})
-    return JSONResponse({"workspaces": workspaces, "assessed_at": iso_utc(utcnow())}, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"organization_id": request.session.get("organization_id"),
+        "can_switch_workspaces": scoped_key is None, "workspaces": workspaces,
+        "assessed_at": iso_utc(utcnow())}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/dashboard")

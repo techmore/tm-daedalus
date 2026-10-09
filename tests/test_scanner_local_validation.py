@@ -9,6 +9,48 @@ spec.loader.exec_module(validation)
 
 
 class ScannerLocalEvidenceTests(unittest.TestCase):
+    def test_recovery_waits_for_local_cleanup_after_saved_acknowledgement(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            spool = Path(directory)
+            event = spool / 'event.json'
+            command = spool / 'commands-fixture' / 'result-one.json'
+            command.parent.mkdir()
+            event.write_text('{}')
+            command.write_text('{}')
+            sleeps = []
+            def finish_cleanup(delay):
+                sleeps.append(delay)
+                event.unlink()
+                command.unlink()
+            with patch.object(validation.time, 'sleep', side_effect=finish_cleanup):
+                self.assertTrue(validation.wait_for_recovery_queues(spool, SimpleNamespace(poll=lambda: None)))
+            self.assertEqual(sleeps, [.3])
+
+    def test_recovery_does_not_accept_rejected_persistent_or_dead_process_queues(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            spool = Path(directory)
+            rejected = spool / 'event.rejected'
+            rejected.write_text('{}')
+            with self.assertRaisesRegex(RuntimeError, 'rejected=1'):
+                validation.wait_for_recovery_queues(spool, SimpleNamespace(poll=lambda: None))
+            rejected.unlink()
+            pending = spool / 'event.json'
+            pending.write_text('{}')
+            with patch.object(validation.time, 'monotonic', side_effect=[0, 31]):
+                with self.assertRaisesRegex(RuntimeError, 'pending events=1'):
+                    validation.wait_for_recovery_queues(spool, SimpleNamespace(poll=lambda: None))
+            pending.unlink()
+            with self.assertRaisesRegex(RuntimeError, 'process exited'):
+                validation.wait_for_recovery_queues(spool, SimpleNamespace(poll=lambda: 17))
+            with self.assertRaisesRegex(RuntimeError, 'spool is unavailable'):
+                validation.wait_for_recovery_queues(spool / 'missing', SimpleNamespace(poll=lambda: None))
+
     def test_multihost_print_assertions_reject_missing_split_and_duplicate_evidence(self):
         from types import SimpleNamespace
         from unittest.mock import patch

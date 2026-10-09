@@ -75,6 +75,23 @@ def wait_for(predicate, timeout=45, process=None):
     raise RuntimeError("Timed out waiting for isolated scanner evidence")
 
 
+def wait_for_recovery_queues(spool: Path, process, timeout=30):
+    """Observe local acknowledgement cleanup after the portal records completion."""
+    def drained():
+        if not spool.is_dir():
+            raise RuntimeError("Recovery spool is unavailable")
+        if any(spool.rglob("*.rejected")):
+            raise RuntimeError("Recovery retained rejected evidence")
+        return not any(spool.glob("*.json")) and not any(spool.glob("commands-*/result-*.json"))
+    try:
+        return wait_for(drained, timeout, process)
+    except RuntimeError as exc:
+        pending = len(list(spool.glob("*.json")))
+        results = len(list(spool.glob("commands-*/result-*.json")))
+        rejected = len(list(spool.rglob("*.rejected")))
+        raise RuntimeError(f"Recovery queues did not drain cleanly: pending events={pending}, command results={results}, rejected={rejected}; {exc}") from exc
+
+
 def validate_host_evidence(payload, listener_port):
     hosts = payload if isinstance(payload, list) else payload.get("hosts", [])
     matched = [h for h in hosts if h.get("ip") == "127.0.0.1"]
@@ -651,8 +668,7 @@ raise SystemExit(completed.returncode)
                     claim = json.loads(claims[0].read_text())
                     if claim.get('fingerprint') != recovery_claim.get('fingerprint') or claim.get('claimed_at') != recovery_claim.get('claimed_at') or claim.get('terminal_result', {}).get('status') != 'succeeded':
                         raise RuntimeError('Original command claim or recovered terminal acknowledgement changed')
-                    if list((root / 'spool').glob('*.json')) or list((root / 'spool').rglob('*.rejected')) or list((root / 'spool').glob('commands-*/result-*.json')):
-                        raise RuntimeError('Recovery queues did not drain cleanly')
+                    wait_for_recovery_queues(root / 'spool', bridge_process)
                     def acknowledged_delivery():
                         current = online()
                         delivery = current.get('upload_delivery', {}) if current else {}

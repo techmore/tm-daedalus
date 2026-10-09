@@ -10,7 +10,7 @@ SOURCE = ROOT / "src/daedalus/static/js/dashboard.js"
 
 @unittest.skipUnless(shutil.which("node"), "Node.js required")
 class DashboardStatusBoardTests(unittest.TestCase):
-    def run_node(self, assertions, *, role="member", include_loader=False):
+    def run_node(self, assertions, *, role="member", include_loader=False, include_selection=False):
         source = SOURCE.read_text()
         end = "  function refresh(force)" if include_loader else "  async function loadWorkspacePosture("
         start = "  function workspaceAssessmentSummary(" if include_loader else "  function workspaceEvidenceTime("
@@ -20,31 +20,38 @@ const assert = require('node:assert/strict');
 const now = Date.parse('2026-10-08T22:00:00Z'); Date.now = () => now;
 class Node {
  constructor(tag='div') { this.tag=tag; this.children=[]; this.textContent=''; this.dataset={}; this.events={}; this.attributes={}; this.disabled=false; }
- append(...children) { this.children.push(...children); }
+ append(...children) { children.forEach(child=>{child.parent=this;}); this.children.push(...children); }
  replaceChildren() { this.children=[]; this.textContent=''; }
  contains(node) { return this === node || this.children.some(child => child instanceof Node && child.contains(node)); }
  addEventListener(name, callback) { this.events[name]=callback; }
  setAttribute(name, value) { this.attributes[name]=value; }
- querySelectorAll(selector) { const result=[]; function visit(node) { if(selector==='[data-overview-mutation]' && node.dataset.overviewMutation) result.push(node); node.children.forEach(visit); } visit(this); return result; }
- querySelector(selector) { const match=selector.match(/^\[data-status-key="([a-z-]+)"\]$/); return match ? find(this, node => node.dataset.statusKey === match[1]) : null; }
+ querySelectorAll(selector) { const result=[]; function visit(node) { if(selector==='[data-overview-mutation]' && node.dataset.overviewMutation || selector==='[data-select-workspace]' && node.dataset.selectWorkspace) result.push(node); node.children.forEach(visit); } visit(this); return result; }
+ querySelector(selector) { const match=selector.match(/^\[data-(status-key|select-workspace|posture-key)="([a-z0-9-]+)"\]$/); const key=match && {'status-key':'statusKey','select-workspace':'selectWorkspace','posture-key':'postureKey'}[match[1]]; return match ? find(this, node => String(node.dataset[key]) === match[2]) : null; }
+ closest(selector) { if (selector==='#portfolio-board') return portfolio.contains(this)?portfolio:null; return null; }
  focus() { document.activeElement=this; }
 }
 function flatten(node) { return node.textContent + ' ' + node.children.map(flatten).join(' '); }
 function find(node, predicate) { if (predicate(node)) return node; for (const child of node.children) { const result=find(child,predicate); if (result) return result; } return null; }
 const overview=new Node(), portfolio=new Node(), evidence=new Node(), refreshButton=new Node('button'), readNote=new Node(), observed=new Node(), board=new Node();
-const document={activeElement:null, createElement:tag=>new Node(tag), getElementById:id=>id==='workspace-priorities'?overview:id==='portfolio-board'?portfolio:id==='workspace-posture'?evidence:id==='overview-refresh'?refreshButton:id==='overview-read-note'?readNote:id==='overview-observed'?observed:id==='overview-status-board'?board:null};
+const customerRefresh=new Node('button'),customerNote=new Node(),customerObserved=new Node(),customerBoard=new Node(),selectionNote=new Node(),selectControl=new Node('select');
+const document={activeElement:null, body:new Node('body'), querySelectorAll:selector=>overview.querySelectorAll(selector).concat(portfolio.querySelectorAll(selector)), createElement:tag=>new Node(tag), getElementById:id=>id==='workspace-priorities'?overview:id==='portfolio-board'?portfolio:id==='workspace-posture'?evidence:id==='overview-refresh'?refreshButton:id==='overview-read-note'?readNote:id==='overview-observed'?observed:id==='overview-status-board'?board:id==='portfolio-refresh'?customerRefresh:id==='portfolio-read-note'?customerNote:id==='portfolio-observed'?customerObserved:id==='portfolio-status-board'?customerBoard:id==='workspace-selection-note'?selectionNote:id==='workspace-select'?selectControl:null};
 function dateLabel(value) { return value; }
 function appendEmpty(host, message) { const child=new Node(); child.textContent=message; host.append(child); }
 let opened=null, postureLoads=0, requests=[], responses=[];
-const orgId='1'; let postureRequestSequence=0; const window={setTimeout,clearTimeout};
+const orgId='1'; let postureRequestSequence=0; let reloads=0,locationChanges=[]; const window={setTimeout,clearTimeout,location:{pathname:'/dashboard',search:'',reload:()=>{reloads++;}},history:{replaceState:(state,title,path)=>locationChanges.push(path)}};
 const workspacePostureRead={body:null,signature:null,error:null,loading:false,controller:null,mutationBusy:false};
+const portfolioRead={body:null,signature:null,error:null,loading:false,controller:null,sequence:0}; let workspaceSelectionBusy=false;
 function activateTab(key, location) { opened={key,location}; }
 async function loadWorkspacePosture() { postureLoads++; }
 async function fetch(path, options) { requests.push({path,options}); const response=responses.shift(); if (response instanceof Error) throw response; return response; }
 const dated='2026-10-08T21:00:00Z';
+const customerBody=(workspaces,extra={})=>({organization_id:1,can_switch_workspaces:true,assessed_at:dated,workspaces,...extra});
 const postureBody=(areas,extra={})=>({organization_id:1,domain:'cybersecuritypilot.org',can_manage:role==='admin',assessed_at:dated,areas,...extra});
 const area=(key,state,extra={})=>({key,title:key.toUpperCase(),state,updated_at:state==='not_assessed'?null:dated,summary:key+' evidence summary',...extra});
 '''
+        if include_selection:
+            renderer += source[source.index('  async function postJson('):source.index('  var reportPollTimer =')]
+            renderer += source[source.index('  function setWorkspaceSelectionBusy('):source.index('  document.addEventListener("click", function (event) {', source.index('  function setWorkspaceSelectionBusy('))]
         script = prelude + "\nconst role=" + repr(role) + ";\nworkspacePostureRead.body={can_manage:role==='admin'};\n" + renderer + "\n" + assertions
         result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -168,9 +175,9 @@ assert.equal(networkButton.disabled,false); assert.match(flatten(overview),/Coul
     def test_portfolio_shows_unassessed_topics_and_coverage_without_health_verdict(self):
         self.run_node(r'''
 (async()=>{
-const workspaces=[{id:1,name:'Customer A',domain:'a.example',areas:[area('dns','recorded'),area('scanners','not_assessed'),area('cis','not_assessed'),area('meraki','running')]},
- {id:2,name:'Customer B',domain:'b.example',areas:[area('web','recorded')]}];
-const original=JSON.stringify(workspaces); responses.push({ok:true,json:async()=>({workspaces})}); await loadPortfolio();
+const workspaces=[{id:1,name:'Customer A',domain:'a.example',role:'admin',verification_status:'verified',areas:[area('dns','recorded'),area('scanners','not_assessed'),area('cis','not_assessed'),area('meraki','running')]},
+ {id:2,name:'Customer B',domain:'b.example',role:'member',verification_status:'pending',areas:[area('web','recorded')]}];
+const original=JSON.stringify(workspaces); responses.push({ok:true,json:async()=>customerBody(workspaces)}); await loadPortfolio();
 assert.equal(portfolio.children[0].children[0].textContent,'1 of 2 customers have unassessed areas');
 assert.match(flatten(portfolio),/SCANNERS: Not assessed/); assert.match(flatten(portfolio),/CIS: Not assessed/);
 assert.match(flatten(portfolio),/MERAKI: Check running/); assert.match(flatten(portfolio),/2 not assessed/);
@@ -178,9 +185,9 @@ assert.match(flatten(portfolio),/Latest saved evidence 2026-10-08T21:00:00Z/);
 assert.match(flatten(portfolio),/Saved customer|Saved evidence available/); assert.doesNotMatch(flatten(portfolio),/All good|look good/);
 assert.equal(find(portfolio,node=>node.dataset.selectWorkspace===1).attributes['aria-label'],'Review Customer A');
 assert.equal(JSON.stringify(workspaces),original);
-responses.push({ok:true,json:async()=>({workspaces:[]})}); await loadPortfolio();
+responses.push({ok:true,json:async()=>customerBody([])}); await loadPortfolio();
 assert.equal(portfolio.children[0].children[0].textContent,'No customers available');
-responses.push({ok:true,json:async()=>({workspaces:[{id:3,name:'Unknown',domain:'unknown.example',areas:[area('web','future-state',{updated_at:null})]}]})}); await loadPortfolio();
+responses.push({ok:true,json:async()=>customerBody([{id:3,name:'Unknown',domain:'unknown.example',role:'member',verification_status:'pending',areas:[area('web','future-state',{updated_at:null})]}])}); await loadPortfolio();
 assert.match(flatten(portfolio),/1 of 1 customers need review/); assert.match(flatten(portfolio),/Assessment status unknown/);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 ''')

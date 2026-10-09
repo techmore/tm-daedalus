@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-192">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-193">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -104,6 +104,7 @@
           {% endif %}
         </div>
       </header>
+      <p id="workspace-selection-note" class="overview-read-note" role="status" hidden></p>
 
       <section class="tab-panel active" id="tab-overview">
         <section class="status-board" id="overview-status-board" aria-labelledby="overview-assessment-title">
@@ -177,7 +178,10 @@
       </section>
 
       <section class="tab-panel" id="tab-portfolio">
-        <section class="status-board" aria-labelledby="portfolio-title"><h2 id="portfolio-title" class="visually-hidden">All customers</h2>
+        <section class="status-board" id="portfolio-status-board" aria-labelledby="portfolio-title">
+          <div class="overview-read-heading"><h2 id="portfolio-title">Customer status</h2><button type="button" class="button button-quiet" id="portfolio-refresh">Refresh customer status</button></div>
+          <p id="portfolio-observed" class="status-when">No customer status read yet.</p>
+          <p id="portfolio-read-note" class="overview-read-note" role="status" hidden></p>
           <div id="portfolio-board" aria-live="polite"><p class="muted">Checking every customer…</p></div>
         </section>
       </section>
@@ -675,9 +679,9 @@
   </dialog>
   <script src="/static/js/onboarding.js?v=20261008-2" defer></script>
   {% endif %}
-  <script src="/static/js/google-admin.js?v=20261009-2" defer></script>
-  <script src="/static/js/history.js?v=20261008-1" defer></script>
-  <script src="/static/js/check-history.js?v=20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-192" defer></script>
+  <script src="/static/js/google-admin.js?v=20261009-3" defer></script>
+  <script src="/static/js/history.js?v=20261009-2" defer></script>
+  <script src="/static/js/check-history.js?v=20261009-2" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-193" defer></script>
 </body>
 </html>

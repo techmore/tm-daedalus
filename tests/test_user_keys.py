@@ -74,6 +74,32 @@ class UserKeyTests(unittest.TestCase):
         self.assertEqual(counts(), before)
         self.assertEqual(self.client.get('/api/dashboard').json()['organization']['id'], org_id)
 
+    def test_portfolio_respects_key_scope_for_bearer_and_login_cookie(self):
+        org_id, _ = self.context()
+        key = self.issue()
+        response = self.client.post('/api/workspaces', json={'name': 'Private other customer', 'domain': 'private-customer.example'})
+        self.assertEqual(response.status_code, 200, response.text)
+        other_id = response.json()['organization_id']
+        normal = self.client.get('/api/portfolio')
+        self.assertEqual(normal.status_code, 200, normal.text)
+        self.assertIn(other_id, [row['id'] for row in normal.json()['workspaces']])
+        self.assertIs(normal.json()['can_switch_workspaces'], True)
+        self.client.post('/logout')
+        bearer = self.client.get('/api/portfolio', headers={'Authorization': 'Bearer ' + key['token']})
+        self.assertEqual(bearer.status_code, 200, bearer.text)
+        self.assertEqual([row['id'] for row in bearer.json()['workspaces']], [org_id])
+        self.assertEqual(bearer.json()['organization_id'], org_id)
+        self.assertIs(bearer.json()['can_switch_workspaces'], False)
+        self.assertNotIn('private-customer.example', bearer.text)
+        self.assertEqual(bearer.headers['cache-control'], 'no-store')
+        self.assertEqual(self.client.post('/auth/token', json={'token': key['token']}).status_code, 200)
+        cookie = self.client.get('/api/portfolio')
+        self.assertEqual(cookie.status_code, 200, cookie.text)
+        self.assertEqual([row['id'] for row in cookie.json()['workspaces']], [org_id])
+        self.assertIs(cookie.json()['can_switch_workspaces'], False)
+        self.assertNotIn('Private other customer', cookie.text)
+        self.assertEqual(self.client.post('/api/workspaces/select', json={'organization_id': other_id}).status_code, 403)
+
     def test_expired_and_unapproved_membership(self):
         key=self.issue()
         with self.session_factory() as db:

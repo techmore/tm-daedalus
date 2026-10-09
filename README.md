@@ -111,6 +111,8 @@ DNS and Website use shared **Check now**, **Monitoring schedule**, and **Create 
 
 Overview status refresh also retains saved priorities and evidence after an interruption. Last-observed availability stays explicit, review links remain usable, and check/schedule writes wait for a fresh workspace and role read. Unchanged polls preserve keyboard focus and partial collection retries.
 
+**All customers** retains its saved rows through failed reads and opens each customer’s Overview. Workspace switches have visible failure/retry feedback and one pending request. Workspace access keys receive only their own portfolio entry; dashboard requests reject a stale tab’s conflicting workspace context before changing data.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:

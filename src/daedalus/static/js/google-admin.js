@@ -7,6 +7,7 @@
   function write(id, value) { var target = node(id); if (target && target.textContent !== String(value)) target.textContent = value; }
   async function request(path, method, body, signal) {
     var headers = {"Content-Type": "application/json"};
+    if (organizationId) headers["X-Daedalus-Workspace"] = String(organizationId);
     if (method && method !== "GET" && path !== "/connect" && current) headers["X-Daedalus-Audit-Connection"] = current.connection_reference || "none";
     var response = await fetch("/api/google-admin" + path, {method: method || "GET", credentials: "same-origin", cache: "no-store", signal: signal, headers: headers, body: body === undefined ? undefined : JSON.stringify(body)});
     var data = await response.json();

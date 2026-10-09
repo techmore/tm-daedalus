@@ -2,6 +2,12 @@
 
 This opt-in harness exercises the shipped NmapUI source bundle, Daedalus bridge, an isolated portal/database, ordinary command enrollment/scope/acknowledgments, realtime websocket events, immutable run history and the existing report renderer. It runs actual Nmap against one temporary listener on `127.0.0.1`. No production enrollment or external target is used.
 
+## Recovery queue observation
+
+Portal completion is recorded before the bridge removes its acknowledged local result file. The interruption harness now waits up to 30 seconds for event/result queues to empty while requiring the owned bridge to remain alive. Rejected evidence and an unavailable spool fail immediately; persistent queues still fail with their counts. The subsequent reported delivery observation must also show zero pending events and a saved acknowledgement. No recovery acceptance condition was removed.
+
+The previous source `9b62da3` passed four Linux scenarios but failed interrupted-bridge CI **37887109103** at its immediate queue check. Its failure receipt is retained. A new real Mac loopback run with the bounded observation succeeded: 12 original pending events recovered with unchanged identity, one deep Nmap invocation, one lost committed event response replayed without duplication, zero final pending events, 21 realtime messages and the existing two-page PDF. The PDF SHA-256 is `bc0d198cc31e458a83713585da909faf05e4979556e0fbc279f735de9baff024`. Approved scanner source/report assets were not edited. New Linux exact-source CI remains a separate acceptance requirement.
+
 ## Run on a development machine
 
 Use the project Python environment for the harness and a Python environment containing the shipped NmapUI requirements for `--nmapui-python`. Nmap must be on PATH. The harness extracts the shipped source bundle; it does not use an independently modified sibling source tree. PDF generation requires the configured Chromium runtime. Do not paste enrollment/API credentials into command arguments.

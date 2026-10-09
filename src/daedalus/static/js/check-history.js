@@ -13,7 +13,7 @@
     async function page(field, before, signal, domain) {
       var url = new URL(options.url, window.location.origin);
       if (before != null) url.searchParams.set(field + "_before", String(before));
-      var response = await fetch(url.pathname + url.search, {
+      var response = await (options.fetch || fetch)(url.pathname + url.search, {
         credentials: "same-origin", cache: "no-store", signal: signal
       });
       var body = await response.json();

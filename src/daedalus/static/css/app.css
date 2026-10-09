@@ -1040,13 +1040,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .approval-who { flex: 1 1 200px; font-weight: 600; overflow-wrap: anywhere; }
 .approval-note { margin: 0; color: #8a3b2f; }
 
-.portfolio-row { grid-template-columns: 14px minmax(140px, 1fr) minmax(130px, .8fr) minmax(140px, .9fr) minmax(0, 1.6fr); }
+.portfolio-row { grid-template-columns: 14px minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr); row-gap: 10px; }
+.portfolio-row .status-why { margin-top: 0; }
 .portfolio-domain { text-align: left; }
-.portfolio-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.portfolio-chips { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
 .portfolio-chip { padding: 3px 9px; border-radius: 999px; font-size: 12px; background: var(--olive-100); color: var(--olive-900); }
 .portfolio-chip.is-warn { background: #f4e8c4; }
 .portfolio-chip.is-bad { background: #f2d6cf; }
 .portfolio-chip.is-idle { background: #ebe8dc; color: var(--muted); }
+.status-board[data-read-stale="true"] .portfolio-chip { background: var(--olive-100); color: var(--muted); }
+.portfolio-row .status-name[aria-disabled="true"] { opacity: .55; cursor: default; }
 @media (max-width: 1050px) { .portfolio-row { grid-template-columns: 14px minmax(0, 1fr); } .portfolio-row > :not(.status-dot):not(.status-name) { grid-column: 2; text-align: left; } .portfolio-chips { justify-content: flex-start; } }
 
 .drive-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; padding: 16px 18px; border: 1px solid var(--card-line); border-radius: 12px; background: var(--cream-50); }

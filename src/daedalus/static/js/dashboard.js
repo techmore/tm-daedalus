@@ -36,9 +36,20 @@
 
   var shell = document.querySelector(".app-shell");
   var orgId = shell ? shell.dataset.organizationId : null;
+  function fetch(url, options) {
+    // Bind API requests to the workspace rendered in this document.
+    if (orgId && typeof url === "string" && url.startsWith("/api/")) {
+      var headers = new Headers(options && options.headers);
+      headers.set("X-Daedalus-Workspace", orgId);
+      options = Object.assign({}, options, {headers: headers});
+    }
+    return window.fetch(url, options);
+  }
   var postureRequestSequence = 0;
   var workspacePostureRead = {body: null, signature: null, error: null, loading: false, controller: null, mutationBusy: false,
     publicCheckRetryTypes: null, publicCheckFeedback: ""};
+  var portfolioRead = {body: null, signature: null, error: null, loading: false, controller: null, sequence: 0};
+  var workspaceSelectionBusy = false;
   var reportHistories = Object.create(null);
   var notificationHistory = null;
   var role = shell ? shell.dataset.role : null;
@@ -1394,18 +1405,73 @@
     return workspaceAreaPresentation(area).level;
   }
 
-  async function loadPortfolio() {
+  function updatePortfolioReadState() {
+    var read = portfolioRead;
+    var refresh = document.getElementById("portfolio-refresh");
+    if (refresh) {
+      if (!refresh.dataset.bound) { refresh.dataset.bound = "true"; refresh.addEventListener("click", function () { return loadPortfolio(); }); }
+      refresh.textContent = read.error ? "Retry customer status" : "Refresh customer status";
+      refresh.setAttribute("aria-busy", String(read.loading));
+      refresh.setAttribute("aria-disabled", String(workspaceSelectionBusy));
+    }
+    var observed = document.getElementById("portfolio-observed");
+    if (observed) observed.textContent = read.body ? (read.error ? "Last observed " : "Customer status read ") + dateLabel(read.body.assessed_at)
+      + ". Each assessment retains its own evidence date." : "No customer status read yet.";
+    var note = document.getElementById("portfolio-read-note");
+    if (note) {
+      note.hidden = !read.error && (!read.loading || !!read.body);
+      note.textContent = read.error ? read.error + (read.body ? " Saved customer evidence remains visible. Availability and access are last observed; refresh before switching customers."
+        : " Retry to load the customers you can access.") : read.loading && !read.body ? "Reading customer status…" : "";
+    }
+    var board = document.getElementById("portfolio-status-board");
+    if (board) board.dataset.readStale = read.error ? "true" : "false";
     var host = document.getElementById("portfolio-board");
-    if (!host) return;
+    if (host) host.querySelectorAll("[data-select-workspace]").forEach(function (button) {
+      button.setAttribute("aria-disabled", String(!read.body || !!read.error || read.loading || workspaceSelectionBusy
+        || !read.body.can_switch_workspaces && String(button.dataset.selectWorkspace) !== String(orgId)));
+    });
+  }
+
+  function validPortfolioBody(body) {
+    if (!body || String(body.organization_id) !== String(orgId) || typeof body.can_switch_workspaces !== "boolean"
+      || typeof body.assessed_at !== "string" || !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(body.assessed_at)
+      || !Number.isFinite(Date.parse(body.assessed_at)) || Date.parse(body.assessed_at) > Date.now() + 60000
+      || !Array.isArray(body.workspaces)) return false;
+    var ids = new Set();
+    return body.workspaces.every(function (workspace) {
+      if (!workspace || !Number.isSafeInteger(workspace.id) || workspace.id <= 0 || ids.has(workspace.id)
+        || typeof workspace.name !== "string" || !workspace.name || typeof workspace.domain !== "string" || !workspace.domain
+        || ["admin", "member"].indexOf(workspace.role) < 0 || typeof workspace.verification_status !== "string"
+        || !validWorkspaceAreaRows(workspace.areas)) return false;
+      ids.add(workspace.id); return true;
+    });
+  }
+
+  async function loadPortfolio(background) {
+    var host = document.getElementById("portfolio-board");
+    if (!host || !orgId || workspaceSelectionBusy || background && portfolioRead.loading) return;
+    var sequence = ++portfolioRead.sequence;
+    if (portfolioRead.controller) portfolioRead.controller.abort();
+    var controller = new AbortController(); portfolioRead.controller = controller; portfolioRead.loading = true;
+    updatePortfolioReadState();
+    var deadline = window.setTimeout(function () { controller.abort(); }, 20000);
     try {
-      var response = await fetch("/api/portfolio", { credentials: "same-origin" });
+      var response = await fetch("/api/portfolio", { credentials: "same-origin", cache: "no-store", signal: controller.signal });
       var body = await response.json();
-      if (!response.ok || !Array.isArray(body.workspaces)) throw new Error("Customers could not be loaded.");
+      if (controller.signal.aborted || !response.ok || !validPortfolioBody(body)) throw new Error("Customer status could not be refreshed.");
+      if (sequence !== portfolioRead.sequence) return;
+      var signature = JSON.stringify([body.can_switch_workspaces, body.workspaces, body.workspaces.map(function (workspace) {
+        return workspaceStatusSummary(workspace.areas).rows.map(function (row) { return [row.level, row.verdict]; });
+      })]);
+      portfolioRead.body = body; portfolioRead.error = null;
+      if (signature === portfolioRead.signature) return;
+      portfolioRead.signature = signature;
+      var focusedId = host.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.selectWorkspace : null;
       var order = {bad: 0, warn: 1, idle: 2, ok: 3};
       var rows = body.workspaces.map(function (workspace) {
         return {workspace: workspace, assessment: workspaceStatusSummary(workspace.areas)};
       });
-      rows.sort(function (x, y) { return order[x.assessment.level] - order[y.assessment.level] || String(x.workspace.name).localeCompare(String(y.workspace.name)); });
+      rows.sort(function (x, y) { return order[x.assessment.level] - order[y.assessment.level] || y.assessment.review - x.assessment.review || y.assessment.missing - x.assessment.missing || String(x.workspace.name).localeCompare(String(y.workspace.name)); });
       var needing = rows.filter(function (row) { return row.assessment.review > 0 || !row.assessment.rows.length; }).length;
       var incomplete = rows.filter(function (row) { return row.assessment.missing > 0; }).length;
       var running = rows.filter(function (row) { return row.assessment.running > 0; }).length;
@@ -1426,8 +1492,13 @@
         var dot = document.createElement("span"); dot.className = "status-dot"; dot.setAttribute("aria-hidden", "true");
         var name = document.createElement("button"); name.type = "button"; name.className = "status-name";
         name.textContent = row.workspace.name; name.dataset.selectWorkspace = row.workspace.id;
+        name.dataset.workspaceReviewTab = "overview";
         name.setAttribute("aria-label", "Review " + row.workspace.name);
         var domain = document.createElement("span"); domain.className = "status-when portfolio-domain"; domain.textContent = row.workspace.domain;
+        var access = document.createElement("span"); access.className = "status-why";
+        var ownership = {verified: "Domain ownership verified", pending: "TXT verification pending", expired: "Domain verification expired"};
+        access.textContent = (ownership[row.workspace.verification_status] || "Domain ownership status unknown")
+          + " · " + (row.workspace.role === "admin" ? "Workspace admin" : "Workspace member");
         var chips = document.createElement("span"); chips.className = "portfolio-chips";
         row.assessment.rows.forEach(function (area) {
           var chip = document.createElement("span"); chip.className = "portfolio-chip is-" + area.level;
@@ -1441,11 +1512,21 @@
         var datedAreas = row.assessment.rows.filter(function (area) { return area.hasEvidence; });
         datedAreas.sort(function (left, right) { return new Date(right.area.updated_at).getTime() - new Date(left.area.updated_at).getTime(); });
         coverage.textContent = row.assessment.detail + (datedAreas.length ? " · Latest saved evidence " + dateLabel(datedAreas[0].area.updated_at) : " · No dated saved evidence");
-        li.append(dot, name, domain, verdict, chips, coverage);
+        li.append(dot, name, domain, verdict, chips, coverage, access);
         list.append(li);
       });
       host.append(list);
-    } catch (error) { host.replaceChildren(); appendEmpty(host, error.message); }
+      if (focusedId && /^\d+$/.test(String(focusedId))) {
+        var focused = host.querySelector('[data-select-workspace="' + focusedId + '"]') || document.getElementById("portfolio-refresh");
+        if (focused) focused.focus({preventScroll: true});
+      }
+    } catch (_error) { if (sequence === portfolioRead.sequence) {
+      portfolioRead.error = controller.signal.aborted ? "Customer status read timed out." : "Customer status could not be refreshed.";
+      if (!portfolioRead.body) { host.replaceChildren(); appendEmpty(host, "Customer status is unavailable."); }
+    } } finally {
+      window.clearTimeout(deadline);
+      if (sequence === portfolioRead.sequence) { portfolioRead.loading = false; portfolioRead.controller = null; updatePortfolioReadState(); }
+    }
   }
 
   function renderStatusBoard(areas) {
@@ -1599,8 +1680,13 @@
       || !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(body.assessed_at)
       || !Number.isFinite(Date.parse(body.assessed_at)) || Date.parse(body.assessed_at) > Date.now() + 60000
       || !Array.isArray(body.areas) || !body.areas.length) return false;
+    return validWorkspaceAreaRows(body.areas);
+  }
+
+  function validWorkspaceAreaRows(areas) {
+    if (!Array.isArray(areas) || !areas.length) return false;
     var seen = new Set();
-    return body.areas.every(function (area) {
+    return areas.every(function (area) {
       if (!area || ["dns", "web", "scanners", "cis", "meraki", "google-admin"].indexOf(area.key) < 0 || seen.has(area.key)
         || typeof area.title !== "string" || typeof area.summary !== "string" || typeof area.state !== "string") return false;
       seen.add(area.key); return true;
@@ -1720,6 +1806,7 @@
         if (!force && document.querySelector(".inline-confirmation")) return;
         render(data);
         if (activeTab === "overview") { await loadWorkspacePosture(true); await loadPendingApprovals(); }
+        if (activeTab === "portfolio") await loadPortfolio(true);
       } catch (_error) {
         // Periodic refresh retries transient failures without changing saved evidence.
       }
@@ -3207,7 +3294,7 @@
 
   function reportHistory(group) {
     if (reportHistories[group.topic]) return reportHistories[group.topic];
-    var pager = window.daedalusHistory.create({ url: "/api/reports", field: "reports", changed: function (state, committed) {
+    var pager = window.daedalusHistory.create({ url: "/api/reports", field: "reports", fetch: function (url, options) { return fetch(url, options); }, changed: function (state, committed) {
       group.views.forEach(function (view) {
         var list = document.getElementById(view[0]);
         if (!list) return;
@@ -5426,6 +5513,7 @@
     var state = type === "web-active" ? activeExposureHistory : type === "web-nikto" ? niktoHistory
       : (externalCheckHistory[type] || (externalCheckHistory[type] = {}));
     var pager = window.daedalusCheckHistory.create({
+      fetch: function (url, options) { return fetch(url, options); },
       url: "/api/external-checks/" + type, type: type, state: state,
       changed: function (current, committed) {
         var focused = document.activeElement;
@@ -5960,24 +6048,57 @@
     });
   }
 
-  async function selectWorkspace(id) {
+  function setWorkspaceSelectionBusy(busy) {
+    workspaceSelectionBusy = busy;
+    var select = document.getElementById("workspace-select");
+    if (select) {
+      if (busy) select.dataset.selectionWasDisabled = String(select.disabled);
+      select.disabled = busy || select.dataset.selectionWasDisabled === "true";
+    }
+    document.querySelectorAll("[data-select-workspace]").forEach(function (button) { button.setAttribute("aria-disabled", String(busy)); });
+    updatePortfolioReadState();
+  }
+
+  async function selectWorkspace(id, targetTab, trigger) {
+    if (typeof id !== "number" && (typeof id !== "string" || !/^\d+$/.test(id))) return;
+    var selectedId = Number(id);
+    if (workspaceSelectionBusy || !Number.isSafeInteger(selectedId) || selectedId <= 0) return;
+    var fromPortfolio = trigger && trigger.closest("#portfolio-board");
+    if (fromPortfolio && (!portfolioRead.body || portfolioRead.error || portfolioRead.loading
+      || !portfolioRead.body.workspaces.some(function (workspace) { return workspace.id === selectedId; })
+      || !portfolioRead.body.can_switch_workspaces && String(selectedId) !== String(orgId))) return;
+    if (String(selectedId) === String(orgId)) {
+      var previousNote = document.getElementById("workspace-selection-note"); if (previousNote) previousNote.hidden = true;
+      if (targetTab === "overview") activateTab("overview", true);
+      return;
+    }
+    var note = document.getElementById("workspace-selection-note");
+    var restoreFocus = trigger && document.activeElement === trigger;
+    if (note) { note.hidden = false; note.textContent = "Opening workspace…"; }
+    setWorkspaceSelectionBusy(true);
+    if (trigger) trigger.setAttribute("aria-busy", "true");
     try {
-      await postJson("/api/workspaces/select", { organization_id: Number(id) });
+      var body = await postJson("/api/workspaces/select", { organization_id: selectedId });
+      if (!body || body.ok !== true || body.organization_id !== selectedId) throw new Error("The selected workspace could not be confirmed.");
+      if (targetTab === "overview") window.history.replaceState(null, "", window.location.pathname + window.location.search + "#overview");
       window.location.reload();
     } catch (error) {
-      var feedback = document.getElementById("workspace-feedback");
-      showError(feedback, error.message);
+      if (note) { note.hidden = false; note.textContent = "Workspace switch could not be confirmed. " + error.message + " This page still displays the previous workspace; retry or refresh before continuing."; }
+      var select = document.getElementById("workspace-select"); if (select) select.value = orgId;
+      setWorkspaceSelectionBusy(false);
+      if (trigger) trigger.setAttribute("aria-busy", "false");
+      if (restoreFocus && (!document.activeElement || document.activeElement === document.body)) trigger.focus({preventScroll: true});
     }
   }
 
   document.addEventListener("click", function (event) {
     var selectButton = event.target.closest("[data-select-workspace]");
-    if (selectButton) selectWorkspace(selectButton.dataset.selectWorkspace);
+    if (selectButton) selectWorkspace(selectButton.dataset.selectWorkspace, selectButton.dataset.workspaceReviewTab, selectButton);
   });
   var workspaceSelect = document.getElementById("workspace-select");
   if (workspaceSelect) {
     workspaceSelect.addEventListener("change", function () {
-      selectWorkspace(workspaceSelect.value);
+      selectWorkspace(workspaceSelect.value, null, workspaceSelect);
     });
   }
 
@@ -6331,7 +6452,7 @@
 
   async function loadNotifications() {
     if (!orgId) return;
-    if (!notificationHistory) notificationHistory = window.daedalusHistory.create({ url: "/api/notifications", field: "notifications", changed: renderNotifications });
+    if (!notificationHistory) notificationHistory = window.daedalusHistory.create({ url: "/api/notifications", field: "notifications", fetch: function (url, options) { return fetch(url, options); }, changed: renderNotifications });
     var filter = document.getElementById("notification-filter");
     return notificationHistory.refresh({ unread_only: filter && filter.value === "unread" ? "true" : "false" });
   }

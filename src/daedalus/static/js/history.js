@@ -11,7 +11,7 @@
       var url = new URL(options.url, window.location.origin);
       Object.keys(requestFilters).forEach(function (key) { url.searchParams.set(key, requestFilters[key]); });
       if (before != null) url.searchParams.set("before", String(before));
-      var response = await fetch(url.pathname + url.search, { credentials: "same-origin", cache: "no-store", signal: signal });
+      var response = await (options.fetch || fetch)(url.pathname + url.search, { credentials: "same-origin", cache: "no-store", signal: signal });
       var body = await response.json();
       if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not load history.");
       var rows = body[options.field];
