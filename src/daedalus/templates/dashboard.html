@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-196">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-199">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -668,13 +668,13 @@
       </form>
     </div>
     <p class="workspace-feedback" id="workspace-feedback" aria-live="polite"></p>
-    <div class="created-challenge hidden" id="created-challenge">
-      <strong>Customer workspaces added</strong>
-      <p id="created-record-name" class="muted"></p>
-      <p id="created-record-value" class="muted"></p>
-      <p class="fine-print" id="created-probation"></p>
-      <button class="button button-primary" id="open-created-workspace" type="button">Open selected workspace</button>
-    </div>
+    <p id="customer-create-feedback" class="workspace-feedback" role="status"></p>
+    <section id="customer-create-result" class="created-challenge hidden" aria-labelledby="customer-create-result-title">
+      <h3 id="customer-create-result-title">Customer creation results</h3>
+      <p id="customer-create-observed" class="status-when"></p>
+      <p class="fine-print">Each domain has its own workspace. Public checks are configured on a daily schedule; results appear after collection. Open a workspace's Overview → Workspace access for its DNS TXT instructions and approval deadlines.</p>
+      <div id="customer-create-rows" class="workspace-request-list"></div>
+    </section>
     {% if platform_admin %}
     <section aria-labelledby="onboarding-customers-title"><h3 id="onboarding-customers-title">Customer onboarding</h3><p class="muted">Grant, review or end complimentary onboarding during a vendor transition.</p><div id="onboarding-customers"></div><p id="onboarding-feedback" aria-live="polite"></p></section>
     {% endif %}
@@ -697,7 +697,8 @@
   <script src="/static/js/audit-history.js?v=20261009-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-2" defer></script>
   <script src="/static/js/memberships.js?v=20261009-2" defer></script>
-  <script src="/static/js/workspace-requests.js?v=20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-196" defer></script>
+  <script src="/static/js/workspace-requests.js?v=20261009-2" defer></script>
+  <script src="/static/js/customer-create.js?v=20261009-1" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-199" defer></script>
 </body>
 </html>

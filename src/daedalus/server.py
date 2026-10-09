@@ -2165,12 +2165,23 @@ def ensure_default_external_schedules() -> int:
                     ExternalCheckSchedule.check_type == check_type))
                 if exists is not None:
                     continue
-                db.add(ExternalCheckSchedule(
-                    organization_id=organization.id, check_type=check_type, enabled=True,
-                    interval_hours=24, next_run_at=now + timedelta(minutes=2 if created == 0 else 2 + created * 2),
-                    updated_by_user_id=None, updated_at=now))
-                audit(db, organization.id, None, "external_check.schedule_defaulted",
-                      {"check_type": check_type, "interval_hours": 24})
+                try:
+                    # Two customer submissions may configure the same newly
+                    # created workspace. Its unique schedule is the arbiter.
+                    with db.begin_nested():
+                        db.add(ExternalCheckSchedule(
+                            organization_id=organization.id, check_type=check_type, enabled=True,
+                            interval_hours=24, next_run_at=now + timedelta(minutes=2 if created == 0 else 2 + created * 2),
+                            updated_by_user_id=None, updated_at=now))
+                        audit(db, organization.id, None, "external_check.schedule_defaulted",
+                              {"check_type": check_type, "interval_hours": 24})
+                        db.flush()
+                except IntegrityError:
+                    if db.scalar(select(ExternalCheckSchedule.id).where(
+                        ExternalCheckSchedule.organization_id == organization.id,
+                        ExternalCheckSchedule.check_type == check_type)) is None:
+                        raise
+                    continue
                 created += 1
         # Move already-scheduled audits that are not due soon into the overnight window.
         zone = ZoneInfo(SCHEDULE_TIMEZONE)
@@ -3130,6 +3141,7 @@ class CustomerCreateRequest(BaseModel):
     domains: list[str] = Field(min_length=1, max_length=20)
     onboarding: bool = False
     onboarding_reason: str = Field(default="Vendor transition: complimentary onboarding", max_length=500)
+    select_created_workspace: bool = True
 
 
 @app.post("/api/customers")
@@ -3140,6 +3152,8 @@ def create_customer_workspaces(
 ):
     """One customer, one or more domains: a workspace per domain, audited daily."""
     user = get_session_user(request, db)
+    if len(payload.name.strip()) < 2:
+        raise HTTPException(status_code=422, detail="Enter a customer name of at least two characters")
     if payload.onboarding:
         from daedalus.onboarding import platform_admin, mutation_origin
         platform_admin(request, db)
@@ -3170,11 +3184,16 @@ def create_customer_workspaces(
             continue
         created.append(organization)
         results.append({"domain": domain, "status": "created", "organization_id": organization.id,
-                        "name": organization.name, "txt": challenge})
+                        "name": organization.name, "txt": challenge,
+                        "created_at": iso_utc(organization.created_at),
+                        "probation_expires_at": iso_utc(organization.verification_expires_at)})
     if created:
         ensure_default_external_schedules()
-        request.session["organization_id"] = created[0].id
-    return {"customer": payload.name.strip(), "results": results, "created": len(created)}
+        if payload.select_created_workspace:
+            request.session["organization_id"] = created[0].id
+    return JSONResponse({"user_id": user.id, "observed_at": iso_utc(utcnow()),
+        "customer": payload.name.strip(), "results": results, "created": len(created)},
+        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/workspaces/{organization_id}/domain-challenge")

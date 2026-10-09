@@ -29,7 +29,7 @@ Final local validation passed **1,470 tests, one skipped and 446 subtests**. The
 
 ## Remaining acceptance
 
-Production activation requires verified SER8 access and recovery/source inspection. Actual additional customer Google users, TXT publication, approved sharing, succession, future expiry/renewal and wider accessibility review remain open. This local walkthrough does not establish those outcomes. The request-list and audit-history follow-ups below have separate local review evidence. Complete customer creation and onboarding acceptance remain open.
+Production activation requires verified SER8 access and recovery/source inspection. Actual additional customer Google users, TXT publication, approved sharing, succession, future expiry/renewal and wider accessibility review remain open. This local walkthrough does not establish those outcomes. The request-list and audit-history follow-ups below have separate local review evidence. [Customer creation](CUSTOMER-ONBOARDING.md#customer-creation-review--october-9-implementation-checkpoint) now has its own local review; production creation and real customer onboarding acceptance remain open.
 
 ## Recorded action history — October 9 follow-up
 

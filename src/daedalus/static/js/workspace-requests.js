@@ -46,6 +46,7 @@
         select.disabled = options.selectionBusy() || !state.fresh || state.loading;
         select.setAttribute("aria-busy",String(state.loading));
       }
+      if (options.onState) options.onState();
     }
     function row(workspace) {
       var article = document.createElement("div"); article.className = "workspace-request-row"; article.dataset.workspaceRequestRow = String(workspace.id);

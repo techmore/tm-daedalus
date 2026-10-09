@@ -812,7 +812,7 @@ focus(){focused=this.dataset.postureKey;document.activeElement=this;}}
 const host=new Node(), priorities=new Node(); const document={activeElement:null,getElementById:id=>id==='workspace-posture'?host:id==='workspace-priorities'?priorities:null,createElement:()=>new Node()};
 function makeAuditMetric(label,value,detail,tone){const n=new Node();n.textContent=label+':'+value;n.tone=tone;return n;}
 let postureRequestSequence=0; const orgId='1'; const role='admin'; const requests=[];
-const portfolioRead={body:null,signature:null,error:null,loading:false,controller:null,sequence:0};let workspaceSelectionBusy=false;let workspaceRequests=null;
+const portfolioRead={body:null,signature:null,error:null,loading:false,controller:null,sequence:0};let workspaceSelectionBusy=false;let workspaceRequests=null;let customerCreation=null;
 const window={setTimeout,clearTimeout}; const workspacePostureRead={body:null,signature:null,error:null,loading:false,controller:null,mutationBusy:false};
 const fetch=()=>new Promise(resolve=>requests.push(resolve));
 function dateLabel(value){return value;} function appendEmpty(node,value){node.textContent=value;}

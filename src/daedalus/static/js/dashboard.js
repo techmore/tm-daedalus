@@ -93,6 +93,7 @@
   var activeTab = null;
   var auditReview = null;
   var workspaceRequests = null;
+  var customerCreation = null;
   var membershipReview = window.DaedalusMembershipReview ? window.DaedalusMembershipReview.create({
     organizationId: orgId,
     fetch: function (url, options) { return fetch(url, options); },
@@ -5917,50 +5918,20 @@
     if (!workspaceRequests && window.DaedalusWorkspaceRequests) {
       workspaceRequests = window.DaedalusWorkspaceRequests.create({userId:shell && shell.dataset.userId,organizationId:orgId,
         fetch:function (url,options) {return fetch(url,options);},selectionBusy:function () {return workspaceSelectionBusy;},
-        select:function (id,button) {return selectWorkspace(id,null,button);},onRead:syncPendingMembershipFeeds});
+        select:function (id,button) {return selectWorkspace(id,null,button);},onRead:syncPendingMembershipFeeds,
+        onState:function () {if (customerCreation) customerCreation.updateControls();}});
       window.daedalusWorkspaceRequests = workspaceRequests;
     }
     if (workspaceRequests) return workspaceRequests.load();
   }
 
-  var createWorkspaceForm = document.getElementById("create-workspace-form");
-  if (createWorkspaceForm) {
-    createWorkspaceForm.addEventListener("submit", async function (event) {
-      event.preventDefault();
-      var feedback = document.getElementById("workspace-feedback");
-      var challenge = document.getElementById("created-challenge");
-      challenge.classList.add("hidden");
-      text(feedback, "Creating workspace…");
-      var form = new FormData(createWorkspaceForm);
-      try {
-        var body = await postJson("/api/customers", {
-          name: form.get("name"),
-          domains: String(form.get("domains") || "").split(/[\s,;]+/).filter(Boolean),
-          onboarding: form.get("onboarding") === "on",
-          onboarding_reason: form.get("onboarding_reason") || "Vendor transition: complimentary onboarding"
-        });
-        var lines = body.results.map(function (item) {
-          var label = item.domain || item.input;
-          return label + " — " + (item.status === "created" ? "added, daily checks starting" : item.status === "exists" ? "already has a workspace (ask its admin for access)" : item.detail || "not valid");
-        });
-        text(feedback, body.created ? body.customer + ": " + lines.join(" · ") : lines.join(" · "));
-        if (body.created) {
-          text(document.getElementById("created-record-name"), "Domain ownership");
-          text(document.getElementById("created-record-value"), "Open each workspace's Overview → Workspace access to copy its DNS TXT record.");
-          text(document.getElementById("created-probation"), "Public checks can run now. Active checks, scanners and sharing require verification or a current approval.");
-          challenge.classList.remove("hidden");
-        }
-        createWorkspaceForm.reset();
-        if (window.daedalusOnboarding) window.daedalusOnboarding.load();
-      } catch (error) {
-        showError(feedback, error.message);
-      }
-    });
-  }
-
-  var openCreatedWorkspace = document.getElementById("open-created-workspace");
-  if (openCreatedWorkspace) {
-    openCreatedWorkspace.addEventListener("click", function () { window.location.reload(); });
+  if (window.DaedalusCustomerCreation) {
+    customerCreation = window.DaedalusCustomerCreation.create({userId:shell && shell.dataset.userId,
+      fetch:function (url,options) {return fetch(url,options);},workspaceReview:function () {return workspaceRequests;},
+      selectionBusy:function () {return workspaceSelectionBusy;},
+      select:function (id,button) {return selectWorkspace(id,"overview",button);},
+      afterSave:async function () {await loadWorkspaces();if (window.daedalusOnboarding) await window.daedalusOnboarding.load();}});
+    window.daedalusCustomerCreation = customerCreation;
   }
 
   async function requestMembership(domain) {
@@ -6016,6 +5987,7 @@
     document.querySelectorAll("[data-select-workspace]").forEach(function (button) { button.setAttribute("aria-disabled", String(busy)); });
     updatePortfolioReadState();
     if (workspaceRequests) workspaceRequests.updateControls();
+    if (customerCreation) customerCreation.updateControls();
   }
 
   async function selectWorkspace(id, targetTab, trigger) {

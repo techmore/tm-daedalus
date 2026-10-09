@@ -40,7 +40,7 @@ function appendEmpty(host, message) { const child=new Node(); child.textContent=
 let opened=null, postureLoads=0, requests=[], responses=[];
 const orgId='1'; let postureRequestSequence=0; let reloads=0,locationChanges=[]; const window={setTimeout,clearTimeout,location:{pathname:'/dashboard',search:'',reload:()=>{reloads++;}},history:{replaceState:(state,title,path)=>locationChanges.push(path)}};
 const workspacePostureRead={body:null,signature:null,error:null,loading:false,controller:null,mutationBusy:false};
-const portfolioRead={body:null,signature:null,error:null,loading:false,controller:null,sequence:0}; let workspaceSelectionBusy=false; let workspaceRequests=null;
+const portfolioRead={body:null,signature:null,error:null,loading:false,controller:null,sequence:0}; let workspaceSelectionBusy=false; let workspaceRequests=null;let customerCreation=null;
 function activateTab(key, location) { opened={key,location}; }
 async function loadWorkspacePosture() { postureLoads++; }
 async function fetch(path, options) { requests.push({path,options}); const response=responses.shift(); if (response instanceof Error) throw response; return response; }

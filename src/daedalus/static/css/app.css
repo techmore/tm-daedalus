@@ -234,6 +234,7 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
 .workspace-request-row strong { display: block; color: #344653; font-size: 11px; }
 .workspace-request-row small { color: #83919a; font-size: 10px; }
 .workspace-request-row > div { min-width: 0; overflow-wrap: anywhere; }
+.workspace-request-row > button { flex-shrink: 0; white-space: nowrap; }
 .workspace-request-row strong { font-size: 13px; }
 .workspace-request-row small { display: block; margin-top: 4px; font-size: 12px; color: #6b624f; }
 .workspace-request-row .workspace-state { font-size: 12px; color: var(--olive-900); }
@@ -413,6 +414,9 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
 .workspace-form h3 { color: var(--olive-950); }
 .workspace-form label { color: #6e684e; }
 .workspace-form input { border-color: rgba(219, 214, 176, .8); color: var(--olive-900); background: #fffefa; }
+.workspace-form textarea { width: 100%; min-height: 96px; padding: 10px; border: 1px solid rgba(219, 214, 176, .8); border-radius: 7px; color: var(--olive-900); background: #fffefa; font: inherit; font-size: 12px; resize: vertical; }
+.created-challenge { border-color: rgba(219, 214, 176, .65); background: var(--cream-50); }
+.created-challenge h3, .created-challenge .status-when { margin: 0; }
 .workspace-form small { color: #6b624f; }
 .workspace-feedback { color: #5f5532; }
 .workspace-request-row { border-color: rgba(219, 214, 176, .65); background: var(--cream-50); }
@@ -1023,7 +1027,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .status-row { grid-template-columns: 14px minmax(0, 1fr); row-gap: 6px; }
   .status-dot { grid-column: 1; grid-row: 1; }
   .status-name { grid-column: 2; grid-row: 1; }
-  .status-verdict, .status-when, .status-action-slot, .status-why { grid-column: 2; text-align: left; }
+  .status-row .status-verdict, .status-row .status-when, .status-row .status-action-slot, .status-row .status-why { grid-column: 2; text-align: left; }
   .status-why { margin-top: 0; }
   .status-action-slot { justify-content: flex-start; }
   .status-run-all { margin-left: 0; width: 100%; }
