@@ -244,7 +244,9 @@ class WorkspaceNotificationTests(unittest.TestCase):
         with patch.object(server, "run_dns_check", side_effect=TimeoutError("private collector detail")):
             returned = server.execute_external_check(org_id, user_id, "dns", "manual")
         self.assertFalse(returned['notice_suppressed'])
-        self.assertEqual(len(self.client.get('/api/notifications').json()['notifications']), 3)
+        notices = self.client.get('/api/notifications').json()['notifications']
+        self.assertEqual(len(notices), 4)
+        self.assertEqual(sum(n['reason'] == 'collection_resumed' for n in notices), 1)
         with self.session_factory() as db:
             self.assertEqual(len(db.scalars(select(ExternalCheckRun)).all()), 5)
 
@@ -331,7 +333,7 @@ class WorkspaceNotificationTests(unittest.TestCase):
         notice = body["notifications"][0]
         self.assertEqual(notice["reason"], "warnings")
         self.assertIn("could not be confirmed", notice["summary"])
-        self.assertIn("No confirmed changes", notice["summary"])
+        self.assertIn("first saved baseline", notice["summary"])
         self.assertTrue(notice["detected_at"])
 
     def test_repeated_warnings_keep_history_without_repeated_notices(self):
@@ -485,7 +487,7 @@ class WorkspaceNotificationTests(unittest.TestCase):
         self.assertEqual(notice["reason"], "warnings")
         self.assertEqual(notice["tab"], "web")
         self.assertIn("partial", notice["summary"])
-        self.assertIn("No confirmed changes", notice["summary"])
+        self.assertIn("first saved baseline", notice["summary"])
 
     def test_meraki_observation_notice_uses_neutral_wording_and_preserves_saved_notice(self):
         org_id, _ = self.workspace()

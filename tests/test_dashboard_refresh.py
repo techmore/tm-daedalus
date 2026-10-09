@@ -264,6 +264,19 @@ assert.doesNotMatch(content,/no detected changes/);
 notifyExternalCheck({run_id:37,check_type:'dns',domain:'example.org',status:'completed_with_warnings',change_count:0,initial_baseline:true});
 assert.match(content,/no previous assessment/);
 assert.match(content,/Some checks may be unknown/);
+notifyExternalCheck({run_id:38,check_type:'dns',domain:'example.org',status:'completed',change_count:0,collection_resumed:true});
+assert.match(content,/DNS collection resumed/);
+assert.match(content,/Fresh evidence was saved/);
+assert.match(content,/does not establish that security findings were resolved/);
+assert.doesNotMatch(content,/with no detected changes/);
+notifyExternalCheck({run_id:39,check_type:'web',domain:'example.org',status:'completed',change_count:0,collection_resumed:true,collection_resumed_with_limits:true,initial_baseline:true});
+assert.match(content,/resumed with limitations/);
+assert.match(content,/changes cannot yet be compared/);
+const resumedMessage=content;
+notifyExternalCheck({run_id:39,check_type:'web',domain:'example.org',status:'completed',change_count:0,collection_resumed:true});
+assert.equal(content,resumedMessage);
+notifyExternalCheck({run_id:40,check_type:'web',domain:'example.org',status:'completed',change_count:0,source:'schedule',notice_suppressed:true});
+assert.equal(content,resumedMessage,'unchanged healthy scheduled collection stays quiet');
 """
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

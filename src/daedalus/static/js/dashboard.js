@@ -5440,6 +5440,10 @@
     var textMessage;
     if (message.status === "failed") {
       textMessage = moduleName + " check failed for " + message.domain + ". Open its tab to review the recorded error.";
+    } else if (message.collection_resumed === true && (message.status === "completed" || message.status === "completed_with_warnings")) {
+      textMessage = moduleName + " collection resumed" + (message.collection_resumed_with_limits === true ? " with limitations" : "") + " for " + message.domain + ". " +
+        (message.initial_baseline === true ? "First baseline saved; changes cannot yet be compared. " : message.change_count ? message.change_count + " change(s) were recorded. " : "Fresh evidence was saved. ") +
+        "Review the latest run; resumed collection does not establish that security findings were resolved.";
     } else if (message.status === "completed_with_warnings") {
       textMessage = moduleName + " check completed with warnings for " + message.domain + ". " +
         (message.initial_baseline === true ? "Initial baseline saved; no previous assessment was available for comparison." : message.change_count ? message.change_count + " change(s) were detected." : "No confirmed changes were detected.") +

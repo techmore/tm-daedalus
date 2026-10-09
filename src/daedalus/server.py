@@ -1654,8 +1654,10 @@ def _execute_external_check(
         started_clock = time.perf_counter()
     else:
         with SessionLocal() as db:
+            # Admission must also hold across app workers. Commit the claim
+            # before collection; network requests never hold this write lock.
+            db.execute(text("BEGIN IMMEDIATE"))
             if enqueue_only:
-                db.execute(text("BEGIN IMMEDIATE"))
                 pending = db.scalar(select(func.count(ExternalCheckRun.id)).where(ExternalCheckRun.check_type == "web-nikto", ExternalCheckRun.status.in_(("queued", "running"))))
                 if pending >= 25:
                     raise HTTPException(status_code=429, detail="Website audit queue is full. Try again later.")
@@ -1677,12 +1679,12 @@ def _execute_external_check(
             if check_type in {"web-active", "web-nikto"}:
                 if user_id is None or not workspace_controls_available(db, organization):
                     raise HTTPException(status_code=403, detail="Active website checks require domain verification or an active override")
-                if db.scalar(select(ExternalCheckRun.id).where(
-                    ExternalCheckRun.organization_id == organization_id,
-                    ExternalCheckRun.check_type == check_type,
-                    ExternalCheckRun.status.in_(("queued", "running")),
-                ).limit(1)) is not None:
-                    raise HTTPException(status_code=409, detail="An active website check is already running for this workspace.")
+            if db.scalar(select(ExternalCheckRun.id).where(
+                ExternalCheckRun.organization_id == organization_id,
+                ExternalCheckRun.check_type == check_type,
+                ExternalCheckRun.status.in_(("queued", "running")),
+            ).limit(1)) is not None:
+                raise HTTPException(status_code=409, detail="A check is already running or queued for this workspace.")
             if trigger_source == "schedule":
                 schedule = db.scalar(
                     select(ExternalCheckSchedule).where(
@@ -1860,6 +1862,12 @@ def _execute_external_check(
         )
         repeated_failure = bool(failure and latest_terminal and latest_terminal.status == "failed"
             and latest_terminal.error_summary == run.error_summary)
+        collection_resumed = bool(
+            run.status in {"completed", "completed_with_warnings"} and latest_terminal
+            and latest_terminal.status == "failed" and latest_terminal.domain == domain
+        )
+        collection_resumed_with_limits = bool(collection_resumed and
+            (warning_reasons or run.status == "completed_with_warnings"))
         action = "external_check.failed" if failure else "external_check.completed"
         details: dict[str, Any] = {
             "run_id": run.id,
@@ -1871,6 +1879,8 @@ def _execute_external_check(
             "source": trigger_source,
             "repeated_warning_notice_suppressed": repeated_warning and not bool(changes),
             "repeated_failure_notice_suppressed": repeated_failure,
+            "collection_resumed": collection_resumed,
+            "previous_failed_run_id": latest_terminal.id if collection_resumed else None,
         }
         if failure:
             details["error"] = run.error_summary
@@ -1891,7 +1901,8 @@ def _execute_external_check(
                     "source": trigger_source,
                 },
             )
-        if (failure and not repeated_failure) or (run.status in {"completed", "completed_with_warnings"} and (changes or (warning_reasons and not repeated_warning))):
+        notice_created = False
+        if (failure and not repeated_failure) or (run.status in {"completed", "completed_with_warnings"} and (collection_resumed or changes or (warning_reasons and not repeated_warning))):
             # The source run and comparison are already saved in this transaction.
             # A unique source key makes request/scheduler retries idempotent.
             existing_notice = db.scalar(select(WorkspaceNotification.id).where(
@@ -1900,8 +1911,13 @@ def _execute_external_check(
                 WorkspaceNotification.source_id == run.id,
             ))
             if existing_notice is None:
-                reason = "check_failed" if failure else "changes_and_warnings" if changes and warning_reasons else "changes" if changes else "warnings"
+                reason = "check_failed" if failure else "collection_resumed" if collection_resumed else "changes_and_warnings" if changes and warning_reasons else "changes" if changes else "warnings"
                 parts = ["Collection failed. This run provides no fresh assessment. Review its saved error; previous evidence remains in history"] if failure else []
+                if collection_resumed:
+                    parts.append(f"Collection resumed{' with limitations' if collection_resumed_with_limits else ''}; fresh evidence is saved in run {run.id} after failed attempt {latest_terminal.id}")
+                    parts.append("This confirms collection resumed; it does not establish that security findings were resolved")
+                    if initial_baseline:
+                        parts.append("This is the first saved baseline; changes cannot yet be compared")
                 if changes:
                     groups = list(dict.fromkeys(
                         external_check_change_group(check_type, field_path)
@@ -1925,7 +1941,9 @@ def _execute_external_check(
                         parts.append("No confirmed configuration changes were detected")
                 if warning_reasons:
                     parts.append("Check warning: " + "; ".join(warning_reasons))
-                    if not changes:
+                    if initial_baseline and not collection_resumed:
+                        parts.append("This is the first saved baseline; changes cannot yet be compared")
+                    if not changes and not initial_baseline:
                         parts.append("No confirmed changes were detected")
                 try:
                     with db.begin_nested():
@@ -1933,12 +1951,13 @@ def _execute_external_check(
                             organization_id=organization_id,
                             source_type="external_check_run",
                             source_id=run.id,
-                            title=f"{check_type_label(check_type)} check{' failed' if failure else ''} · {domain}",
+                            title=f"{check_type_label(check_type)} {'collection resumed' if collection_resumed else 'check failed' if failure else 'check'} · {domain}",
                             summary=". ".join(parts)[:1000],
                             reason=reason,
                             detected_at=completed_at,
                         ))
                         db.flush()
+                    notice_created = True
                 except IntegrityError:
                     # Another worker may have committed the same run's notice.
                     # The unique key is the final guard against duplicate delivery.
@@ -1949,7 +1968,9 @@ def _execute_external_check(
         result = serialize_external_run(run, actor)
         result["initial_baseline"] = initial_baseline
         result["changed_fields"] = [change[0] for change in changes]
-        result["notice_suppressed"] = repeated_failure or (repeated_warning and not bool(changes))
+        result["collection_resumed"] = collection_resumed
+        result["collection_resumed_with_limits"] = collection_resumed_with_limits
+        result["notice_suppressed"] = not notice_created
         return result
 
 
@@ -1999,7 +2020,7 @@ def execute_external_check(
     key = (organization_id, check_type)
     with _external_check_lock:
         if key in _active_external_checks:
-            raise HTTPException(status_code=409, detail="A check is already running for this workspace.")
+            raise HTTPException(status_code=409, detail="A check is already running or queued for this workspace.")
         _active_external_checks.add(key)
     try:
         return _execute_external_check(organization_id, user_id, check_type, trigger_source)
@@ -2295,6 +2316,8 @@ async def publish_external_check_result(
             "status": result["status"],
             "change_count": result["change_count"],
             "initial_baseline": result.get("initial_baseline", False),
+            "collection_resumed": result.get("collection_resumed", False),
+            "collection_resumed_with_limits": result.get("collection_resumed_with_limits", False),
             "fields": result.get("changed_fields", []),
             "actor": result.get("actor") or "Scheduled check",
             "source": result.get("source", "manual"),

@@ -155,6 +155,12 @@ Configured platform administrators can grant complimentary 30-day onboarding in 
 
 ## Report and notification history
 
+### Collection failures and recovery
+
+Failed DNS and website attempts retain the last successful evidence and record a dated failure notice. Identical repeated failures stay quiet. The next successful collection records one **collection resumed** notice, including remaining limitations and any observed changes. A first successful collection is explicitly a baseline without a prior comparison. Resumed collection does not establish that security findings were resolved.
+
+Unchanged scheduled checks retain their run history without creating inbox notices or completion banners. Manual checks still show completion feedback. Each workspace/check type has a database admission guard across workers; a busy scheduled check is deferred for retry instead of recorded as a collector failure. Network collection starts after the admission transaction commits.
+
 Saved reports are grouped by topic, with counts and **Load older reports** controls. Topic pages query their own history, so a busy topic cannot hide another topic's reports. The Meraki summary uses the latest completed assessment even when newer failed attempts fill the first page. In-page refresh retains the loaded older boundary; failed refreshes preserve the evidence already shown and offer a retry.
 
 The workspace inbox supports **All notices** and **Unread notices**, counts and **Load older notices**. Unread state belongs to each member. The selected inbox filter stays in the URL across reloads, alongside the topic hash. Refreshes retain focused review actions where their notice is still present. Access notices lead to Overview's Workspace access section; failed PDF notices lead to report history.
