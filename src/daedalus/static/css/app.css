@@ -1067,3 +1067,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .history-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 20px; }
 .history-toolbar label { display: flex; align-items: center; gap: 8px; }
+
+.history-toolbar .button[aria-disabled="true"], #notification-older[aria-disabled="true"] { opacity: .55; cursor: wait; }

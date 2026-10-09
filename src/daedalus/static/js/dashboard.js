@@ -2993,14 +2993,18 @@
       older.addEventListener("click", function () { pager.older(); });
       var retry = document.createElement("button"); retry.type = "button"; retry.className = "button button-quiet";
       retry.textContent = "Refresh " + label; retry.dataset.historyRefresh = "true";
-      retry.addEventListener("click", function () { loadReports(); });
+      retry.addEventListener("click", function () { if (!pager.state.busy) loadReports(); });
       controls.append(older, retry); list.after(controls);
     }
     var state = pager.state;
     var olderButton = controls.querySelector("[data-history-older]");
     olderButton.classList.toggle("hidden", !state.body || !state.body.has_more);
-    olderButton.disabled = state.busy;
-    controls.querySelector("[data-history-refresh]").disabled = state.busy;
+    olderButton.disabled = false;
+    olderButton.setAttribute("aria-disabled", String(state.busy));
+    var refreshButton = controls.querySelector("[data-history-refresh]");
+    refreshButton.disabled = false;
+    refreshButton.setAttribute("aria-disabled", String(state.busy));
+    if (olderButton.classList.contains("hidden") && document.activeElement === olderButton) refreshButton.focus({ preventScroll: true });
   }
 
   function reportHistory(group) {
@@ -5953,9 +5957,13 @@
     var filter = document.getElementById("notification-filter");
     var unreadOnly = filter && filter.value === "unread";
     var older = document.getElementById("notification-older");
-    if (older) { older.classList.toggle("hidden", !state.body || !state.body.has_more); older.disabled = state.busy; }
+    if (older) { older.classList.toggle("hidden", !state.body || !state.body.has_more); older.disabled = false; older.setAttribute("aria-disabled", String(state.busy)); }
     var refreshButton = document.getElementById("notification-refresh");
-    if (refreshButton) refreshButton.disabled = state.busy;
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.setAttribute("aria-disabled", String(state.busy));
+      if (older && older.classList.contains("hidden") && document.activeElement === older) refreshButton.focus({ preventScroll: true });
+    }
     var summary = state.loaded ? state.body.unread_count + " unread · Showing " + state.rows.length + " of " + state.body.total_count + (unreadOnly ? " unread notices." : " notices.") : "Loading notifications…";
     if (state.error) summary = state.error + (state.loaded ? " Previously loaded notices remain below; refresh to update them." : " Use Refresh notices to retry.");
     else if (state.busy) summary += " Updating…";
@@ -6019,7 +6027,7 @@
   var notificationOlder = document.getElementById("notification-older");
   if (notificationOlder) notificationOlder.addEventListener("click", function () { if (notificationHistory) notificationHistory.older(); });
   var notificationRefresh = document.getElementById("notification-refresh");
-  if (notificationRefresh) notificationRefresh.addEventListener("click", loadNotifications);
+  if (notificationRefresh) notificationRefresh.addEventListener("click", function () { if (!notificationHistory || !notificationHistory.state.busy) loadNotifications(); });
 
   document.addEventListener("click", async function (event) {
     var notificationOpen = event.target.closest("[data-notification-open]");

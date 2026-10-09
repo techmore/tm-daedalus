@@ -100,7 +100,8 @@ body=invalid;await pager.refresh();assert.equal(pager.state.rows,original);asser
         helpers = source[source.index('  function notificationReviewLabel('):source.index('  function restoreNotificationFilter(')]
         script = r"""
 class Node {
- constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.textContent='';this.parentElement=null;this.value='all';this.classes=new Set();this.classList={toggle:(name,on)=>{if(on)this.classes.add(name);else this.classes.delete(name);}};}
+ constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.textContent='';this.parentElement=null;this.value='all';this.classes=new Set();this.classList={contains:name=>this.classes.has(name),toggle:(name,on)=>{if(on)this.classes.add(name);else this.classes.delete(name);}};}
+ setAttribute(name,value){this.attrs=this.attrs||{};this.attrs[name]=value;}
  append(...nodes){nodes.forEach(n=>{n.parentElement=this;this.children.push(n);});}
  replaceChildren(...nodes){this.children=[];this.append(...nodes);}
  contains(node){return this===node||this.children.some(child=>child.contains(node));}
@@ -124,6 +125,8 @@ assert.equal(ids['notification-older'].classes.has('hidden'),false);
 let focus=ids['notification-list'].querySelectorAll().find(button=>button.dataset.notificationOpen==='2');focus.focus();
 await notificationHistory.older();assert.equal(ids['notification-list'].children.length,3);assert.equal(document.activeElement.dataset.notificationOpen,'2');
 assert.equal(ids['notification-older'].classes.has('hidden'),true);
+notificationHistory.state.body.has_more=true;renderNotifications(notificationHistory.state,false);ids['notification-older'].focus();notificationHistory.state.busy=true;renderNotifications(notificationHistory.state,false);assert.equal(document.activeElement,ids['notification-older']);assert.equal(ids['notification-older'].attrs['aria-disabled'],'true');notificationHistory.state.busy=false;notificationHistory.state.body.has_more=false;renderNotifications(notificationHistory.state,false);assert.equal(document.activeElement,ids['notification-refresh']);
+ids['notification-list'].querySelectorAll().find(button=>button.dataset.notificationOpen==='2').focus();
 const oldRows=ids['notification-list'].children;failure=true;await loadNotifications();
 assert.equal(ids['notification-list'].children,oldRows);assert.match(ids['notification-inbox-status'].textContent,/Previously loaded/);assert.equal(ids['notification-refresh'].disabled,false);
 failure=false;rows=rows.filter(row=>row.id!==2);await loadNotifications();assert.equal(ids['notification-list'].children.length,2);assert.equal(document.activeElement,ids['notification-filter']);
@@ -136,7 +139,9 @@ ids['notification-filter'].value='unread';rows=[];await loadNotifications();asse
         helpers = source[source.index('  var reportHistoryGroups = ['):source.index('  var merakiOrgOptions = []')]
         script = r"""
 class Node {
- constructor(){this.children=[];this.dataset={};this.classes=new Set();this.classList={toggle:(name,on)=>{if(on)this.classes.add(name);else this.classes.delete(name);}};}
+ focus(){document.activeElement=this;}
+ constructor(){this.children=[];this.dataset={};this.classes=new Set();this.classList={contains:name=>this.classes.has(name),toggle:(name,on)=>{if(on)this.classes.add(name);else this.classes.delete(name);}};}
+ setAttribute(name,value){this.attrs=this.attrs||{};this.attrs[name]=value;}
  append(...nodes){this.children.push(...nodes);}
  replaceChildren(...nodes){this.children=nodes;}
  addEventListener(){} contains(){return false;} querySelectorAll(){return [];}
@@ -160,6 +165,7 @@ assert.equal(renders.length,5);assert.equal(ids['scanner-report-job-list'].rows[
 assert.equal(ids['scanner-report-job-list-history-controls'].querySelector('[data-history-older]').classes.has('hidden'),true);
 const oldRows=ids['scanner-report-job-list'].rows;failure=true;await loadReports();assert.equal(ids['scanner-report-job-list'].rows,oldRows);assert.match(ids['scanner-report-library-status'].textContent,/Previously loaded/);
 assert.match(ids['report-library-status'].textContent,/Showing 1 of 1/);
+const pager=reportHistory(reportHistoryGroups[0]), list=ids['report-job-list'];pager.state.body.has_more=true;renderHistoryControls(list,pager,'reports');const controls=ids['report-job-list-history-controls'];controls.querySelector('[data-history-older]').focus();pager.state.busy=true;renderHistoryControls(list,pager,'reports');assert.equal(document.activeElement,controls.querySelector('[data-history-older]'));assert.equal(document.activeElement.attrs['aria-disabled'],'true');pager.state.busy=false;pager.state.body.has_more=false;renderHistoryControls(list,pager,'reports');assert.equal(document.activeElement,controls.querySelector('[data-history-refresh]'));
 calls=[];activeTab='meraki';await loadReports();assert.deepEqual(calls,['meraki_security']);assert.equal(renders.at(-1).latest.id,1);assert.equal(renders.at(-1).id,'meraki-report-job-list');
 """
         self.run_node(script)
