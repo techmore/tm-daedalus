@@ -46,6 +46,7 @@
   var externalCheckHistory = Object.create(null);
   var savedCheckHistories = Object.create(null);
   var activeExposureHistory = { runs: [], changes: [], runsCursor: null, changesCursor: null, runsHasMore: false, changesHasMore: false, loading: null };
+  var cisWorkspaceRead = { bodies: null, sequence: 0, loading: false, error: null, invalidated: false, mutationBusy: false, controller: null };
   var niktoHistory = { runs: [], cursor: null, hasMore: false, busy: false, sequence: 0 };
   var openCommandHistories = new Set();
   var openScannerControls = new Set();
@@ -1900,7 +1901,7 @@
           }
         }
         if (message.type === "cis_report_received") {
-          if (activeTab === "cis") loadCIS();
+          if (activeTab === "cis") loadCIS(true);
           loadNotifications();
           if (role === "admin") loadAuditLog();
           notifyCISReport(message);
@@ -3489,7 +3490,9 @@
       var state = document.createElement("span");
       var clientState = device.client_state || "unknown";
       state.className = "cis-device-state is-" + clientState;
-      state.textContent = clientState === "online" ? "Client checking in" : clientState === "offline" ? "Client check-in overdue" : "Client presence unknown";
+      state.dataset.cisClientState = clientState;
+      state.dataset.cisClientLabel = clientState === "online" ? "Client checking in" : clientState === "offline" ? "Client check-in overdue" : "Client presence unknown";
+      state.textContent = state.dataset.cisClientLabel;
       var heartbeat = document.createElement("small");
       heartbeat.textContent = device.last_client_heartbeat_at ? "Client check-in " + dateLabel(device.last_client_heartbeat_at) : "This device has not sent a separate client check-in.";
       main.append(heartbeat);
@@ -3562,15 +3565,31 @@
     }
     if (!list) return;
     var earlierOpen = Boolean(list.querySelector(".cis-history-group[open]"));
+    var focused = document.activeElement;
+    var hadFocus = list.contains(focused);
+    var savedCards = new Map(Array.from(list.querySelectorAll("[data-report-id]")).map(function (card) {
+      return [String(card.dataset.reportId), card];
+    }));
     list.replaceChildren();
     if (!reports.length) {
       appendEmpty(list, "Waiting for the first endpoint report. Download a client configuration and run the CSP CIS client.");
+      if (hadFocus) {
+        var retry = document.getElementById("cis-refresh");
+        if (retry) retry.focus();
+      }
       return;
     }
     reports.forEach(function (report) {
+      var signature = JSON.stringify(report);
+      var saved = savedCards.get(String(report.id));
+      if (saved && saved.dataset.reportSignature === signature) {
+        list.append(saved);
+        return;
+      }
       var card = document.createElement("details");
       card.className = "cis-report-card";
       card.dataset.reportId = report.id;
+      card.dataset.reportSignature = signature;
       var summary = document.createElement("summary");
       var top = document.createElement("div");
       top.className = "cis-report-topline";
@@ -3603,7 +3622,7 @@
       resultList.append(document.createTextNode("Open this report to load individual check results."));
       card.append(summary, resultList);
       card.addEventListener("toggle", async function () {
-        if (!card.open || resultList.dataset.loaded === "true") return;
+        if (!card.open || resultList.dataset.loaded === "true" || resultList.dataset.loaded === "loading") return;
         resultList.dataset.loaded = "loading";
         resultList.replaceChildren();
         appendEmpty(resultList, "Loading check results…");
@@ -3633,7 +3652,15 @@
       });
       list.append(card);
     });
-    groupEarlierCISHistory(list, "reports", earlierOpen);
+    var earlierReview = Array.from(list.children).slice(10).some(function (card) { return card.open || card.contains(focused); });
+    groupEarlierCISHistory(list, "reports", earlierOpen || earlierReview);
+    if (hadFocus) {
+      if (list.contains(focused)) focused.focus();
+      else {
+        var refresh = document.getElementById("cis-refresh");
+        if (refresh) refresh.focus();
+      }
+    }
   }
 
   function renderCISChanges(changes) {
@@ -3663,67 +3690,187 @@
     groupEarlierCISHistory(list, "changes", earlierOpen);
   }
 
-  async function loadCIS() {
-    if (!orgId) return;
-    try {
-      var responses = await Promise.all([
-        fetch("/api/cis/status", { credentials: "same-origin" }),
-        fetch("/api/cis/profiles", { credentials: "same-origin" }),
-        fetch("/api/cis/reports", { credentials: "same-origin" }),
-        fetch("/api/cis/changes", { credentials: "same-origin" })
-      ]);
-      var bodies = await Promise.all(responses.map(function (response) { return response.json(); }));
-      var failed = responses.findIndex(function (response) { return !response.ok; });
-      if (failed >= 0) throw new Error(bodies[failed].detail || "Could not load CIS workspace data");
-      var status = bodies[0];
-      renderCISProfiles(bodies[1].profiles || []);
-      renderCISCoverage(status);
-      renderCISDevices(status.devices || []);
-      renderCISReports(bodies[2].reports || [], status.device_count || 0);
-      renderCISChanges(bodies[3].changes || []);
-      var keyStatus = document.getElementById("cis-key-status");
-      if (status.key_configured) {
-        text(keyStatus, "Upload key ready" + (status.key_hint ? " · ending " + status.key_hint : "") + ". Client configuration is scoped to this workspace.");
-        if (keyStatus) keyStatus.className = "cis-feedback is-ready";
-      } else {
-        text(keyStatus, "No client upload key has been issued.");
-        if (keyStatus) keyStatus.className = "cis-feedback";
-      }
-      var revoke = document.getElementById("cis-revoke-key");
-      if (revoke) revoke.disabled = !status.key_configured;
-      var issue = document.getElementById("cis-issue-key");
-      if (issue) {
-        issue.dataset.keyConfigured = status.key_configured ? "true" : "false";
-        text(issue, status.key_configured ? "Rotate key and download new config" : "Issue client key and download config");
-      }
-      var starter = document.getElementById("cis-install-starter");
-      if (starter) starter.disabled = (bodies[1].profiles || []).some(function (profile) {
-        return profile.slug === "csp-macos-browser-baseline" && profile.version === "1.0.0";
-      });
-      var tahoe = document.getElementById("cis-install-macos26");
-      if (tahoe) {
-        var publishedSlugs = new Set((bodies[1].profiles || []).map(function (profile) { return profile.slug; }));
-        tahoe.disabled = publishedSlugs.has("cis-macos-26-tahoe-level-1") && publishedSlugs.has("cis-macos-26-tahoe-level-2");
-      }
-    } catch (error) {
-      text(document.getElementById("cis-assessment-scope"), "Could not refresh the latest endpoint assessment. Previously displayed headline counts may be out of date.");
-      ["cis-assessment-coverage", "cis-profile-list", "cis-device-list", "cis-report-list", "cis-change-list"].forEach(function (id) {
-        var list = document.getElementById(id);
-        if (list) { list.replaceChildren(); appendEmpty(list, error.message); }
-      });
-      text(document.getElementById("cis-key-status"), error.message);
+  function validateCISWorkspace(bodies) {
+    function object(value) { return value && typeof value === "object" && !Array.isArray(value); }
+    function count(value) { return Number.isSafeInteger(value) && value >= 0; }
+    function rows(value, maximum) {
+      return Array.isArray(value) && value.length <= maximum && value.every(function (row) {
+        return object(row) && Number.isSafeInteger(row.id) && row.id > 0;
+      }) && new Set(value.map(function (row) { return row.id; })).size === value.length;
+    }
+    if (!Array.isArray(bodies) || bodies.length !== 4 || bodies.some(function (body) {
+      return !object(body) || body.organization_id !== Number(orgId);
+    })) throw new Error("The endpoint workspace changed. Reload this page before reviewing it.");
+    var status = bodies[0];
+    if (typeof status.key_configured !== "boolean" || typeof status.can_manage !== "boolean" ||
+        !count(status.device_count) || !rows(status.devices, 250) || status.devices.length > status.device_count ||
+        typeof status.devices_truncated !== "boolean" || status.devices_truncated !== (status.device_count > status.devices.length) ||
+        typeof status.observed_at !== "string" || !Number.isFinite(Date.parse(status.observed_at)) ||
+        !rows(bodies[1].profiles, 100) || !rows(bodies[2].reports, 50) || !rows(bodies[3].changes, 100)) {
+      throw new Error("Saved endpoint data is incomplete. Please retry.");
+    }
+    var counts = status.assessment_counts;
+    if (!object(counts) || !["current", "stale", "unknown", "missing"].every(function (key) { return count(counts[key]); }) ||
+        counts.current + counts.stale + counts.unknown + counts.missing !== status.device_count ||
+        bodies[1].profiles.some(function (profile) { return typeof profile.slug !== "string" || !profile.slug || typeof profile.platform !== "string"; }) ||
+        bodies[2].reports.some(function (report) {
+          var summary = report.summary;
+          return !object(summary) || !["total", "pass", "fail", "manual", "error"].every(function (key) { return count(summary[key]); }) ||
+            summary.total !== summary.pass + summary.fail + summary.manual + summary.error ||
+            typeof summary.score !== "number" || !Number.isFinite(summary.score) || summary.score < 0 || summary.score > 100;
+        })) throw new Error("Saved endpoint assessment metadata is incomplete. Please retry.");
+  }
+
+  function canManageCIS() {
+    return Boolean(role === "admin" && cisWorkspaceRead.bodies && cisWorkspaceRead.bodies[0].can_manage &&
+      !cisWorkspaceRead.loading && !cisWorkspaceRead.error && !cisWorkspaceRead.invalidated && !cisWorkspaceRead.mutationBusy);
+  }
+
+  function updateCISReadControls() {
+    function available(button, enabled) {
+      if (!button) return;
+      button.disabled = false;
+      button.setAttribute("aria-disabled", String(!enabled));
+    }
+    var status = cisWorkspaceRead.bodies && cisWorkspaceRead.bodies[0];
+    var profiles = cisWorkspaceRead.bodies ? cisWorkspaceRead.bodies[1].profiles : [];
+    var manage = Boolean(canManageCIS());
+    var refresh = document.getElementById("cis-refresh");
+    if (refresh) {
+      refresh.setAttribute("aria-busy", String(cisWorkspaceRead.loading));
+      refresh.setAttribute("aria-disabled", String(cisWorkspaceRead.loading || cisWorkspaceRead.mutationBusy));
+    }
+    var note = "";
+    if (cisWorkspaceRead.error || cisWorkspaceRead.invalidated) {
+      note = status ? (cisWorkspaceRead.error ? "Could not refresh. " : "Workspace setup is being updated. ") + "Previously loaded endpoint evidence remains visible. Assessment coverage, check-in status and setup may be out of date. Last successful workspace read: " + dateLabel(status.observed_at) + "."
+        : "Endpoint data is unavailable. Refresh saved endpoint data to retry.";
+      if (cisWorkspaceRead.error) note += " " + cisWorkspaceRead.error;
+      if (cisWorkspaceRead.invalidated) note += " A setup action may have changed the workspace; refresh before making another setup change.";
+    } else if (cisWorkspaceRead.loading && !status) note = "Loading saved endpoint data…";
+    var refreshStatus = document.getElementById("cis-refresh-status");
+    if (refreshStatus && refreshStatus.textContent !== note) text(refreshStatus, note);
+    var revoke = document.getElementById("cis-revoke-key");
+    available(revoke, manage && status.key_configured);
+    var issue = document.getElementById("cis-issue-key");
+    available(issue, manage);
+    var starter = document.getElementById("cis-install-starter");
+    available(starter, manage && !profiles.some(function (profile) { return profile.slug === "csp-macos-browser-baseline" && profile.version === "1.0.0"; }));
+    var tahoe = document.getElementById("cis-install-macos26");
+    if (tahoe) {
+      var slugs = new Set(profiles.map(function (profile) { return profile.slug; }));
+      available(tahoe, manage && !(slugs.has("cis-macos-26-tahoe-level-1") && slugs.has("cis-macos-26-tahoe-level-2")));
+    }
+    var form = document.getElementById("cis-profile-form");
+    var submit = form && form.querySelector("[type='submit']");
+    available(submit, manage);
+    // Cached presence is a dated observation, not proof of a currently connected client.
+    var devices = document.getElementById("cis-device-list");
+    if (devices) Array.from(devices.querySelectorAll("[data-cis-client-state]")).forEach(function (badge) {
+      var stale = Boolean(cisWorkspaceRead.error || cisWorkspaceRead.invalidated);
+      badge.className = "cis-device-state is-" + (stale ? "unknown" : badge.dataset.cisClientState);
+      badge.textContent = (stale ? "Last observed: " : "") + badge.dataset.cisClientLabel;
+    });
+  }
+
+  function renderCISWorkspace(bodies) {
+    var status = bodies[0];
+    var previous = cisWorkspaceRead.bodies;
+    function changed(index, field) {
+      return !previous || JSON.stringify(field ? previous[index][field] : previous[index]) !== JSON.stringify(field ? bodies[index][field] : bodies[index]);
+    }
+    if (changed(1, "profiles")) renderCISProfiles(bodies[1].profiles);
+    if (changed(0, "assessment_counts")) renderCISCoverage(status);
+    if (changed(0, "devices")) renderCISDevices(status.devices);
+    if (changed(2, "reports") || !previous || previous[0].device_count !== status.device_count) renderCISReports(bodies[2].reports, status.device_count);
+    if (changed(3, "changes")) renderCISChanges(bodies[3].changes);
+    text(document.getElementById("cis-device-list-scope"), status.devices_truncated
+      ? "Showing the 250 most recently reporting endpoints of " + status.device_count + " enrolled devices. Assessment coverage includes all enrolled devices."
+      : status.device_count + " enrolled endpoint(s). Check-in states observed " + dateLabel(status.observed_at) + ".");
+    var keyStatus = document.getElementById("cis-key-status");
+    text(keyStatus, (status.key_configured ? "Upload key configured" + (status.key_hint ? " · ending " + status.key_hint : "") + "." : "No client upload key has been issued.") + " Last observed " + dateLabel(status.observed_at) + ".");
+    if (keyStatus) keyStatus.className = "cis-feedback";
+    var issue = document.getElementById("cis-issue-key");
+    if (issue && !cisWorkspaceRead.mutationBusy) {
+      issue.dataset.keyConfigured = String(status.key_configured);
+      text(issue, status.key_configured ? "Rotate key and download new config" : "Issue client key and download config");
     }
   }
+
+  async function loadCIS(background) {
+    if (!orgId || cisWorkspaceRead.mutationBusy || (background && cisWorkspaceRead.loading)) return false;
+    if (cisWorkspaceRead.controller) cisWorkspaceRead.controller.abort();
+    var controller = new AbortController();
+    cisWorkspaceRead.controller = controller;
+    var sequence = ++cisWorkspaceRead.sequence;
+    var timedOut = false;
+    var deadline = window.setTimeout(function () { timedOut = true; controller.abort(); }, 20000);
+    cisWorkspaceRead.loading = true;
+    updateCISReadControls();
+    try {
+      var responses = await Promise.all(["status", "profiles", "reports", "changes"].map(function (path) {
+        return fetch("/api/cis/" + path, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+      }));
+      var bodies = await Promise.all(responses.map(function (response) { return response.json(); }));
+      if (sequence !== cisWorkspaceRead.sequence) return false;
+      if (timedOut) throw new Error("The refresh timed out. Please retry.");
+      var failed = responses.findIndex(function (response) { return !response.ok; });
+      if (failed >= 0) throw new Error(bodies[failed] && typeof bodies[failed].detail === "string" ? bodies[failed].detail : "Could not load endpoint workspace data.");
+      validateCISWorkspace(bodies);
+      renderCISWorkspace(bodies);
+      cisWorkspaceRead.bodies = bodies;
+      cisWorkspaceRead.error = null;
+      cisWorkspaceRead.invalidated = false;
+      return true;
+    } catch (error) {
+      if (sequence !== cisWorkspaceRead.sequence) return false;
+      controller.abort();
+      cisWorkspaceRead.error = timedOut ? "The refresh timed out. Please retry." : error.message;
+      if (!cisWorkspaceRead.bodies) {
+        text(document.getElementById("cis-assessment-scope"), "Saved endpoint assessment unavailable.");
+        ["cis-assessment-coverage", "cis-profile-list", "cis-device-list", "cis-report-list", "cis-change-list"].forEach(function (id) {
+          var list = document.getElementById(id);
+          if (list) { list.replaceChildren(); appendEmpty(list, "Saved data unavailable. Use Refresh saved endpoint data to retry."); }
+        });
+        text(document.getElementById("cis-key-status"), "Workspace setup status unavailable.");
+      }
+      return false;
+    } finally {
+      window.clearTimeout(deadline);
+      if (sequence === cisWorkspaceRead.sequence) {
+        cisWorkspaceRead.loading = false;
+        cisWorkspaceRead.controller = null;
+        updateCISReadControls();
+      }
+    }
+  }
+
+  function beginCISMutation() {
+    if (!canManageCIS()) return false;
+    cisWorkspaceRead.mutationBusy = true;
+    cisWorkspaceRead.invalidated = true;
+    updateCISReadControls();
+    return true;
+  }
+
+  async function finishCISMutation() {
+    cisWorkspaceRead.mutationBusy = false;
+    await loadCIS();
+  }
+
+  var cisRefresh = document.getElementById("cis-refresh");
+  if (cisRefresh) cisRefresh.addEventListener("click", function () {
+    if (!cisWorkspaceRead.loading && !cisWorkspaceRead.mutationBusy) loadCIS();
+  });
 
   var cisInstallMacOS26 = document.getElementById("cis-install-macos26");
   if (cisInstallMacOS26) {
     cisInstallMacOS26.addEventListener("click", async function () {
-      cisInstallMacOS26.disabled = true;
+      if (cisInstallMacOS26.getAttribute("aria-disabled") === "true") return;
+      if (!beginCISMutation()) return;
       text(cisInstallMacOS26, "Publishing macOS 26 profiles…");
       text(document.getElementById("cis-profile-feedback"), "");
       try {
         var result = await postJson("/api/cis/profiles/install-macos26");
-        await loadCIS();
         var count = result.installed_count || 0;
         text(document.getElementById("cis-profile-feedback"), count
           ? "Published " + count + " macOS 26 Tahoe CIS profile(s). Choose a level in Client profile before downloading a config."
@@ -3732,8 +3879,7 @@
         text(document.getElementById("cis-profile-feedback"), error.message);
       } finally {
         text(cisInstallMacOS26, "Install macOS 26 Level 1 + 2 profiles");
-        cisInstallMacOS26.disabled = false;
-        await loadCIS();
+        await finishCISMutation();
       }
     });
   }
@@ -3753,24 +3899,25 @@
   var cisInstallStarter = document.getElementById("cis-install-starter");
   if (cisInstallStarter) {
     cisInstallStarter.addEventListener("click", async function () {
-      cisInstallStarter.disabled = true;
+      if (cisInstallStarter.getAttribute("aria-disabled") === "true") return;
+      if (!beginCISMutation()) return;
       text(cisInstallStarter, "Installing profile…");
       text(document.getElementById("cis-profile-feedback"), "");
-      try { await postJson("/api/cis/profiles/install-starter"); await loadCIS(); }
+      try { await postJson("/api/cis/profiles/install-starter"); text(document.getElementById("cis-profile-feedback"), "CSP starter profile published."); }
       catch (error) { text(document.getElementById("cis-profile-feedback"), error.message); }
-      finally { text(cisInstallStarter, "Install CSP starter profile"); cisInstallStarter.disabled = false; }
+      finally { text(cisInstallStarter, "Install CSP starter profile"); await finishCISMutation(); }
     });
   }
 
   var cisIssueKey = document.getElementById("cis-issue-key");
   if (cisIssueKey) {
     cisIssueKey.addEventListener("click", async function () {
-      cisIssueKey.disabled = true;
+      if (!beginCISMutation()) return;
       text(cisIssueKey, "Preparing secure config…");
+      var profilePicker = document.getElementById("cis-client-profile");
+      var profileSlug = profilePicker ? profilePicker.value : "";
       try {
         var body = await postJson("/api/cis/api-key");
-        var profilePicker = document.getElementById("cis-client-profile");
-        var profileSlug = profilePicker ? profilePicker.value : "";
         var config = buildCISClientConfig(body, profileSlug);
         var blobUrl = URL.createObjectURL(new Blob([config], { type: "application/yaml" }));
         var link = document.createElement("a");
@@ -3780,16 +3927,15 @@
         link.click();
         link.remove();
         window.setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 1000);
-        text(document.getElementById("cis-key-status"), body.rotated
+        text(document.getElementById("cis-client-feedback"), body.rotated
           ? "Upload key rotated. The prior configuration is no longer valid; download and replace it on all clients."
           : "Upload key issued and client configuration downloaded. The key is shown only in that file.");
-        await loadCIS();
       } catch (error) {
-        text(document.getElementById("cis-key-status"), error.message);
+        text(document.getElementById("cis-client-feedback"), error.message);
       } finally {
         if (cisIssueKey.dataset.keyConfigured !== "true") text(cisIssueKey, "Issue client key and download config");
         else text(cisIssueKey, "Rotate key and download new config");
-        cisIssueKey.disabled = false;
+        await finishCISMutation();
       }
     });
   }
@@ -3797,14 +3943,15 @@
   var cisRevokeKey = document.getElementById("cis-revoke-key");
   if (cisRevokeKey) {
     cisRevokeKey.addEventListener("click", async function () {
-      cisRevokeKey.disabled = true;
+      if (cisRevokeKey.getAttribute("aria-disabled") === "true") return;
+      if (!beginCISMutation()) return;
       try {
         await requestJson("/api/cis/api-key", "DELETE");
-        text(document.getElementById("cis-key-status"), "Client upload key revoked. Existing client configurations can no longer send reports.");
-        await loadCIS();
+        text(document.getElementById("cis-client-feedback"), "Client upload key revoked. Existing client configurations can no longer send reports.");
       } catch (error) {
-        text(document.getElementById("cis-key-status"), error.message);
-        cisRevokeKey.disabled = false;
+        text(document.getElementById("cis-client-feedback"), error.message);
+      } finally {
+        await finishCISMutation();
       }
     });
   }
@@ -3883,8 +4030,7 @@
       event.preventDefault();
       var submit = cisProfileForm.querySelector("[type='submit']");
       var file = cisProfileForm.elements.profile_file.files[0];
-      if (!file) return;
-      submit.disabled = true;
+      if (!file || !beginCISMutation()) return;
       text(submit, "Validating profile…");
       text(document.getElementById("cis-profile-feedback"), "");
       try {
@@ -3896,12 +4042,11 @@
         await postJson("/api/cis/profiles", profile);
         cisProfileForm.reset();
         text(document.getElementById("cis-profile-feedback"), "Profile published as a new immutable version.");
-        await loadCIS();
       } catch (error) {
         text(document.getElementById("cis-profile-feedback"), error instanceof SyntaxError ? "Choose a valid profile JSON file." : error.message);
       } finally {
         text(submit, "Validate and publish new version");
-        submit.disabled = false;
+        await finishCISMutation();
       }
     });
   }
@@ -6107,8 +6252,8 @@
   if (orgId) {
     refresh();
     // Heartbeat status expires on the server even when the live stream is quiet.
-    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } } }, 15000);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } } });
+    window.setInterval(function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); } }, 15000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { refresh(); if (activeTab === "web") { loadActiveExposure(undefined, true); loadNikto(undefined, true); } if (activeTab === "cis") loadCIS(true); } });
   }
   loadWorkspaces();
   loadMemberships();

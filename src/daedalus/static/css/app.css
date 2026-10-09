@@ -1073,3 +1073,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .scanner-upload-delivery { margin: 12px 0; padding: 12px; border: 1px solid var(--card-line); border-radius: 10px; background: var(--card-surface); }
 .scanner-upload-delivery h4 { margin: 0 0 6px; }
 .scanner-upload-delivery.upload-needs-review { border-color: var(--amber); }
+
+/* Preserve keyboard focus while endpoint reads or setup writes are pending. */
+.cis-workspace .button[aria-disabled="true"] { opacity: .55; cursor: default; }

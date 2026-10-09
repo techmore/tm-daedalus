@@ -97,6 +97,10 @@ existing Daedalus installations are refused. The managed scanner workflow
 runs this path on Ubuntu 24.04. Generated credentials and runtime data are
 removed after the check; the sanitized receipt and PDF are retained.
 
+## Review saved endpoint assessments
+
+The endpoint topic preserves the latest saved assessment, profiles, device observations, open check evidence and selected client profile through a failed refresh. An inline dated warning identifies stale workspace data; cached presence becomes **Last observed**. **Refresh saved endpoint data** is read-only. Key/profile setup actions wait for a successful current read, and their outcomes survive failed reconciliation. See the [endpoint refresh contract](docs/ENDPOINT-EVIDENCE-REFRESH.md) for limits and remaining acceptance.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:

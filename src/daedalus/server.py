@@ -4144,7 +4144,8 @@ def receive_cis_heartbeat(
 
 
 @app.get("/api/cis/status")
-def cis_status(request: Request, db: Session = Depends(get_db)):
+def cis_status(request: Request, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     _user, organization, membership = get_org_context(request, db)
     api_key = db.scalar(
         select(CISAPIKey).where(CISAPIKey.organization_id == organization.id)
@@ -4198,6 +4199,8 @@ def cis_status(request: Request, db: Session = Depends(get_db)):
         for device in device_rows
     ]
     return {
+        "organization_id": organization.id,
+        "observed_at": iso_utc(now),
         "key_configured": api_key is not None,
         "key_hint": api_key.key_hint if api_key and membership.role == "admin" else None,
         "profile_count": profiles,
@@ -4376,7 +4379,8 @@ def publish_cis_profile(
 
 
 @app.get("/api/cis/profiles")
-def list_cis_profiles(request: Request, db: Session = Depends(get_db)):
+def list_cis_profiles(request: Request, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     _user, organization, _ = get_org_context(request, db)
     profiles = db.scalars(
         select(CISProfile)
@@ -4384,7 +4388,7 @@ def list_cis_profiles(request: Request, db: Session = Depends(get_db)):
         .order_by(CISProfile.published_at.desc(), CISProfile.id.desc())
         .limit(100)
     ).all()
-    return {"profiles": [serialize_cis_profile(profile) for profile in profiles]}
+    return {"organization_id": organization.id, "profiles": [serialize_cis_profile(profile) for profile in profiles]}
 
 
 @app.get("/api/cis/client-package/download")
@@ -4599,7 +4603,8 @@ def serialize_cis_report(
 
 
 @app.get("/api/cis/reports")
-def list_cis_reports(request: Request, db: Session = Depends(get_db)):
+def list_cis_reports(request: Request, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     _user, organization, _ = get_org_context(request, db)
     rows = db.execute(
         select(CISReport, CISDevice)
@@ -4608,7 +4613,7 @@ def list_cis_reports(request: Request, db: Session = Depends(get_db)):
         .order_by(CISReport.collected_at.desc(), CISReport.id.desc())
         .limit(50)
     ).all()
-    return {"reports": [serialize_cis_report(report, device) for report, device in rows]}
+    return {"organization_id": organization.id, "reports": [serialize_cis_report(report, device) for report, device in rows]}
 
 
 @app.get("/api/cis/reports/{report_id}")
@@ -4629,7 +4634,8 @@ def get_cis_report(report_id: int, request: Request, db: Session = Depends(get_d
 
 
 @app.get("/api/cis/changes")
-def list_cis_changes(request: Request, db: Session = Depends(get_db)):
+def list_cis_changes(request: Request, response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
     _user, organization, _ = get_org_context(request, db)
     rows = db.execute(
         select(CISReportChange, CISReport, CISDevice)
@@ -4640,6 +4646,7 @@ def list_cis_changes(request: Request, db: Session = Depends(get_db)):
         .limit(100)
     ).all()
     return {
+        "organization_id": organization.id,
         "changes": [
             {
                 "id": change.id,

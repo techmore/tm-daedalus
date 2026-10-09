@@ -24,6 +24,41 @@ class CISHeartbeatTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return headers
 
+    def test_saved_endpoint_reads_identify_workspace_and_observation_time(self):
+        self.enroll()
+        with self.session_factory() as db:
+            organization_id = db.scalar(select(Organization.id))
+        for suffix in ("status", "profiles", "reports", "changes"):
+            with self.subTest(endpoint=suffix):
+                response = self.client.get("/api/cis/" + suffix)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+                self.assertEqual(response.json()["organization_id"], organization_id)
+                if suffix == "status":
+                    self.assertTrue(response.json()["observed_at"].endswith("Z"))
+        self.client.cookies.clear()
+        for suffix in ("status", "profiles", "reports", "changes"):
+            self.assertEqual(self.client.get("/api/cis/" + suffix).status_code, 401)
+
+    def test_saved_endpoint_reads_change_scope_without_exposing_previous_workspace(self):
+        self.enroll()
+        before = self.client.get("/api/cis/status").json()
+        profiles = self.client.get("/api/cis/profiles").json()["profiles"]
+        report_id = self.client.get("/api/cis/reports").json()["reports"][0]["id"]
+        created = self.client.post("/api/workspaces", json={"name": "Other endpoint fixture", "domain": "other-endpoint.example"})
+        self.assertEqual(created.status_code, 200, created.text)
+        status = self.client.get("/api/cis/status").json()
+        self.assertNotEqual(status["organization_id"], before["organization_id"])
+        self.assertEqual(status["devices"], [])
+        self.assertFalse(status["key_configured"])
+        for endpoint, field in (("profiles", "profiles"), ("reports", "reports"), ("changes", "changes")):
+            body = self.client.get("/api/cis/" + endpoint).json()
+            self.assertEqual(body["organization_id"], status["organization_id"])
+            self.assertEqual(body[field], [])
+        self.assertEqual(self.client.get(f"/api/cis/reports/{report_id}").status_code, 404)
+        for profile in profiles:
+            self.assertEqual(self.client.get(profile["download_url"]).status_code, 404)
+
     def test_heartbeat_updates_presence_without_new_report_or_score(self):
         headers = self.enroll()
         before = self.client.get('/api/cis/status').json()['devices'][0]

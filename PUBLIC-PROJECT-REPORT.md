@@ -32,6 +32,10 @@ Daedalus brings independent customer workspaces, domain and website health, mana
 | Theme and product experience | CSP ivory/olive/brown styling, topic summaries, refreshable URLs, inline controls, history grouping and native scanner status. Implemented/API behavior and some visual receipts exist. | Populated desktop/mobile review of every topic, consistent priority/freshness/change/action hierarchy, keyboard/screen-reader review and final marketing/content acceptance. |
 | Hosting and recovery | Incus deployment, verified off-host backups, staged activation, health checks and automatic rollback. A disposable restore recovered all 71 pre-deployment report pairs and passed SQLite integrity/foreign-key checks. | Independent recovery-secret custody, restored real Google sign-in, public DNS/TLS failover, storage/retention policy, capacity and sustained operating acceptance. |
 
+## Endpoint review improvement — implementation checkpoint
+
+The next application source adds read-only endpoint refresh/retry, retained saved assessments and profile selection after failed reads, dated cached check-in labels, setup freshness/permission guards, independent key/profile outcome feedback and reused open report evidence/PDF focus. Organization metadata and `no-store` response headers cover all four saved endpoint APIs. The current live release above remains authoritative until rollout verification is recorded. [Endpoint refresh behavior and remaining acceptance](docs/ENDPOINT-EVIDENCE-REFRESH.md).
+
 ## Saved evidence review workflow — verified October 9
 
 DNS, website, exposure and Nikto views now retain displayed findings, dates and loaded older history when a saved-data request fails. An inline warning remains until a complete retry succeeds. **Refresh saved evidence** reads stored data; new audits use their separate run controls. Refresh stages both independently paged run/change prefixes before replacing the view. Superseded or malformed responses cannot replace saved evidence. Background polls leave an active review request alone and avoid repeated loading announcements.
