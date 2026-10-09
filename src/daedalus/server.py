@@ -3867,16 +3867,34 @@ async def revoke_probation_override(
 
 
 @app.get("/api/audit-log")
-def list_audit_log(request: Request, limit: int = 100, db: Session = Depends(get_db)):
+def list_audit_log(
+    request: Request,
+    limit: int = Query(100, ge=1, le=200),
+    before: int | None = Query(None, ge=1, le=9223372036854775807),
+    db: Session = Depends(get_db),
+):
     _, organization, _ = get_org_context(request, db, admin=True)
-    rows = db.execute(
+    if before is not None:
+        anchor = db.get(AuditLog, before)
+        if anchor is None or anchor.organization_id != organization.id:
+            raise HTTPException(status_code=404, detail="Audit history position not found")
+    query = (
         select(AuditLog, User)
         .outerjoin(User, User.id == AuditLog.actor_user_id)
         .where(AuditLog.organization_id == organization.id)
-        .order_by(AuditLog.id.desc())
-        .limit(max(1, min(limit, 200)))
-    ).all()
-    return {
+    )
+    if before is not None:
+        query = query.where(AuditLog.id < before)
+    rows = db.execute(query.order_by(AuditLog.id.desc()).limit(limit + 1)).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    total_count = db.scalar(select(func.count(AuditLog.id)).where(AuditLog.organization_id == organization.id))
+    return JSONResponse({
+        "organization_id": organization.id,
+        "observed_at": iso_utc(utcnow()),
+        "total_count": total_count,
+        "has_more": has_more,
+        "next_before": rows[-1][0].id if has_more else None,
         "events": [
             {
                 "id": item.id,
@@ -3887,7 +3905,7 @@ def list_audit_log(request: Request, limit: int = 100, db: Session = Depends(get
             }
             for item, user in rows
         ]
-    }
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/external-checks/{check_type}")

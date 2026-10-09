@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-194">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-195">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -619,8 +619,11 @@
         <div id="member-access-note" class="security-note hidden" role="status"></div>
         <div id="membership-list" class="membership-list" aria-live="polite"><div class="empty-events">Loading workspace members…</div></div>
         {% if membership.role == 'admin' %}
-        <div class="section-heading"><div><p class="eyebrow">ADMIN ACTION HISTORY</p><h2>Workspace audit log</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow">ADMIN ACTION HISTORY</p><h2>Workspace audit log</h2></div><button id="audit-log-refresh" type="button" class="button button-quiet">Refresh action history</button></div>
+        <p id="audit-log-observed" class="status-when">No action history read yet.</p>
+        <p id="audit-log-read-note" class="overview-read-note" role="status" hidden></p>
         <div id="audit-log-list" class="audit-log-list" aria-live="polite"><div class="empty-events">Loading audit log…</div></div>
+        <div class="history-toolbar"><button id="audit-log-older" type="button" class="button button-secondary" hidden>Load older actions</button></div>
         {% endif %}
       </section>
       <section class="tab-panel" id="tab-notifications">
@@ -684,9 +687,10 @@
   <script src="/static/js/onboarding.js?v=20261008-2" defer></script>
   {% endif %}
   <script src="/static/js/google-admin.js?v=20261009-3" defer></script>
-  <script src="/static/js/history.js?v=20261009-2" defer></script>
+  <script src="/static/js/history.js?v=20261009-3" defer></script>
+  <script src="/static/js/audit-history.js?v=20261009-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-2" defer></script>
   <script src="/static/js/memberships.js?v=20261009-2" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-194" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-195" defer></script>
 </body>
 </html>

@@ -11,18 +11,35 @@
       var url = new URL(options.url, window.location.origin);
       Object.keys(requestFilters).forEach(function (key) { url.searchParams.set(key, requestFilters[key]); });
       if (before != null) url.searchParams.set("before", String(before));
-      var response = await (options.fetch || fetch)(url.pathname + url.search, { credentials: "same-origin", cache: "no-store", signal: signal });
-      var body = await response.json();
-      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not load history.");
-      var rows = body[options.field];
-      if (!Array.isArray(rows) || rows.length > 100 || rows.some(function (row) { return !row || !Number.isSafeInteger(row.id) || row.id < 1; }) ||
-          new Set(rows.map(function (row) { return row.id; })).size !== rows.length ||
-          (before != null && rows.some(function (row) { return row.id === before; })) ||
-          (options.field === "notifications" && (!Number.isSafeInteger(body.unread_count) || body.unread_count < 0)) ||
-          typeof body.has_more !== "boolean" || !Number.isSafeInteger(body.total_count) || body.total_count < 0 ||
-          (body.has_more && (!rows.length || body.next_before !== rows[rows.length - 1].id)) ||
-          (!body.has_more && body.next_before !== null)) throw new Error("History response is incomplete. Please retry.");
-      return body;
+      var requestController = options.timeoutMs ? new AbortController() : null;
+      var expired = false, timer = null;
+      function abortRequest() { requestController.abort(); }
+      if (requestController) {
+        if (signal.aborted) abortRequest();
+        else signal.addEventListener("abort", abortRequest, {once:true});
+        timer = window.setTimeout(function () {expired = true; abortRequest();}, options.timeoutMs);
+      }
+      try {
+        var response = await (options.fetch || fetch)(url.pathname + url.search, { credentials: "same-origin", cache: "no-store", signal: requestController ? requestController.signal : signal });
+        var body = await response.json();
+        if (requestController && requestController.signal.aborted) throw new Error("History request was interrupted. Please retry.");
+        if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not load history.");
+        var rows = body[options.field];
+        if (!Array.isArray(rows) || rows.length > 100 || rows.some(function (row) { return !row || !Number.isSafeInteger(row.id) || row.id < 1; }) ||
+            new Set(rows.map(function (row) { return row.id; })).size !== rows.length ||
+            (before != null && rows.some(function (row) { return row.id === before; })) ||
+            (options.field === "notifications" && (!Number.isSafeInteger(body.unread_count) || body.unread_count < 0)) ||
+            typeof body.has_more !== "boolean" || !Number.isSafeInteger(body.total_count) || body.total_count < 0 ||
+            (body.has_more && (!rows.length || body.next_before !== rows[rows.length - 1].id)) ||
+            (!body.has_more && body.next_before !== null)) throw new Error("History response is incomplete. Please retry.");
+        if (options.validate) options.validate(body, before);
+        return body;
+      } catch (error) {
+        if (expired) throw new Error("History request timed out. Please retry.");
+        throw error;
+      } finally {
+        if (requestController) {window.clearTimeout(timer); signal.removeEventListener("abort", abortRequest);}
+      }
     }
     async function refresh(nextFilters) {
       var changedFilters = nextFilters && JSON.stringify(nextFilters) !== JSON.stringify(filters);

@@ -209,8 +209,9 @@ h1, h2, h3 { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-se
 .audit-log-list { display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .audit-log-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 11px 13px; border-bottom: 1px solid #edf0f2; }
 .audit-log-row:last-child { border-bottom: 0; }
-.audit-log-row strong { display: block; margin-bottom: 4px; color: #344653; font-size: 11px; }
-.audit-log-row small, .audit-log-row time { color: #83919a; font-size: 9px; }
+.audit-log-row > div { min-width: 0; }
+.audit-log-row strong { display: block; margin-bottom: 4px; color: #344653; font-size: 13px; }
+.audit-log-row small, .audit-log-row time { color: #83919a; font-size: 12px; overflow-wrap: anywhere; }
 .audit-log-row pre { grid-column: 1 / -1; overflow: auto; max-height: 70px; margin: 0; color: #6e7e89; font: 9px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 .workspace-dialog { width: min(720px, calc(100vw - 28px)); max-width: 720px; max-height: calc(100vh - 30px); padding: 25px; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); background: #fff; box-shadow: 0 22px 70px #10233330; }
 .workspace-dialog::backdrop { background: #12233388; backdrop-filter: blur(2px); }
@@ -930,6 +931,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .audit-event-summary { margin: 0; color: var(--olive-900); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .audit-event-details summary { cursor: pointer; color: var(--olive-700); font-size: 12px; }
 .audit-event-details pre { margin-top: 8px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .audit-log-row { grid-template-columns: minmax(0, 1fr); }
+}
 
 .certificate-history-mobile-list { display: none; }
 @media (max-width: 600px) {

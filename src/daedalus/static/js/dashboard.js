@@ -91,6 +91,7 @@
     notifications: "Security notifications"
   };
   var activeTab = null;
+  var auditReview = null;
   var membershipReview = window.DaedalusMembershipReview ? window.DaedalusMembershipReview.create({
     organizationId: orgId,
     fetch: function (url, options) { return fetch(url, options); },
@@ -210,7 +211,7 @@
     if (name === "web") { loadActiveExposure(); loadNikto(); }
     if (name === "reports") loadReports();
     if (name === "notifications") loadNotifications();
-    if (name === "members") loadMemberships();
+    if (name === "members") {loadMemberships();loadAuditLog();}
   }
 
   function showMembershipNotice(message, action) {
@@ -6237,55 +6238,13 @@
   }
 
   async function loadAuditLog() {
-    var list = document.getElementById("audit-log-list");
-    if (!list || !orgId || role !== "admin") return;
-    try {
-      var response = await fetch("/api/audit-log", { credentials: "same-origin" });
-      var body = await response.json();
-      if (!response.ok) throw new Error(body.detail || "Could not load workspace audit history");
-      list.replaceChildren();
-      body.events.forEach(function (entry) {
-        var row = document.createElement("article");
-        row.className = "audit-log-row";
-        var main = document.createElement("div");
-        var title = document.createElement("strong");
-        title.textContent = entry.action.replaceAll("_", " ").replaceAll(".", " · ");
-        var actor = document.createElement("small");
-        actor.textContent = "by " + entry.actor;
-        main.append(title, actor);
-        var time = document.createElement("time");
-        time.textContent = dateLabel(entry.created_at);
-        var details = document.createElement("pre");
-        details.textContent = JSON.stringify(entry.details || {}, null, 2);
-        row.append(main, time);
-        var description = auditEventSummary(entry);
-        if (description) {
-          var explanation = document.createElement("p");
-          explanation.className = "audit-event-summary";
-          explanation.textContent = description;
-          row.append(explanation);
-        }
-        var evidence = document.createElement("details");
-        evidence.className = "audit-event-details";
-        var disclosure = document.createElement("summary");
-        disclosure.textContent = "View saved event details";
-        evidence.append(disclosure, details);
-        row.append(evidence);
-        list.append(row);
-      });
-      if (!body.events.length) {
-        var empty = document.createElement("div");
-        empty.className = "empty-events";
-        empty.textContent = "No workspace admin actions have been recorded yet.";
-        list.append(empty);
-      }
-    } catch (error) {
-      list.replaceChildren();
-      var message = document.createElement("div");
-      message.className = "empty-events";
-      message.textContent = error.message;
-      list.append(message);
+    if (!orgId || role !== "admin") return;
+    if (!auditReview && window.DaedalusAuditReview) {
+      auditReview = window.DaedalusAuditReview.create({organizationId:orgId,summary:auditEventSummary,
+        fetch:function (url,options) {return fetch(url,options);}});
+      window.daedalusAuditHistory = auditReview;
     }
+    if (auditReview) return auditReview.load();
   }
 
   function notificationReviewLabel(tab) {

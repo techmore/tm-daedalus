@@ -199,6 +199,7 @@ Authenticated history API parameters:
 
 - `GET /api/reports`: `limit` (1–100, default 50), `before` (the previous page's `next_before`), `report_type` (one supported type or comma-separated types), and `status` (`queued`, `running`, `completed`, `failed`).
 - `GET /api/notifications`: `limit`, `before`, and `unread_only` (default false).
+- `GET /api/audit-log` (workspace admins): `limit` (1–200, default 100) and `before`. Responses also identify the workspace and observation date. Members loads 40 actions per page, retains its review depth/open details/focus after refresh and offers retry without clearing saved history. See the [recorded action workflow](docs/MEMBERS-ACCESS-WORKFLOW.md#recorded-action-history--october-9-follow-up).
 
 Responses include `total_count`, `has_more`, and `next_before`; report responses also include `latest_completed`, and inbox responses retain the current member's overall `unread_count`. Report ordering follows descending job ID. Inbox ordering follows detection time and then ID, including delayed notices and timestamp ties. Positions are scoped to the authenticated workspace; unread pagination remains valid after marking its anchor read. Responses are not cached. History reads do not regenerate PDFs or mark notices read.
 
