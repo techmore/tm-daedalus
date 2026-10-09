@@ -2,7 +2,15 @@
 
 The original objective remains **complete the build out and validate it**. The live pilot and individual feature tests do not establish completion of the whole project. This audit supersedes older “current checkpoint” summaries; their dated receipts remain historical evidence.
 
-## Current verified release
+## Current consolidated state — October 9, 2026
+
+Use the [current project report](../PUBLIC-PROJECT-REPORT.md) for the complete platform scope, current application release and remaining acceptance. The entries below retain their own dated evidence; older release identifiers, counts and requirement-table findings are historical.
+
+SER8 runs application source `fa02771f191fcce5a2a99e78f752e62d1cf47247`, verified 102-file archive SHA-256 `421cace59071262464b275c069fae61741af0e143eef65093106b1828656683e`. Public/internal readiness and all four served dashboard assets match source. Final local validation passed **1,304 tests, one skipped, 426 subtests**. The latest production report is **72**; all 71 preceding PDF/snapshot pairs are unchanged. Backend CI **37869582645** passed Python 3.11/3.12; managed Linux CI **37869582525** passed all five scenarios for this exact source.
+
+The original requirements remain in scope. Physical scanner fleet/long-term operation, populated portal visual/accessibility acceptance, real customer TXT/sharing/expiry workflows, signed CIS physical macOS 26 distribution, live Google Admin consent/auditing, Meraki procedure/procurement review, retention and restored SSO/failover remain open.
+
+## Initial October 8 verified release
 
 SER8 initially ran pushed application source `10fba40bea5469c31c0553d5e06f55a34398fc5c` for Penn report 64. The later onboarding/Google Admin release `793a5116d89cb5518f3546ae3faaddd2be3c2528` was subsequently deployed: its Incus application path matched its 98-file release digest `f60dd82aaa774062e1b71b8b6546834d99656d1f115f2d6e0f6c7af256f11992`, public readiness passed, and served dashboard JavaScript matches the clean source bytes. The off-host backup `daedalus-data-20261008T160335Z.tar.gz` was independently rehashed and matches SHA-256 `86244ade89ce0e8157e9b63e3ff4b2ac2ef7429e14f2b8ca2483b7ac7f127e71`.
 
@@ -12,7 +20,7 @@ Clean current application source plus the final scanner validation isolation pat
 
 SER8 now runs application source `42a4614556bc3e2cd7e17fb2ba51a80d824d42a5`, archive digest `6d0ffe89664b09de32be48300d9d2ebd7a582dbe92cc52534832f43b1372d6db`. Backend CI and all five actual Linux scanner scenarios passed. Native source bc302a9 also passed macOS 26 collector/package CI. Fresh backup `daedalus-data-20261008T173628Z.tar.gz` independently matches its host copy; all 64 previously completed PDFs and snapshots are unchanged after rollout. Mac/Linux scanner dashboard statuses recovered. New production report 65 validates JIT rendering from existing Mac XML (no new scan) with print version 3; all six pages were viewed. Numeric ports still wrap in service-summary columns, so print readability acceptance remains open. Scoped temporary validation keys were revoked and returned 401 afterward. None of these checks completes the full requirements below.
 
-## Requirement-by-requirement state
+## Requirement-by-requirement state at the initial October 8 checkpoint
 
 | Requirement | Authoritative evidence inspected | State and remaining acceptance |
 | --- | --- | --- |
@@ -204,3 +212,19 @@ The actual installed Mac window was inspected through accessibility and a screen
 Normal CSP/Penn API checks also revalidated report/inbox pagination against database IDs/counts, oldest PDF downloads, foreign-workspace cursor 404s and invalid-filter 422s. Temporary user keys were audited/revoked; Bearer and token-login cookies return 401 afterward. Backend CI **37867007263** passed Python 3.11/3.12, native Mac CI **37867007326** passed, and managed Linux CI **37867007378** passed all five scenarios for the exact deployed source. The retained Linux interruption receipt independently proves 12 delayed events, one deep Nmap invocation, an actual lost committed response saved once on retry, a drained queue and downloaded original PDF. The corresponding real Mac proof retained 19 grouped run events and its approved PDF.
 
 This completes the implemented delivery observation/review workflow and its controlled recovery validation. Physical multi-VLAN/fleet/long-term acceptance, populated portal visual acceptance, signed CIS distribution, live Google Admin/customer-domain workflows and the other original project requirements remain open. The whole project goal remains active.
+
+## October 9 — collection recovery and consolidated project state
+
+Source `fa02771f191fcce5a2a99e78f752e62d1cf47247` is pushed and live on SER8 Incus at the 102-file archive digest `421cace59071262464b275c069fae61741af0e143eef65093106b1828656683e`. Independent reads verify the active path and committed server/template/dashboard/agent/delivery bytes; public/internal readiness and all four served assets match source. The scanner engine, installed kit, profiles and approved report assets are unchanged.
+
+A failed public collection retains the last successful baseline. The next successful run records one dated **collection resumed** inbox notice and audit, including remaining limitations and any observed differences. First baselines explicitly lack a prior comparison. Identical repeated failures and unchanged scheduled checks stay quiet; manual completion feedback remains. A database admission transaction guards every workspace/check type across workers, commits before network collection and preserves the existing one-minute scheduled deferral.
+
+Eight recovery tests exercise failure/repeat/resumption, warnings/first baselines, scheduled website changes, interrupted-run recovery, workspace/type/domain boundaries, actual SQLite contention and the actual scheduler deferral. The authenticated API workflow also creates/downloads real themed PDFs, preserves an earlier PDF/frozen snapshot and reloads persisted notice/read receipts. Actual Node notification-helper checks cover recovery, partial evidence, first baselines, duplicate events and scheduled silence. Final full local validation passed **1,304 tests, one skipped, 426 subtests** in 90.84 seconds. Backend CI **37869582645** passed both Python versions; managed scanner CI **37869582525** passed lifecycle, repeat comparison, interrupted bridge, listener change and multi-host change for the same revision.
+
+Normal scoped production requests saved CSP DNS **97** (warnings; two differences against 95) and website **98** (completed; zero differences against 96). DNS has one SOA record change and one certificate-history partial-coverage change, separately described in notice **68**. Three `www` lookups remain unavailable; a lookup-coverage change does not establish a security incident or resolution. Website completion produced no new inbox notice. The controlled failure/recovery episode was validated locally, without manufacturing a production failure.
+
+Normal JIT generation/download completed report **72**, with observed progress 12→100, 11 visually reviewed pages, 25,666 bytes and SHA-256 `7fa3cdc94a957a0cddf8c1ee5299300bbdf751d97ce0ee1f23622973793c60ef`. Its frozen snapshot names DNS 97/web 98 and separately dates older active/Nikto evidence. Existing theme is retained, with no observed clipping. All **71** preexisting completed PDFs and snapshots remain identical. CSP/Penn paginated report/inbox reads, foreign-position rejection, invalid filters and old downloads were revalidated. Temporary scoped keys were audited/revoked; Bearer and token-login cookie access returned 401 afterward.
+
+Verified backup `daedalus-data-20261009T012409Z.tar.gz` has SHA-256 `515603ac753136f5e849efcaf6fed8c2b7fe9c53c98302b2cc9af9cabdd7326e`. Independent temporary restore passed SQLite integrity/foreign-key checks and recovered all 71 pre-deployment PDF/snapshot pairs with matching hashes. The first local restore invocation stopped at a missing repository import path; the corrected invocation completed, and both logs are retained. Temporary restored state was removed.
+
+The current [project report](../PUBLIC-PROJECT-REPORT.md) now gives one full-scope summary with working capabilities, evidence and remaining acceptance. Every preceding project checkpoint is preserved exactly in [project history](../PROJECT-HISTORY.md), under an explicit historical notice. Current report links resolve. This documentation consolidation does not change the live application source. Private receipts are under `validation/collection-recovery-20261009/`. The whole project remains incomplete and its goal stays active.

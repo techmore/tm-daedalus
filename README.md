@@ -11,7 +11,7 @@ Daedalus is Cyber Security Pilot's multi-organization security portal. It brings
 
 ## Google Admin security reporting
 
-The [Google Admin audit guide and checklist](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md) covers the implemented read-only OAuth connection, customer/domain validation, CIS Controls v8.1 rationale, manual policy evidence and immutable recurring reports. Dedicated OAuth configuration, production activation and real CSP/BFS acceptance remain pending.
+The deployed Google Admin connector supports read-only OAuth connection, customer/domain validation, CIS Controls v8.1 rationale, manual policy evidence and immutable recurring reports. Dedicated OAuth configuration, real tenant consent and CSP/BFS acceptance remain pending. See the [audit guide and checklist](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md).
 
 ## GitHub Pages
 
