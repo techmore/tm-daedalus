@@ -185,3 +185,5 @@ Authenticated history API parameters:
 - `GET /api/notifications`: `limit`, `before`, and `unread_only` (default false).
 
 Responses include `total_count`, `has_more`, and `next_before`; report responses also include `latest_completed`, and inbox responses retain the current member's overall `unread_count`. Report ordering follows descending job ID. Inbox ordering follows detection time and then ID, including delayed notices and timestamp ties. Positions are scoped to the authenticated workspace; unread pagination remains valid after marking its anchor read. Responses are not cached. History reads do not regenerate PDFs or mark notices read.
+
+Saved Network evidence can recover after a failed read through inline retry: [Meraki evidence recovery](docs/MERAKI-EVIDENCE-RETRY.md).

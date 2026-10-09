@@ -2587,17 +2587,69 @@
   }
 
   function fetchMerakiDashboardDetails(reportId) {
+    if (!Number.isSafeInteger(reportId) || reportId <= 0) return Promise.reject(new Error("Invalid saved report."));
     var cached = merakiDashboardDetailCache.get(reportId);
     if (!cached) {
-      cached = fetch("/api/meraki/reports/" + encodeURIComponent(reportId) + "/details", {credentials: "same-origin"})
+      var controller = new AbortController();
+      var deadline = window.setTimeout(function () { controller.abort(); }, 20000);
+      cached = fetch("/api/meraki/reports/" + encodeURIComponent(reportId) + "/details", {credentials: "same-origin", cache: "no-store", signal: controller.signal})
         .then(async function (response) {
           var body = await response.json();
-          if (!response.ok) throw new Error(body.detail || "Could not load Meraki report details");
+          if (!response.ok) throw new Error("Saved report details could not be read.");
+          if (!body || typeof body !== "object" || Array.isArray(body) || body.report_id !== reportId || body.organization_id !== Number(orgId)
+              || !body.summary || typeof body.summary !== "object" || Array.isArray(body.summary)
+              || !Array.isArray(body.findings)) throw new Error("Saved report details could not be validated.");
           return body;
-        });
+        }).catch(function (error) {
+          if (merakiDashboardDetailCache.get(reportId) === cached) merakiDashboardDetailCache.delete(reportId);
+          throw error;
+        }).finally(function () { window.clearTimeout(deadline); });
       merakiDashboardDetailCache.set(reportId, cached);
     }
     return cached;
+  }
+
+  async function readMerakiEvidence(reportId, container, renderer, label) {
+    if (container.dataset.loading || (container.dataset.loaded && container.dataset.loadedReportId === String(reportId))) return false;
+    delete container.dataset.loaded;
+    container.dataset.loading = "true";
+    container.setAttribute("aria-busy", "true");
+    var retryControl = container.querySelector("[data-meraki-evidence-retry]");
+    if (retryControl) retryControl.setAttribute("aria-disabled", "true");
+    else container.textContent = "Loading " + label + "…";
+    try {
+      var details = await fetchMerakiDashboardDetails(reportId);
+      if (container.isConnected === false) return false;
+      var restoreFocus = container.contains(document.activeElement);
+      renderer(container, details);
+      container.dataset.loaded = "true";
+      container.dataset.loadedReportId = String(reportId);
+      if (restoreFocus) {
+        var summary = container.parentElement && container.parentElement.querySelector("summary");
+        if (summary) summary.focus();
+        else { container.tabIndex = -1; container.focus(); }
+      }
+      return true;
+    } catch (_error) {
+      if (container.isConnected === false) return false;
+      var restoreFocus = container.contains(document.activeElement);
+      container.replaceChildren();
+      var warning = document.createElement("p");
+      warning.className = "check-scope-note";
+      warning.setAttribute("role", "status");
+      warning.textContent = "Saved " + label + " could not be loaded. Retrying reads the saved snapshot and does not run an audit.";
+      var retry = document.createElement("button");
+      retry.type = "button"; retry.className = "button button-small button-quiet";
+      retry.textContent = "Retry " + label;
+      retry.dataset.merakiEvidenceRetry = "true";
+      retry.addEventListener("click", function () { return readMerakiEvidence(reportId, container, renderer, label); });
+      container.append(warning, retry);
+      if (restoreFocus) retry.focus();
+      return false;
+    } finally {
+      delete container.dataset.loading;
+      container.setAttribute("aria-busy", "false");
+    }
   }
 
   function renderMerakiActionOverview(container, details) {
@@ -2715,41 +2767,11 @@
     section.append(action); container.append(section);
   }
 
-  async function loadMerakiSummaryObservations(reportId, container) {
-    container.textContent = "Loading saved review observations…";
-    try {
-      var details = await fetchMerakiDashboardDetails(reportId);
-      if (container.isConnected === false) return;
-      container.replaceChildren();
-      if (!Array.isArray(details.findings)) {
-        appendEmpty(container, "Saved observation evidence is unavailable for this report.");
-        renderMerakiActionOverview(container, details);
-        renderMerakiClientOverview(container, details);
-        renderMerakiCis8Overview(container, details);
-        renderMerakiTopologyOverview(container, details);
-        if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
-    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
-        if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
-        renderMerakiSwitchOverview(container, details);
-        renderMerakiWanOverview(container, details);
-        renderMerakiPlanningOverview(container, details);
-        return;
-      }
-      var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
-      if (!review.length) {
-        appendEmpty(container, "No saved observations are labeled Review.");
-        renderMerakiActionOverview(container, details);
-        renderMerakiClientOverview(container, details);
-        renderMerakiCis8Overview(container, details);
-        renderMerakiTopologyOverview(container, details);
-        if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
-    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
-        if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
-        renderMerakiSwitchOverview(container, details);
-        renderMerakiWanOverview(container, details);
-        renderMerakiPlanningOverview(container, details);
-        return;
-      }
+  function renderMerakiSummaryObservations(container, details) {
+    container.replaceChildren();
+    var review = details.findings.filter(function (item) { return item && item.status === "Review"; });
+    if (!review.length) appendEmpty(container, "No saved observations are labeled Review.");
+    else {
       var heading = document.createElement("h3"); heading.textContent = "Review observations";
       container.append(heading);
       review.slice(0, 5).forEach(function (item) {
@@ -2759,30 +2781,25 @@
         row.append(title, detail); container.append(row);
       });
       if (review.length > 5) appendEmpty(container, "Additional review observations are available in the saved report.");
-      renderMerakiActionOverview(container, details);
-      renderMerakiClientOverview(container, details);
-      renderMerakiCis8Overview(container, details);
-      renderMerakiTopologyOverview(container, details);
-      if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
-    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
-        if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
-      renderMerakiSwitchOverview(container, details);
-      renderMerakiWanOverview(container, details);
-      renderMerakiPlanningOverview(container, details);
-    } catch (error) {
-      merakiDashboardDetailCache.delete(reportId);
-      if (container.isConnected !== false) container.textContent = "Saved review observations could not be loaded. Open the report details or retry refresh.";
     }
+    renderMerakiActionOverview(container, details);
+    renderMerakiClientOverview(container, details);
+    renderMerakiCis8Overview(container, details);
+    renderMerakiTopologyOverview(container, details);
+    if (details.unifi_plan && details.unifi_plan.provider_lifecycle) renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true);
+    if (details.unifi_plan && details.unifi_plan.lifecycle) renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true);
+    if (details.path_analysis) renderMerakiPaths(container, details.path_analysis, true);
+    renderMerakiSwitchOverview(container, details);
+    renderMerakiWanOverview(container, details);
+    renderMerakiPlanningOverview(container, details);
+  }
+
+  async function loadMerakiSummaryObservations(reportId, container) {
+    return readMerakiEvidence(reportId, container, renderMerakiSummaryObservations, "review observations");
   }
 
   async function loadMerakiDashboardDetails(reportId, container) {
-    container.textContent = "Loading saved report details…";
-    try {
-      renderMerakiDashboardDetails(container, await fetchMerakiDashboardDetails(reportId));
-    } catch (error) {
-      merakiDashboardDetailCache.delete(reportId);
-      container.textContent = error.message;
-    }
+    return readMerakiEvidence(reportId, container, renderMerakiDashboardDetails, "report details");
   }
 
   function reportJobStatusSummary(reports) {
@@ -2947,7 +2964,6 @@
           if (details.open) {
             openMerakiDashboardDetails.add(job.id);
             if (!detailContent.dataset.loaded) {
-              detailContent.dataset.loaded = "true";
               loadMerakiDashboardDetails(job.id, detailContent);
             }
           } else {
@@ -2956,7 +2972,6 @@
         });
         card.append(details);
         if (details.open) {
-          detailContent.dataset.loaded = "true";
           loadMerakiDashboardDetails(job.id, detailContent);
         }
       }

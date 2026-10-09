@@ -292,6 +292,9 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
         self.assertEqual(details_response.status_code, 200, details_response.text)
         self.assertEqual(details_response.headers["cache-control"], "no-store")
         details = details_response.json()
+        self.assertEqual(details["report_id"], second_id)
+        with self.session_factory() as db:
+            self.assertEqual(details["organization_id"], db.get(ReportJob, second_id).organization_id)
         self.assertEqual(details["summary"]["device_count"], 1)
         from daedalus.meraki_planning import project_unifi_plan
         self.assertEqual(details["unifi_plan"], project_unifi_plan(snapshot.json()["unifi_plan"]))

@@ -101,4 +101,4 @@ const absent=new Node('div');renderMerakiLifecycle(absent,null,false);assert.equ
     result=subprocess.run(['node','-e',script],input=json.dumps(project_lifecycle(build_lifecycle(fixture()))),text=True,capture_output=True)
     assert result.returncode==0,result.stderr
     assert 'innerHTML' not in helper
-    assert source.count('renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true)')==3
+    assert source.count('renderMerakiLifecycle(container, details.unifi_plan.lifecycle, true)')==1

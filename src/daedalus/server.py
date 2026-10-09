@@ -5590,6 +5590,7 @@ def meraki_report_details(
 
     return {
         "report_id": job.id,
+        "organization_id": organization.id,
         "organization": {
             "id": text_field(snapshot.get("organization", {}) if isinstance(snapshot.get("organization"), dict) else {}, "id"),
             "name": text_field(snapshot.get("organization", {}) if isinstance(snapshot.get("organization"), dict) else {}, "name"),

@@ -129,7 +129,7 @@ const overview=new Node('div');renderMerakiProviderLifecycle(overview,evidence,t
 '''
     snapshot,_=fixture();r=subprocess.run(['node','-e',script],input=json.dumps(project_provider_lifecycle(build_provider_lifecycle(snapshot))),text=True,capture_output=True)
     assert r.returncode==0,r.stderr
-    assert 'innerHTML' not in helper and source.count('renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true)')==3
+    assert 'innerHTML' not in helper and source.count('renderMerakiProviderLifecycle(container, details.unifi_plan.provider_lifecycle, true)')==1
 
 
 def test_history_missing_dates_and_rows_only_change_coverage():

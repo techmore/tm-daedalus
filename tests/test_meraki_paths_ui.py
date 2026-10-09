@@ -28,4 +28,4 @@ def test_layer_review_precedes_purchase_details_and_all_overview_branches():
     source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()
     renderer=source[source.index('  function renderMerakiDashboardDetails('):source.index('  function fetchMerakiDashboardDetails(')]
     assert renderer.index('renderMerakiPaths(')<renderer.index('var plan = details.unifi_plan')
-    assert source.count('renderMerakiPaths(container, details.path_analysis, true)')==3
+    assert source.count('renderMerakiPaths(container, details.path_analysis, true)')==1

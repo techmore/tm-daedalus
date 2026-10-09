@@ -839,11 +839,11 @@ host.children[0].events.click();assert.equal(opened,'dns');
         code=source[source.index('  function fetchMerakiDashboardDetails('):source.index('  async function loadMerakiDashboardDetails(')]
         code=source[source.index('  function renderMerakiSwitchOverview('):source.index('  function renderMerakiWanUsage(')]+code
         script="""const assert=require('node:assert/strict');
-class Node {constructor(){this.children=[];this.textContent='';this.isConnected=true;} replaceChildren(){this.children=[];this.textContent='';} append(...items){this.children.push(...items);}}
+class Node {constructor(){this.children=[];this.textContent='';this.isConnected=true;this.dataset={};} setAttribute(){} contains(){return false;} querySelector(){return null;} addEventListener(){} replaceChildren(){this.children=[];this.textContent='';} append(...items){this.children.push(...items);}}
 const document={createElement:()=>new Node()};
-const merakiDashboardDetailCache=new Map(); let calls=0;
+const merakiDashboardDetailCache=new Map(); let calls=0;const orgId=1;const window={setTimeout,clearTimeout};
 let findings=[{status:'Review',title:'<script>literal</script>',detail:'Saved review detail'},{status:'Coverage warning',title:'Not a review item'}];
-async function fetch(){calls++;return {ok:true,json:async()=>({findings})};}
+async function fetch(path){calls++;return {ok:true,json:async()=>({report_id:Number(path.split('/')[4]),organization_id:1,summary:{},findings})};}
 function appendEmpty(node,message){const child=new Node();child.textContent=message;node.append(child);}
 function flatten(node){return node.textContent+' '+node.children.map(flatten).join(' ');}
 """+code+"""
@@ -854,7 +854,7 @@ const second=new Node();await loadMerakiSummaryObservations(31,second);assert.eq
 findings=Array.from({length:9},()=>({status:'Review',title:'Review row'}));await loadMerakiSummaryObservations(32,host);
 assert.equal(host.children.filter(x=>x.className==='audit-policy-card').length,5);
 assert.match(flatten(host),/Additional review observations/);
-findings=undefined;await loadMerakiSummaryObservations(33,host);assert.match(flatten(host),/evidence is unavailable/);
+findings=undefined;await loadMerakiSummaryObservations(33,host);assert.match(flatten(host),/could not be loaded/);
 findings=[];await loadMerakiSummaryObservations(34,host);assert.match(flatten(host),/No saved observations/);
 const detached=new Node();detached.isConnected=false;await loadMerakiSummaryObservations(34,detached);assert.equal(detached.children.length,0);
 })().catch(error=>{console.error(error);process.exitCode=1;});
