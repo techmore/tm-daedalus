@@ -1076,3 +1076,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* Preserve keyboard focus while endpoint reads or setup writes are pending. */
 .cis-workspace .button[aria-disabled="true"] { opacity: .55; cursor: default; }
+
+#tab-google-admin .button[aria-disabled="true"] { opacity: .55; cursor: default; }

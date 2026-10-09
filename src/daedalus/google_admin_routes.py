@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field, StrictBool, StrictInt
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,32 @@ def require_verified(org):
         raise HTTPException(403, "Verify workspace domain ownership before authorizing Google Admin audit access.")
 
 
+def latest_manual_evidence(db: Session, organization_id: int, connection_id: str) -> dict:
+    """Read the latest append-only evidence per check on this connection."""
+    ids = select(func.max(GoogleAdminReview.id)).where(
+        GoogleAdminReview.organization_id == organization_id,
+        GoogleAdminReview.connection_id == connection_id,
+    ).group_by(GoogleAdminReview.check_id)
+    rows = db.scalars(select(GoogleAdminReview).where(GoogleAdminReview.id.in_(ids)).order_by(GoogleAdminReview.id.desc())).all()
+    return {review.check_id: {"review_id": review.id, "reviewer_user_id": review.reviewer_user_id,
+        "captured_at": review.evidence["evidence_collected_at"], "recorded_at": host().iso_utc(review.captured_at), **review.evidence}
+        for review in rows}
+
+
+def require_connection_reference(request: Request, db: Session, organization_id: int) -> None:
+    """Keep a browser action on the connection its administrator reviewed."""
+    expected = request.headers.get("X-Daedalus-Audit-Connection")
+    if expected is None:
+        return  # Existing authorized API clients retain their established contract.
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
+    connection = db.scalar(select(GoogleAdminConnection).where(
+        GoogleAdminConnection.organization_id == organization_id).with_for_update())
+    actual = host().token_digest(connection.connection_id) if connection else "none"
+    if expected != actual:
+        raise HTTPException(409, "The audit connection changed. Refresh saved Google Admin data before retrying.")
+
+
 @router.get("/api/google-admin")
 def status(request: Request, db: Session = Depends(get_db)):
     s = host()
@@ -50,9 +76,17 @@ def status(request: Request, db: Session = Depends(get_db)):
     connection = db.get(GoogleAdminConnection, org.id)
     latest = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "google_admin_security", ReportJob.status == "completed").order_by(ReportJob.id.desc()))
     attempt = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "google_admin_security").order_by(ReportJob.id.desc()))
-    return JSONResponse({"configured": configured(), "connected": connection is not None, "is_admin": member.role == "admin", "verified": org.verification_status == "verified",
+    matches = bool(latest and connection and latest.report_snapshot.get("connection_id") == connection.connection_id)
+    frozen_manual = latest.report_snapshot.get("google_admin", {}).get("manual_evidence", {}) if matches else {}
+    pending = {key: evidence for key, evidence in latest_manual_evidence(db, org.id, connection.connection_id).items()
+        if frozen_manual.get(key, {}).get("review_id") != evidence["review_id"]} if connection else {}
+    return JSONResponse({"organization_id": org.id, "observed_at": s.iso_utc(s.utcnow()),
+        "latest_matches_connection": matches, "pending_manual_evidence": pending,
+        "configured": configured(), "connected": connection is not None, "is_admin": member.role == "admin", "verified": org.verification_status == "verified",
         "customer_id": connection.customer_id if connection else None, "binding": connection.approved_binding if connection else None,
         "last_verified_at": s.iso_utc(connection.last_verified_at) if connection else None,
+        "connected_at": s.iso_utc(connection.connected_at) if connection else None,
+        "connection_reference": s.token_digest(connection.connection_id) if connection else None,
         "last_error": connection.last_error if connection else None, "schedule_days": connection.schedule_days if connection else 0,
         "next_run_at": s.iso_utc(connection.next_run_at) if connection else None,
         "latest": {"report_id": latest.id, "assessment": {key: value for key, value in latest.report_snapshot.get("google_admin", {}).items() if key != "collections"}, "comparison": latest.report_snapshot.get("google_admin_comparison"), "completed_at": s.iso_utc(latest.completed_at)} if latest else None,
@@ -186,6 +220,7 @@ def queue_report(db: Session, org: Organization, actor_id: int | None) -> Report
 def create_report(request: Request, tasks: BackgroundTasks, db: Session = Depends(get_db)):
     s = host()
     user, org, _ = s.get_org_context(request, db, admin=True)
+    require_connection_reference(request, db, org.id)
     if not configured():
         raise HTTPException(503, "Google Admin audit OAuth is not configured.")
     job = queue_report(db, org, user.id)
@@ -222,6 +257,7 @@ class ReviewInput(BaseModel):
 def record_review(payload: ReviewInput, request: Request, db: Session = Depends(get_db)):
     s = host()
     user, org, _ = s.get_org_context(request, db, admin=True)
+    require_connection_reference(request, db, org.id)
     require_verified(org)
     connection = db.get(GoogleAdminConnection, org.id)
     if not connection:
@@ -251,6 +287,7 @@ class ScheduleInput(BaseModel):
 def schedule(payload: ScheduleInput, request: Request, db: Session = Depends(get_db)):
     s = host()
     user, org, _ = s.get_org_context(request, db, admin=True)
+    require_connection_reference(request, db, org.id)
     connection = db.get(GoogleAdminConnection, org.id)
     if not connection:
         raise HTTPException(409, "Connect Google Admin first.")
@@ -271,6 +308,7 @@ def schedule(payload: ScheduleInput, request: Request, db: Session = Depends(get
 async def disconnect(request: Request, db: Session = Depends(get_db)):
     s = host()
     user, org, _ = s.get_org_context(request, db, admin=True)
+    require_connection_reference(request, db, org.id)
     connection = db.get(GoogleAdminConnection, org.id)
     if not connection:
         return {"connected": False}
@@ -321,13 +359,7 @@ def collect_job(report_id: int) -> dict:
             raise api.GoogleAdminError("The approved customer scope changed; start a new audit.")
         encrypted_refresh = connection.encrypted_refresh_token
         snapshot = dict(job.report_snapshot)
-        review_rows = db.scalars(select(GoogleAdminReview).where(GoogleAdminReview.organization_id == job.organization_id,
-            GoogleAdminReview.connection_id == revision).order_by(GoogleAdminReview.id.desc()).limit(1000)).all()
-        manual_evidence = {}
-        for review in review_rows:
-            if review.check_id not in manual_evidence:
-                manual_evidence[review.check_id] = {"review_id": review.id, "reviewer_user_id": review.reviewer_user_id,
-                    "captured_at": review.evidence["evidence_collected_at"], "recorded_at": s.iso_utc(review.captured_at), **review.evidence}
+        manual_evidence = latest_manual_evidence(db, job.organization_id, revision)
     try:
         refresh = decrypt_secret(encrypted_refresh)
         access = api.refresh_access_token(GOOGLE_ADMIN_CLIENT_ID, GOOGLE_ADMIN_CLIENT_SECRET, refresh)

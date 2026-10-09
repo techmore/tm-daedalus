@@ -336,3 +336,148 @@ def test_collection_deadline_prevents_unbounded_api_work():
             with pytest.raises(api.GoogleAdminError, match="deadline"):
                 client.get("customers/my_customer")
             network.assert_not_called()
+
+
+def review_payload(check_id="GA-07", observed="External sharing allowed"):
+    return dict(check_id=check_id, evidence_collected_at=server.utcnow().isoformat()+"Z", policy_scope="Staff OU / edition review", observed=observed,
+        expected="Approved partners only", rationale="Limit unintended disclosure", source_reference="Private fixture capture", owner="Workspace administrator", validation="Review inherited staff OU policy")
+
+
+def test_status_identifies_scope_and_previous_connection_without_exposing_credentials(portal):
+    client, factory, org_id, _ = portal
+    response = client.get("/api/google-admin")
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json()["organization_id"] == org_id
+    assert response.json()["observed_at"].endswith("Z")
+    assert response.json()["connected_at"].endswith("Z")
+    assert response.json()["latest_matches_connection"] is False
+    with valid_collection():
+        report_id = client.post("/api/google-admin/reports").json()["id"]
+    assert client.get("/api/google-admin").json()["latest_matches_connection"] is True
+    with factory() as db:
+        db.get(GoogleAdminConnection, org_id).connection_id = "version2"
+        db.commit()
+    status = client.get("/api/google-admin")
+    assert status.json()["latest"]["report_id"] == report_id
+    assert status.json()["latest_matches_connection"] is False
+    assert "encrypted" not in status.text and "access-private" not in status.text and "connection_id" not in status.text
+    client.cookies.clear()
+    assert client.get("/api/google-admin").status_code == 401
+
+
+def test_pending_manual_evidence_reload_collect_revision_and_scope_preserve_frozen_reports(portal):
+    client, factory, org_id, _ = portal
+    created = client.post("/api/google-admin/reviews", json=review_payload())
+    assert created.status_code == 200
+    pending = client.get("/api/google-admin").json()["pending_manual_evidence"]
+    assert pending["GA-07"]["review_id"] == created.json()["review_id"]
+    assert pending["GA-07"]["observed"] == "External sharing allowed"
+    assert pending["GA-07"]["captured_at"].endswith("Z")
+    assert pending["GA-07"]["recorded_at"].endswith("Z")
+    with valid_collection():
+        report_id = client.post("/api/google-admin/reports").json()["id"]
+    frozen = client.get(f"/api/google-admin/reports/{report_id}/snapshot").json()
+    assert client.get("/api/google-admin").json()["pending_manual_evidence"] == {}
+    revised = client.post("/api/google-admin/reviews", json=review_payload(observed="Revised staff sharing observation"))
+    pending = client.get("/api/google-admin").json()["pending_manual_evidence"]
+    assert pending["GA-07"]["review_id"] == revised.json()["review_id"]
+    assert pending["GA-07"]["observed"] == "Revised staff sharing observation"
+    assert client.get(f"/api/google-admin/reports/{report_id}/snapshot").json() == frozen
+    with factory() as db:
+        connection = db.get(GoogleAdminConnection, org_id)
+        connection.connection_id = "version2"
+        db.commit()
+    assert client.get("/api/google-admin").json()["pending_manual_evidence"] == {}
+    assert client.get(f"/api/google-admin/reports/{report_id}/snapshot").json() == frozen
+    other = client.post("/api/workspaces", json={"name":"Other review fixture", "domain":"other-review.example"})
+    assert other.status_code == 200
+    assert client.get("/api/google-admin").json()["pending_manual_evidence"] == {}
+    assert client.get(f"/api/google-admin/reports/{report_id}/snapshot").status_code == 404
+
+
+def test_latest_manual_per_check_survives_more_than_a_thousand_revisions_of_another_check(portal):
+    client, factory, org_id, user_id = portal
+    created = client.post("/api/google-admin/reviews", json=review_payload(check_id="GA-08"))
+    old_id = created.json()["review_id"]
+    with factory() as db:
+        values = review_payload()
+        values.pop("check_id")
+        for _ in range(1001):
+            db.add(GoogleAdminReview(organization_id=org_id, connection_id="version1", check_id="GA-07", reviewer_user_id=user_id, captured_at=server.utcnow(), evidence=values))
+        db.commit()
+    pending = client.get("/api/google-admin").json()["pending_manual_evidence"]
+    assert set(pending) == {"GA-07", "GA-08"}
+    assert pending["GA-08"]["review_id"] == old_id
+    with valid_collection():
+        report_id = client.post("/api/google-admin/reports").json()["id"]
+    frozen = client.get(f"/api/google-admin/reports/{report_id}/snapshot").json()["google_admin"]["manual_evidence"]
+    assert frozen == pending
+    assert client.get("/api/google-admin").json()["pending_manual_evidence"] == {}
+
+
+def test_browser_mutations_refuse_a_replaced_connection_and_accept_current_reference(portal):
+    client, factory, org_id, _ = portal
+    prior = client.get("/api/google-admin").json()["connection_reference"]
+    with factory() as db:
+        db.get(GoogleAdminConnection, org_id).connection_id = "replaced-version"
+        db.commit()
+    headers = {"X-Daedalus-Audit-Connection": prior}
+    for method, path, body in (("POST", "/reviews", review_payload()), ("POST", "/schedule", {"days":0}), ("POST", "/reports", None), ("DELETE", "", None)):
+        response = client.request(method, "/api/google-admin"+path, headers=headers, json=body)
+        assert response.status_code == 409, response.text
+        assert "connection changed" in response.json()["detail"]
+    with factory() as db:
+        assert db.get(GoogleAdminConnection, org_id).connection_id == "replaced-version"
+        assert not db.scalars(select(GoogleAdminReview)).all()
+        assert not db.scalars(select(ReportJob).where(ReportJob.report_type=="google_admin_security")).all()
+    current = client.get("/api/google-admin").json()["connection_reference"]
+    assert current != prior and len(current) == 64
+    headers = {"X-Daedalus-Audit-Connection": current}
+    assert client.post("/api/google-admin/reviews", headers=headers, json=review_payload()).status_code == 200
+    assert client.post("/api/google-admin/schedule", headers=headers, json={"days":0}).status_code == 200
+    with valid_collection():
+        assert client.post("/api/google-admin/reports", headers=headers).status_code == 200
+    with patch.object(routes, "decrypt_secret", return_value="fixture-refresh"), patch.object(api, "revoke", return_value=True):
+        assert client.delete("/api/google-admin", headers=headers).status_code == 200
+
+
+def test_pending_notes_are_scoped_even_when_connections_share_a_fixture_revision(portal):
+    client, factory, org_id, user_id = portal
+    assert client.post("/api/google-admin/reviews", json=review_payload()).status_code == 200
+    with factory() as db:
+        now = server.utcnow()
+        other = Organization(name="Other evidence fixture", slug="other-evidence", domain="other-evidence.example", verification_status="verified", created_at=now)
+        db.add(other);db.flush()
+        db.add(Membership(organization_id=other.id,user_id=user_id,role="admin",status="approved",created_at=now))
+        db.add(GoogleAdminConnection(organization_id=other.id,customer_id="C456",connection_id="version1",connected_by_user_id=user_id,google_subject="other-subject",encrypted_refresh_token="other-encrypted",granted_scopes=list(api.SCOPES),approved_binding={"customer_id":"C456","domains":[other.domain],"scope":"entire_customer"},connected_at=now,last_verified_at=now,schedule_days=0))
+        values=review_payload(observed="Other customer evidence only");values.pop("check_id")
+        db.add(GoogleAdminReview(organization_id=other.id,connection_id="version1",check_id="GA-07",reviewer_user_id=user_id,captured_at=now,evidence=values))
+        db.commit();other_id=other.id
+    assert client.post("/api/workspaces/select",json={"organization_id":other_id}).status_code == 200
+    status=client.get("/api/google-admin").json()
+    assert status["organization_id"] == other_id
+    assert status["pending_manual_evidence"]["GA-07"]["observed"] == "Other customer evidence only"
+    assert client.post("/api/workspaces/select",json={"organization_id":org_id}).status_code == 200
+    assert client.get("/api/google-admin").json()["pending_manual_evidence"]["GA-07"]["observed"] == "External sharing allowed"
+
+
+def test_actual_scoped_status_payload_renders_in_the_real_ui_with_retry_retention(portal):
+    import shutil
+    if not shutil.which('node'):
+        pytest.skip('Node.js required')
+    try:
+        from .test_google_admin_refresh_ui import GoogleAdminRefreshUITests
+    except ImportError:
+        from test_google_admin_refresh_ui import GoogleAdminRefreshUITests
+    client, _, _, _ = portal
+    assert client.post('/api/google-admin/reviews', json=review_payload()).status_code == 200
+    with valid_collection():
+        assert client.post('/api/google-admin/reports').status_code == 200
+    assert client.post('/api/google-admin/reviews', json=review_payload(observed='Revised evidence awaiting collection')).status_code == 200
+    payload = client.get('/api/google-admin').json()
+    GoogleAdminRefreshUITests().run_node('data=' + json.dumps(payload) + r''';
+await load();assert.match(n('summary').textContent,/checks assessed/);assert.match(n('pending-evidence').textContent,/Revised evidence awaiting collection/);
+const summary=n('summary').textContent,card=n('checklist').children[0],pending=n('pending-evidence').children[0];card.open=true;
+failure=true;await load();assert.equal(n('summary').textContent,summary);assert.equal(n('checklist').children[0],card);assert.equal(n('pending-evidence').children[0],pending);
+failure=false;await n('refresh').emit('click');assert.equal(n('refresh-status').textContent,'');assert.equal(n('checklist').children[0],card);assert.equal(card.open,true);
+''')

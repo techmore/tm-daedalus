@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-184">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-185">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -513,10 +513,13 @@
         <section class="topic-priority" aria-labelledby="google-admin-assessment-title">
           <p class="eyebrow">CURRENT ASSESSMENT</p><h3 id="google-admin-assessment-title">Google Workspace security</h3>
           <p id="google-admin-summary" aria-live="polite">Loading saved assessment...</p>
+          <p class="check-scope-note" id="google-admin-refresh-status" role="status" aria-live="polite"></p>
+          <p class="check-scope-note" id="google-admin-observation"></p>
+          <button class="button button-quiet button-small" id="google-admin-refresh" type="button">Refresh saved Google Admin data</button>
           <p class="check-scope-note">CIS Controls v8.1 provides the program rationale. The Google Workspace Benchmark version/profile remains pending review. Results are CSP checklist observations, not a CIS compliance attestation.</p>
         </section>
         <details class="topic-secondary"><summary>Audit connection and schedule</summary>
-          <p id="google-admin-connection" aria-live="polite">Checking connection...</p>
+          <p id="google-admin-connection">Checking connection...</p>
           <p class="muted">This audit uses separate read-only Google Admin consent. Your portal sign-in and Drive export do not grant audit access. The account needs the Google privileges required for each API; unavailable evidence stays explicit.</p>
           {% if membership.role == 'admin' %}
           <label class="google-admin-consent"><input type="checkbox" id="google-admin-customer-consent"> I authorize an audit of the entire Google Workspace customer associated with this verified domain, including its other domains and customer-wide account/role settings.</label>
@@ -536,6 +539,10 @@
           <h3 id="google-admin-checklist-title">Settings checklist and change rationale</h3>
           <p class="muted">API evidence assesses active administrator 2-Step Verification and supplies account/role context. Gmail, app trust, sharing, session, device and recovery controls require scoped manual evidence. Missing policy evidence is never a pass.</p>
           <div id="google-admin-checklist"></div>
+          <details class="topic-secondary"><summary>Manual evidence waiting for the next audit</summary>
+            <p class="check-scope-note">These recorded notes will be included in the next assessment on this audit connection. Saved reports retain their original evidence; notes do not turn an unassessed control into a pass.</p>
+            <div id="google-admin-pending-evidence"></div>
+          </details>
           {% if membership.role == 'admin' %}
           <details class="topic-secondary"><summary>Record manual policy evidence</summary>
             <form id="google-admin-review-form" class="workspace-form">
@@ -663,7 +670,7 @@
   </dialog>
   <script src="/static/js/onboarding.js?v=20261008-2" defer></script>
   {% endif %}
-  <script src="/static/js/google-admin.js?v=20261008-1" defer></script>
+  <script src="/static/js/google-admin.js?v=20261009-2" defer></script>
   <script src="/static/js/history.js?v=20261008-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-1" defer></script>
   <script src="/static/js/dashboard.js?v=daedalus-20261009-184" defer></script>
