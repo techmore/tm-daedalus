@@ -16,6 +16,7 @@ class SavedCheckHistoryUITests(unittest.TestCase):
         if dashboard:
             source = (JS / 'dashboard.js').read_text()
             setup += (ROOT / 'tests/saved_check_dom_fixture.js').read_text() + '\n'
+            setup += source[source.index('  function externalSchedulePresentation('):source.index('  function renderExternalCheckSchedule(')]
             setup += source[source.index('  function savedSuccessfulCheck('):source.index('  function renderExposureReview(')]
             setup += source[source.index('  function niktoObservationGroup('):source.index('  var niktoButton =')]
             for start, end in (

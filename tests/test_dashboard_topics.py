@@ -34,7 +34,7 @@ assert.ok(externalEvidenceLabel({}).includes('establish a baseline'));
     def test_profile_feedback_does_not_replace_client_key_status(self):
         root = Path(__file__).parents[1] / 'src/daedalus'
         source = (root / 'static/js/dashboard.js').read_text()
-        for start, end in [('  var cisProfileForm =', '  var generateReport ='),
+        for start, end in [('  var cisProfileForm =', '  var externalReportCreationBusy ='),
                            ('  var cisInstallMacOS26 =', '  function notifyCISReport('),
                            ('  var cisInstallStarter =', '  var cisIssueKey =')]:
             handler = source[source.index(start):source.index(end)]
@@ -205,7 +205,7 @@ assert.throws(()=>scannerInstaller('windows'),/Choose the scanner/);
         self.assertEqual(template.count('id="web-audit-review"'), 1)
         self.assertLess(template.index('id="web-summary-grid"'), template.index('id="web-audit-review"'))
         self.assertLess(template.index('id="web-audit-review"'), template.index('<summary>Linked vendors'))
-        self.assertLess(template.index('id="web-audit-review"'), template.index('<summary>Refresh assessment'))
+        self.assertLess(template.index('id="web-audit-review"'), template.index('<summary>Latest collection attempt'))
         start = template.index('<section class="website-audit-evidence"')
         evidence = template[start:template.index('</section>', start)]
         self.assertNotIn('<details', evidence)
@@ -369,10 +369,10 @@ assert.equal(reportJobStatusSummary([{status:'failed'}]), '0 PDF(s) ready · 1 f
     def test_external_topics_lead_with_assessment_and_changes(self):
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
         section = template.split('data-external-check="{{ key }}">', 1)[1].split("{% elif key == 'reports' %}", 1)[0]
-        self.assertLess(section.index('id="{{ key }}-priorities"'), section.index('data-run-external-check'))
+        self.assertNotIn('data-run-external-check', section)
         self.assertLess(section.index('id="{{ key }}-check-changes"'), section.index('id="dns-record-grid"'))
-        self.assertLess(section.index('id="dns-record-grid"'), section.index('<summary>Refresh assessment</summary>'))
-        self.assertLess(section.index('<summary>Refresh assessment</summary>'), section.index('data-run-external-check'))
+        self.assertLess(section.index('id="dns-record-grid"'), section.index('<summary>Latest collection attempt</summary>'))
+        self.assertIn('id="{{ key }}-monitoring-details"', section)
         self.assertIn('<details class="topic-secondary"><summary>Assessment scope &amp; limitations</summary>', section)
         self.assertIn('class="topic-changes" aria-labelledby="{{ key }}-changes-title"', section)
         self.assertLess(section.index('id="{{ key }}-changes-title"'), section.index('class="topic-evidence"'))

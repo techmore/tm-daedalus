@@ -1011,6 +1011,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .check-action-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 6px; }
 .check-action-note { color: var(--muted); font-size: 13px; }
+.external-check-workspace .assessment-review-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.external-check-workspace .assessment-review-heading .eyebrow { margin: 0; color: var(--olive-600); }
+.external-check-workspace .assessment-review-heading h3 { margin: 4px 0 0; font-size: 24px; }
+.external-check-workspace .assessment-review-heading + .check-scope-note:empty { display: none; }
+.external-check-workspace .topic-priority > .check-scope-note { padding: 0; border: 0; background: transparent; margin: 14px 0; }
+.check-action-note { margin: 10px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
+.check-action-feedback { margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--olive-600); color: var(--brown-900); background: var(--cream-50); line-height: 1.5; overflow-wrap: anywhere; }
+.check-action-feedback:empty { display: none; }
+.external-check-workspace [data-save-schedule][aria-disabled="true"] { opacity: .55; cursor: default; }
 .check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .check-item { display: grid; grid-template-columns: 26px 110px 1fr; align-items: baseline; gap: 10px; padding: 11px 14px; border: 1px solid var(--card-line); border-radius: 10px; background: var(--cream-50); }
 .check-mark { font-weight: 800; color: #747b50; }

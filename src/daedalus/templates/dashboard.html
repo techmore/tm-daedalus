@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-189">
+  <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261009-191">
 </head>
 <body class="app-page">
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -386,9 +386,8 @@
         {% elif key in ['dns', 'web'] %}
         <section class="external-check-workspace" data-external-check="{{ key }}">
           <section class="topic-priority" aria-labelledby="{{ key }}-priority-title">
-            <p class="eyebrow">SAVED ASSESSMENT</p><h3 id="{{ key }}-priority-title">What needs attention</h3>
+            <div class="assessment-review-heading"><div><p class="eyebrow">SAVED ASSESSMENT</p><h3 id="{{ key }}-priority-title">What needs attention</h3></div><button class="button button-quiet button-small" type="button" data-refresh-check="{{ key }}">Refresh saved evidence</button></div>
             <p class="check-scope-note" id="{{ key }}-history-status" role="status" aria-live="polite"></p>
-            <button class="button button-quiet button-small" type="button" data-refresh-check="{{ key }}">Refresh saved evidence</button>
             <p class="check-scope-note" id="{{ key }}-assessment-evidence" aria-live="polite">Loading evidence collection time…</p>
             <div id="{{ key }}-priorities" aria-live="polite"><p class="muted">Loading saved evidence…</p></div>
             {% if key == 'web' %}<div class="topic-audit-outcomes"><p id="web-exposure-outcome">Exposure assessment: loading saved evidence…</p><p id="web-nikto-outcome">Deeper website assessment: loading saved evidence…</p></div>{% endif %}
@@ -452,15 +451,12 @@
           </details>
           </section>
 
-          <details class="topic-secondary"><summary>Refresh assessment</summary>
+          <details class="topic-secondary"><summary>Latest collection attempt</summary>
           <div class="check-toolbar">
             <div>
               <span class="check-status" id="{{ key }}-check-status">No check run yet</span>
               <p class="muted" id="{{ key }}-check-last-run">Run a check to establish the first baseline.</p>
             </div>
-            {% if membership.role == 'admin' %}
-            <button class="button button-primary" type="button" data-run-external-check="{{ key }}">Run {{ 'DNS' if key == 'dns' else 'website' }} check</button>
-            {% endif %}
           </div>
 
           </details>
@@ -493,7 +489,7 @@
           <div class="check-run-list" id="{{ key }}-check-runs" aria-live="polite"><div class="empty-events">No check history yet.</div></div>
           <button class="button button-secondary button-small history-pagination hidden" type="button" data-load-older-checks="{{ key }}" data-page-kind="runs">Load older check runs</button>
           </details>
-          <details class="topic-secondary"><summary>Monitoring schedule</summary>
+          <details class="topic-secondary" id="{{ key }}-monitoring-details"><summary>Monitoring schedule</summary>
           <section class="external-schedule-card" aria-label="Recurring check schedule">
             <div class="external-schedule-copy">
               <span class="check-status" id="{{ key }}-schedule-status">Recurring checks are off</span>
@@ -572,6 +568,7 @@
         {% elif key == 'reports' %}
         <section class="drive-card hidden" id="drive-card" aria-live="polite"></section>
         <section class="report-library">
+          <p id="domain-report-feedback" class="check-action-feedback" role="status" aria-live="polite"></p>
           <div class="section-heading check-subheading"><div><p class="eyebrow">DOMAIN HEALTH</p><h3>DNS, email &amp; website reports</h3></div></div>
           <span class="check-status" id="report-library-status" aria-live="polite">Reports are scoped to this workspace.</span>
           <div class="report-job-list" id="report-job-list" aria-live="polite"><div class="empty-events">Loading workspace reports…</div></div>
@@ -676,6 +673,6 @@
   <script src="/static/js/google-admin.js?v=20261009-2" defer></script>
   <script src="/static/js/history.js?v=20261008-1" defer></script>
   <script src="/static/js/check-history.js?v=20261009-1" defer></script>
-  <script src="/static/js/dashboard.js?v=daedalus-20261009-188" defer></script>
+  <script src="/static/js/dashboard.js?v=daedalus-20261009-190" defer></script>
 </body>
 </html>

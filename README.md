@@ -105,6 +105,10 @@ Saved Google Admin assessments and manual notes survive failed refreshes. Notes 
 
 The endpoint topic preserves the latest saved assessment, profiles, device observations, open check evidence and selected client profile through a failed refresh. An inline dated warning identifies stale workspace data; cached presence becomes **Last observed**. **Refresh saved endpoint data** is read-only. Key/profile setup actions wait for a successful current read, and their outcomes survive failed reconciliation. See the [endpoint refresh contract](docs/ENDPOINT-EVIDENCE-REFRESH.md) for limits and remaining acceptance.
 
+## Review DNS and website health
+
+DNS and Website use shared **Check now**, **Monitoring schedule**, and **Create PDF report** actions. Schedule summaries retain daily/weekly cadence and identify past expected collection times. PDF creation opens the existing report library for progress and download. Saved-data refresh retains findings and dates after a failed read. See the [domain review workflow](docs/DOMAIN-REVIEW-WORKFLOW.md) for the local browser/collector/report receipts and remaining production acceptance.
+
 ## Build and test the CIS client
 
 The consolidated macOS client source is in `clients/csp-cis-audit/`. Run its unit suite with:

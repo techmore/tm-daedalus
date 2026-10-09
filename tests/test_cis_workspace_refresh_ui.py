@@ -17,7 +17,7 @@ class CISWorkspaceRefreshUITests(unittest.TestCase):
         if actions:
             script += source[source.index('  var cisInstallMacOS26 ='):source.index('  document.addEventListener("click", function (event) {', source.index('  var cisInstallMacOS26 ='))]
             script += source[source.index('  function buildCISClientConfig('):source.index('  var shell =')]
-            script += source[source.index('  var cisProfileForm ='):source.index('  var generateReport =')]
+            script += source[source.index('  var cisProfileForm ='):source.index('  var externalReportCreationBusy =')]
         script += '\n(async()=>{\n' + code + '\n})().catch(e=>{console.error(e);process.exitCode=1;});'
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)

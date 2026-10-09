@@ -1,6 +1,6 @@
 # Daedalus project report
 
-## Current state — October 9, 2026, 01:54 UTC
+## Current state — October 9, 2026
 
 **Daedalus is a working, internet-hosted pilot. The full project remains incomplete.** This report covers the whole intended platform. The [historical checkpoints](PROJECT-HISTORY.md) preserve earlier receipts; their release identifiers and counts apply to their own dates.
 
@@ -58,7 +58,13 @@ Optional deployment staging cleanup now has a 20-second process deadline and sto
 
 Saved Meraki connection reads now restore approved organization choices without querying Cisco. Failed reads retain the selection and typed key while pausing setup actions; recorded key verification and cached state are labeled separately from provider reachability and audit freshness. Explicit Cisco lookups retain choices for the matching saved credential. Replaced keys and unavailable prior choices require an explicit selection, and approval outcomes survive a failed follow-up read.
 
-Browser actions bind to the saved key/approval version. Server admission rechecks that state and the acting user's role/scoped key after provider work, under a workspace write lock. Concurrent report requests admit one active Meraki job; an active assessment protects its key and revocation scope. Provider reply identities are captured before commit. Local tests use mocked provider responses and actual scoped SQLite/API/UI callbacks; Final local validation passed **1,407 tests, one skipped and 444 subtests**, with 76 focused tests and 26 subtests. Source publication includes this implementation; its exact-source CI remains pending. Production activation and populated portal acceptance remain pending. [Connection workflow and limits](docs/MERAKI-CONNECTION-REVIEW.md).
+Browser actions bind to the saved key/approval version. Server admission rechecks that state and the acting user's role/scoped key after provider work, under a workspace write lock. Concurrent report requests admit one active Meraki job; an active assessment protects its key and revocation scope. Provider reply identities are captured before commit. Local tests use mocked provider responses and actual scoped SQLite/API/UI callbacks; Final local validation passed **1,407 tests, one skipped and 444 subtests**, with 76 focused tests and 26 subtests. Exact-source backend CI **37882795827** passed Python 3.11/3.12 and managed Linux CI **37882795828** passed all five scenarios for `d1aad0f`. Production activation and populated portal acceptance remain pending. [Connection workflow and limits](docs/MERAKI-CONNECTION-REVIEW.md).
+
+## DNS and Website everyday review — implementation checkpoint
+
+DNS and Website now use one shared collection action, one monitoring editor, and report creation that opens the existing progress/download library. Weekly schedules retain their cadence; saved configuration and past expected collection times no longer imply active collection. Saved-read failures mark retained schedule context as last observed. The visual layout removes empty status boxes and duplicated run controls. Schedule saves preserve focus and block repeat requests while pending.
+
+An isolated local copy exercised real CSP public Website and DNS collection, comparisons, inbox read/review, weekly schedule persistence, report creation and browser downloads. Local runs 50/51 retained two and 22 evidence differences respectively, with DNS lookup and certificate-history gaps explicit. Reports 34/35 completed at 100%; all seven/nine pages were rendered and visually reviewed using the unchanged approved renderer. The original local database and all 34 original report-directory files remain unchanged. A controlled local read failure and real retry retained findings, dates and refresh focus at a 390-pixel mobile viewport. Final local validation passed **1,416 tests, one skipped and 446 subtests**. Exact-source CI for this new implementation and production activation remain pending. [Workflow, receipts and remaining acceptance](docs/DOMAIN-REVIEW-WORKFLOW.md).
 
 ## Saved evidence review workflow — verified October 9
 
@@ -88,6 +94,8 @@ Normal production CSP requests then saved DNS **97** and website **98**:
 Verified pre-deployment backup `daedalus-data-20261009T012409Z.tar.gz` has SHA-256 `515603ac753136f5e849efcaf6fed8c2b7fe9c53c98302b2cc9af9cabdd7326e`. Its independent temporary restore recovered all 71 saved report pairs with matching hashes; temporary restored state was removed.
 
 ## Completion priorities
+
+Production source/recovery inspection and activation of the pushed application changes remain an operating prerequisite; public readiness alone does not close that work.
 
 1. Finish and review the complete customer journey across populated desktop/mobile topics, keeping priority, freshness, changes and next actions consistent.
 2. Validate actual customer TXT ownership, users/sharing/succession and expiry/renewal behavior.

@@ -4120,78 +4120,74 @@
     });
   }
 
-  var generateReport = document.querySelector("[data-generate-report]");
-  if (generateReport) {
-    generateReport.addEventListener("click", async function () {
-      var original = generateReport.textContent;
-      generateReport.disabled = true;
-      text(generateReport, "Queueing PDF…");
-      text(document.getElementById("report-library-status"), "Capturing the latest saved DNS and website evidence…");
-      try {
-        await postJson("/api/reports/external-posture");
-        await loadReports();
-      } catch (error) {
-        text(document.getElementById("report-library-status"), error.message);
-      } finally {
-        text(generateReport, original);
-        generateReport.disabled = false;
-      }
-    });
+  var externalReportCreationBusy = false;
+  async function queueExternalPostureReport(button) {
+    if (externalReportCreationBusy) return;
+    externalReportCreationBusy = true;
+    var original = button.textContent;
+    var controls = Array.from(document.querySelectorAll("[data-generate-report]"));
+    var feedback = document.getElementById(button.dataset.reportFeedback || "domain-report-feedback");
+    var createdMessage = null;
+    controls.forEach(function (control) { control.disabled = true; });
+    text(button, "Queueing PDF…");
+    text(feedback, "Capturing the latest saved DNS and website evidence…");
+    try {
+      var job = await postJson("/api/reports/external-posture");
+      var message = "Report" + (Number.isSafeInteger(job.id) && job.id > 0 ? " #" + job.id : "") + " queued. Generation progress and the finished download are in Reports.";
+      createdMessage = message;
+      text(feedback, message);
+      text(document.getElementById("domain-report-feedback"), message);
+      activateTab("reports", true);
+      await loadReports();
+    } catch (error) {
+      var failure = createdMessage ? createdMessage + " Report history could not refresh; use Refresh reports to retry. " + error.message : error.message;
+      text(feedback, failure);
+      if (createdMessage) text(document.getElementById("domain-report-feedback"), failure);
+    } finally {
+      text(button, original);
+      controls.forEach(function (control) { control.disabled = false; });
+      externalReportCreationBusy = false;
+    }
   }
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-generate-report]");
+    if (!button) return;
+    event.preventDefault();
+    queueExternalPostureReport(button);
+  });
 
   function buildCheckActionBar(type) {
     var panel = document.getElementById("tab-" + type);
     var intro = panel && panel.querySelector(".page-intro");
     if (!intro || panel.querySelector(".check-action-bar")) return;
     var bar = document.createElement("div"); bar.className = "check-action-bar";
-    var note = document.createElement("span"); note.className = "check-action-note";
+    var note = document.createElement("p"); note.className = "check-action-note";
+    note.id = type + "-action-schedule";
+    note.textContent = "Loading saved monitoring schedule…";
     var admin = role === "admin";
     var checkNow = document.createElement("button"); checkNow.type = "button"; checkNow.className = "button button-primary"; checkNow.textContent = "Check now";
-    var daily = document.createElement("button"); daily.type = "button"; daily.className = "button button-quiet"; daily.textContent = "Daily check…";
-    var pdf = document.createElement("button"); pdf.type = "button"; pdf.className = "button button-quiet"; pdf.textContent = "Download PDF";
-    var scheduleOn = false;
-    async function syncSchedule() {
-      try {
-        var response = await fetch("/api/external-checks/" + type, {credentials: "same-origin"});
-        var body = await response.json();
-        scheduleOn = !!(body.schedule && body.schedule.enabled);
-        daily.textContent = scheduleOn ? "Daily check: on" : "Turn on daily check";
-        note.textContent = scheduleOn && body.schedule.next_run_at ? "Next automatic check " + dateLabel(body.schedule.next_run_at) : (scheduleOn ? "" : "Not checked automatically yet");
-      } catch (_e) { /* keep defaults */ }
-    }
-    checkNow.addEventListener("click", async function () {
-      checkNow.disabled = true; checkNow.textContent = "Checking…";
-      try { await postJson("/api/external-checks/" + type + "/run"); await loadExternalCheck(type); } catch (error) { note.textContent = error.message; }
-      checkNow.disabled = false; checkNow.textContent = "Check now";
+    checkNow.dataset.runExternalCheck = type;
+    checkNow.dataset.checkFeedback = type + "-action-feedback";
+    var schedule = document.createElement("button"); schedule.type = "button"; schedule.className = "button button-quiet"; schedule.textContent = "Monitoring schedule";
+    schedule.setAttribute("aria-controls", type + "-monitoring-details");
+    schedule.addEventListener("click", function () {
+      var details = document.getElementById(type + "-monitoring-details");
+      if (!details) return;
+      details.open = true;
+      var summary = details.querySelector("summary");
+      if (summary) { summary.focus(); summary.scrollIntoView({block: "center"}); }
     });
-    daily.addEventListener("click", async function () {
-      daily.disabled = true;
-      try {
-        var response = await fetch("/api/external-checks/" + type + "/schedule", {method: "PUT", credentials: "same-origin",
-          headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: !scheduleOn, interval_hours: 24})});
-        if (!response.ok) throw new Error("Could not change the daily check");
-        await syncSchedule();
-      } catch (error) { note.textContent = error.message; }
-      daily.disabled = false;
-    });
-    pdf.addEventListener("click", async function () {
-      pdf.disabled = true; pdf.textContent = "Preparing PDF…";
-      try {
-        var job = await postJson("/api/reports/external-posture");
-        for (var attempt = 0; attempt < 90; attempt += 1) {
-          await new Promise(function (resolve) { window.setTimeout(resolve, 1000); });
-          var reports = (await (await fetch("/api/reports", {credentials: "same-origin"})).json()).reports || [];
-          var found = reports.find(function (report) { return report.id === job.id; });
-          if (found && found.status === "failed") throw new Error("The PDF could not be generated");
-          if (found && found.download_url) { window.location.assign(found.download_url); break; }
-        }
-      } catch (error) { note.textContent = error.message; }
-      pdf.disabled = false; pdf.textContent = "Download PDF";
-    });
-    if (admin) bar.append(checkNow, daily);
-    bar.append(pdf, note);
+    var pdf = document.createElement("button"); pdf.type = "button"; pdf.className = "button button-quiet"; pdf.textContent = "Create PDF report";
+    pdf.dataset.generateReport = "";
+    pdf.dataset.reportFeedback = type + "-action-feedback";
+    var feedback = document.createElement("p"); feedback.id = type + "-action-feedback";
+    feedback.className = "check-action-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    if (admin) bar.append(checkNow, schedule);
+    bar.append(pdf);
     intro.after(bar);
-    syncSchedule();
+    bar.after(note, feedback);
   }
   ["dns", "web"].forEach(buildCheckActionBar);
 
@@ -5237,27 +5233,40 @@
     renderExternalCheckSchedule(type, body.schedule);
   }
 
+  function externalSchedulePresentation(schedule, now) {
+    var unknown = {state: "unknown", label: "Monitoring schedule unknown", detail: "Refresh saved evidence to read the monitoring schedule."};
+    if (!schedule || typeof schedule.enabled !== "boolean" || ![24, 168].includes(schedule.interval_hours)) return unknown;
+    if (!schedule.enabled) return {state: "off", label: "Automatic checks off", detail: "Schedules start one full interval after they are saved."};
+    var cadence = schedule.interval_hours === 168 ? "Weekly" : "Daily";
+    var next = typeof schedule.next_run_at === "string" ? Date.parse(schedule.next_run_at) : NaN;
+    var reference = now === undefined ? Date.now() : now;
+    var detail = !Number.isFinite(next) ? "Expected collection time is not recorded."
+      : next <= reference ? "Expected collection " + dateLabel(schedule.next_run_at) + "; no later schedule update is recorded."
+      : "Next scheduled collection " + dateLabel(schedule.next_run_at) + ".";
+    return {state: "saved", label: cadence + " schedule saved", detail: detail};
+  }
+
   function renderExternalCheckSchedule(type, schedule) {
-    schedule = schedule || { enabled: false, interval_hours: 24 };
+    var presentation = externalSchedulePresentation(schedule);
     var status = document.getElementById(type + "-schedule-status");
     var nextRun = document.getElementById(type + "-schedule-next-run");
+    var actionSchedule = document.getElementById(type + "-action-schedule");
     var checkbox = document.querySelector('[data-schedule-enabled="' + type + '"]');
     var interval = document.querySelector('[data-schedule-interval="' + type + '"]');
-    var cadence = Number(schedule.interval_hours) === 168 ? "weekly" : "daily";
     if (status) {
-      status.className = "check-status" + (schedule.enabled ? " status-completed" : "");
-      text(status, schedule.enabled ? "Recurring " + cadence + " checks are active" : "Recurring checks are off");
+      status.className = "check-status";
+      text(status, presentation.label);
     }
     if (nextRun) {
-      var message = schedule.enabled
-        ? "Next run " + dateLabel(schedule.next_run_at)
-        : "Schedules start one full interval after they are saved.";
-      if (schedule.last_completed_at) {
+      var message = presentation.detail;
+      if (schedule && schedule.last_completed_at) {
         message += " · Last attempt " + dateLabel(schedule.last_completed_at) +
           (schedule.last_run_status ? " (" + schedule.last_run_status.replaceAll("_", " ") + ")" : "");
       }
       text(nextRun, message);
     }
+    if (actionSchedule) text(actionSchedule, presentation.label + " · " + presentation.detail);
+    if (presentation.state === "unknown") return;
     if (checkbox) checkbox.checked = Boolean(schedule.enabled);
     if (interval) {
       interval.value = String(schedule.interval_hours || 24);
@@ -5289,6 +5298,12 @@
       ? (state.loaded ? "Could not refresh. Previously loaded evidence remains visible and may be out of date. " : "Saved evidence is unavailable. ") + state.error
       : state.loading && !state.loaded ? "Loading saved evidence…" : "";
     if (note && note.textContent !== message) text(note, message);
+    var scheduleNote = document.getElementById(type + "-action-schedule");
+    if (scheduleNote && state.error) {
+      var savedSchedule = state.loaded && state.body ? externalSchedulePresentation(state.body.schedule) : null;
+      text(scheduleNote, savedSchedule ? "Last observed: " + savedSchedule.label + " · " + savedSchedule.detail
+        : "Monitoring schedule unavailable. Retry saved evidence to load it.");
+    }
     if (state.error && !state.loaded) {
       var emptyIds = type === "web-active" ? ["web-exposure-review", "web-exposure-outcome", "web-active-runs"]
         : type === "web-nikto" ? ["web-audit-review", "web-nikto-outcome", "web-nikto-runs"]
@@ -5647,12 +5662,16 @@
 
   document.querySelectorAll("[data-run-external-check]").forEach(function (button) {
     button.addEventListener("click", async function () {
+      if (button.disabled) return;
       var type = button.dataset.runExternalCheck;
       var original = button.textContent;
+      var feedback = document.getElementById(button.dataset.checkFeedback || type + "-action-feedback");
       button.disabled = true;
       text(button, "Checking…");
+      text(feedback, "Collecting fresh " + (type === "dns" ? "DNS and email" : "website") + " evidence…");
       try {
         var run = await postJson("/api/external-checks/" + type + "/run");
+        text(feedback, "Check #" + run.id + " recorded: " + String(run.status || "status unavailable").replaceAll("_", " ") + ". Review the saved findings and comparison below.");
         await loadExternalCheck(type);
         notifyExternalCheck({
           run_id: run.id,
@@ -5667,7 +5686,7 @@
         });
         await loadAuditLog();
       } catch (error) {
-        text(document.getElementById(type + "-check-last-run"), error.message);
+        text(feedback, error.message);
       } finally {
         text(button, original);
         button.disabled = false;
@@ -5685,11 +5704,14 @@
 
   document.querySelectorAll("[data-save-schedule]").forEach(function (button) {
     button.addEventListener("click", async function () {
+      if (button.disabled || button.dataset.scheduleSaving === "true") return;
       var type = button.dataset.saveSchedule;
       var checkbox = document.querySelector('[data-schedule-enabled="' + type + '"]');
       var interval = document.querySelector('[data-schedule-interval="' + type + '"]');
       if (!checkbox || !interval) return;
-      button.disabled = true;
+      button.dataset.scheduleSaving = "true";
+      button.setAttribute("aria-disabled", "true");
+      button.setAttribute("aria-busy", "true");
       var original = button.textContent;
       text(button, "Saving…");
       try {
@@ -5707,7 +5729,9 @@
         }
       } finally {
         text(button, original);
-        button.disabled = false;
+        button.dataset.scheduleSaving = "false";
+        button.setAttribute("aria-disabled", "false");
+        button.setAttribute("aria-busy", "false");
       }
     });
   });
