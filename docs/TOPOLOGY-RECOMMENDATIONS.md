@@ -19,3 +19,7 @@ Local activation: installed source release 0894a521cf904575f95036b1aa6da82fd8999
 ## Opt-in behavior
 
 Topology recommendations now default off. Local Settings → Report Exports includes a persisted “Include topology & address recommendations” checkbox used by both new scans and PDF generation from saved evidence. Daedalus run PDF actions have a separate default-off checkbox, remembered per scanner in that browser; the API independently defaults false and snapshots the chosen appendix version. Existing generated PDFs are unaffected. The current owner's local scanner is explicitly opted in during activation. No tests were run for this change.
+
+## Customer/subnet device plans
+
+Local target profiles now retain a normalized operational device plan and their own report opt-in. PDF profile lookup requires both the customer identity and a contained target subnet, so identical private subnets at different customers do not share plans. The dashboard displays the selected customer's exact-subnet map ahead of scan summary cards, including a saved per-profile PDF checkbox. Each device has a role, user-reported state, proposed address, logical parent and notes. Proposed assignments and operational dependencies are explicitly distinguished from measured IP/MAC identities and physical cabling. User-specific plan data is stored in local runtime settings, not this source repository. No IP assignments are applied. No automated tests were run for this addition.
