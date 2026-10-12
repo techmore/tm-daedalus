@@ -95,8 +95,9 @@ func privateUploadObservation(_ url: URL) -> [String: Any]? {
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
 }
 
-final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessionTaskDelegate, WKNavigationDelegate, WKUIDelegate {
+final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessionTaskDelegate, WKNavigationDelegate, WKUIDelegate, NSToolbarDelegate {
     var item: NSStatusItem!
+    var reopenObserver: NSObjectProtocol?
     let menu = NSMenu()
     var engine = "NmapUI: checking…"
     var portal = "Daedalus: checking…"
@@ -125,11 +126,21 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
     let hostedReportPanel = NSStackView()
     let hostedReportStatus = NSTextField(wrappingLabelWithString: "")
     var hostedReportFingerprint = ""
-    let windowHistoryButton = NSButton(title: "Recent scans", target: nil, action: nil)
-    let windowStatus = NSTextField(wrappingLabelWithString: "Connecting to scanner…")
+    var historyToolbarItem: NSToolbarItem?
+    let windowStatus = NSTextField(labelWithString: "Connecting to scanner…")
     lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let openNotification = Notification.Name("org.daedalus.scanner-status.open-window")
+        let otherInstances = NSRunningApplication.runningApplications(withBundleIdentifier: "org.daedalus.scanner-status").filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+        if !otherInstances.isEmpty {
+            if !CommandLine.arguments.contains("--background") {
+                DistributedNotificationCenter.default().postNotificationName(openNotification, object: nil, userInfo: nil, deliverImmediately: true)
+            }
+            NSApp.terminate(nil)
+            return
+        }
+        reopenObserver = DistributedNotificationCenter.default().addObserver(forName: openNotification, object: nil, queue: .main) { [weak self] _ in self?.openLocal() }
         let configURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Daedalus/managed-agent.json")
         if let data = try? Data(contentsOf: configURL), let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             if let address = config["nmapui_url"] as? String, let url = URL(string: address),
@@ -247,9 +258,73 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         item.button?.title = " " + runtimePresentation.badge + (deliveryPresentation.needsReview ? " · Upload review" : ((deliveryPresentation.pending ?? 0) > 0 ? " · Queued" : ""))
         item.button?.image = NSImage(systemSymbolName: deliveryPresentation.needsReview ? "exclamationmark.shield" : runtimePresentation.symbol, accessibilityDescription: runtimePresentation.activity)
         windowHistory.stringValue = "Managed scan history (Daedalus)\n" + (recent.isEmpty ? "No saved runs reported yet." : recent.joined(separator: "\n"))
-        windowStatus.stringValue = "\(engine)   ·   \(portal)\n\(activity)\n\(deliveryPresentation.summary)\nAn empty upload queue does not establish scan completeness." + (scannerPageMessage.isEmpty ? "" : "\n" + scannerPageMessage)
+        let cloud = portal == "Daedalus bridge: connected" ? "Cloud connected" : (portal == "Daedalus bridge: offline" ? "Cloud offline" : "Cloud unavailable")
+        let upload = deliveryPresentation.needsReview ? "Upload needs review" : (deliveryPresentation.valid ? ((deliveryPresentation.pending ?? 0) > 0 ? "\(deliveryPresentation.pending!) queued" : "Queue clear") : "Delivery unknown")
+        let scan = runtimePresentation.working ? activity.replacingOccurrences(of: "Active: scan ", with: "Scanning ").replacingOccurrences(of: "Active: report ", with: "Report ") : runtimePresentation.badge
+        windowStatus.stringValue = [scan, cloud, upload, scannerPageMessage.isEmpty ? "" : "Page unavailable"].filter { !$0.isEmpty }.joined(separator: " · ")
+        windowStatus.textColor = !scannerPageMessage.isEmpty || deliveryPresentation.needsReview || !runtimePresentation.running ? .systemOrange : .secondaryLabelColor
+        windowStatus.toolTip = "\(engine)\n\(portal)\n\(activity)\n\(deliveryPresentation.summary)\nAn empty upload queue does not establish scan completeness." + (scannerPageMessage.isEmpty ? "" : "\n" + scannerPageMessage)
         item.button?.toolTip = "\(engine)\n\(portal)\n\(activity)\n\(deliveryPresentation.summary)"
     }
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [NSToolbarItem.Identifier("scanner-status"), .flexibleSpace] + ["scanner-reload", "scanner-recent", "scanner-browser", "scanner-cloud"].map { NSToolbarItem.Identifier($0) }
+    }
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        toolbarDefaultItemIdentifiers(toolbar)
+    }
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        if identifier.rawValue == "scanner-status" {
+            item.label = "Scanner status"
+            item.view = windowStatus
+            windowStatus.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                windowStatus.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
+                windowStatus.widthAnchor.constraint(lessThanOrEqualToConstant: 700),
+                windowStatus.heightAnchor.constraint(equalToConstant: 18)
+            ])
+            return item
+        }
+        let actions: [String: (String, String, Selector)] = [
+            "scanner-reload": ("Reload scanner", "arrow.clockwise", #selector(reloadScanner)),
+            "scanner-recent": ("Recent scans", "clock.arrow.circlepath", #selector(toggleRecent)),
+            "scanner-browser": ("Open in browser", "safari", #selector(openBrowser)),
+            "scanner-cloud": ("Daedalus history", "cloud", #selector(openPortal))
+        ]
+        guard let (label, symbol, action) = actions[identifier.rawValue] else { return nil }
+        item.label = label; item.toolTip = label
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        item.target = self; item.action = action
+        if identifier.rawValue == "scanner-recent" { historyToolbarItem = item }
+        return item
+    }
+    // Applied to the local scanner view on every navigation, including dynamically rendered tabs.
+    // rem-based typography is 75% of the browser layout; padding and gaps are reduced further.
+    static let desktopDensityScript = """
+    (() => {
+        const style = document.createElement('style');
+        style.id = 'daedalus-desktop-density';
+        style.textContent = `
+            html { font-size: 75% !important; }
+            .page-shell { max-width: none !important; padding-inline: 1rem !important; }
+            body { padding-block: 1rem !important; }
+            #scanner-header { margin-bottom: 1rem !important; gap: 1rem !important; }
+            #scanner-header > div { gap: 1rem !important; }
+            .p-4, .p-5, .p-6, .p-8 { padding: .75rem !important; }
+            .px-4, .px-5, .px-6, .px-8 { padding-inline: .75rem !important; }
+            .py-3, .py-4, .py-5, .py-6, .py-8 { padding-block: .5rem !important; }
+            .gap-4, .gap-5, .gap-6, .gap-8 { gap: .75rem !important; }
+            .mt-4, .mt-5, .mt-6, .mt-8 { margin-top: .75rem !important; }
+            .mb-4, .mb-5, .mb-6, .mb-8 { margin-bottom: .75rem !important; }
+            .space-y-4 > :not([hidden]) ~ :not([hidden]),
+            .space-y-6 > :not([hidden]) ~ :not([hidden]),
+            .space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: .75rem !important; }
+            .results-band { margin-top: .75rem !important; padding-block: .75rem !important; }
+            .modal-panel { padding: 1rem !important; }
+        `;
+        document.head.appendChild(style);
+    })();
+    """
     @objc func openLocal() {
         guard let url = localURL else { return }
         if scannerWindow == nil {
@@ -259,19 +334,25 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             window.isReleasedWhenClosed = false
             let root = NSView(); window.contentView = root
             let configuration = WKWebViewConfiguration()
-            // The web UI receives no portal enrollment token or native script bridge.
+            // Desktop density is presentation-only; no portal token or native script bridge is exposed.
+            configuration.userContentController.addUserScript(WKUserScript(source: Self.desktopDensityScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
             let web = WKWebView(frame: .zero, configuration: configuration)
             web.navigationDelegate = self; web.uiDelegate = self
-            let reload = NSButton(title: "Reload", target: self, action: #selector(reloadScanner))
-            let browser = NSButton(title: "Open in browser", target: self, action: #selector(openBrowser))
-            let history = NSButton(title: "Daedalus history", target: self, action: #selector(openPortal))
-            windowHistoryButton.target = self; windowHistoryButton.action = #selector(toggleRecent)
-            let controls = NSStackView(views: [reload, windowHistoryButton, browser, history]); controls.spacing = 8
+            window.titleVisibility = .hidden
+            window.toolbarStyle = .unifiedCompact
+            windowStatus.font = .systemFont(ofSize: 11)
+            windowStatus.maximumNumberOfLines = 1
+            windowStatus.lineBreakMode = .byTruncatingMiddle
+            let toolbar = NSToolbar(identifier: "DaedalusScannerToolbar")
+            toolbar.delegate = self
+            toolbar.displayMode = .iconOnly
+            toolbar.allowsUserCustomization = false
+            window.toolbar = toolbar
             windowBody.orientation = .vertical; windowBody.alignment = .leading; windowBody.spacing = 0
             windowHistoryPanel.orientation = .vertical; windowHistoryPanel.alignment = .leading
-            windowHistoryPanel.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
+            windowHistoryPanel.edgeInsets = NSEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
             windowHistoryPanel.addArrangedSubview(windowHistory)
-            hostedReportPanel.orientation = .vertical; hostedReportPanel.alignment = .leading; hostedReportPanel.spacing = 6
+            hostedReportPanel.orientation = .vertical; hostedReportPanel.alignment = .leading; hostedReportPanel.spacing = 4
             windowHistoryPanel.addArrangedSubview(hostedReportPanel)
             windowHistoryPanel.addArrangedSubview(hostedReportStatus)
             windowHistoryScroll.hasVerticalScroller = true
@@ -280,18 +361,13 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             windowHistoryScroll.documentView = windowHistoryPanel
             windowHistoryScroll.isHidden = true
             windowBody.addArrangedSubview(windowHistoryScroll); windowBody.addArrangedSubview(web)
-            for view in [windowStatus, controls, windowBody] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+            for view in [windowBody] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
             NSLayoutConstraint.activate([
-                windowStatus.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-                windowStatus.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
-                windowStatus.trailingAnchor.constraint(lessThanOrEqualTo: controls.leadingAnchor, constant: -12),
-                controls.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
-                controls.centerYAnchor.constraint(equalTo: windowStatus.centerYAnchor),
                 windowBody.leadingAnchor.constraint(equalTo: root.leadingAnchor), windowBody.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-                windowBody.topAnchor.constraint(equalTo: windowStatus.bottomAnchor, constant: 12), windowBody.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+                windowBody.topAnchor.constraint(equalTo: root.topAnchor), windowBody.bottomAnchor.constraint(equalTo: root.bottomAnchor),
                 web.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
                 windowHistoryScroll.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
-                windowHistoryScroll.heightAnchor.constraint(equalToConstant: 220),
+                windowHistoryScroll.heightAnchor.constraint(equalToConstant: 170),
                 windowHistoryPanel.leadingAnchor.constraint(equalTo: windowHistoryScroll.contentView.leadingAnchor),
                 windowHistoryPanel.topAnchor.constraint(equalTo: windowHistoryScroll.contentView.topAnchor),
                 windowHistoryPanel.widthAnchor.constraint(equalTo: windowHistoryScroll.contentView.widthAnchor),
@@ -369,7 +445,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
     }
     @objc func toggleRecent() {
         windowHistoryScroll.isHidden.toggle()
-        windowHistoryButton.title = windowHistoryScroll.isHidden ? "Recent scans" : "Hide recent scans"
+        historyToolbarItem?.toolTip = windowHistoryScroll.isHidden ? "Recent scans" : "Hide recent scans"
     }
     @objc func reloadScanner() {
         if let url = scannerWebView?.url, sameScannerOrigin(url) { scannerWebView?.reload() }
