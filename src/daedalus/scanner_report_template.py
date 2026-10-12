@@ -413,6 +413,9 @@ def render_standardized_scanner_pdf(report_snapshot: dict) -> bytes:
         html, inserted = re.subn(r"(<body[^>]*>)", lambda m: m.group(1) + panel, html, count=1)
         if not inserted:
             raise ValueError("The standardized report body could not receive the change summary.")
+    if provenance and provenance.get("topology_recommendations_version") == 1:
+        from daedalus.topology_recommendations import append_recommendations
+        html = append_recommendations(html, original_xml_documents(events))
     html = scanner_print_layout_html(html, provenance)
     with tempfile.TemporaryDirectory(prefix="daedalus-scanner-pdf-") as directory:
         path = Path(directory) / "report.html"
