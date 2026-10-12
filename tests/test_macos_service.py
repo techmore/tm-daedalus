@@ -40,7 +40,7 @@ class ManagedMacOSServiceTests(unittest.TestCase):
         self.assertEqual(environment["NMAPUI_PORT"], "9000")
         self.assertEqual(environment["NMAPUI_DATA_DIR"], "/Users/operator/Library/Application Support/Daedalus/nmapui-data/data")
         self.assertEqual(environment["NMAPUI_LOG_DIR"], "/Users/operator/Library/Application Support/Daedalus/nmapui-data/logs")
-        self.assertEqual(environment["NMAPUI_ENABLE_NETWORK_FINGERPRINT"], "false")
+        self.assertEqual(environment["NMAPUI_ENABLE_NETWORK_FINGERPRINT"], "true")
         self.assertEqual(environment["NMAPUI_ENABLE_UPDATE_CHECK"], "false")
         self.assertNotIn("NMAPUI_USERNAME", environment)
         self.assertNotIn("shell", payload)

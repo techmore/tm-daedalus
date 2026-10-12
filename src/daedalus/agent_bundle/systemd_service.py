@@ -127,7 +127,7 @@ def _nmapui_unit(args: argparse.Namespace, env_path: Path) -> str:
         "NMAPUI_SKIP_LEGACY_MIGRATION": "1",
         "NMAPUI_HOST": "127.0.0.1",
         "NMAPUI_PORT": str(args.port),
-        "NMAPUI_ENABLE_NETWORK_FINGERPRINT": "false",
+        "NMAPUI_ENABLE_NETWORK_FINGERPRINT": "true",
         "NMAPUI_ENABLE_VULNERS": "false",
         "NMAPUI_ENABLE_UPDATE_CHECK": "false",
         "NMAPUI_ALLOW_UNSAFE_WERKZEUG": "true",

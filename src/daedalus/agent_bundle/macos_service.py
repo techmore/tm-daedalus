@@ -117,7 +117,7 @@ def build_nmapui_plist(
         "NMAPUI_HOST": "127.0.0.1",
         "NMAPUI_PORT": str(port),
         "NMAPUI_SKIP_LEGACY_MIGRATION": "1",
-        "NMAPUI_ENABLE_NETWORK_FINGERPRINT": "false",
+        "NMAPUI_ENABLE_NETWORK_FINGERPRINT": "true",
         "NMAPUI_ENABLE_VULNERS": "false",
         "NMAPUI_ENABLE_UPDATE_CHECK": "false",
         "NMAPUI_ALLOW_UNSAFE_WERKZEUG": "true",
