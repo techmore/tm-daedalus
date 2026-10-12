@@ -17,3 +17,9 @@ The installed scanner includes the compact history review and bounded, direct-cl
 ## Validation limits
 
 No new automated regression suite was run for these changes. Installer/helper syntax was parsed and prompt-free raw ARP exercised on the actual Mac. Customer attribution is being checked with a real scan of a user-confirmed client. PDF appendix visual review, full native-branch reconciliation and physical-host unattended soak remain separate open items.
+
+## Acceptance receipt
+
+The real user-confirmed client scan completed with one host, persisted under the selected customer. Its raw ARP phase collected MAC data through the restricted helper without a password prompt. The cloud bridge returned online, its upload backlog drained to zero, and production grouped the new run as completed. This is a bounded single-client acceptance check, not a full subnet or unattended-soak validation.
+
+The release deployed to `daedalus-prod` using the standard verified off-host backup and readiness workflow. An initial permission failure stopped before activation; the retry completed successfully with internal and public readiness passing. A follow-up scanner correction includes all configured IPv4 gateways in discovery-only protection when a VPN replaces the default route. The final bundle and local install include that correction.
