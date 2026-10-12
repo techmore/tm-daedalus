@@ -8311,7 +8311,8 @@ def validate_scanner_run_result(event_name: str, payload: Any) -> None:
 
 @app.post("/api/agents/{agent_id}/runs/{source_job_id}/pdf")
 def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
-                           background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+                           background_tasks: BackgroundTasks, include_topology_recommendations: bool = False,
+                           db: Session = Depends(get_db)):
     user, organization, _membership = get_org_context(request, db)
     agent = db.get(Agent, agent_id)
     if agent is None or agent.organization_id != organization.id:
@@ -8394,7 +8395,7 @@ def create_scanner_run_pdf(agent_id: int, source_job_id: UUID, request: Request,
                                         "asset_sha256": dict(REPORT_ASSET_SHA256),
                                         "print_layout_version": PRINT_LAYOUT_VERSION,
                                         "print_layout_sha256": PRINT_LAYOUT_SHA256,
-                                        "topology_recommendations_version": 1},
+                                        "topology_recommendations_version": 1 if include_topology_recommendations else None},
             "scanner": {"name": agent.name, "agent_id": agent.id, "source_job_id": str(source_job_id),
                         "run": run, "events": saved_events, "payload": [],
                         "changes_since_previous": changes_since_previous}})

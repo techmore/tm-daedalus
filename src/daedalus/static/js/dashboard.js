@@ -840,7 +840,17 @@
           runPdf.textContent = "Generate run PDF";
           var runFeedback = document.createElement("span");
           runFeedback.className = "scanner-pdf-feedback";
-          reportActions.append(runPdf, runFeedback);
+          var topologyLabel = document.createElement("label");
+          var topologyToggle = document.createElement("input");
+          topologyToggle.type = "checkbox";
+          topologyToggle.className = "scanner-topology-toggle";
+          var topologyKey = "daedalus-topology-recommendations:" + agent.id;
+          try { topologyToggle.checked = localStorage.getItem(topologyKey) === "true"; } catch (_error) {}
+          topologyToggle.addEventListener("change", function () {
+            try { localStorage.setItem("daedalus-topology-recommendations:" + agent.id, String(this.checked)); } catch (_error) {}
+          });
+          topologyLabel.append(topologyToggle, document.createTextNode(" Include topology recommendations"));
+          reportActions.append(topologyLabel, runPdf, runFeedback);
           runCard.append(reportActions);
           var earlierRuns = payload.runs.filter(function (candidate) {
             return candidate.source_job_id !== run.source_job_id && candidate.source_job_type === "scan" && new Date(candidate.first_occurred_at) < new Date(run.first_occurred_at);
@@ -4239,6 +4249,10 @@
       var endpoint = button.dataset.scannerPdfRun
         ? "/api/agents/" + encodeURIComponent(button.dataset.scannerAgent) + "/runs/" + encodeURIComponent(button.dataset.scannerPdfRun) + "/pdf"
         : "/api/agents/events/" + encodeURIComponent(button.dataset.scannerPdfEvent) + "/pdf";
+      if (button.dataset.scannerPdfRun) {
+        var topologyToggle = button.closest(".agent-actions").querySelector(".scanner-topology-toggle");
+        endpoint += "?include_topology_recommendations=" + (topologyToggle && topologyToggle.checked ? "true" : "false");
+      }
       await postJson(endpoint);
       text(feedback, "Queued. See Reports for generation progress and download.");
       await loadReports();
