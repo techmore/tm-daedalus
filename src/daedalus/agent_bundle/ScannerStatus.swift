@@ -299,7 +299,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
         return item
     }
     // Applied to the local scanner view on every navigation, including dynamically rendered tabs.
-    // rem-based typography is 75% of the browser layout; padding and gaps are reduced further.
+    // Keep the existing typography scale; compact the native layout around it.
     static let desktopDensityScript = """
     (() => {
         const style = document.createElement('style');
@@ -321,6 +321,61 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
             .space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: .75rem !important; }
             .results-band { margin-top: .75rem !important; padding-block: .75rem !important; }
             .modal-panel { padding: 1rem !important; }
+            /* Native compact layout: reclaim vertical space before reducing legibility. */
+            .page-shell { padding-inline: 8px !important; }
+            body { padding-block: 6px !important; }
+            #scanner-header { margin-bottom: 6px !important; gap: 8px !important; }
+            #scanner-header > div { gap: 8px !important; }
+            #scanner-header img { max-width: 28px; max-height: 28px; }
+            #scanner-header h1 { font-size: 18px !important; line-height: 1.1 !important; }
+            #current-date-time { font-family: inherit !important; font-size: 11px !important; line-height: 1.2 !important; }
+            .p-4, .p-5, .p-6, .p-8 { padding: 8px !important; }
+            .px-4, .px-5, .px-6, .px-8 { padding-inline: 8px !important; }
+            .py-3, .py-4, .py-5, .py-6, .py-8 { padding-block: 5px !important; }
+            .gap-4, .gap-5, .gap-6, .gap-8 { gap: 8px !important; }
+            .mt-4, .mt-5, .mt-6, .mt-8 { margin-top: 8px !important; }
+            .mb-4, .mb-5, .mb-6, .mb-8 { margin-bottom: 8px !important; }
+            .space-y-4 > :not([hidden]) ~ :not([hidden]),
+            .space-y-6 > :not([hidden]) ~ :not([hidden]),
+            .space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: 8px !important; }
+            .action-button { min-height: 26px; padding: 4px 9px !important; line-height: 1.2 !important; }
+            .form-control { min-height: 28px; padding-block: 4px !important; }
+            #local-ip-panel { padding: 6px 8px !important; }
+            #local-ip-panel > .grid { margin-bottom: 5px !important; gap: 8px !important; }
+            #local-ip-panel > .grid > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+            #network-key-banner { border: 0 !important; border-top: 1px solid #d4d7c5 !important; border-radius: 0 !important; padding: 5px 0 0 !important; box-shadow: none !important; }
+            #network-key-banner .pb-3 { padding-bottom: 4px !important; }
+            #network-key-banner .gap-4 { gap: 4px !important; }
+            #scan-command-center { padding: 8px !important; margin-top: 8px !important; }
+            #scan-command-center > .flex { gap: 8px !important; }
+            #scan-target { min-height: 30px; padding-block: 5px !important; }
+            #quick-scan-card, #deep-scan-card, #monitoring-hub-card { padding: 8px !important; border-radius: 6px !important; }
+            #quick-scan-card h2, #deep-scan-card h2, #monitoring-hub-card h2 { font-size: 14px !important; line-height: 1.2 !important; }
+            #quick-scan-card .mb-3, #deep-scan-card .mb-3, #monitoring-hub-card .mb-3 { margin-bottom: 4px !important; }
+            .compact-card .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 3px !important; }
+            .results-band { margin-top: 8px !important; padding-block: 4px !important; border-radius: 6px !important; }
+            .results-band table { font-size: 11px !important; line-height: 1.25 !important; }
+            .results-band th, .results-band td { padding: 5px 7px !important; vertical-align: top; }
+            .results-band th { padding-block: 6px !important; }
+            #start-scan-btn, #generate-report-btn, #chunked-scan-btn { height: 30px !important; min-height: 30px !important; padding-inline: 10px !important; }
+            #scan-command-center button[aria-label*="PDF"] { height: 30px !important; min-height: 30px !important; }
+            #scan-command-center > .border-t { margin-top: 6px !important; padding-top: 6px !important; }
+            #monitoring-hub-card > .border-t { margin-top: 5px !important; padding-top: 5px !important; }
+            #quick-scan-card > p, #deep-scan-card > p, #monitoring-hub-card > p { margin-top: 3px !important; font-size: 10px !important; }
+            @media (min-width: 700px) {
+                #scan-command-center > div:has(#scan-target) { display: grid !important; grid-template-columns: minmax(160px, 1fr) minmax(150px, 1fr) auto; align-items: end !important; }
+                #scan-command-center > div:has(#scan-target) > div:last-child { width: auto !important; }
+                #scan-command-center > div:has(#scan-target) > div:last-child > div { flex-direction: row !important; }
+                #quick-scan-card, #deep-scan-card, #monitoring-hub-card { align-self: start !important; }
+                #monitoring-hub-card > .space-y-1 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; }
+                #monitoring-hub-card > .space-y-1 > p { gap: 8px; }
+                #monitoring-hub-card > .border-t { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; }
+                #open-reports-tab-btn { grid-column: 1 / -1; padding-block: 3px !important; }
+            }
+            #historical-data-banner { margin-top: 8px !important; }
+            #historical-data-banner > div { padding: 6px 8px !important; }
+            #history-tab-panel, #reports-tab-panel, #customers-tab-panel, #settings-tab-panel { padding: 10px !important; border-radius: 8px !important; }
+
         `;
         document.head.appendChild(style);
     })();
@@ -367,7 +422,7 @@ final class StatusApp: NSObject, NSApplicationDelegate, NSMenuDelegate, URLSessi
                 windowBody.topAnchor.constraint(equalTo: root.topAnchor), windowBody.bottomAnchor.constraint(equalTo: root.bottomAnchor),
                 web.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
                 windowHistoryScroll.widthAnchor.constraint(equalTo: windowBody.widthAnchor),
-                windowHistoryScroll.heightAnchor.constraint(equalToConstant: 170),
+                windowHistoryScroll.heightAnchor.constraint(equalToConstant: 140),
                 windowHistoryPanel.leadingAnchor.constraint(equalTo: windowHistoryScroll.contentView.leadingAnchor),
                 windowHistoryPanel.topAnchor.constraint(equalTo: windowHistoryScroll.contentView.topAnchor),
                 windowHistoryPanel.widthAnchor.constraint(equalTo: windowHistoryScroll.contentView.widthAnchor),
