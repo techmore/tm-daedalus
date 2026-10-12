@@ -19,6 +19,7 @@ ROOT_FILES = (
     "persistence.py",
     "requirements.txt",
     "VERSION",
+    "packaging/macos/install-arp-helper.py",
     "nmap-modern.xsl",
     "nmap-pdf-olive-legacy.xsl",
     "config/auto_scan_config.example.json",
