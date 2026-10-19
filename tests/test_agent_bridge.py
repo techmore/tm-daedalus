@@ -377,6 +377,7 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
 
     def test_managed_nmapui_restart_runs_while_the_socket_is_offline(self):
         (self.root / "Library/Application Support/Daedalus").mkdir(parents=True)
+        (self.root / "Library/Application Support/Daedalus").chmod(0o700)
         bridge = NmapUIBridge(
             {
                 "agent_id": 7,
