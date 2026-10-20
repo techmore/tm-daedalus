@@ -38,6 +38,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from anyio import from_thread
 
 from daedalus import __version__
+from daedalus.request_limits import BoundedBodyMiddleware
 from daedalus.scanner_activity import unknown_activity, validated_activity
 from daedalus.scanner_delivery import unknown_delivery, validated_delivery, needs_review
 from daedalus.cis_client_release import load_release, release_status, ReleaseInvalid
@@ -466,6 +467,15 @@ app.add_middleware(
     allowed_hosts=list(ALLOWED_HOSTS),
 )
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
+# Scanner JSON routes are parsed by pydantic before the handler can measure them; cap the
+# raw body first so a stolen scanner token cannot force large allocations. The event payload
+# limit inside the handler stays at 512 KB; the envelope allows for the other fields.
+MAX_AGENT_EVENT_BODY_BYTES = 640_000
+MAX_AGENT_HEARTBEAT_BODY_BYTES = 64_000
+app.add_middleware(BoundedBodyMiddleware, rules=(
+    ("POST", r"/api/agents/\d+/events", MAX_AGENT_EVENT_BODY_BYTES),
+    ("POST", r"/api/agents/\d+/heartbeat", MAX_AGENT_HEARTBEAT_BODY_BYTES),
+))
 
 
 @app.middleware("http")
@@ -533,8 +543,10 @@ class AgentHeartbeatRequest(BaseModel):
 
     @model_validator(mode="after")
     def normalize_detected_networks(self):
+        # A scanner on a benchmark/documentation range (198.18.0.0/15, 192.0.2.0/24) or a
+        # public address must still check in; only the private ranges are recorded.
         if self.detected_networks is not None:
-            self.detected_networks = validate_scanner_network_scopes(self.detected_networks)
+            self.detected_networks = accepted_detected_networks(self.detected_networks)
         return self
 
     nmapui_connected: bool = False
@@ -2601,6 +2613,17 @@ def validate_scanner_network_scopes(raw_scopes: list[str]) -> list[str]:
     )
 
 
+def accepted_detected_networks(raw_scopes: list[str]) -> list[str]:
+    """Keep the entries a scanner may report (private, loopback, link-local); drop the rest silently."""
+    accepted: list[str] = []
+    for raw_scope in raw_scopes[:32]:
+        try:
+            accepted.extend(validate_scanner_network_scopes([raw_scope]))
+        except ValueError:
+            continue
+    return validate_scanner_network_scopes(accepted) if accepted else []
+
+
 def scanner_connection_scope(agent: Agent) -> str:
     """Compare current connected subnets with approved scope, not target reachability."""
     if not agent.enabled or not agent_bridge_online(agent):
@@ -3008,10 +3031,27 @@ def revoke_user_key(key_id: int, request: Request, db: Session = Depends(get_db)
         headers={"Cache-Control": "no-store"})
 
 
+DEMO_LOGIN_PEERS = frozenset({"127.0.0.1", "::1", "testclient"})
+PROXY_HEADERS = ("x-forwarded-for", "forwarded", "x-real-ip")
+
+
+def demo_login_available(request: Request) -> bool:
+    """Only direct loopback connections may use the demo accounts.
+
+    Behind a reverse proxy every client appears to come from loopback, so a
+    request that carries a proxy header is refused even on a loopback peer.
+    """
+    if not DEMO_MODE:
+        return False
+    client_host = request.client.host if request.client else ""
+    if client_host not in DEMO_LOGIN_PEERS:
+        return False
+    return not any(request.headers.get(name) for name in PROXY_HEADERS)
+
+
 @app.post("/dev/login")
 def demo_login(request: Request, db: Session = Depends(get_db)):
-    client_host = request.client.host if request.client else ""
-    if not DEMO_MODE or client_host not in {"127.0.0.1", "::1", "testclient"}:
+    if not demo_login_available(request):
         raise HTTPException(status_code=404, detail="Not found")
     user = db.scalar(
         select(User).where(User.google_subject == "daedalus-local-demo-admin")
@@ -3033,8 +3073,7 @@ def demo_login(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/dev/login/member")
 def demo_member_login(request: Request, db: Session = Depends(get_db)):
-    client_host = request.client.host if request.client else ""
-    if not DEMO_MODE or client_host not in {"127.0.0.1", "::1", "testclient"}:
+    if not demo_login_available(request):
         raise HTTPException(status_code=404, detail="Not found")
     user = db.scalar(
         select(User).where(User.google_subject == "daedalus-local-demo-member")

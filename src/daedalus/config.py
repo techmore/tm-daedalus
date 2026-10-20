@@ -72,9 +72,20 @@ DATA_DIR = Path(os.environ.get("DAEDALUS_DATA_DIR", "/data" if APP_ENV == "produ
 
 if APP_ENV == "production" and DEMO_MODE:
     raise RuntimeError("DAEDALUS_DEMO_MODE must be false in production.")
+# Same markers as scripts/check_production_env.py: the example files ship values like
+# "replace-with-at-least-32-random-characters", which are long enough to pass a length check.
+SECRET_PLACEHOLDER_MARKERS = ("replace-with", "change-me", "changeme", "your-", "local-only")
+
+
+def looks_like_placeholder(value: str) -> bool:
+    lowered = value.casefold()
+    return any(marker in lowered for marker in SECRET_PLACEHOLDER_MARKERS)
+
+
 if APP_ENV == "production" and (
     SESSION_SECRET == "local-only-change-this-daedalus-session-secret"
     or len(SESSION_SECRET) < 32
+    or looks_like_placeholder(SESSION_SECRET)
 ):
     raise RuntimeError("Set a long, random DAEDALUS_SESSION_SECRET in production.")
 if APP_ENV == "production" and (
@@ -84,7 +95,7 @@ if APP_ENV == "production" and (
 if APP_ENV == "production" and not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
     raise RuntimeError("Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in production.")
 if APP_ENV == "production":
-    if not ENCRYPTION_KEY:
+    if not ENCRYPTION_KEY or looks_like_placeholder(ENCRYPTION_KEY):
         raise RuntimeError("Set DAEDALUS_ENCRYPTION_KEY to a Fernet key in production.")
     try:
         Fernet(ENCRYPTION_KEY.encode("ascii"))
