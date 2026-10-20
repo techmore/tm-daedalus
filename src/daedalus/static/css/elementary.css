@@ -1,0 +1,104 @@
+/* elementary OS native look for the Daedalus portal.
+ * Redefines the design tokens from app.css (Blueberry accent, Slate text, Silver
+ * surfaces, Inter, 9px radii) for light and dark, then overrides the components
+ * that hard-code colors. Loaded after app.css. */
+:root {
+  color-scheme: light dark;
+  --e-blueberry-100: #8cd5ff; --e-blueberry-300: #64baff; --e-blueberry-500: #3689e6; --e-blueberry-700: #0d52bf;
+  --e-strawberry: #c6262e; --e-orange: #f37329; --e-banana: #f9c440; --e-lime: #68b723; --e-mint: #28bca3;
+  --e-window: #fafafa; --e-surface: #ffffff; --e-surface-2: #f5f5f5; --e-sidebar: #f0f0f0;
+  --e-text: #333333; --e-text-2: #485a6c; --e-text-3: #667885;
+  --e-border: rgba(0,0,0,.14); --e-border-soft: rgba(0,0,0,.08);
+  --e-accent: var(--e-blueberry-500); --e-accent-strong: var(--e-blueberry-700); --e-on-accent: #fff;
+  --e-accent-soft: rgba(54,137,230,.14);
+  --e-warn-bg: rgba(249,196,64,.22); --e-warn: #7a5a00; --e-bad-bg: rgba(198,38,46,.12); --e-bad: #a10705; --e-ok-bg: rgba(104,183,35,.16); --e-ok: #3a7d0a;
+  --e-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.1), 0 3px 3px rgba(0,0,0,.12);
+  --e-font: Inter, "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* app.css tokens */
+  --olive-50: var(--e-window); --olive-100: var(--e-surface-2); --olive-200: var(--e-border);
+  --olive-600: var(--e-accent); --olive-700: var(--e-accent-strong); --olive-800: var(--e-text-2); --olive-900: var(--e-text); --olive-950: var(--e-text);
+  --cream-50: var(--e-surface); --cream-100: var(--e-surface-2); --brown-800: var(--e-text-2); --brown-900: var(--e-text);
+  --card-surface: var(--e-surface); --card-line: var(--e-border); --selected-surface: var(--e-accent-soft);
+  --ink: var(--e-text); --muted: var(--e-text-3); --line: var(--e-border); --panel: var(--e-surface); --canvas: var(--e-window);
+  --navy: var(--e-sidebar); --teal: var(--e-accent); --teal-dark: var(--e-accent-strong); --soft-teal: var(--e-surface-2);
+  --blue: var(--e-accent); --violet: var(--e-text-2); --amber: var(--e-orange);
+  font-family: var(--e-font);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --e-window: #1c1c1c; --e-surface: #2b2b2b; --e-surface-2: #333333; --e-sidebar: #242424;
+    --e-text: #fafafa; --e-text-2: #d4d4d4; --e-text-3: #abacae;
+    --e-border: rgba(255,255,255,.14); --e-border-soft: rgba(255,255,255,.08);
+    --e-accent: var(--e-blueberry-500); --e-accent-strong: var(--e-blueberry-300); --e-accent-soft: rgba(100,186,255,.18);
+    --e-warn-bg: rgba(249,196,64,.16); --e-warn: #f9c440; --e-bad-bg: rgba(198,38,46,.22); --e-bad: #ff8c82; --e-ok-bg: rgba(104,183,35,.2); --e-ok: #9bdb4d;
+    --e-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4), 0 3px 3px rgba(0,0,0,.4);
+  }
+}
+html body { font-family: var(--e-font); font-size: 14px; color: var(--e-text); background: var(--e-window); -webkit-font-smoothing: antialiased; }
+html h1, html h2, html h3, html h4 { font-family: var(--e-font); font-style: normal; font-weight: 700; letter-spacing: -.01em; color: var(--e-text); }
+html :focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; border-radius: 6px; }
+html ::selection { background: var(--e-blueberry-300); color: #0b1b33; }
+
+/* Login */
+html .login-page { background: var(--e-window); }
+html .login-card { background: var(--e-surface); border: 1px solid var(--e-border); border-radius: 12px; box-shadow: var(--e-shadow); }
+html .eyebrow { color: var(--e-accent); letter-spacing: .08em; }
+html .brand, html .brand-mark { font-family: var(--e-font); color: var(--e-text); }
+html .brand-mark { background: transparent; color: var(--e-accent); }
+html .notice { color: var(--e-text-2); background: var(--e-surface-2); border: 1px solid var(--e-border-soft); border-radius: 9px; }
+html .divider, html .fine-print { color: var(--e-text-3); }
+html .divider::before, html .divider::after { background: var(--e-border); }
+
+/* Buttons (Granite default / suggested) */
+html .button, html button.button { border-radius: 6px; font-weight: 600; transition: background-color .15s, box-shadow .15s; transform: none; }
+html .button-primary, html .button-small { color: var(--e-on-accent); background: var(--e-accent); box-shadow: none; }
+html .button-primary:hover, html .button-small:hover { background: var(--e-accent-strong); color: #fff; transform: none; }
+html .button-secondary, html .button-quiet { color: var(--e-text); background: var(--e-surface-2); border: 1px solid var(--e-border); }
+html .button-secondary:hover, html .button-quiet:hover { background: var(--e-accent-soft); }
+html .button-wide { min-height: 40px; }
+
+/* Sidebar */
+html .sidebar { background: var(--e-sidebar); color: var(--e-text); border-right: 1px solid var(--e-border); backdrop-filter: none; }
+html .sidebar .brand, html .sidebar .brand-mark { color: var(--e-text); }
+html .nav-label { color: var(--e-text-3); font-family: var(--e-font); letter-spacing: .08em; }
+html .nav-item { color: var(--e-text-2); border-radius: 6px; font-weight: 500; }
+html .nav-item > span { color: var(--e-text-3); }
+html .nav-item:hover { color: var(--e-text); background: var(--e-accent-soft); }
+html .nav-item.active { color: var(--e-text); background: var(--e-accent-soft); box-shadow: inset 3px 0 var(--e-accent); font-weight: 600; }
+html .nav-item.active > span { color: var(--e-accent); }
+html .nav-badge { color: var(--e-on-accent); background: var(--e-accent); border-radius: 99px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+html .sidebar-footer { border-color: var(--e-border); }
+html .sidebar-add-workspace { color: var(--e-text-2); }
+html .sidebar-add-workspace:hover { color: var(--e-text); background: var(--e-accent-soft); }
+
+/* Top bar and panels */
+html .topbar { border-bottom: 1px solid var(--e-border); }
+html .topbar h1 { font-size: 20px; }
+html .panel, html .stat-card, html .module-card, html .posture-card, html .check-record-card, html .override-card,
+html .verification-card, html .date-card, html .scanner-run-row, html .event-row, html .status-row, html .cis-device-card,
+html .cis-profile-card, html .audit-metric-card, html .welcome-row, html .workspace-request-row, html .workspace-switcher,
+html .external-schedule-card, html .membership-person {
+  background: var(--e-surface); border: 1px solid var(--e-border); border-radius: 9px; box-shadow: none; color: var(--e-text);
+}
+html .status-banner, html .overview-hero-copy { border-radius: 9px; }
+html input, html select, html textarea { font-family: var(--e-font); color: var(--e-text); background: var(--e-surface); border: 1px solid var(--e-border); border-radius: 6px; }
+html input::placeholder, html textarea::placeholder { color: var(--e-text-3); }
+html input:focus, html select:focus, html textarea:focus { outline: none; border-color: var(--e-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--e-accent) 35%, transparent); }
+html table { border-color: var(--e-border); }
+html th { color: var(--e-text-2); background: var(--e-surface-2); }
+html td, html th { border-color: var(--e-border-soft); }
+html .muted, html .text-muted { color: var(--e-text-3); }
+html a { color: var(--e-accent); }
+
+/* Neutral chrome for informational pills and notes (generated rules tint some of them warn). */
+html .notice, html .status-note { color: var(--e-text-2); background: var(--e-surface-2); border: 1px solid var(--e-border-soft); }
+html .connection-pill, html .count-pill { color: var(--e-text-2); background: var(--e-surface-2); border: 1px solid var(--e-border); }
+html .verification-pill { color: var(--e-text-2); background: var(--e-surface-2); border: 1px solid var(--e-border); }
+html .verification-pill.verification-verified { color: var(--e-ok); background: var(--e-ok-bg); border-color: transparent; }
+html .verification-pill.verification-pending, html .verification-pill.verification-expired { color: var(--e-warn); background: var(--e-warn-bg); border-color: transparent; }
+html .connection-pill i { background: var(--e-orange); }
+html .connection-pill.connected i { background: var(--e-lime); box-shadow: 0 0 0 3px color-mix(in srgb, var(--e-lime) 25%, transparent); }
+html .status-dot { background: var(--e-text-3); }
+html .status-dot.is-warn, html .is-warn .status-dot { background: var(--e-orange); }
+html .status-dot.is-ok, html .is-ok .status-dot { background: var(--e-lime); }
+html .status-dot.is-bad, html .is-bad .status-dot { background: var(--e-strawberry); }
