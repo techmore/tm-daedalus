@@ -74,7 +74,7 @@ class IncusDeployTests(unittest.TestCase):
             _ssh('operator@incus-host', ['incus', 'exec', 'daedalus-prod', '--', 'rollback'])
         self.assertEqual(command.call_args.kwargs, {})
 
-    def _deploy_with_mocked_release(self, ssh_side_effect, health_results):
+    def _deploy_with_mocked_release(self, ssh_side_effect, health_results, expected_error=DeployError):
         temporary_directory = tempfile.TemporaryDirectory(prefix="daedalus-deploy-test-")
         self.addCleanup(temporary_directory.cleanup)
 
@@ -95,7 +95,7 @@ class IncusDeployTests(unittest.TestCase):
             contextlib.redirect_stdout(output),
             contextlib.redirect_stderr(errors),
         ):
-            with self.assertRaises(DeployError) as failure:
+            with self.assertRaises(expected_error) as failure:
                 deploy("operator@incus-host", "daedalus-prod", "https://portal.example/readyz")
         return failure.exception, ssh.call_args_list, output.getvalue(), errors.getvalue()
 
@@ -172,9 +172,51 @@ class IncusDeployTests(unittest.TestCase):
         self.assertIn("Restoring the previous source release", errors)
         remote_phases = [call.args[1][6] for call in calls if len(call.args[1]) > 6 and call.args[1][0] == "incus" and call.args[1][5].endswith("deploy-remote.sh")]
         self.assertEqual(remote_phases, ["prepare", "activate", "rollback"])
-        host_cleanup = calls[-1].args[1]
-        self.assertEqual(host_cleanup[0], "rm")
-        self.assertNotIn("/tmp/daedalus-deploy-remote.sh", host_cleanup)
+        self.assertFalse(any(call.kwargs.get("optional_cleanup") for call in calls))
+        self.assertIn("Recovery staging retained", str(failure))
+
+    def test_staging_is_private_unique_and_root_owned_before_upload(self):
+        _failure, calls, _output, _errors = self._deploy_with_mocked_release(None, [False, True])
+        commands = [call.args[1] for call in calls]
+        host_directory = commands[0][-1]
+        self.assertRegex(host_directory, r'^/tmp/daedalus-deploy-[0-9a-f]{32}$')
+        self.assertEqual(commands[0][:4], ['mkdir', '-m', '0700', '--'])
+        self.assertIn('mkdir -m 0700', commands[1][-3])
+        pushes = [command for command in commands if command[:3] == ['incus', 'file', 'push']]
+        self.assertEqual(len(pushes), 2)
+        for command in pushes:
+            self.assertEqual(command[3:9], ['--uid', '0', '--gid', '0', '--mode', '0600'])
+            self.assertRegex(command[-1], r'^daedalus-prod/opt/daedalus/\.deploy-[0-9a-f]{32}/')
+        phases = [command for command in commands if len(command) > 6 and command[5].endswith('deploy-remote.sh')]
+        self.assertTrue(all(command[9] == phases[0][9] for command in phases))
+        self.assertEqual(commands[-1], ['rm', '-rf', '--', host_directory])
+
+    def test_failed_helper_upload_cleans_private_attempt_without_executing_partial_helper(self):
+        def upload_fails(_host, command, **_kwargs):
+            if command[:3] == ['incus', 'file', 'push'] and command[-1].endswith('deploy-remote.sh'):
+                raise DeployError('interrupted helper upload')
+            return ''
+        failure, calls, _output, _errors = self._deploy_with_mocked_release(upload_fails, [])
+        self.assertIn('interrupted helper upload', str(failure))
+        cleanup = [call.args[1] for call in calls if call.kwargs.get('optional_cleanup')]
+        self.assertEqual(len(cleanup), 2)
+        self.assertEqual(cleanup[0][:7], ['incus', 'exec', 'daedalus-prod', '--', 'rm', '-rf', '--'])
+        self.assertFalse(any('prepare' in call.args[1] for call in calls))
+
+    def test_interrupted_or_uncertain_remote_work_retains_recovery(self):
+        for phase in ('prepare', 'activate', 'rollback'):
+            for error in (KeyboardInterrupt, DeployError):
+                with self.subTest(phase=phase, error=error):
+                    def interrupt(_host, command, **_kwargs):
+                        if phase in command:
+                            raise error('interrupted remote operation')
+                        return ''
+                    # Activation DeployError is recovered normally; rollback is then proven safe.
+                    if phase == 'activate' and error == DeployError:
+                        continue
+                    _failure, calls, _output, errors = self._deploy_with_mocked_release(interrupt, [False], expected_error=error)
+                    self.assertFalse(any(call.kwargs.get('optional_cleanup') for call in calls))
+                    self.assertIn('Recovery staging retained', errors)
 
     def test_pdf_browser_install_avoids_protected_home_cache(self):
         script = (ROOT / "scripts/deploy_incus_remote.sh").read_text()
