@@ -103,6 +103,31 @@ def _bounded_update_command(args: list[str], *, timeout: float, env=None) -> sub
             process.stderr.close()
 
 
+_LOCAL_SCAN_RANGES = tuple(ipaddress.ip_network(value) for value in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16",
+    "fc00::/7", "fe80::/10", "::1/128",
+))
+MAX_LOCAL_SCAN_ADDRESSES = 65_536
+
+
+def local_scan_target_refusal(target: str) -> str | None:
+    """Defense in depth: never hand NmapUI a target the portal would refuse.
+
+    The portal enforces the approved scope; the local bridge still refuses
+    anything that is not a bounded private IP or CIDR, so a compromised or
+    mistaken queue cannot aim this device at hostnames or public ranges.
+    """
+    try:
+        network = ipaddress.ip_network(target, strict=False)
+    except ValueError:
+        return "Scan target must be a private IP address or CIDR."
+    if not any(network.version == scope.version and network.subnet_of(scope) for scope in _LOCAL_SCAN_RANGES):
+        return "Scan target is outside private address space."
+    if network.num_addresses > MAX_LOCAL_SCAN_ADDRESSES:
+        return "Scan target exceeds the 65,536 address limit."
+    return None
+
+
 def discover_connected_networks() -> list[str]:
     """Derive the active default connection's IPv4 subnet; never guess a prefix."""
     def read(args: list[str]) -> str:
@@ -996,6 +1021,10 @@ class NmapUIBridge:
             target = str(command.get("target") or "").strip()
             if not target:
                 self._send_command_result(command_id, "failed", "Missing scan target.")
+                return
+            refusal = local_scan_target_refusal(target)
+            if refusal:
+                self._send_command_result(command_id, "failed", refusal)
                 return
             data = {"target": target}
             if type(command.get("skip_host_discovery")) is bool:

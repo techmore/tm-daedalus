@@ -5010,9 +5010,13 @@ async def receive_cis_report(
                 raise HTTPException(status_code=413, detail="The CIS report exceeds the 5 MiB limit.")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid report content length.") from exc
-    raw_body = await request.body()
-    if len(raw_body) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="The CIS report exceeds the 5 MiB limit.")
+    # Enforce the limit while streaming: chunked uploads carry no Content-Length.
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="The CIS report exceeds the 5 MiB limit.")
+    raw_body = bytes(body)
     try:
         payload = json.loads(raw_body)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -6972,7 +6976,17 @@ def enroll_agent(payload: EnrollmentRequest, db: Session = Depends(get_db)):
         last_seen_at=now,
         created_at=now,
     )
-    enrollment.used_at = now
+    # Claim the single-use code atomically so concurrent enrollments cannot
+    # both pass the used_at check above and mint two scanners from one code.
+    claimed = db.execute(
+        update(EnrollmentToken)
+        .where(EnrollmentToken.id == enrollment.id, EnrollmentToken.used_at.is_(None))
+        .values(used_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=401, detail="Enrollment code is invalid or expired")
     db.add(agent)
     db.flush()
     audit(
