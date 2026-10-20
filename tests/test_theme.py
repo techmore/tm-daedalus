@@ -53,6 +53,21 @@ class ThemeTests(unittest.TestCase):
         self.assertIn(".report-job-card { grid-template-columns: minmax(0, 1fr); align-items: start; }", css)
         self.assertIn(".report-job-actions { flex-wrap: wrap; min-width: 0; }", css)
 
+    def test_every_portal_page_declares_an_icon_and_theme_color(self):
+        for name in ("dashboard", "login", "user_keys"):
+            html = (DASHBOARD.parent / f"{name}.html").read_text()
+            with self.subTest(page=name):
+                self.assertIn('<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,', html)
+                self.assertIn('<meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">', html)
+                self.assertIn("app.css?v=daedalus-20261020-203", html)
+
+    def test_mobile_menu_exposes_account_footer_and_demo_switch(self):
+        css = CSS.read_text()
+        self.assertIn(".sidebar-navigation-content.is-open ~ .sidebar-footer { display: grid;", css)
+        self.assertIn(".sidebar-footer .icon-button { min-width: 44px; min-height: 44px; }", css)
+        mobile = css[css.index(".sidebar-navigation-content.is-open ~ .sidebar-footer"):]
+        self.assertIn(".demo-switch { display: inline-flex; }", mobile)
+
     def test_keyboard_bypass_focus_and_reduced_motion(self):
         css = CSS.read_text()
         html = DASHBOARD.read_text()

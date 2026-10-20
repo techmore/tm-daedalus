@@ -139,6 +139,13 @@ xcodebuild test \
 
 For a private local demo archive, run `sh clients/csp-cis-audit/scripts/build-local-client.sh`. It does not bundle workspace credentials. The app receives an ad hoc bundle signature for integrity checks, but that signature has no publisher identity and is not notarized; downloaded copies may still be blocked by Gatekeeper. Do not ask end users to override that protection. With a Developer ID Application identity and a configured `notarytool` keychain profile, build an external distribution ZIP using `sh clients/csp-cis-audit/scripts/build-notarized-client.sh`.
 
+## Screenshots
+
+_Screenshots of the workspace overview, scanner cards and report library are
+pending; capture them from a local demo workspace (`uv run uvicorn
+daedalus.server:app`) at desktop and phone widths, in light and dark mode, and
+add them here._
+
 ## Product overview
 
 See the [Daedalus project overview](site/daedalus.html) for the feature map, architecture, and current scope. The application is an active pilot; the overview distinguishes implemented workflows from hosting and operational work that remains.

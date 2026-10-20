@@ -92,6 +92,35 @@ class PublicSiteTests(unittest.TestCase):
                 if parsed.fragment:
                     self.assertIn(parsed.fragment, parser.ids, f"{page.name}: missing #{parsed.fragment}")
 
+    def test_third_party_scripts_are_pinned_to_exact_versions(self):
+        home = (SITE / "index.html").read_text(encoding="utf-8")
+        parser = SiteParser()
+        parser.feed(home)
+        scripts = [reference for reference in parser.references if reference.startswith("https://") and reference.endswith((".js", "3.4.17"))]
+        self.assertTrue(scripts)
+        for reference in scripts:
+            with self.subTest(script=reference):
+                self.assertNotIn("@latest", reference)
+                self.assertRegex(reference, r"\d+\.\d+\.\d+")
+
+    def test_home_mobile_menu_and_skip_link_are_accessible(self):
+        home = (SITE / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="skip-link" href="#main-content"', home)
+        self.assertIn('<main id="main-content" tabindex="-1">', home)
+        self.assertIn('aria-expanded="false" aria-controls="mobile-menu"', home)
+        self.assertIn("mobileMenuBtn.setAttribute('aria-expanded', String(open))", home)
+        self.assertIn("event.key === 'Escape'", home)
+        self.assertIn("'aria-hidden': 'true'", home)
+        self.assertNotIn("h-4.5", home)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", home)
+
+    def test_overview_has_skip_link_and_dark_scheme(self):
+        overview = (SITE / "daedalus.html").read_text(encoding="utf-8")
+        self.assertIn('class="skip-link" href="#main-content"', overview)
+        self.assertIn('<main id="main-content" tabindex="-1">', overview)
+        self.assertIn("@media(prefers-color-scheme:dark){:root{color-scheme:dark;", overview)
+        self.assertIn("a:focus-visible{outline:", overview)
+
     def test_pages_workflow_publishes_only_the_static_site(self):
         workflow = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
         self.assertIn("path: site", workflow)

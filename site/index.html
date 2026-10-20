@@ -7,7 +7,7 @@
   <title>Cyber Security Pilot</title>
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -68,10 +68,18 @@
       background-color: #c4bb84;
       color: #1f1c12;
     }
+    .skip-link { position: absolute; left: 16px; top: -48px; z-index: 60; padding: 10px 14px; border-radius: 999px; background: #3d3926; color: #fefdf8; font-weight: 600; text-decoration: none; }
+    .skip-link:focus { top: 12px; }
+    a:focus-visible, button:focus-visible { outline: 3px solid #7d703c; outline-offset: 3px; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .card-hover, .card-hover:hover { transition: none; transform: none; }
+    }
   </style>
 </head>
 <body class="overflow-x-hidden bg-olive-50 text-olive-900 font-sans antialiased">
-  <nav class="fixed left-0 right-0 top-0 z-50 border-b border-olive-200/60 bg-olive-50/88 backdrop-blur-lg">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <nav class="fixed left-0 right-0 top-0 z-50 border-b border-olive-200/60 bg-olive-50/88 backdrop-blur-lg" aria-label="Main navigation">
     <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
       <a href="#" class="flex items-center gap-2.5">
         <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-olive-800 text-cream-200">
@@ -90,7 +98,7 @@
         </a>
         <a href="https://daedalus.cybersecuritypilot.org/" aria-label="Sign in to the Daedalus client portal" class="inline-flex items-center gap-2 rounded-full bg-olive-950 px-4 py-2 text-sm font-semibold text-cream-100 shadow-sm transition hover:bg-olive-800">Client Portal</a>
       </div>
-      <button id="mobile-menu-btn" class="rounded-lg p-2 transition hover:bg-olive-200/60 md:hidden" aria-label="Open menu">
+      <button id="mobile-menu-btn" type="button" class="rounded-lg p-2 transition hover:bg-olive-200/60 md:hidden" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
         <i data-lucide="menu" class="h-6 w-6 text-olive-800"></i>
       </button>
     </div>
@@ -106,7 +114,7 @@
     </div>
   </nav>
 
-  <main>
+  <main id="main-content" tabindex="-1">
     <section class="gradient-hero relative overflow-hidden pt-16">
       <div class="scan-line absolute inset-0 pointer-events-none"></div>
       <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-28">
@@ -126,11 +134,11 @@
           <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <a href="#services" class="inline-flex items-center justify-center gap-2.5 rounded-full bg-olive-800 px-6 py-3.5 text-sm font-semibold text-cream-100 shadow-lg shadow-olive-800/20 transition hover:bg-olive-700">
               Explore Services
-              <i data-lucide="layers-3" class="h-4.5 w-4.5"></i>
+              <i data-lucide="layers-3" class="h-[18px] w-[18px]"></i>
             </a>
             <a href="https://techmore.github.io/TM-NMapUI-www/" class="inline-flex items-center justify-center gap-2.5 rounded-full border-2 border-olive-400/50 px-6 py-3.5 text-sm font-semibold text-olive-800 transition hover:bg-olive-200/40">
               Vulnerability Scanning
-              <i data-lucide="external-link" class="h-4.5 w-4.5"></i>
+              <i data-lucide="external-link" class="h-[18px] w-[18px]"></i>
             </a>
           </div>
           <div class="flex flex-wrap gap-x-6 gap-y-3 pt-2 text-sm text-olive-600">
@@ -304,7 +312,7 @@
         <p class="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-cream-300/80">For vulnerability scanning, Cyber Security Pilot points teams to the NMapUI workflow: Nmap-powered scans, scheduling, and reporting in a focused interface.</p>
         <a href="https://techmore.github.io/TM-NMapUI-www/" class="mt-8 inline-flex items-center gap-2.5 rounded-full bg-cream-100 px-6 py-3.5 text-sm font-semibold text-olive-900 transition hover:bg-cream-200">
           Open NMapUI
-          <i data-lucide="external-link" class="h-4.5 w-4.5"></i>
+          <i data-lucide="external-link" class="h-[18px] w-[18px]"></i>
         </a>
       </div>
     </section>
@@ -316,7 +324,7 @@
         <div class="space-y-3">
           <div class="flex items-center gap-2.5">
             <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-cream-200/15">
-              <i data-lucide="shield-check" class="h-4.5 w-4.5 text-cream-200"></i>
+              <i data-lucide="shield-check" class="h-[18px] w-[18px] text-cream-200"></i>
             </span>
             <span class="font-instrument text-lg font-semibold text-cream-100">Cyber Security Pilot</span>
           </div>
@@ -348,28 +356,38 @@
     </div>
   </footer>
 
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <script>
-    lucide.createIcons();
+    // Icons are decorative; every control also has visible text or an aria-label.
+    const iconOptions = { attrs: { 'aria-hidden': 'true', focusable: 'false' } };
+    lucide.createIcons(iconOptions);
 
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
     const mobileMenu = document.getElementById('mobile-menu');
 
-    mobileMenuBtn.addEventListener('click', () => {
-      const shouldOpen = mobileMenu.classList.contains('hidden');
-      mobileMenu.classList.toggle('hidden', !shouldOpen);
-      mobileMenuBtn.innerHTML = shouldOpen
+    function setMobileMenu(open) {
+      mobileMenu.classList.toggle('hidden', !open);
+      mobileMenuBtn.setAttribute('aria-expanded', String(open));
+      mobileMenuBtn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      mobileMenuBtn.innerHTML = open
         ? '<i data-lucide="x" class="h-6 w-6 text-olive-800"></i>'
         : '<i data-lucide="menu" class="h-6 w-6 text-olive-800"></i>';
-      lucide.createIcons();
+      lucide.createIcons(iconOptions);
+    }
+
+    mobileMenuBtn.addEventListener('click', () => {
+      setMobileMenu(mobileMenu.classList.contains('hidden'));
     });
 
     mobileMenu.querySelectorAll('a').forEach((link) => {
-      link.addEventListener('click', () => {
-        mobileMenu.classList.add('hidden');
-        mobileMenuBtn.innerHTML = '<i data-lucide="menu" class="h-6 w-6 text-olive-800"></i>';
-        lucide.createIcons();
-      });
+      link.addEventListener('click', () => setMobileMenu(false));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !mobileMenu.classList.contains('hidden')) {
+        setMobileMenu(false);
+        mobileMenuBtn.focus();
+      }
     });
   </script>
 </body>
