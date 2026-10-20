@@ -1048,6 +1048,14 @@ class NmapUIBridge:
                 self._send_command_result(command_id, "failed", "Missing scan target.")
                 return
             refusal = local_scan_target_refusal(target, self.authorized_networks)
+            if refusal and self.authorized_networks is not None and local_scan_target_refusal(target) is None:
+                # An admin can widen the scope after enrollment; confirm against
+                # the portal's current list before refusing on a stale copy.
+                try:
+                    self._heartbeat()
+                except (httpx.HTTPError, OSError):
+                    pass
+                refusal = local_scan_target_refusal(target, self.authorized_networks)
             if refusal:
                 self._send_command_result(command_id, "failed", refusal)
                 return

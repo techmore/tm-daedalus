@@ -145,6 +145,33 @@ class BridgeScopeTests(unittest.TestCase):
         self.run_scan(bridge, "10.20.0.7")
         bridge.sio.emit.assert_called_once()
 
+    def test_scope_widened_after_enrollment_is_picked_up_before_refusing(self):
+        bridge = self.bridge()
+        bridge.authorized_networks = parse_authorized_networks([])  # enrolled without a scope
+
+        def widened():
+            bridge.authorized_networks = parse_authorized_networks(["127.0.0.1/32"])
+
+        bridge._heartbeat = Mock(side_effect=widened)
+        self.run_scan(bridge, "127.0.0.1")
+        bridge._heartbeat.assert_called_once()
+        bridge.sio.emit.assert_called_once()
+
+    def test_still_refused_after_refresh_when_portal_scope_excludes_target(self):
+        bridge = self.bridge()
+        bridge.authorized_networks = parse_authorized_networks([])
+        bridge._heartbeat = Mock()
+        self.run_scan(bridge, "10.5.5.5")
+        bridge.sio.emit.assert_not_called()
+        self.assertEqual(bridge._send_command_result.call_args.args[:2], (51, "failed"))
+
+    def test_public_target_does_not_trigger_a_refresh(self):
+        bridge = self.bridge()
+        bridge.authorized_networks = parse_authorized_networks([])
+        bridge._heartbeat = Mock()
+        self.run_scan(bridge, "8.8.8.8")
+        bridge._heartbeat.assert_not_called()
+
     def test_scope_is_read_from_enrollment_config_and_refreshed_by_heartbeat(self):
         bridge = self.bridge()
         self.assertIsNone(bridge.authorized_networks)  # legacy config: private-range guard only
