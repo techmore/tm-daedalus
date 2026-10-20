@@ -1,5 +1,6 @@
 from pathlib import Path
-import shutil, subprocess
+import shutil
+import subprocess
 import pytest
 
 @pytest.mark.skipif(not shutil.which('node'),reason='Node required')

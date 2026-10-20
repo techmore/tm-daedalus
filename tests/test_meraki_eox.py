@@ -1,6 +1,11 @@
-import copy, io, json, subprocess, shutil
+import copy
+import io
+import json
+import subprocess
+import shutil
 from pathlib import Path
-import pytest, httpx
+import pytest
+import httpx
 from pypdf import PdfReader
 from daedalus.meraki_eox import assigned_index, summarize_inventory_eox, build_provider_lifecycle, project_provider_lifecycle, SOURCE
 from daedalus.meraki_api import MerakiClient, compare_meraki_snapshots

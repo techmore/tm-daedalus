@@ -7,7 +7,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import KeepTogether, SimpleDocTemplate, Spacer
 
 
 def build_google_admin_pdf(snapshot: dict) -> bytes:

@@ -334,7 +334,7 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
             membership = Membership(user_id=user.id, organization_id=org.id, role='user', status='pending', created_at=server.utcnow())
             db.add(membership)
             db.commit()
-            membership_id, user_id = membership.id, user.id
+            membership_id = membership.id
         original_execute = Session.execute
         approved = False
         def approve_before_update(db, statement, *args, **kwargs):
@@ -493,7 +493,6 @@ class AuthAndWorkspaceFlowTests(unittest.TestCase):
                 Membership.user_id == requester.id,
                 Membership.organization_id == organization.id,
             ))
-            requester_id = requester.id
             organization_id = organization.id
             membership_id = membership.id
 

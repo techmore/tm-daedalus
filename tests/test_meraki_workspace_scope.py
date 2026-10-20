@@ -281,7 +281,8 @@ class MerakiWorkspaceScopeTests(unittest.TestCase):
             self.assertEqual(list(db.scalars(select(MerakiOrganizationGrant)).all()),[])
 
     def test_actual_saved_status_payload_passes_the_real_ui_read_and_retry_callbacks(self):
-        import json,shutil
+        import json
+        import shutil
         if not shutil.which('node'):self.skipTest('Node.js required')
         from test_meraki_connection_refresh_ui import MerakiConnectionRefreshUITests
         self._connect_key()

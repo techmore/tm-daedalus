@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 
 from daedalus import credential_store
-from daedalus.meraki_api import MerakiAPIError, MerakiClient, _aggregate_client_usage, _managed_topology, summarize_wireless_connections, summarize_channel_utilization, compare_meraki_snapshots, redact_meraki_data
+from daedalus.meraki_api import MerakiAPIError, MerakiClient, _aggregate_client_usage, _managed_topology, summarize_wireless_connections, compare_meraki_snapshots, redact_meraki_data
 from daedalus.reports import build_meraki_security_pdf
 
 

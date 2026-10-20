@@ -415,7 +415,6 @@ def test_posture_status_items_report_what_needs_attention_and_stay_quiet_when_he
     broken = {"dns": {"run": {"snapshot": {"records": {"TXT": [], "DMARC": [], "DKIM": {}},
                                "resolver_errors": {"www A": "SERVFAIL"}}}},
               "web": {"run": {"snapshot": {"http_status": 503, "security_headers": {"hsts": None}}}}}
-    levels = dict((text.split(":")[0][:12], level) for level, text in _posture_attention_items(broken, None))
     texts = " ".join(text for _, text in _posture_attention_items(broken, None))
     assert "www A" in texts and "SPF" in texts and "DMARC" in texts and "503" in texts and "header" in texts
     assert any(level == "bad" for level, _ in _posture_attention_items(broken, None))

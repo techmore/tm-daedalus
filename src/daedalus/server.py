@@ -8563,10 +8563,11 @@ async def live_updates(websocket: WebSocket):
         live_hub.disconnect(organization_id_int, websocket)
 
 
-from daedalus.onboarding import router as onboarding_router
+# Routers import helpers from this module, so they are attached after the app exists.
+from daedalus.onboarding import router as onboarding_router  # noqa: E402
 app.include_router(onboarding_router)
 
-from daedalus.google_admin_routes import router as google_admin_router
+from daedalus.google_admin_routes import router as google_admin_router  # noqa: E402
 app.include_router(google_admin_router)
 
 if __name__ == "__main__":

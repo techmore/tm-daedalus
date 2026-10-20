@@ -387,7 +387,8 @@ def test_four_host_print_layout_keeps_heading_with_ports_and_footer_with_results
 
 
 def test_oversized_host_card_can_paginate_without_losing_port_evidence():
-    import io, re
+    import io
+    import re
     from pypdf import PdfReader
     from daedalus.scanner_report_template import (
         render_standardized_scanner_pdf, HISTORICAL_TEMPLATE_SHA256,
@@ -428,7 +429,8 @@ def test_saved_v2_print_layout_is_frozen_and_never_upgraded():
 
 
 def test_print_layout_preserves_long_hostname_and_ipv6_evidence():
-    import io, re
+    import io
+    import re
     from pypdf import PdfReader
     from daedalus.scanner_report_template import (
         render_standardized_scanner_pdf, HISTORICAL_TEMPLATE_SHA256, REPORT_ASSET_SHA256,

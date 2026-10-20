@@ -40,14 +40,14 @@ def parse(value):
 
 def role(prop, rgba):
     r, g, b, a = rgba
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    h, lightness, s = colorsys.rgb_to_hls(r, g, b)
     hue = h * 360
     if a < 0.45:
         return None
     if prop == "color":
-        if l > 0.86:
+        if lightness > 0.86:
             return None  # white-ish text on a colored fill stays
-        if s > 0.45 and 0.25 < l < 0.7:
+        if s > 0.45 and 0.25 < lightness < 0.7:
             if hue < 25 or hue > 335:
                 return "var(--e-bad)"
             if 25 <= hue < 70:
@@ -55,11 +55,11 @@ def role(prop, rgba):
             if 70 <= hue < 170:
                 return "var(--e-ok)"
             return "var(--e-accent)"
-        return "var(--e-text)" if l < 0.3 else "var(--e-text-2)" if l < 0.5 else "var(--e-text-3)"
+        return "var(--e-text)" if lightness < 0.3 else "var(--e-text-2)" if lightness < 0.5 else "var(--e-text-3)"
     if prop == "bg":
-        if l < 0.45:
+        if lightness < 0.45:
             return None  # dark/saturated fills (buttons, badges) are handled by hand
-        if s > 0.25 and l > 0.6:
+        if s > 0.25 and lightness > 0.6:
             if hue < 25 or hue > 335:
                 return "var(--e-bad-bg)"
             if 25 <= hue < 70:
@@ -67,9 +67,9 @@ def role(prop, rgba):
             if 70 <= hue < 170:
                 return "var(--e-ok-bg)"
             return "var(--e-accent-soft)"
-        return "var(--e-surface)" if l > 0.965 else "var(--e-surface-2)"
+        return "var(--e-surface)" if lightness > 0.965 else "var(--e-surface-2)"
     if prop == "border":
-        return "var(--e-border)" if l > 0.5 else None
+        return "var(--e-border)" if lightness > 0.5 else None
     return None
 
 

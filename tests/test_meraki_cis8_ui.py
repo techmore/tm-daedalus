@@ -1,5 +1,7 @@
 from pathlib import Path
-import shutil,subprocess,unittest
+import shutil
+import subprocess
+import unittest
 
 @unittest.skipUnless(shutil.which('node'),'Node required')
 class Cis8UITests(unittest.TestCase):

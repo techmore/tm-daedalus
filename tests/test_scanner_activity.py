@@ -1,5 +1,4 @@
 """Operational activity fixtures; no live scanner, target or service action."""
-import copy
 from datetime import timedelta
 import json
 from pathlib import Path

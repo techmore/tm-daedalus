@@ -1,6 +1,5 @@
 import json
 import unittest
-from uuid import uuid4
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 from daedalus import server

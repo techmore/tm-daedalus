@@ -83,7 +83,8 @@ def test_empty_partial_zero_and_rounding_are_distinct():
 
 
 def test_new_reserve_appendix_preserves_historical_plan_rendering():
-    import copy,io
+    import copy
+    import io
     from pypdf import PdfReader
     from daedalus.reports import build_meraki_security_pdf
     snapshot={'domain':'example.test','meraki':{'organization':{'name':'Fixture'},'collected_at':'2026-10-08T00:00:00Z'}}

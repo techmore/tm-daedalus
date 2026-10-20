@@ -1,4 +1,8 @@
-import copy, io, json, shutil, subprocess
+import copy
+import io
+import json
+import shutil
+import subprocess
 from pathlib import Path
 import pytest
 from pypdf import PdfReader
