@@ -1,5 +1,7 @@
 # Daedalus
 
+Deployment readiness: [blueprint and required gates](docs/deployment-readiness.md) · [live milestone](https://github.com/techmore/tm-daedalus/milestone/1).
+
 Daedalus is Cyber Security Pilot's multi-organization security portal. It brings domain health checks, managed network scanners, Meraki reporting, endpoint baselines, and audit history into one workspace.
 
 - **Marketing site:** [`site/`](site/) — the Cyber Security Pilot homepage and Daedalus overview.
