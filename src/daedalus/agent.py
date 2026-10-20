@@ -120,14 +120,8 @@ def parse_authorized_networks(value: Any) -> list[ipaddress.IPv4Network | ipaddr
         return None
 
 
-def local_scan_target_refusal(target: str, authorized: list | None = None) -> str | None:
-    """Defense in depth: never hand NmapUI a target the portal would refuse.
-
-    The portal enforces the approved scope; the local bridge still refuses
-    anything that is not a bounded private IP or CIDR, and, once it knows its
-    approved networks, anything outside them. `authorized=None` means the scope
-    is not yet known (older enrollment); an empty list approves nothing.
-    """
+def private_scan_target_refusal(target: str) -> str | None:
+    """Check address syntax and size without making an authorization decision."""
     try:
         network = ipaddress.ip_network(target, strict=False)
     except ValueError:
@@ -136,7 +130,18 @@ def local_scan_target_refusal(target: str, authorized: list | None = None) -> st
         return "Scan target is outside private address space."
     if network.num_addresses > MAX_LOCAL_SCAN_ADDRESSES:
         return "Scan target exceeds the 65,536 address limit."
-    if authorized is not None and not any(
+    return None
+
+
+def local_scan_target_refusal(target: str, authorized: list | None = None) -> str | None:
+    """Unknown and empty scopes both deny dispatch to the local scanner."""
+    refusal = private_scan_target_refusal(target)
+    if refusal:
+        return refusal
+    if authorized is None:
+        return "Scanner authorization is unavailable. Refresh the approved networks before scanning."
+    network = ipaddress.ip_network(target, strict=False)
+    if not any(
         network.version == scope.version and network.subnet_of(scope) for scope in authorized
     ):
         return "Scan target is outside this scanner's approved networks."
@@ -633,8 +638,8 @@ class NmapUIBridge:
             approved = parse_authorized_networks(response.json().get("authorized_networks"))
         except (ValueError, AttributeError, TypeError):
             approved = None
-        if approved is not None:
-            self.authorized_networks = approved
+        # Missing/malformed scope is unknown, never permission to retain an old grant.
+        self.authorized_networks = approved
         self.last_successful_check_in = datetime.now(UTC).isoformat()
 
     def _read_delivery(self) -> dict[str, Any]:
@@ -1047,10 +1052,11 @@ class NmapUIBridge:
             if not target:
                 self._send_command_result(command_id, "failed", "Missing scan target.")
                 return
-            refusal = local_scan_target_refusal(target, self.authorized_networks)
-            if refusal and self.authorized_networks is not None and local_scan_target_refusal(target) is None:
-                # An admin can widen the scope after enrollment; confirm against
-                # the portal's current list before refusing on a stale copy.
+            refusal = private_scan_target_refusal(target)
+            if not refusal:
+                # Recheck every dispatch, including cached grants and legacy enrollments.
+                # A revoked grant must not survive a failed or malformed refresh.
+                self.authorized_networks = None
                 try:
                     self._heartbeat()
                 except (httpx.HTTPError, OSError):
