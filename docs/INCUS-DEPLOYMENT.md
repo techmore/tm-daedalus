@@ -76,6 +76,18 @@ separate, operator-reviewed task.
 `requirements-production.txt` is exported from `uv.lock`. CI regenerates and
 compares it on each run so deployment pins cannot silently drift.
 
+## Runtime assumptions
+
+The portal must run as a **single uvicorn worker** (no `--workers N`). The live
+WebSocket hub, schedulers and report threads are per-process, and the SQLite
+database runs in WAL mode (`PRAGMA journal_mode=WAL`, 30 s `busy_timeout`) on
+the container's local `/data` volume; WAL does not work over network
+filesystems. Backups use the SQLite backup API and convert the copy back to a
+single self-contained file before archiving, so `restore_data.py` is unchanged.
+Existing databases switch to WAL on their first connection after upgrade; the
+`-wal` and `-shm` files next to `daedalus.db` are normal. To revert, deploy the
+previous release after running `PRAGMA journal_mode=DELETE` once.
+
 ## Data recovery
 
 The release process never replaces `/data`. Its verified off-host backup is

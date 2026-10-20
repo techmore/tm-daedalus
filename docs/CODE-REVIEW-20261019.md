@@ -113,3 +113,10 @@ sizes and digests. No cross-tenant read or write, command injection, or SSRF was
   `X-API-Key` header, private config) and macOS-only scanner service scripts.
 - Meraki/Google Admin API clients beyond credential storage (Fernet-encrypted; key required in production).
 - Load/concurrency behavior (finding 1 is from reading, not measured).
+
+## Follow-up (2026-10-20)
+
+Findings Medium 1 (SQLite WAL/busy timeout, single-worker assumption), Medium 2 (cross-site session writes) and
+Medium 3 (bridge scope) were addressed in the hardening PR. Not changed: global CSRF tokens (Origin and
+Sec-Fetch-Site checks only), enforcing one worker in code, and refusing scans for legacy enrollments whose scope is
+unknown until their first heartbeat.
