@@ -458,6 +458,12 @@ if "-oX" in normalized:
         or parent.stat().st_uid != os.getuid() or xml_destination.exists() or xml_destination.is_symlink()):
         raise SystemExit("Loopback harness rejected unexpected XML destination")
     del normalized[index:index+2]
+if "-sn" not in normalized and "--host-timeout" in normalized:
+    # Interactive service scans carry NmapUI's fixed per-host deadline.
+    index=normalized.index("--host-timeout")
+    if normalized[index:index+2] != ["--host-timeout", "120s"]:
+        raise SystemExit("Loopback harness rejected unexpected scanner arguments")
+    del normalized[index:index+2]
 allowed_targets = [{scan_target!r}] if "-sn" in normalized else ({[f"127.0.0.{i}" for i in range(4)]!r} if {multi_host!r} else ["127.0.0.1"])
 if not normalized or normalized[-1] not in allowed_targets or normalized[:-1] not in (["-sn", "-Pn"], ["-T3", "-sV", "-Pn"]):
     raise SystemExit("Loopback harness rejected unexpected scanner arguments")
