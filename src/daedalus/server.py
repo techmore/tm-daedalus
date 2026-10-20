@@ -468,6 +468,33 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
 
 
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+@app.middleware("http")
+async def reject_cross_site_session_mutations(request: Request, call_next):
+    """Cookie-session writes must come from this portal's own origin.
+
+    Bearer-token requests carry no ambient credential, and requests without the
+    session cookie have nothing to forge, so both pass. Browsers always send
+    Sec-Fetch-Site and Origin on cross-site writes, which is what is checked.
+    """
+    if (
+        request.method in UNSAFE_METHODS
+        and "authorization" not in request.headers
+        and "daedalus_session=" in request.headers.get("cookie", "")
+    ):
+        origin = request.headers.get("origin")
+        if request.headers.get("sec-fetch-site") in {"cross-site", "same-site"} or (
+            origin is not None
+            and not websocket_origin_matches_host(
+                origin, request.headers.get("host", ""), production=APP_ENV == "production"
+            )
+        ):
+            return JSONResponse({"detail": "Cross-site request blocked"}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -7065,7 +7092,7 @@ async def agent_heartbeat(
     )
     if delivery_notice_created:
         await live_hub.publish(agent.organization_id, {"type": "workspace_notification_created", "agent_id": agent.id})
-    return {"ok": True, "status": agent_status(agent)}
+    return {"ok": True, "status": agent_status(agent), "authorized_networks": agent.authorized_networks or []}
 
 
 @app.post("/api/agents/{agent_id}/events")

@@ -93,9 +93,18 @@ def main() -> int:
     os.close(descriptor)
     temporary_archive = Path(temporary_name)
     try:
-        with sqlite3.connect(DATABASE, timeout=30) as source:
-            with sqlite3.connect(database_copy) as destination:
+        source = sqlite3.connect(DATABASE, timeout=30)
+        try:
+            destination = sqlite3.connect(database_copy)
+            try:
                 source.backup(destination)
+                # The live database runs in WAL mode and the backup inherits it.
+                # Fold it into one self-contained file before it is archived.
+                destination.execute("PRAGMA journal_mode=DELETE")
+            finally:
+                destination.close()
+        finally:
+            source.close()
         with tarfile.open(temporary_archive, "w:gz") as archive:
             manifest = [archive_file(archive, database_copy, "daedalus.db")]
             manifest.extend(archive_tree(archive, REPORTS, "reports"))

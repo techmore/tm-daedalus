@@ -110,12 +110,23 @@ _LOCAL_SCAN_RANGES = tuple(ipaddress.ip_network(value) for value in (
 MAX_LOCAL_SCAN_ADDRESSES = 65_536
 
 
-def local_scan_target_refusal(target: str) -> str | None:
+def parse_authorized_networks(value: Any) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None:
+    """Return approved scopes, or None when the portal has not supplied a valid list."""
+    if not isinstance(value, list) or len(value) > 32:
+        return None
+    try:
+        return [ipaddress.ip_network(item, strict=False) for item in value]
+    except (TypeError, ValueError):
+        return None
+
+
+def local_scan_target_refusal(target: str, authorized: list | None = None) -> str | None:
     """Defense in depth: never hand NmapUI a target the portal would refuse.
 
     The portal enforces the approved scope; the local bridge still refuses
-    anything that is not a bounded private IP or CIDR, so a compromised or
-    mistaken queue cannot aim this device at hostnames or public ranges.
+    anything that is not a bounded private IP or CIDR, and, once it knows its
+    approved networks, anything outside them. `authorized=None` means the scope
+    is not yet known (older enrollment); an empty list approves nothing.
     """
     try:
         network = ipaddress.ip_network(target, strict=False)
@@ -125,6 +136,10 @@ def local_scan_target_refusal(target: str) -> str | None:
         return "Scan target is outside private address space."
     if network.num_addresses > MAX_LOCAL_SCAN_ADDRESSES:
         return "Scan target exceeds the 65,536 address limit."
+    if authorized is not None and not any(
+        network.version == scope.version and network.subnet_of(scope) for scope in authorized
+    ):
+        return "Scan target is outside this scanner's approved networks."
     return None
 
 
@@ -357,6 +372,7 @@ def enroll(server: str, name: str, code: str) -> dict[str, Any]:
         "agent_name": body["agent_name"],
         "organization": body["organization"],
         "agent_token": body["agent_token"],
+        "authorized_networks": body.get("authorized_networks") if parse_authorized_networks(body.get("authorized_networks")) is not None else None,
         "created_at": time.time(),
     }
 
@@ -368,6 +384,9 @@ class NmapUIBridge:
         self.agent_id = int(config["agent_id"])
         self.server = validate_endpoint(str(config["server"]))
         self.token = str(config["agent_token"])
+        # Refreshed from every heartbeat response; the enrollment copy covers
+        # the window before the first check-in. None means "not yet known".
+        self.authorized_networks = parse_authorized_networks(config.get("authorized_networks"))
         self.http = httpx.Client(
             timeout=httpx.Timeout(10.0, connect=4.0),
             headers={"Authorization": "Bearer " + self.token},
@@ -610,6 +629,12 @@ class NmapUIBridge:
             json=payload,
         )
         response.raise_for_status()
+        try:
+            approved = parse_authorized_networks(response.json().get("authorized_networks"))
+        except (ValueError, AttributeError, TypeError):
+            approved = None
+        if approved is not None:
+            self.authorized_networks = approved
         self.last_successful_check_in = datetime.now(UTC).isoformat()
 
     def _read_delivery(self) -> dict[str, Any]:
@@ -1022,7 +1047,15 @@ class NmapUIBridge:
             if not target:
                 self._send_command_result(command_id, "failed", "Missing scan target.")
                 return
-            refusal = local_scan_target_refusal(target)
+            refusal = local_scan_target_refusal(target, self.authorized_networks)
+            if refusal and self.authorized_networks is not None and local_scan_target_refusal(target) is None:
+                # An admin can widen the scope after enrollment; confirm against
+                # the portal's current list before refusing on a stale copy.
+                try:
+                    self._heartbeat()
+                except (httpx.HTTPError, OSError):
+                    pass
+                refusal = local_scan_target_refusal(target, self.authorized_networks)
             if refusal:
                 self._send_command_result(command_id, "failed", refusal)
                 return
