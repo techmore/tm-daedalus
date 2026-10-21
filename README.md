@@ -40,14 +40,17 @@ The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/I
 Run from the repository root using the same commands as backend CI:
 
 ```sh
-uv sync --locked
-uv run --locked python -m playwright install chromium --only-shell
-uv run --locked python -m pytest -q
+uv sync --locked --group dev
+uv run --locked python -m playwright install --with-deps chromium --only-shell
+umask 022; uv run --locked python -m pytest -q
+uvx ruff@0.14.1 check src tests scripts
 ```
 
-On Linux, install the browser's system dependencies with `python -m playwright
-install-deps chromium` from the configured virtual environment first. Use
-`python -m pytest` so tests can import the repository's deployment scripts.
+`--with-deps` installs the browser's Linux system packages (it needs sudo on a
+workstation; drop it on macOS). Run the suite with `umask 022`: the packaging
+tests assert the file modes they produce. Use `python -m pytest` so tests can
+import the repository's deployment scripts. The ruff step is the same static
+check the CI lint job runs (syntax errors, undefined names, unused imports).
 These tests include isolated report generation; passing them does not establish
 visual approval of a PDF template or validation of a production scanner fleet.
 
