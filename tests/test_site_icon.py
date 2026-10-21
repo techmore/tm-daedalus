@@ -7,7 +7,7 @@ HTML = b'<html><head><link rel="icon" type="image/png" href="/static/i.png"><lin
 
 
 def fake(responses):
-    def _get(url, allowed, limit):
+    def _get(url, allowed, limit, deadline=None):
         status, body = responses.get(url, (404, b""))
         return status, {}, body, url
     return _get
@@ -39,7 +39,7 @@ def test_falls_back_to_favicon_ico_and_skips_non_image_bodies():
 def test_cross_domain_and_data_urls_are_never_requested():
     html = b'<link rel="icon" href="https://evil.test/i.png"><link rel="icon" href="data:image/png;base64,AAAA">'
     seen = []
-    def _get(url, allowed, limit):
+    def _get(url, allowed, limit, deadline=None):
         seen.append(url)
         if url == "https://example.test/":
             return 200, {}, html, url

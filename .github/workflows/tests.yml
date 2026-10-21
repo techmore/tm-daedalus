@@ -27,6 +27,18 @@ jobs:
         # Pinned tool run; the lockfile and production requirements stay unchanged.
         run: uvx ruff@0.14.1 check src tests scripts
 
+  deployment-staging:
+    name: Protected deployment staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Load disposable fixture image
+        run: docker pull ubuntu:24.04
+      - name: Exercise real root helper without network or production services
+        run: python3 scripts/validate_deploy_staging.py --runtime docker
+
   backend:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest

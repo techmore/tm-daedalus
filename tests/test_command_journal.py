@@ -1,4 +1,5 @@
 import json
+import ipaddress
 import hashlib
 import tempfile
 import unittest
@@ -91,6 +92,7 @@ class CommandJournalTests(unittest.TestCase):
 
     def test_duplicate_delivery_does_not_repeat_side_effect(self):
         bridge = self.bridge()
+        bridge._heartbeat = Mock(side_effect=lambda: setattr(bridge, "authorized_networks", [ipaddress.ip_network('127.0.0.1/32')]))
         bridge.nmapui_connected.set()
         bridge._request = Mock(return_value=httpx.Response(200, request=httpx.Request("GET", "https://fixture.example.org/next"), json={"command": {"id": 9, "action": "start_scan", "target": "127.0.0.1"}}))
         bridge.sio.emit = Mock()
@@ -141,6 +143,7 @@ class CommandJournalTests(unittest.TestCase):
 
     def test_modern_scan_includes_command_id_and_waits_for_real_result(self):
         bridge = self.bridge()
+        bridge._heartbeat = Mock(side_effect=lambda: setattr(bridge, "authorized_networks", [ipaddress.ip_network('127.0.0.1/32')]))
         bridge.nmapui_connected.set()
         bridge.command_completion_supported = True
         bridge._request = Mock(return_value=httpx.Response(200, request=httpx.Request("GET", "https://fixture.example.org/next"), json={"command": {"id": 5, "action": "start_scan", "target": "127.0.0.1"}}))

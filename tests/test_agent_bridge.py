@@ -1,4 +1,5 @@
 import os
+import ipaddress
 import json
 import hashlib
 import tempfile
@@ -224,6 +225,7 @@ class NmapUIBridgeTelemetryTests(unittest.TestCase):
 
     def test_scan_command_forwards_only_an_explicit_known_target_override(self):
         bridge = self.make_bridge()
+        bridge._heartbeat = Mock(side_effect=lambda: setattr(bridge, "authorized_networks", [ipaddress.ip_network('127.0.0.1/32')]))
         bridge.nmapui_connected.set()
         bridge.command_completion_supported = True
         bridge._send_command_result = Mock()

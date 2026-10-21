@@ -38,6 +38,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from anyio import from_thread
 
 from daedalus import __version__
+from daedalus.request_limits import BoundedBodyMiddleware
 from daedalus.scanner_activity import unknown_activity, validated_activity
 from daedalus.scanner_delivery import unknown_delivery, validated_delivery, needs_review
 from daedalus.cis_client_release import load_release, release_status, ReleaseInvalid
@@ -377,6 +378,13 @@ def ensure_cis_presence_columns(connection) -> None:
         connection.execute(text("ALTER TABLE cis_devices ADD COLUMN last_client_heartbeat_at TIMESTAMP"))
 
 
+def ensure_cis_key_columns(connection) -> None:
+    existing = {column["name"] for column in sqlalchemy_inspect(connection).get_columns("cis_api_keys")}
+    for name in ("expires_at", "last_used_at"):
+        if name not in existing:
+            connection.execute(text(f"ALTER TABLE cis_api_keys ADD COLUMN {name} TIMESTAMP"))
+
+
 def ensure_domain_challenge_columns(connection) -> None:
     """Leave older hash-only proof valid without inventing its public TXT value."""
     existing = {column["name"] for column in sqlalchemy_inspect(connection).get_columns("domain_challenges")}
@@ -423,6 +431,7 @@ async def lifespan(_app: FastAPI):
         ensure_agent_command_columns(connection)
         ensure_external_check_columns(connection)
         ensure_cis_presence_columns(connection)
+        ensure_cis_key_columns(connection)
         ensure_domain_challenge_columns(connection)
         connection.execute(
             text(
@@ -466,6 +475,42 @@ app.add_middleware(
     allowed_hosts=list(ALLOWED_HOSTS),
 )
 app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
+# Scanner JSON routes are parsed by pydantic before the handler can measure them; cap the
+# raw body first so a stolen scanner token cannot force large allocations. The event payload
+# limit inside the handler stays at 512 KB; the envelope allows for the other fields.
+MAX_AGENT_EVENT_BODY_BYTES = 640_000
+MAX_AGENT_HEARTBEAT_BODY_BYTES = 64_000
+app.add_middleware(BoundedBodyMiddleware, rules=(
+    ("POST", r"/api/agents/\d+/events", MAX_AGENT_EVENT_BODY_BYTES),
+    ("POST", r"/api/agents/\d+/heartbeat", MAX_AGENT_HEARTBEAT_BODY_BYTES),
+))
+
+
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+@app.middleware("http")
+async def reject_cross_site_session_mutations(request: Request, call_next):
+    """Cookie-session writes must come from this portal's own origin.
+
+    Bearer-token requests carry no ambient credential, and requests without the
+    session cookie have nothing to forge, so both pass. Browsers always send
+    Sec-Fetch-Site and Origin on cross-site writes, which is what is checked.
+    """
+    if (
+        request.method in UNSAFE_METHODS
+        and "authorization" not in request.headers
+        and "daedalus_session=" in request.headers.get("cookie", "")
+    ):
+        origin = request.headers.get("origin")
+        if request.headers.get("sec-fetch-site") in {"cross-site", "same-site"} or (
+            origin is not None
+            and not websocket_origin_matches_host(
+                origin, request.headers.get("host", ""), production=APP_ENV == "production"
+            )
+        ):
+            return JSONResponse({"detail": "Cross-site request blocked"}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -533,8 +578,10 @@ class AgentHeartbeatRequest(BaseModel):
 
     @model_validator(mode="after")
     def normalize_detected_networks(self):
+        # A scanner on a benchmark/documentation range (198.18.0.0/15, 192.0.2.0/24) or a
+        # public address must still check in; only the private ranges are recorded.
         if self.detected_networks is not None:
-            self.detected_networks = validate_scanner_network_scopes(self.detected_networks)
+            self.detected_networks = accepted_detected_networks(self.detected_networks)
         return self
 
     nmapui_connected: bool = False
@@ -2544,18 +2591,19 @@ def close_scanner_controls(
 
 
 def _network_is_internal(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
+    # Link-local (169.254/16, fe80::/10) is deliberately excluded: it is never a
+    # customer LAN and 169.254.169.254 is the cloud metadata endpoint. Loopback
+    # stays allowed for same-host scanner validation.
     if network.version == 4:
         allowed_ranges = (
             ipaddress.ip_network("10.0.0.0/8"),
             ipaddress.ip_network("172.16.0.0/12"),
             ipaddress.ip_network("192.168.0.0/16"),
             ipaddress.ip_network("127.0.0.0/8"),
-            ipaddress.ip_network("169.254.0.0/16"),
         )
     else:
         allowed_ranges = (
             ipaddress.ip_network("fc00::/7"),
-            ipaddress.ip_network("fe80::/10"),
             ipaddress.ip_network("::1/128"),
         )
     return any(network.subnet_of(allowed_range) for allowed_range in allowed_ranges)
@@ -2589,7 +2637,7 @@ def validate_scanner_network_scopes(raw_scopes: list[str]) -> list[str]:
         except ValueError as exc:
             raise ValueError("Authorized networks must be IP addresses or CIDRs.") from exc
         if not _network_is_internal(network):
-            raise ValueError("Only private, loopback, or link-local scanner networks are allowed.")
+            raise ValueError("Only private or loopback scanner networks are allowed.")
         normalized.add(str(network))
     return sorted(
         normalized,
@@ -2599,6 +2647,17 @@ def validate_scanner_network_scopes(raw_scopes: list[str]) -> list[str]:
             ipaddress.ip_network(value).prefixlen,
         ),
     )
+
+
+def accepted_detected_networks(raw_scopes: list[str]) -> list[str]:
+    """Keep the entries a scanner may report (private, loopback, link-local); drop the rest silently."""
+    accepted: list[str] = []
+    for raw_scope in raw_scopes[:32]:
+        try:
+            accepted.extend(validate_scanner_network_scopes([raw_scope]))
+        except ValueError:
+            continue
+    return validate_scanner_network_scopes(accepted) if accepted else []
 
 
 def scanner_connection_scope(agent: Agent) -> str:
@@ -3008,10 +3067,27 @@ def revoke_user_key(key_id: int, request: Request, db: Session = Depends(get_db)
         headers={"Cache-Control": "no-store"})
 
 
+DEMO_LOGIN_PEERS = frozenset({"127.0.0.1", "::1", "testclient"})
+PROXY_HEADERS = ("x-forwarded-for", "forwarded", "x-real-ip")
+
+
+def demo_login_available(request: Request) -> bool:
+    """Only direct loopback connections may use the demo accounts.
+
+    Behind a reverse proxy every client appears to come from loopback, so a
+    request that carries a proxy header is refused even on a loopback peer.
+    """
+    if not DEMO_MODE:
+        return False
+    client_host = request.client.host if request.client else ""
+    if client_host not in DEMO_LOGIN_PEERS:
+        return False
+    return not any(request.headers.get(name) for name in PROXY_HEADERS)
+
+
 @app.post("/dev/login")
 def demo_login(request: Request, db: Session = Depends(get_db)):
-    client_host = request.client.host if request.client else ""
-    if not DEMO_MODE or client_host not in {"127.0.0.1", "::1", "testclient"}:
+    if not demo_login_available(request):
         raise HTTPException(status_code=404, detail="Not found")
     user = db.scalar(
         select(User).where(User.google_subject == "daedalus-local-demo-admin")
@@ -3033,8 +3109,7 @@ def demo_login(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/dev/login/member")
 def demo_member_login(request: Request, db: Session = Depends(get_db)):
-    client_host = request.client.host if request.client else ""
-    if not DEMO_MODE or client_host not in {"127.0.0.1", "::1", "testclient"}:
+    if not demo_login_available(request):
         raise HTTPException(status_code=404, detail="Not found")
     user = db.scalar(
         select(User).where(User.google_subject == "daedalus-local-demo-member")
@@ -4317,6 +4392,9 @@ def serialize_cis_profile(profile: CISProfile) -> dict[str, Any]:
     }
 
 
+CIS_KEY_LAST_USED_RESOLUTION = timedelta(minutes=1)
+
+
 def get_cis_workspace_from_key(db: Session, api_key: str | None) -> tuple[CISAPIKey | UserAPIKey, Organization]:
     if not api_key or len(api_key) > 256:
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
@@ -4333,6 +4411,14 @@ def get_cis_workspace_from_key(db: Session, api_key: str | None) -> tuple[CISAPI
         stored_key.token_hash, token_digest(api_key)
     ):
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
+    now = utcnow()
+    if stored_key.expires_at is not None and stored_key.expires_at <= now:
+        raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
+    # At most one write a minute per key, so check-ins stay read-mostly.
+    if stored_key.last_used_at is None or stored_key.last_used_at <= now - CIS_KEY_LAST_USED_RESOLUTION:
+        db.execute(update(CISAPIKey).where(CISAPIKey.id == stored_key.id).values(last_used_at=now)
+                   .execution_options(synchronize_session=False))
+        db.commit()
     organization = db.get(Organization, stored_key.organization_id)
     if organization is None:
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
@@ -4431,6 +4517,9 @@ def cis_status(request: Request, response: Response, db: Session = Depends(get_d
         "observed_at": iso_utc(now),
         "key_configured": api_key is not None,
         "key_hint": api_key.key_hint if api_key and membership.role == "admin" else None,
+        "key_expires_at": iso_utc(api_key.expires_at) if api_key and membership.role == "admin" else None,
+        "key_expired": bool(api_key and api_key.expires_at is not None and api_key.expires_at <= now),
+        "key_last_used_at": iso_utc(api_key.last_used_at) if api_key and membership.role == "admin" else None,
         "profile_count": profiles,
         "device_count": devices,
         "online_device_count": online_device_count,
@@ -4727,11 +4816,17 @@ def download_cis_profile(profile_id: int, request: Request, db: Session = Depend
     return response
 
 
+class CISKeyOptions(BaseModel):
+    model_config = {"extra": "forbid"}
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
 @app.post("/api/cis/api-key")
-def issue_cis_api_key(request: Request, db: Session = Depends(get_db)):
+def issue_cis_api_key(request: Request, payload: CISKeyOptions | None = None, db: Session = Depends(get_db)):
     user, organization, _ = get_org_context(request, db, admin=True)
     clear_key = secrets.token_urlsafe(40)
     now = utcnow()
+    expires_at = now + timedelta(days=payload.expires_in_days) if payload and payload.expires_in_days else None
     existing = db.scalar(
         select(CISAPIKey).where(CISAPIKey.organization_id == organization.id)
     )
@@ -4742,6 +4837,7 @@ def issue_cis_api_key(request: Request, db: Session = Depends(get_db)):
             key_hint=clear_key[-4:],
             created_by_user_id=user.id,
             created_at=now,
+            expires_at=expires_at,
         )
         db.add(existing)
         rotated = False
@@ -4750,18 +4846,21 @@ def issue_cis_api_key(request: Request, db: Session = Depends(get_db)):
         existing.key_hint = clear_key[-4:]
         existing.created_by_user_id = user.id
         existing.created_at = now
+        existing.expires_at = expires_at
+        existing.last_used_at = None
         rotated = True
     audit(
         db,
         organization.id,
         user.id,
         "cis.api_key.issued" if not rotated else "cis.api_key.rotated",
-        {"key_hint": clear_key[-4:]},
+        {"key_hint": clear_key[-4:], "expires_at": iso_utc(expires_at)},
     )
     db.commit()
     return {
         "api_key": clear_key,
         "key_hint": clear_key[-4:],
+        "expires_at": iso_utc(expires_at),
         "rotated": rotated,
         "domain": organization.domain,
         "report_endpoint": BASE_URL + "/api/cis/report",
@@ -7065,7 +7164,7 @@ async def agent_heartbeat(
     )
     if delivery_notice_created:
         await live_hub.publish(agent.organization_id, {"type": "workspace_notification_created", "agent_id": agent.id})
-    return {"ok": True, "status": agent_status(agent)}
+    return {"ok": True, "status": agent_status(agent), "authorized_networks": agent.authorized_networks or []}
 
 
 @app.post("/api/agents/{agent_id}/events")
