@@ -104,8 +104,8 @@ def _bounded_update_command(args: list[str], *, timeout: float, env=None) -> sub
 
 
 _LOCAL_SCAN_RANGES = tuple(ipaddress.ip_network(value) for value in (
-    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16",
-    "fc00::/7", "fe80::/10", "::1/128",
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+    "fc00::/7", "::1/128",
 ))
 MAX_LOCAL_SCAN_ADDRESSES = 65_536
 
