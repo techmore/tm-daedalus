@@ -1,5 +1,7 @@
 # Daedalus project report
 
+October 20 source/CI audit: [deployment-readiness blueprint](docs/deployment-readiness.md) tracks current unresolved gates. The dated release and acceptance receipts below remain historical; this audit did not reverify the live host or complete a new rollout.
+
 ## Current state — October 9, 2026
 
 **Daedalus is a working, internet-hosted pilot. The full project remains incomplete.** This report covers the whole intended platform. The [historical checkpoints](PROJECT-HISTORY.md) preserve earlier receipts; their release identifiers and counts apply to their own dates.
