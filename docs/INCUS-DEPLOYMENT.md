@@ -88,6 +88,10 @@ Existing databases switch to WAL on their first connection after upgrade; the
 `-wal` and `-shm` files next to `daedalus.db` are normal. To revert, deploy the
 previous release after running `PRAGMA journal_mode=DELETE` once.
 
+## Private release staging
+
+Release archives, the remote helper, smoke data and rollback state use unique private attempt directories. See [protected deployment staging](DEPLOYMENT-STAGING.md) for permissions, interruption handling, retained recovery paths and disposable-container validation. A failed or uncertain remote phase keeps recovery material until its outcome is established.
+
 ## Data recovery
 
 The release process never replaces `/data`. Its verified off-host backup is
