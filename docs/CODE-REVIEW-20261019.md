@@ -120,3 +120,15 @@ Findings Medium 1 (SQLite WAL/busy timeout, single-worker assumption), Medium 2 
 Medium 3 (bridge scope) were addressed in the hardening PR. Not changed: global CSRF tokens (Origin and
 Sec-Fetch-Site checks only), enforcing one worker in code, and refusing scans for legacy enrollments whose scope is
 unknown until their first heartbeat.
+
+## Follow-up (2026-10-21)
+
+- **Medium 4 (`web-nikto` inline) was a misreading and is withdrawn.** `start_external_check` passes
+  `enqueue_only=True` (`server.py`, `_execute_external_check`), which queues the run (25-run cap) and returns 202;
+  `website_audit_worker` executes it. No change needed.
+- **Low 8**: link-local (169.254.0.0/16, fe80::/10) is no longer an accepted scan target or authorized scope
+  (server and bridge). Loopback stays allowed for same-host validation. The heartbeat 422 part is covered by PR #10.
+- **Low 9**: CIS upload keys record `last_used_at` (written at most once a minute) and accept an optional
+  `expires_in_days` (1-365) at issue time; the default is no expiry, so existing keys keep working. Status shows
+  `key_expires_at`, `key_expired` and `key_last_used_at` to admins.
+- Left to PR #10: demo login, placeholder secrets, scanner request bodies, heartbeat detected networks, icon fetch.

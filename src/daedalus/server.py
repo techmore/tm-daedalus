@@ -377,6 +377,13 @@ def ensure_cis_presence_columns(connection) -> None:
         connection.execute(text("ALTER TABLE cis_devices ADD COLUMN last_client_heartbeat_at TIMESTAMP"))
 
 
+def ensure_cis_key_columns(connection) -> None:
+    existing = {column["name"] for column in sqlalchemy_inspect(connection).get_columns("cis_api_keys")}
+    for name in ("expires_at", "last_used_at"):
+        if name not in existing:
+            connection.execute(text(f"ALTER TABLE cis_api_keys ADD COLUMN {name} TIMESTAMP"))
+
+
 def ensure_domain_challenge_columns(connection) -> None:
     """Leave older hash-only proof valid without inventing its public TXT value."""
     existing = {column["name"] for column in sqlalchemy_inspect(connection).get_columns("domain_challenges")}
@@ -423,6 +430,7 @@ async def lifespan(_app: FastAPI):
         ensure_agent_command_columns(connection)
         ensure_external_check_columns(connection)
         ensure_cis_presence_columns(connection)
+        ensure_cis_key_columns(connection)
         ensure_domain_challenge_columns(connection)
         connection.execute(
             text(
@@ -2571,18 +2579,19 @@ def close_scanner_controls(
 
 
 def _network_is_internal(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
+    # Link-local (169.254/16, fe80::/10) is deliberately excluded: it is never a
+    # customer LAN and 169.254.169.254 is the cloud metadata endpoint. Loopback
+    # stays allowed for same-host scanner validation.
     if network.version == 4:
         allowed_ranges = (
             ipaddress.ip_network("10.0.0.0/8"),
             ipaddress.ip_network("172.16.0.0/12"),
             ipaddress.ip_network("192.168.0.0/16"),
             ipaddress.ip_network("127.0.0.0/8"),
-            ipaddress.ip_network("169.254.0.0/16"),
         )
     else:
         allowed_ranges = (
             ipaddress.ip_network("fc00::/7"),
-            ipaddress.ip_network("fe80::/10"),
             ipaddress.ip_network("::1/128"),
         )
     return any(network.subnet_of(allowed_range) for allowed_range in allowed_ranges)
@@ -2616,7 +2625,7 @@ def validate_scanner_network_scopes(raw_scopes: list[str]) -> list[str]:
         except ValueError as exc:
             raise ValueError("Authorized networks must be IP addresses or CIDRs.") from exc
         if not _network_is_internal(network):
-            raise ValueError("Only private, loopback, or link-local scanner networks are allowed.")
+            raise ValueError("Only private or loopback scanner networks are allowed.")
         normalized.add(str(network))
     return sorted(
         normalized,
@@ -4344,6 +4353,9 @@ def serialize_cis_profile(profile: CISProfile) -> dict[str, Any]:
     }
 
 
+CIS_KEY_LAST_USED_RESOLUTION = timedelta(minutes=1)
+
+
 def get_cis_workspace_from_key(db: Session, api_key: str | None) -> tuple[CISAPIKey | UserAPIKey, Organization]:
     if not api_key or len(api_key) > 256:
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
@@ -4360,6 +4372,14 @@ def get_cis_workspace_from_key(db: Session, api_key: str | None) -> tuple[CISAPI
         stored_key.token_hash, token_digest(api_key)
     ):
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
+    now = utcnow()
+    if stored_key.expires_at is not None and stored_key.expires_at <= now:
+        raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
+    # At most one write a minute per key, so check-ins stay read-mostly.
+    if stored_key.last_used_at is None or stored_key.last_used_at <= now - CIS_KEY_LAST_USED_RESOLUTION:
+        db.execute(update(CISAPIKey).where(CISAPIKey.id == stored_key.id).values(last_used_at=now)
+                   .execution_options(synchronize_session=False))
+        db.commit()
     organization = db.get(Organization, stored_key.organization_id)
     if organization is None:
         raise HTTPException(status_code=401, detail="A valid CIS upload key is required.")
@@ -4458,6 +4478,9 @@ def cis_status(request: Request, response: Response, db: Session = Depends(get_d
         "observed_at": iso_utc(now),
         "key_configured": api_key is not None,
         "key_hint": api_key.key_hint if api_key and membership.role == "admin" else None,
+        "key_expires_at": iso_utc(api_key.expires_at) if api_key and membership.role == "admin" else None,
+        "key_expired": bool(api_key and api_key.expires_at is not None and api_key.expires_at <= now),
+        "key_last_used_at": iso_utc(api_key.last_used_at) if api_key and membership.role == "admin" else None,
         "profile_count": profiles,
         "device_count": devices,
         "online_device_count": online_device_count,
@@ -4754,11 +4777,17 @@ def download_cis_profile(profile_id: int, request: Request, db: Session = Depend
     return response
 
 
+class CISKeyOptions(BaseModel):
+    model_config = {"extra": "forbid"}
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
+
+
 @app.post("/api/cis/api-key")
-def issue_cis_api_key(request: Request, db: Session = Depends(get_db)):
+def issue_cis_api_key(request: Request, payload: CISKeyOptions | None = None, db: Session = Depends(get_db)):
     user, organization, _ = get_org_context(request, db, admin=True)
     clear_key = secrets.token_urlsafe(40)
     now = utcnow()
+    expires_at = now + timedelta(days=payload.expires_in_days) if payload and payload.expires_in_days else None
     existing = db.scalar(
         select(CISAPIKey).where(CISAPIKey.organization_id == organization.id)
     )
@@ -4769,6 +4798,7 @@ def issue_cis_api_key(request: Request, db: Session = Depends(get_db)):
             key_hint=clear_key[-4:],
             created_by_user_id=user.id,
             created_at=now,
+            expires_at=expires_at,
         )
         db.add(existing)
         rotated = False
@@ -4777,18 +4807,21 @@ def issue_cis_api_key(request: Request, db: Session = Depends(get_db)):
         existing.key_hint = clear_key[-4:]
         existing.created_by_user_id = user.id
         existing.created_at = now
+        existing.expires_at = expires_at
+        existing.last_used_at = None
         rotated = True
     audit(
         db,
         organization.id,
         user.id,
         "cis.api_key.issued" if not rotated else "cis.api_key.rotated",
-        {"key_hint": clear_key[-4:]},
+        {"key_hint": clear_key[-4:], "expires_at": iso_utc(expires_at)},
     )
     db.commit()
     return {
         "api_key": clear_key,
         "key_hint": clear_key[-4:],
+        "expires_at": iso_utc(expires_at),
         "rotated": rotated,
         "domain": organization.domain,
         "report_endpoint": BASE_URL + "/api/cis/report",
