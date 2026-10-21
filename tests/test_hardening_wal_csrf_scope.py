@@ -111,10 +111,11 @@ class BridgeScopeTests(unittest.TestCase):
         return bridge
 
     def run_scan(self, bridge, target):
+        self.command_id = getattr(self, "command_id", 50) + 1
         bridge.nmapui_connected.set()
         request = httpx.Request("GET", "https://fixture.example.org/next")
         bridge._request = Mock(return_value=httpx.Response(200, request=request, json={
-            "command": {"id": 51, "action": "start_scan", "target": target}}))
+            "command": {"id": self.command_id, "action": "start_scan", "target": target}}))
         bridge.sio.emit = Mock()
         bridge._send_command_result = Mock()
         bridge._run_one_command()
@@ -128,7 +129,7 @@ class BridgeScopeTests(unittest.TestCase):
         self.assertIsNotNone(local_scan_target_refusal("10.20.0.0/16", scope))
         self.assertIsNotNone(local_scan_target_refusal("192.168.1.1", []))
         self.assertIsNotNone(local_scan_target_refusal("8.8.8.8", scope))
-        self.assertIsNone(local_scan_target_refusal("192.168.1.1", None))
+        self.assertIsNotNone(local_scan_target_refusal("192.168.1.1", None))
         self.assertIsNone(parse_authorized_networks("10.0.0.0/8"))
         self.assertIsNone(parse_authorized_networks(["not-a-network"]))
 
@@ -142,6 +143,9 @@ class BridgeScopeTests(unittest.TestCase):
     def test_in_scope_target_is_forwarded(self):
         bridge = self.bridge()
         bridge.authorized_networks = parse_authorized_networks(["10.20.0.0/24"])
+        def refreshed():
+            bridge.authorized_networks = parse_authorized_networks(["10.20.0.0/24"])
+        bridge._heartbeat = Mock(side_effect=refreshed)
         self.run_scan(bridge, "10.20.0.7")
         bridge.sio.emit.assert_called_once()
 
@@ -174,7 +178,7 @@ class BridgeScopeTests(unittest.TestCase):
 
     def test_scope_is_read_from_enrollment_config_and_refreshed_by_heartbeat(self):
         bridge = self.bridge()
-        self.assertIsNone(bridge.authorized_networks)  # legacy config: private-range guard only
+        self.assertIsNone(bridge.authorized_networks)  # legacy configuration is not authorization
         bridge.config["authorized_networks"] = ["10.20.0.0/24"]
         bridge._read_nmapui_health = Mock(return_value={})
         bridge._read_nmapui_activity = Mock(return_value=None)
@@ -184,8 +188,46 @@ class BridgeScopeTests(unittest.TestCase):
         bridge._heartbeat()
         self.assertEqual([str(n) for n in bridge.authorized_networks], ["172.16.4.0/24"])
         bridge._request = Mock(return_value=httpx.Response(200, request=httpx.Request("POST", "https://x.example/h"), json={"ok": True}))
-        bridge._heartbeat()  # an older portal omits the field: keep what we know
-        self.assertEqual([str(n) for n in bridge.authorized_networks], ["172.16.4.0/24"])
+        bridge._heartbeat()  # an older portal cannot establish current authorization
+        self.assertIsNone(bridge.authorized_networks)
+
+    def test_unknown_scope_requires_successful_current_authorization(self):
+        for response in (None, [], ["10.99.0.0/24"]):
+            with self.subTest(scope=response):
+                bridge = self.bridge()
+                bridge._heartbeat = Mock(side_effect=lambda: setattr(bridge, "authorized_networks", parse_authorized_networks(response)))
+                self.run_scan(bridge, "10.20.0.1")
+                bridge._heartbeat.assert_called_once()
+                bridge.sio.emit.assert_not_called()
+                self.assertEqual(bridge._send_command_result.call_args.args[:2], (self.command_id, "failed"))
+
+    def test_cached_grant_cannot_survive_offline_portal_or_revocation(self):
+        for refresh in (httpx.ConnectError("offline"), OSError("offline"), None):
+            with self.subTest(refresh=refresh):
+                bridge = self.bridge()
+                bridge.authorized_networks = parse_authorized_networks(["10.20.0.0/24"])
+                bridge._heartbeat = Mock(side_effect=refresh)
+                self.run_scan(bridge, "10.20.0.1")
+                bridge.sio.emit.assert_not_called()
+
+    def test_legacy_enrollment_can_scan_after_authorized_refresh(self):
+        bridge = self.bridge()
+        self.assertIsNone(bridge.authorized_networks)
+        bridge._heartbeat = Mock(side_effect=lambda: setattr(bridge, "authorized_networks", parse_authorized_networks(["127.0.0.1/32"])))
+        self.run_scan(bridge, "127.0.0.1")
+        bridge.sio.emit.assert_called_once()
+
+    def test_malformed_heartbeat_scope_invalidates_old_grant(self):
+        for body in ({}, {"authorized_networks": "10.20.0.0/24"}, {"authorized_networks": ["broken"]}, []):
+            with self.subTest(body=body):
+                bridge = self.bridge()
+                bridge.authorized_networks = parse_authorized_networks(["10.20.0.0/24"])
+                bridge._read_nmapui_health = Mock(return_value={})
+                bridge._read_nmapui_activity = Mock(return_value=None)
+                bridge._read_delivery = Mock(return_value=None)
+                bridge._request = Mock(return_value=httpx.Response(200, request=httpx.Request("POST", "https://x.example/h"), json=body))
+                bridge._heartbeat()
+                self.assertIsNone(bridge.authorized_networks)
 
     def test_enroll_persists_authorized_networks(self):
         body = {"agent_id": 3, "agent_name": "n", "organization": "o", "agent_token": "t" * 20,
