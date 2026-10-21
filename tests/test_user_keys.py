@@ -21,7 +21,7 @@ class UserKeyTests(unittest.TestCase):
         self.assertIn('#new-key { white-space: pre-wrap; overflow-wrap: anywhere; }', css)
         for name in ('login.html', 'user_keys.html'):
             template = (root / 'templates' / name).read_text()
-            self.assertIn('app.css?v=daedalus-20261009-193', template)
+            self.assertIn('app.css?v=daedalus-20261020-203', template)
             self.assertIn('user_keys.js?v=20261009-1', template)
 
     setUp = fixtures.ActiveWebsiteFlowsTests.setUp

@@ -801,6 +801,10 @@ h1, h2, h3 { color: var(--olive-950); font-family: 'Instrument Serif', Georgia, 
   .sidebar-navigation-content { display: none; }
   .sidebar-navigation-content.is-open { display: block; }
   .sidebar-navigation-content.is-open .workspace-switcher { display: flex; }
+  /* The account footer is a sibling of the menu; show it with the open menu so Sign out and Access keys stay reachable. */
+  .sidebar-navigation-content.is-open ~ .sidebar-footer { display: grid; margin-top: 12px; padding-top: 12px; }
+  .sidebar-footer .icon-button { min-width: 44px; min-height: 44px; }
+  .demo-switch { display: inline-flex; }
 }
 .topic-priority {
   padding: 24px 28px;
