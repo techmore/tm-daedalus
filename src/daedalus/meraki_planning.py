@@ -4,7 +4,7 @@ from typing import Any
 from .meraki_eox import build_provider_lifecycle, project_provider_lifecycle
 from .meraki_lifecycle import build_lifecycle, project_lifecycle
 
-from .meraki_catalog import OBSERVED_ON as PRICE_DATE, PRICES as CATALOG, CANDIDATES, CATALOG_VERSION, item, sensor_dependencies
+from .meraki_catalog import OBSERVED_ON as PRICE_DATE, CANDIDATES, CATALOG_VERSION, item, sensor_dependencies
 
 def build_unifi_plan(snapshot: dict[str, Any]) -> dict[str, Any]:
     devices = snapshot.get('devices')

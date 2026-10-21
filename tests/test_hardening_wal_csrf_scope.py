@@ -1,6 +1,5 @@
 """WAL/busy timeout, cross-site mutation guard, and bridge scope enforcement."""
 import importlib.util
-import os
 import sqlite3
 import tarfile
 import tempfile
@@ -12,7 +11,6 @@ import httpx
 from sqlalchemy import event
 
 from daedalus import db as daedalus_db
-from daedalus import server
 from daedalus.agent import enroll, local_scan_target_refusal, parse_authorized_networks
 
 try:
@@ -30,7 +28,9 @@ class SQLiteConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.object(daedalus_db, "DATABASE_URL", "sqlite:///" + directory + "/x.db"):
             connection = sqlite3.connect(Path(directory) / "x.db")
             daedalus_db.configure_sqlite_connection(connection)
-            pragma = lambda name: connection.execute("PRAGMA " + name).fetchone()[0]
+            def pragma(name):
+                return connection.execute("PRAGMA " + name).fetchone()[0]
+
             self.assertEqual(pragma("journal_mode"), "wal")
             self.assertEqual(pragma("busy_timeout"), daedalus_db.SQLITE_BUSY_TIMEOUT_MS)
             self.assertEqual(pragma("foreign_keys"), 1)

@@ -1154,8 +1154,7 @@ class CISReportPDFFlowTests(unittest.TestCase):
 
     def test_customer_onboarding_accepts_urls_creates_a_workspace_per_domain_and_adds_platform_admins(self):
         with self.session_factory() as db:
-            owner = db.scalar(select(User).where(User.email == "demo.admin@cybersecuritypilot.org"))
-            owner_id = owner.id
+            self.assertIsNotNone(db.scalar(select(User).where(User.email == "demo.admin@cybersecuritypilot.org")))
         with patch.object(server, "PLATFORM_ADMIN_EMAILS", ("demo.admin@cybersecuritypilot.org",)):
             response = self.client.post("/api/customers", json={"name": "Deep Run", "domains": [
                 "https://deeprunshop.com/", "www.deeprunhemp.com", "deeprunshop.com", "not a domain"]})

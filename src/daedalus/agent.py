@@ -12,7 +12,6 @@ import logging
 import os
 import platform
 import re
-import secrets
 import selectors
 import shutil
 import signal

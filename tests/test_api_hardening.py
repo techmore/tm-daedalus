@@ -159,7 +159,8 @@ class HeartbeatDetectedNetworkTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         with self.session_factory() as db:
             agent = db.get(Agent, agent_id)
-            self.assertEqual(agent.detected_networks, ["10.20.0.0/24", "fe80::/64"])
+            # Link-local ranges are no longer accepted as detected networks (review finding 8).
+            self.assertEqual(agent.detected_networks, ["10.20.0.0/24"])
             self.assertEqual(agent.authorized_networks, ["127.0.0.1/32", "192.168.1.0/24"])
 
     def test_more_than_thirty_two_entries_are_still_rejected(self):

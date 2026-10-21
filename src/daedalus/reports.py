@@ -16,7 +16,8 @@ from reportlab.lib.units import inch
 from reportlab.platypus import KeepTogether, LongTable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from daedalus.email_policy import analyze_email_auth
-from daedalus.google_admin_pdf import build_google_admin_pdf
+# Re-exported: server.py imports the Google Admin builder from this module.
+from daedalus.google_admin_pdf import build_google_admin_pdf as build_google_admin_pdf
 
 
 OLIVE_950 = colors.HexColor("#1f2117")
@@ -614,7 +615,6 @@ def _overview_run(check: dict[str, Any]) -> tuple[str, str]:
         "completed_with_warnings": "Completed with warnings",
         "failed": "Failed",
         "running": "In progress",
-        "queued": "Queued",
         "queued": "Queued",
     }.get(status, status.replace("_", " ").title())
     details = f"Run #{run.get('id', 'unknown')} · {status_label}"

@@ -31,7 +31,7 @@ def test_cycles_isolates_and_preview_bounds_do_not_drop_visible_edges():
     assert len(diagram['nodes'])==50 and diagram['additional_nodes']==20
     assert diagram['additional_links']==20 and len(diagram['links'])==50
     ids={n['device_serial'] for n in diagram['nodes']}
-    assert all(set(l['device_serials'])<=ids for l in diagram['links'])
+    assert all(set(link['device_serials'])<=ids for link in diagram['links'])
     s=snapshot();s['topology'][0]['data']['links']=[]
     assert len(project_topology(s)['networks'][0]['diagram']['nodes'])==5
 

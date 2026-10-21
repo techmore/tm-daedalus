@@ -1,6 +1,5 @@
 """Offline Linux upgrade transactions; no real installs or service operations."""
 from argparse import Namespace
-import hashlib
 import json
 import os
 from pathlib import Path

@@ -1,4 +1,5 @@
-import copy, io
+import copy
+import io
 import pytest
 from pypdf import PdfReader
 from daedalus.meraki_lifecycle import build_lifecycle,project_lifecycle,INDEX,INDEX_V2,NOTICES_V1,NOTICES_V2
@@ -117,7 +118,9 @@ def test_pdf_v2_links_and_reviews_preserve_prior_main_body():
 
 
 def test_real_v2_dom_sources_counts_and_days_ago():
- import subprocess,json,shutil
+ import subprocess
+ import json
+ import shutil
  from pathlib import Path
  if not shutil.which('node'):pytest.skip('Node required')
  source=(Path(__file__).parents[1]/'src/daedalus/static/js/dashboard.js').read_text()

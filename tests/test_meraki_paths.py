@@ -1,4 +1,6 @@
-import copy,io,math
+import copy
+import io
+import math
 import pytest
 from pypdf import PdfReader
 from daedalus.meraki_paths import build_path_analysis,project_path_analysis

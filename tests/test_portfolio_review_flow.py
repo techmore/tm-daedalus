@@ -4,7 +4,6 @@ import subprocess
 import unittest
 from sqlalchemy import select
 
-from daedalus import server
 from daedalus.models import ExternalCheckSchedule, Membership
 import test_active_website_flows as api_fixtures
 import test_dashboard_status_board as ui_fixtures

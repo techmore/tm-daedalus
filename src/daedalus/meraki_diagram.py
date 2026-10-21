@@ -15,7 +15,8 @@ def layout_network(network: dict) -> dict:
     for link in links:
         a, b = link["device_serials"]
         adjacency[a].add(b); adjacency[b].add(a)
-    order = lambda key: (by_id[key]["reported_root"] is not True, by_id[key]["name"].casefold(), key)
+    def order(key):
+        return (by_id[key]["reported_root"] is not True, by_id[key]["name"].casefold(), key)
     remaining = set(by_id)
     layers = []
     while remaining:
