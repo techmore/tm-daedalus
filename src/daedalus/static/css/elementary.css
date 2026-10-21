@@ -102,3 +102,6 @@ html .status-dot { background: var(--e-text-3); }
 html .status-dot.is-warn, html .is-warn .status-dot { background: var(--e-orange); }
 html .status-dot.is-ok, html .is-ok .status-dot { background: var(--e-lime); }
 html .status-dot.is-bad, html .is-bad .status-dot { background: var(--e-strawberry); }
+
+/* The status line under a section heading sat on the heading's baseline. */
+html .check-subheading + .meraki-feedback { margin-top: 10px; }

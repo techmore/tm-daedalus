@@ -23,12 +23,26 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
+SQLITE_BUSY_TIMEOUT_MS = 30_000
+
+
+def configure_sqlite_connection(connection, _record=None) -> None:
+    """Foreign keys, a bounded lock wait, and WAL so readers do not block the writer.
+
+    The portal assumes ONE uvicorn worker: WAL needs shared memory on a local
+    filesystem, and the live hub, schedulers and report threads are per-process.
+    """
+    cursor = connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+    if not DATABASE_URL.startswith("sqlite:///:memory:"):
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
+
 if DATABASE_URL.startswith("sqlite"):
-    @event.listens_for(engine, "connect")
-    def enable_sqlite_foreign_keys(connection, _record):
-        cursor = connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    event.listens_for(engine, "connect")(configure_sqlite_connection)
 
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)

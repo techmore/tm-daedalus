@@ -59,8 +59,8 @@ class VendorReviewTests(unittest.TestCase):
 
     def test_invalid_inventory_and_rationale_are_rejected(self):
         run=self.inventory();payload=self.payload(run)
-        for patch in ({'resource_index':1},{'resource_index':True},{'status':'secure'},{'note':'        '},{'run_id':999999}):
-            response=self.client.post('/api/vendor-reviews',json=dict(payload,**patch))
+        for override in ({'resource_index':1},{'resource_index':True},{'status':'secure'},{'note':'        '},{'run_id':999999}):
+            response=self.client.post('/api/vendor-reviews',json=dict(payload,**override))
             self.assertIn(response.status_code,(404,422),response.text)
         with self.session_factory() as db:
             db.get(ExternalCheckRun,run).status='failed';db.commit()

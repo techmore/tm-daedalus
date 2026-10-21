@@ -1,5 +1,7 @@
 from pathlib import Path
-import json,shutil,subprocess
+import json
+import shutil
+import subprocess
 import pytest
 from daedalus.meraki_paths import build_path_analysis,project_path_analysis
 from test_meraki_paths import snapshot

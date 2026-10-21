@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import func, select
 
 from daedalus import server
-from daedalus.agent import local_scan_target_refusal
+from daedalus.agent import local_scan_target_refusal, parse_authorized_networks
 from daedalus.models import Agent, EnrollmentToken
 
 try:
@@ -20,7 +20,7 @@ except ImportError:
 class LocalScanTargetTests(unittest.TestCase):
     def test_private_targets_are_accepted(self):
         for target in ("10.1.2.3", "192.168.1.0/24", "172.16.0.0/16", "127.0.0.1", "fd00::/112"):
-            self.assertIsNone(local_scan_target_refusal(target), target)
+            self.assertIsNone(local_scan_target_refusal(target, parse_authorized_networks([target])), target)
 
     def test_public_hostname_and_oversized_targets_are_refused(self):
         for target in ("8.8.8.8", "example.com", "10.0.0.0/7", "0.0.0.0/0", "10.0.0.1,8.8.8.8", "2001:db8::/32", "10.0.0.0/8"):

@@ -1,4 +1,5 @@
-import copy,io
+import copy
+import io
 import pytest
 from pypdf import PdfReader
 from daedalus.meraki_topology import project_topology

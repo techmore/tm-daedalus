@@ -174,7 +174,10 @@ class ScannerLocalEvidenceTests(unittest.TestCase):
                 lookup.assert_not_called()
 
     def test_multihost_executable_guard_keeps_distinct_xml_and_rejects_other_targets(self):
-        import ast, subprocess, sys, tempfile
+        import ast
+        import subprocess
+        import sys
+        import tempfile
         source = ast.parse(Path(validation.__file__).read_text())
         template = next(node.args[0] for node in ast.walk(source) if isinstance(node, ast.Call)
                         and isinstance(node.func, ast.Attribute) and node.func.attr == "write_text"
@@ -341,7 +344,10 @@ class BridgeFaultTransportTests(unittest.TestCase):
 
 class GuardLauncherTests(unittest.TestCase):
     def test_real_guard_launcher_supports_python_path_with_spaces(self):
-        import ast,subprocess,sys,tempfile
+        import ast
+        import subprocess
+        import sys
+        import tempfile
         source=ast.parse(Path(validation.__file__).read_text())
         template=next(node.args[0] for node in ast.walk(source) if isinstance(node,ast.Call)
                       and isinstance(node.func,ast.Attribute) and node.func.attr=='write_text'

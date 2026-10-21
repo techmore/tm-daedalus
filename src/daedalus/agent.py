@@ -12,7 +12,6 @@ import logging
 import os
 import platform
 import re
-import secrets
 import selectors
 import shutil
 import signal
@@ -104,19 +103,24 @@ def _bounded_update_command(args: list[str], *, timeout: float, env=None) -> sub
 
 
 _LOCAL_SCAN_RANGES = tuple(ipaddress.ip_network(value) for value in (
-    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16",
-    "fc00::/7", "fe80::/10", "::1/128",
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+    "fc00::/7", "::1/128",
 ))
 MAX_LOCAL_SCAN_ADDRESSES = 65_536
 
 
-def local_scan_target_refusal(target: str) -> str | None:
-    """Defense in depth: never hand NmapUI a target the portal would refuse.
+def parse_authorized_networks(value: Any) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None:
+    """Return approved scopes, or None when the portal has not supplied a valid list."""
+    if not isinstance(value, list) or len(value) > 32:
+        return None
+    try:
+        return [ipaddress.ip_network(item, strict=False) for item in value]
+    except (TypeError, ValueError):
+        return None
 
-    The portal enforces the approved scope; the local bridge still refuses
-    anything that is not a bounded private IP or CIDR, so a compromised or
-    mistaken queue cannot aim this device at hostnames or public ranges.
-    """
+
+def private_scan_target_refusal(target: str) -> str | None:
+    """Check address syntax and size without making an authorization decision."""
     try:
         network = ipaddress.ip_network(target, strict=False)
     except ValueError:
@@ -125,6 +129,21 @@ def local_scan_target_refusal(target: str) -> str | None:
         return "Scan target is outside private address space."
     if network.num_addresses > MAX_LOCAL_SCAN_ADDRESSES:
         return "Scan target exceeds the 65,536 address limit."
+    return None
+
+
+def local_scan_target_refusal(target: str, authorized: list | None = None) -> str | None:
+    """Unknown and empty scopes both deny dispatch to the local scanner."""
+    refusal = private_scan_target_refusal(target)
+    if refusal:
+        return refusal
+    if authorized is None:
+        return "Scanner authorization is unavailable. Refresh the approved networks before scanning."
+    network = ipaddress.ip_network(target, strict=False)
+    if not any(
+        network.version == scope.version and network.subnet_of(scope) for scope in authorized
+    ):
+        return "Scan target is outside this scanner's approved networks."
     return None
 
 
@@ -357,6 +376,7 @@ def enroll(server: str, name: str, code: str) -> dict[str, Any]:
         "agent_name": body["agent_name"],
         "organization": body["organization"],
         "agent_token": body["agent_token"],
+        "authorized_networks": body.get("authorized_networks") if parse_authorized_networks(body.get("authorized_networks")) is not None else None,
         "created_at": time.time(),
     }
 
@@ -368,6 +388,9 @@ class NmapUIBridge:
         self.agent_id = int(config["agent_id"])
         self.server = validate_endpoint(str(config["server"]))
         self.token = str(config["agent_token"])
+        # Refreshed from every heartbeat response; the enrollment copy covers
+        # the window before the first check-in. None means "not yet known".
+        self.authorized_networks = parse_authorized_networks(config.get("authorized_networks"))
         self.http = httpx.Client(
             timeout=httpx.Timeout(10.0, connect=4.0),
             headers={"Authorization": "Bearer " + self.token},
@@ -610,6 +633,12 @@ class NmapUIBridge:
             json=payload,
         )
         response.raise_for_status()
+        try:
+            approved = parse_authorized_networks(response.json().get("authorized_networks"))
+        except (ValueError, AttributeError, TypeError):
+            approved = None
+        # Missing/malformed scope is unknown, never permission to retain an old grant.
+        self.authorized_networks = approved
         self.last_successful_check_in = datetime.now(UTC).isoformat()
 
     def _read_delivery(self) -> dict[str, Any]:
@@ -1022,7 +1051,16 @@ class NmapUIBridge:
             if not target:
                 self._send_command_result(command_id, "failed", "Missing scan target.")
                 return
-            refusal = local_scan_target_refusal(target)
+            refusal = private_scan_target_refusal(target)
+            if not refusal:
+                # Recheck every dispatch, including cached grants and legacy enrollments.
+                # A revoked grant must not survive a failed or malformed refresh.
+                self.authorized_networks = None
+                try:
+                    self._heartbeat()
+                except (httpx.HTTPError, OSError):
+                    pass
+                refusal = local_scan_target_refusal(target, self.authorized_networks)
             if refusal:
                 self._send_command_result(command_id, "failed", refusal)
                 return

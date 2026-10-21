@@ -1,4 +1,5 @@
-import copy, io
+import copy
+import io
 import httpx
 import pytest
 from pypdf import PdfReader

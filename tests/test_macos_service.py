@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 AGENT_BUNDLE = Path(__file__).resolve().parents[1] / "src" / "daedalus" / "agent_bundle"
 sys.path.insert(0, str(AGENT_BUNDLE))
-import macos_service
+import macos_service  # noqa: E402
 
 
 class ManagedMacOSServiceTests(unittest.TestCase):

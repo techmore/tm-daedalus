@@ -314,7 +314,6 @@ class ScannerComparisonHistoryTests(unittest.TestCase):
             saved = {**row.comparison, "fixture_full_evidence": "x" * (5 * 1024 * 1024)}
             row.comparison = saved
             db.commit()
-            comparison_id = row.id
         response = self.history()
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(response.content), 4 * 1024 * 1024)

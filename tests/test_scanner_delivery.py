@@ -15,7 +15,7 @@ import threading
 from daedalus import server
 from daedalus.agent import NmapUIBridge
 from daedalus.models import Agent, AuditLog, ScanEvent, WorkspaceNotification
-from daedalus.scanner_delivery import DeliveryJournal, needs_review, unknown_delivery, validated_delivery
+from daedalus.scanner_delivery import needs_review, unknown_delivery, validated_delivery
 try:
     from . import test_cis_pdf_flow as fixtures
 except ImportError:

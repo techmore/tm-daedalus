@@ -6,7 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import AuditLog,ExternalCheckRun,ExternalCheckSchedule,Organization,Membership,WorkspaceNotification
+from daedalus.models import AuditLog,ExternalCheckRun,ExternalCheckSchedule,Organization,Membership
 import test_cis_pdf_flow as fixtures
 
 BASE={'domain':'cybersecuritypilot.org','records':{'A':['192.0.2.1']},'resolver_errors':{}}
@@ -180,7 +180,8 @@ class CollectionRecoveryTests(unittest.TestCase):
             self.assertEqual(len(db.scalars(select(ExternalCheckRun)).all()), 1)
 
     def test_authenticated_history_notice_report_and_reload_preserve_the_evidence_trail(self):
-        import hashlib,json
+        import hashlib
+        import json
         from fastapi.testclient import TestClient
         from daedalus.models import ReportJob
         def request(value=BASE,error=None):

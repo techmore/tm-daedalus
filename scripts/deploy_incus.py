@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shlex
 import subprocess
 import sys
@@ -28,6 +29,18 @@ ROOT = Path(__file__).resolve().parents[1]
 INSTANCE_DEFAULT = "daedalus-prod"
 HEALTH_URL_DEFAULT = "https://daedalus.cybersecuritypilot.org/readyz"
 SSH_CONNECTION_OPTIONS = ["-o", "ConnectTimeout=10", "-o", "ConnectionAttempts=1"]
+
+# Executed by Incus as root before copying any executable helper. Never follow a
+# service-writable ancestor or reuse an existing attempt directory.
+CREATE_CONTAINER_STAGING = '''set -euo pipefail
+[[ $EUID == 0 ]]
+for path in /opt /opt/daedalus; do
+    [[ -d "$path" && ! -L "$path" && $(stat -c %u "$path") == 0 ]]
+    mode=$(stat -c %a "$path")
+    (( (8#$mode & 0022) == 0 ))
+done
+mkdir -m 0700 -- "$1"
+'''
 
 
 class DeployError(RuntimeError):
@@ -192,28 +205,47 @@ def deploy(host: str, instance: str, health_url: str, *, plan_only: bool = False
         if backup.returncode:
             raise DeployError("The off-host data backup failed; deployment was not started.")
 
-        archive_name = f"daedalus-{digest}.tar.gz"
-        remote_archive = f"/tmp/{archive_name}"
-        remote_script = "/tmp/daedalus-deploy-remote.sh"
+        attempt = secrets.token_hex(16)
+        host_staging = f"/tmp/daedalus-deploy-{attempt}"
+        container_staging = f"/opt/daedalus/.deploy-{attempt}"
+        remote_archive = f"{host_staging}/release.tar.gz"
+        remote_script = f"{host_staging}/deploy-remote.sh"
+        container_archive = f"{container_staging}/release.tar.gz"
+        container_script = f"{container_staging}/deploy-remote.sh"
         script = ROOT / "scripts/deploy_incus_remote.sh"
         retain_remote_recovery = False
+        remote_safe_to_clean = True
+        host_created = container_created = helper_uploaded = False
         try:
+            _ssh(host, ["mkdir", "-m", "0700", "--", host_staging])
+            host_created = True
+            _ssh(host, ["incus", "exec", instance, "--", "bash", "-c",
+                        CREATE_CONTAINER_STAGING, "daedalus-stage", container_staging])
+            container_created = True
+            print(f"Private staging: host {host_staging}; container {container_staging}")
             _run(["scp", *SSH_CONNECTION_OPTIONS, str(archive), f"{host}:{remote_archive}"])
             _run(["scp", *SSH_CONNECTION_OPTIONS, str(script), f"{host}:{remote_script}"])
-            _ssh(host, ["incus", "file", "push", remote_archive, f"{instance}{remote_archive}"])
-            _ssh(host, ["incus", "file", "push", remote_script, f"{instance}{remote_script}"])
+            _ssh(host, ["incus", "file", "push", "--uid", "0", "--gid", "0", "--mode", "0600",
+                        remote_archive, f"{instance}{container_archive}"])
+            _ssh(host, ["incus", "file", "push", "--uid", "0", "--gid", "0", "--mode", "0600",
+                        remote_script, f"{instance}{container_script}"])
+            helper_uploaded = True
 
             def remote_phase(phase: str) -> None:
                 _ssh(host, [
-                    "incus", "exec", instance, "--", "bash", remote_script,
-                    phase, digest, instance,
+                    "incus", "exec", instance, "--", "bash", container_script,
+                    phase, digest, instance, container_staging,
                 ])
 
+            remote_safe_to_clean = False
             remote_phase("prepare")
+            remote_safe_to_clean = True
             try:
+                remote_safe_to_clean = False
                 remote_phase("activate")
                 _ssh(host, ["incus", "restart", "--timeout", "120", instance])
                 if _wait_for_health(host, instance, health_url):
+                    remote_safe_to_clean = True
                     print("Release is active; internal and public health checks passed.")
                     return 0
                 raise DeployError("The new release did not pass internal and public health checks.")
@@ -224,28 +256,35 @@ def deploy(host: str, instance: str, health_url: str, *, plan_only: bool = False
                     _ssh(host, ["incus", "restart", "--timeout", "120", instance])
                     if not _wait_for_health(host, instance, health_url):
                         raise DeployError("The restored service did not pass health checks.")
+                    remote_safe_to_clean = True
                 except Exception as rollback_failure:
                     retain_remote_recovery = True
                     raise DeployError(
-                        f"Deployment failed ({failure}); automatic rollback could not be verified ({rollback_failure})."
+                        f"Deployment failed ({failure}); automatic rollback could not be verified ({rollback_failure}). "
+                        f"Recovery staging retained at host {host_staging} and container {container_staging}."
                     ) from failure
                 raise DeployError(f"Deployment failed ({failure}); previous release was restored and is healthy.") from failure
         finally:
-            if not retain_remote_recovery:
+            if not remote_safe_to_clean:
+                retain_remote_recovery = True
+                print(f"Recovery staging retained: host {host_staging}; container {container_staging}", file=sys.stderr)
+            if container_created and not retain_remote_recovery:
                 try:
-                    _ssh(host, [
-                        "incus", "exec", instance, "--", "bash", remote_script,
-                        "cleanup", digest, instance,
-                    ], optional_cleanup=True)
+                    if helper_uploaded:
+                        _ssh(host, [
+                            "incus", "exec", instance, "--", "bash", container_script,
+                            "cleanup", digest, instance, container_staging,
+                        ], optional_cleanup=True)
+                    else:
+                        _ssh(host, ["incus", "exec", instance, "--", "rm", "-rf", "--", container_staging],
+                             optional_cleanup=True)
                 except DeployError:
                     print("Optional container cleanup was skipped; temporary staging files may remain.", file=sys.stderr)
-            try:
-                host_cleanup = ["rm", "-f", remote_archive]
-                if not retain_remote_recovery:
-                    host_cleanup.append(remote_script)
-                _ssh(host, host_cleanup, optional_cleanup=True)
-            except DeployError:
-                print("Optional host cleanup was skipped; temporary archives may remain.", file=sys.stderr)
+            if host_created and not retain_remote_recovery:
+                try:
+                    _ssh(host, ["rm", "-rf", "--", host_staging], optional_cleanup=True)
+                except DeployError:
+                    print("Optional host cleanup was skipped; temporary archives may remain.", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:

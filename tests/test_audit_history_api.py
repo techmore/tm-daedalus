@@ -1,9 +1,8 @@
 """Complete, scoped, read-only access to recorded workspace actions."""
 import unittest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 from daedalus import server
-from daedalus.models import AuditLog, Membership, Organization, User
+from daedalus.models import AuditLog, Membership, Organization
 import test_auth_and_workspace_flows as fixtures
 
 

@@ -1,4 +1,5 @@
-import copy,io
+import copy
+import io
 from pypdf import PdfReader
 from daedalus.meraki_cis8 import build_cis8_assessment,project_cis8_assessment
 from daedalus.reports import build_meraki_security_pdf
