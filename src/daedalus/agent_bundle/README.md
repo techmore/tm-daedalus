@@ -492,13 +492,13 @@ previous archive. Review the extracted manifest, runtime diff and archive hash,
 then commit the refreshed ZIP with the exact source revision and test evidence.
 Do not publish an archive built from an uncommitted integration worktree.
 
-The October 25 integration candidate embeds NmapUI `911f83d837c6ea992f2592b4633c59e4a5c1ee29`
+The October 25 integration candidate embeds NmapUI `0e7d22ed8f60ea325dd6cbc77192ea9ff64340b9`
 (`v2026.10.25`, Playwright `1.64.1`), replacing source `ead498812fd3` and
 Playwright `1.58.0`. Its ZIP SHA-256 is
-`2448dc411efe6e96e02ce25a52c39886422b122bdf7a22626b361d09ad468ebc`;
-the manifest records 138 runtime files, no uncommitted source paths, and tree hash
-`463849cd2f6e2c3c431c11868eb2b1de96ebd75eafd303b5108ddd1586bc452f`.
-Eight runtime files were added and none removed. Source and installed-candidate
+`014bdc4c1c59b9ff06b25a3ef1e7124b79db05bc8fce075c1430b3e4c6ced9be`;
+the manifest records 139 runtime files, no uncommitted source paths, and tree hash
+`67cd1c769f14807fbbdcb1a8d35deb3fa80ebc47c0a35296cfdf0e6c7e9a89d8`.
+Nine runtime files were added and none removed relative to the original embedded source. Source and installed-candidate
 qualification remain pending; this pin does not establish a released scanner or
 production readiness. If qualification requires another NmapUI code change,
 select its new clean commit and rebuild/review this archive again.
