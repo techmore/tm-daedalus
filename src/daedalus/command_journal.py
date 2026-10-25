@@ -98,7 +98,10 @@ class CommandJournal:
         with self.lock:
             claim = self.root / f"claim-{identifier}.json"
             if claim.exists() and not claim.is_symlink():
-                acknowledged = json.loads(claim.read_text()).get("terminal_result")
+                record = json.loads(claim.read_text())
+                if status == "accepted" and record.get("accepted_result") == value:
+                    return
+                acknowledged = record.get("terminal_result")
                 if acknowledged and (status == "accepted" or acknowledged == value):
                     return
             pending = sorted(self.root.glob("result-*.json"))
@@ -137,11 +140,14 @@ class CommandJournal:
         with self.lock:
             value = json.loads(path.read_text())
             claim = self.root / f"claim-{value['command_id']}.json"
-            if value["status"] in {"succeeded", "failed", "timed_out"} and claim.exists():
+            if value["status"] in {"accepted", "succeeded", "failed", "timed_out"} and claim.exists():
                 if claim.is_symlink():
                     raise OSError("Refusing a claimed command through a symbolic link")
                 record = json.loads(claim.read_text())
-                record["terminal_result"] = value
+                # Preserve acceptance too: source replay can arrive after this
+                # entry is deleted but before a pending terminal result is acked.
+                key = "accepted_result" if value["status"] == "accepted" else "terminal_result"
+                record[key] = value
                 self._write(claim, record)
             path.unlink()
 

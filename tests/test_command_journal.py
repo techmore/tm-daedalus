@@ -129,6 +129,41 @@ class CommandJournalTests(unittest.TestCase):
         bridge.command_journal.enqueue(3, "failed", "Conflicting outcome")
         self.assertEqual(len(bridge.command_journal.pending()), 1)
 
+    def test_replayed_acceptance_between_acknowledgements_does_not_follow_terminal_result(self):
+        bridge = self.bridge()
+        bridge.command_journal.claim({"id": 3, "action": "start_scan"})
+        bridge.command_journal.enqueue(3, "accepted", "Started")
+        bridge.command_journal.enqueue(3, "succeeded", "Complete")
+        statuses = []
+        def upload(method, path, **kwargs):
+            status = kwargs['json']['status']
+            statuses.append(status)
+            if status == 'succeeded':
+                # Reconnect replay arrives after accepted was acknowledged,
+                # while the already queued terminal outcome is being uploaded.
+                CommandJournal(bridge.command_journal.root).enqueue(3, 'accepted', 'Started')
+            if statuses == ['accepted', 'succeeded', 'accepted']:
+                return httpx.Response(409)
+            return httpx.Response(200, json={'ok': True, 'command_id': 3, 'status': status})
+        bridge._request = Mock(side_effect=upload)
+        bridge._flush_command_results()
+        bridge._flush_command_results()
+        self.assertEqual(statuses, ['accepted', 'succeeded'])
+        self.assertEqual(bridge.command_journal.counts(), {'pending_command_results': 0, 'rejected_command_results': 0})
+
+    def test_accepted_receipt_survives_restart_and_preserves_conflicting_replay(self):
+        journal = CommandJournal(self.root / 'commands')
+        journal.claim({'id': 3, 'action': 'start_scan'})
+        journal.enqueue(3, 'accepted', 'Started')
+        journal.acknowledge(journal.pending()[0][0])
+        restarted = CommandJournal(journal.root)
+        restarted.enqueue(3, 'accepted', 'Started')
+        self.assertEqual(restarted.pending(), [])
+        restarted.enqueue(3, 'accepted', 'Conflicting acceptance')
+        self.assertEqual([entry for _, entry in restarted.pending()], [
+            {'command_id': 3, 'status': 'accepted', 'result': 'Conflicting acceptance'},
+        ])
+
     def test_correlated_envelope_never_infers_completion_or_accepts_unknown_command(self):
         bridge = self.bridge()
         bridge.command_journal.claim({"id": 4, "action": "start_scan"})
