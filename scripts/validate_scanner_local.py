@@ -115,6 +115,27 @@ def recovery_rejection_diagnostics(spool: Path, database: Path, logs=()):
             if path.is_symlink():
                 raise ValueError("Rejected envelope is a symbolic link")
             envelope = json.loads(path.read_text())
+            if re.fullmatch(r"commands-[a-f0-9]{24}", path.parent.name):
+                entry["envelope_kind"] = "command_result"
+                allowed_statuses = {"accepted", "succeeded", "failed", "timed_out"}
+                if (not isinstance(envelope, dict) or type(envelope.get("command_id")) is not int
+                        or envelope["command_id"] <= 0 or envelope.get("status") not in allowed_statuses
+                        or not isinstance(envelope.get("result"), str)):
+                    raise ValueError("Invalid rejected command result")
+                entry.update(command_id=envelope["command_id"], status=envelope["status"])
+                statuses = re.findall(r"Command result retained for review after rejection \((\d{3})\): "
+                                      + re.escape(path.with_suffix(".json").name), log_text)
+                entry["http_status"] = int(statuses[-1]) if statuses else None
+                try:
+                    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as db:
+                        row = db.execute("SELECT status,result FROM agent_commands WHERE id=?", (envelope["command_id"],)).fetchone()
+                    entry["saved_command_found"] = row is not None
+                    if row:
+                        entry["saved_status"] = row[0] if row[0] in allowed_statuses else "other"
+                        entry["result_matches_saved"] = row[1] == envelope["result"]
+                except (sqlite3.Error, OSError, ValueError, TypeError) as error:
+                    entry["comparison_error_type"] = type(error).__name__
+                continue
             if not isinstance(envelope, dict) or not isinstance(envelope.get("client_event_id"), str):
                 raise ValueError("Rejected envelope lacks an event identity")
             identity = str(uuid.UUID(envelope["client_event_id"]))
