@@ -492,12 +492,28 @@ previous archive. Review the extracted manifest, runtime diff and archive hash,
 then commit the refreshed ZIP with the exact source revision and test evidence.
 Do not publish an archive built from an uncommitted integration worktree.
 
+As of the October 25 integration review, the embedded archive still identifies
+NmapUI `ead498812fd3` and requires Playwright `1.58.0`. The pending NmapUI audit
+revision requires Playwright `1.64.1`; this builder change does not refresh that
+archive. After all NmapUI integration changes are committed and validated,
+check out that exact clean revision, run the command above, inspect the manifest
+and packaged diff, and commit the refreshed ZIP separately. Record that exact
+NmapUI commit and ZIP SHA-256 in the review evidence.
+
 Engine dependencies are isolated from the portal and bridge. Each staged engine
 release installs its own `requirements.txt`, then invokes that release's Python
 to install Chromium into its own `PLAYWRIGHT_BROWSERS_PATH`. Keep this pairing
 when changing Playwright: a portal browser cache does not prove the scanner's
 browser is present or compatible. Fresh Ubuntu validation must provision the
 system dependencies required by the engine's selected browser as well.
+In `linux-scanner-managed.yml`, the non-lifecycle scenarios create a separate
+`nmapui-runtime` virtual environment. When refreshing to Playwright `1.64.1`,
+also install Chromium's system dependencies with that environment's Python
+(`python -m playwright install-deps chromium`) and install its matching browser
+as the scanner user (`python -m playwright install chromium`), using the same
+browser path as the validation process. The portal environment's browser install
+cannot satisfy this step. Managed installs already run the staged engine's
+Python with its release-specific `PLAYWRIGHT_BROWSERS_PATH`.
 
 Run the builder, packaged scanner progress/maintenance, bridge command/replay,
 installer and upgrade tests, plus Daedalus's locked full suite and lint. A changed
