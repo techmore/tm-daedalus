@@ -52,7 +52,11 @@ def _source_worktree_paths(source: Path, packaged_paths: set[str]) -> list[str]:
     """Identify packaged files whose bytes are not represented by the source HEAD."""
     try:
         status = subprocess.check_output(
-            ["git", "-C", str(source), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            [
+                "git", "-C", str(source), "status", "--porcelain=v1", "-z",
+                "--untracked-files=all", "--ignored=traditional", "--",
+                *sorted(set(ROOT_FILES) | set(RUNTIME_DIRECTORIES) | packaged_paths),
+            ],
             stderr=subprocess.DEVNULL,
         )
     except (OSError, subprocess.CalledProcessError):

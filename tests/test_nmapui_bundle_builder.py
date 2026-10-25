@@ -176,13 +176,18 @@ renderReportsTab([]);assert.equal(message,'No saved report files found on this s
             (repository / "app.py").write_text("changed\n", encoding="utf-8")
             (repository / "new.py").write_text("untracked\n", encoding="utf-8")
             (repository / "notes.txt").write_text("not packaged\n", encoding="utf-8")
+            (repository / '.gitignore').write_text('*.tmp\n', encoding='utf-8')
+            (repository / 'nmapui/ignored.tmp').write_text('ignored but packaged')
             (repository / 'nmapui/deleted.py').unlink()
             subprocess.run(['git', '-C', str(repository), 'mv', 'nmapui/renamed.py', 'archived.txt'], check=True)
             odd_name = 'nmapui/space → new\nname.py'
             (repository / odd_name).write_text('new runtime')
 
             paths = _source_worktree_paths(repository, {"app.py", "new.py", odd_name})
-            self.assertEqual(paths, sorted(["app.py", "new.py", 'nmapui/deleted.py', 'nmapui/renamed.py', odd_name]))
+            self.assertEqual(paths, sorted([
+                "app.py", "new.py", 'nmapui/deleted.py', 'nmapui/renamed.py',
+                'nmapui/ignored.tmp', odd_name,
+            ]))
 
 
 if __name__ == "__main__":
