@@ -93,6 +93,11 @@ jobs:
             sudo runuser -u daedalusqa -- /home/daedalusqa/nmapui-runtime/bin/pip install \
               -r /home/daedalusqa/nmapui-requirements.txt
             scanner_python=/home/daedalusqa/nmapui-runtime/bin/python
+            # The engine can pin a different Playwright than the portal. Install
+            # and launch its matching browser using the engine's own Python.
+            sudo "$scanner_python" -m playwright install-deps chromium
+            sudo runuser -u daedalusqa -- "$scanner_python" -m playwright install chromium
+            sudo runuser -u daedalusqa -- "$scanner_python" -c 'from importlib.metadata import version; from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print("Scanner Playwright", version("playwright"), "Chromium", browser.version); browser.close(); p.stop()'
           fi
           sudo runuser -u daedalusqa -- env \
             XDG_CONFIG_HOME="/home/daedalusqa/.config" \
