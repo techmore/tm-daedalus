@@ -492,13 +492,16 @@ previous archive. Review the extracted manifest, runtime diff and archive hash,
 then commit the refreshed ZIP with the exact source revision and test evidence.
 Do not publish an archive built from an uncommitted integration worktree.
 
-As of the October 25 integration review, the embedded archive still identifies
-NmapUI `ead498812fd3` and requires Playwright `1.58.0`. The pending NmapUI audit
-revision requires Playwright `1.64.1`; this builder change does not refresh that
-archive. After all NmapUI integration changes are committed and validated,
-check out that exact clean revision, run the command above, inspect the manifest
-and packaged diff, and commit the refreshed ZIP separately. Record that exact
-NmapUI commit and ZIP SHA-256 in the review evidence.
+The October 25 integration candidate embeds NmapUI `46a18a27bbc9df5fec061f6df226159b18f788e5`
+(`v2026.10.25`, Playwright `1.64.1`), replacing source `ead498812fd3` and
+Playwright `1.58.0`. Its ZIP SHA-256 is
+`1ce5cdd8ca0d9ee0da0b87aab0bbb8133f0b4584df5964c6c595bc1b5ad30a0d`;
+the manifest records 138 runtime files, no uncommitted source paths, and tree hash
+`701ba3576e7c744de650f12a6787efdd6b025458e72911c4b66cebf3902bb41f`.
+Eight runtime files were added and none removed. Source and installed-candidate
+qualification remain pending; this pin does not establish a released scanner or
+production readiness. If qualification requires another NmapUI code change,
+select its new clean commit and rebuild/review this archive again.
 
 Engine dependencies are isolated from the portal and bridge. Each staged engine
 release installs its own `requirements.txt`, then invokes that release's Python
@@ -507,13 +510,12 @@ when changing Playwright: a portal browser cache does not prove the scanner's
 browser is present or compatible. Fresh Ubuntu validation must provision the
 system dependencies required by the engine's selected browser as well.
 In `linux-scanner-managed.yml`, the non-lifecycle scenarios create a separate
-`nmapui-runtime` virtual environment. When refreshing to Playwright `1.64.1`,
-also install Chromium's system dependencies with that environment's Python
-(`python -m playwright install-deps chromium`) and install its matching browser
-as the scanner user (`python -m playwright install chromium`), using the same
-browser path as the validation process. The portal environment's browser install
-cannot satisfy this step. Managed installs already run the staged engine's
-Python with its release-specific `PLAYWRIGHT_BROWSERS_PATH`.
+`nmapui-runtime` virtual environment, install Chromium's system dependencies with
+that environment's Python (`python -m playwright install-deps chromium`), install
+its matching browser as the scanner user (`python -m playwright install chromium`),
+and launch it to record the engine Playwright/Chromium versions. The portal
+environment's browser install cannot satisfy this step. Managed installs run the
+staged engine's Python with its release-specific `PLAYWRIGHT_BROWSERS_PATH`.
 
 Run the builder, packaged scanner progress/maintenance, bridge command/replay,
 installer and upgrade tests, plus Daedalus's locked full suite and lint. A changed
