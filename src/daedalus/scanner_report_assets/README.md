@@ -11,12 +11,20 @@ The later `nmap-pdf-olive-legacy.xsl` is retained as source provenance, not sele
 by the corrective source candidate. Neither filename establishes human approval.
 The exact standardized reference and full visual parity remain unverified.
 
-These files are copied unchanged from the existing NmapUI project:
+These files retain the bytes verified against NmapUI source `ead498812fd3`.
+The October 25 engine refresh does not update the hosted report baseline:
 
 - `nmap-pdf-olive-legacy.xsl`: the PDF stylesheet selected by `nmapui/paths.py`.
 - `tailwind.css`: embedded report styling from `static/css/tailwind.css`.
 - `report_runtime.js`: embedded report runtime from `static/js/report_runtime.js`.
 - `fonts/`: locally bundled Inter and Instrument Serif fonts and their licenses.
+
+The frozen legacy XSL SHA-256 is
+`84cd911b6a0c2ecd4e6dbb991301afc8b1f956c3b247f156d7a7717d08f133a4`,
+Tailwind is `c9f25a1f752e7d51faca479a190657929812107a465e8b24d7866115c838f73d`,
+and report runtime is `d03ed605446c229533335a5b8f92dfa47bb12a8b2d0f93d5227360ff9b759318`.
+New engine UI styles and legacy-report changes require separate hosted visual
+qualification before replacing these bytes or the approved historical template.
 
 The user requires their existing standardized PDF to remain the baseline, with
 enhancements only. Identify that exact reference before selecting a production
