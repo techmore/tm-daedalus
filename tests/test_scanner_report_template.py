@@ -46,17 +46,15 @@ def test_invalid_or_external_evidence_is_rejected(xml):
         standardized_scanner_html(xml)
 
 
-def test_pdf_assets_match_bundled_nmapui_baseline():
-    import zipfile
-
-    archive = Path(__file__).resolve().parents[1] / "src/daedalus/agent_bundle/nmapui-source.zip"
-    with zipfile.ZipFile(archive) as bundle:
-        for source, destination in [
-            ("nmap-pdf-olive-legacy.xsl", "nmap-pdf-olive-legacy.xsl"),
-            ("static/css/tailwind.css", "tailwind.css"),
-            ("static/js/report_runtime.js", "report_runtime.js"),
-        ]:
-            assert (ASSETS / destination).read_bytes() == bundle.read("daedalus-nmapui-source/" + source)
+def test_pdf_assets_preserve_documented_historical_source_baseline():
+    # These bytes matched source ead498812fd3 before the engine ZIP refresh.
+    # A newer engine's UI CSS must not silently restyle saved hosted reports.
+    for name, expected in {
+        "nmap-pdf-olive-legacy.xsl": "84cd911b6a0c2ecd4e6dbb991301afc8b1f956c3b247f156d7a7717d08f133a4",
+        "tailwind.css": "c9f25a1f752e7d51faca479a190657929812107a465e8b24d7866115c838f73d",
+        "report_runtime.js": "d03ed605446c229533335a5b8f92dfa47bb12a8b2d0f93d5227360ff9b759318",
+    }.items():
+        assert hashlib.sha256((ASSETS / name).read_bytes()).hexdigest() == expected
     assert hashlib.sha256((ASSETS / "nmap-pdf-olive-approved.xsl").read_bytes()).hexdigest() == "687e6ff1522e99a77ba03ddfe367fd098c7eb0c57eb231f3aa370fcf5ad31537"
 
 
