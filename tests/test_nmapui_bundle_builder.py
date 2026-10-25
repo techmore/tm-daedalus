@@ -9,10 +9,59 @@ import unittest
 import shutil
 import zipfile
 
-from scripts.build_nmapui_source_bundle import _source_worktree_paths
+from scripts.build_nmapui_source_bundle import _source_worktree_paths, main, write_bundle
 
 
 class NmapUISourceProvenanceTests(unittest.TestCase):
+    def test_failed_bundle_write_preserves_existing_release(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'nmapui-source.zip'
+            output.write_bytes(b'previous-release')
+            with patch.object(zipfile.ZipFile, 'writestr', side_effect=OSError('disk full')):
+                with self.assertRaisesRegex(OSError, 'disk full'):
+                    write_bundle(output, {'app.py': b'new release'})
+            self.assertEqual(output.read_bytes(), b'previous-release')
+            self.assertEqual(list(output.parent.glob('.nmapui-source.zip.*.tmp')), [])
+
+    def test_failed_sync_or_atomic_replace_preserves_existing_release(self):
+        for target in ('scripts.build_nmapui_source_bundle.os.fsync',
+                       'scripts.build_nmapui_source_bundle.os.replace'):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / 'nmapui-source.zip'
+                output.write_bytes(b'previous-release')
+                with patch(target, side_effect=OSError('publication failed')):
+                    with self.assertRaisesRegex(OSError, 'publication failed'):
+                        write_bundle(output, {'app.py': b'new release'})
+                self.assertEqual(output.read_bytes(), b'previous-release')
+                self.assertEqual(list(output.parent.glob('.nmapui-source.zip.*.tmp')), [])
+
+    def test_clean_release_gate_rejects_before_replacing_bundle(self):
+        for manifest in [
+            {'source_commit': 'unavailable', 'source_worktree_paths': []},
+            {'source_commit': '0123456789ab', 'source_worktree_paths': ['app.py']},
+        ]:
+            with self.subTest(manifest=manifest), tempfile.TemporaryDirectory() as temporary:
+                import json
+
+                output = Path(temporary) / 'nmapui-source.zip'
+                output.write_bytes(b'previous-release')
+                with patch('sys.argv', ['builder', '--source', temporary, '--output', str(output), '--require-clean-source']), \
+                        patch('scripts.build_nmapui_source_bundle.collect_files', return_value={'manifest.json': json.dumps(manifest).encode()}):
+                    with self.assertRaisesRegex(SystemExit, 'requires a committed'):
+                        main()
+                self.assertEqual(output.read_bytes(), b'previous-release')
+
+    def test_bundle_rebuild_is_deterministic_and_contains_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'nmapui-source.zip'
+            files = {'app.py': b'print("fixture")', 'nmapui/integration.py': b'fixture'}
+            write_bundle(output, files)
+            original = output.read_bytes()
+            write_bundle(output, files)
+            self.assertEqual(output.read_bytes(), original)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.read('daedalus-nmapui-source/nmapui/integration.py'), b'fixture')
+
     def test_packaged_browser_template_declares_device_viewport(self):
         archive = Path(__file__).parents[1] / 'src/daedalus/agent_bundle/nmapui-source.zip'
         with zipfile.ZipFile(archive) as bundle:
@@ -118,15 +167,22 @@ renderReportsTab([]);assert.equal(message,'No saved report files found on this s
             subprocess.run(["git", "-C", str(repository), "config", "user.name", "Test"], check=True)
             subprocess.run(["git", "-C", str(repository), "config", "user.email", "test@example.invalid"], check=True)
             (repository / "app.py").write_text("committed\n", encoding="utf-8")
-            subprocess.run(["git", "-C", str(repository), "add", "app.py"], check=True)
+            (repository / 'nmapui').mkdir()
+            (repository / 'nmapui/deleted.py').write_text('old runtime')
+            (repository / 'nmapui/renamed.py').write_text('renamed runtime')
+            subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
             subprocess.run(["git", "-C", str(repository), "commit", "-qm", "fixture"], check=True)
 
             (repository / "app.py").write_text("changed\n", encoding="utf-8")
             (repository / "new.py").write_text("untracked\n", encoding="utf-8")
             (repository / "notes.txt").write_text("not packaged\n", encoding="utf-8")
+            (repository / 'nmapui/deleted.py').unlink()
+            subprocess.run(['git', '-C', str(repository), 'mv', 'nmapui/renamed.py', 'archived.txt'], check=True)
+            odd_name = 'nmapui/space → new\nname.py'
+            (repository / odd_name).write_text('new runtime')
 
-            paths = _source_worktree_paths(repository, {"app.py", "new.py"})
-            self.assertEqual(paths, ["app.py", "new.py"])
+            paths = _source_worktree_paths(repository, {"app.py", "new.py", odd_name})
+            self.assertEqual(paths, sorted(["app.py", "new.py", 'nmapui/deleted.py', 'nmapui/renamed.py', odd_name]))
 
 
 if __name__ == "__main__":

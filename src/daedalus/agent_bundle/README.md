@@ -467,6 +467,52 @@ not follow redirects. The enrollment token is never placed in a browser URL or
 injected into the local web interface. This device access cannot create reports
 or read another scanner or workspace’s PDF; generation remains in the portal.
 
+## Refreshing the included NmapUI engine
+
+The kit distributes the committed `agent_bundle/nmapui-source.zip`; installs do
+not fetch NmapUI's moving `main` branch. `manifest.json` inside the archive records
+the engine source commit, packaged tree hash, runtime version and uncommitted
+runtime paths. The display version alone is not a source pin. New Python modules
+under `nmapui/` and rebuilt browser assets are collected automatically.
+
+After selecting a committed, reviewed NmapUI revision with passing checks, build
+the candidate from that clean checkout in the Daedalus repository:
+
+```sh
+python scripts/build_nmapui_source_bundle.py \
+  --source /path/to/reviewed/NmapUI \
+  --require-clean-source
+```
+
+This release mode refuses unknown source provenance and uncommitted packaged
+runtime changes. Development builds may omit the flag, but their manifest does
+not establish a reviewed release. The ZIP is replaced atomically only after the
+complete new archive has been written and synced; a failed build preserves the
+previous archive. Review the extracted manifest, runtime diff and archive hash,
+then commit the refreshed ZIP with the exact source revision and test evidence.
+Do not publish an archive built from an uncommitted integration worktree.
+
+Engine dependencies are isolated from the portal and bridge. Each staged engine
+release installs its own `requirements.txt`, then invokes that release's Python
+to install Chromium into its own `PLAYWRIGHT_BROWSERS_PATH`. Keep this pairing
+when changing Playwright: a portal browser cache does not prove the scanner's
+browser is present or compatible. Fresh Ubuntu validation must provision the
+system dependencies required by the engine's selected browser as well.
+
+Run the builder, packaged scanner progress/maintenance, bridge command/replay,
+installer and upgrade tests, plus Daedalus's locked full suite and lint. A changed
+engine ZIP also needs the managed Linux scanner workflow's lifecycle,
+repeat-comparison, listener-change, multi-host-change and interrupted-bridge
+scenarios. Qualify Mac installation/upgrade, authenticated WebSocket access,
+PDF rendering and retained enrollment/evidence independently before rollout.
+Passing source or Linux checks does not establish installed Mac or fleet support.
+
+The local engine's `daedalus_protocol` version 1 is distinct from the bridge's
+portal command protocol version. Keep namespace binding, stable source/job
+identities, durable result receipts and acknowledgement handling compatible.
+Local pause/resume controls do not by themselves add remote portal commands;
+those require a coordinated allowlist, agent dispatch and result contract.
+
 ## October 9 event replay correction
 
 The current source ZIP SHA-256 is `734c19b7db708ce60f775ef765cdfd0369a6d93936067166b78ebc0a2a3321b1`. Recording/replaying scan and report events now uses independent nested payload snapshots, and every recipient receives its own copy. Relative to the preceding ZIP `37a8b078deb94704f4cd334c94f695f48e4e828f79c7292ad504e0e7ca24469c`, only two runtime source files and the manifest changed; report assets remain identical. A real isolated Mac interruption recovered 12 queued payloads unchanged, with one scan and zero rejected events. Corrected source `795f97e` passed backend CI and all five managed Linux scenarios. The existing Mac scanner was upgraded through the ordinary idle/maintenance workflow; enrollment, saved job/event history, cached PDFs and spool evidence survived, and real portal check-ins and the native status/history UI were verified. Other clients, newer SER8 portal activation and wider fleet acceptance remain pending. [Correction and validation details](../../../docs/SCANNER-LIVE-VALIDATION.md#frozen-event-payload-correction--october-9), [installed Mac verification](../../../docs/SCANNER-LIVE-VALIDATION.md#installed-mac-activation--october-9).
