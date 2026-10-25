@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from daedalus.scanner_report_template import ASSETS, standardized_scanner_html
