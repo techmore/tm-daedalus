@@ -101,6 +101,9 @@
           <h1 id="page-title" tabindex="-1">Workspace overview</h1>
         </div>
         <div class="topbar-actions">
+          {% if drive_connection %}
+          <a class="button button-small button-quiet" href="https://drive.google.com/drive/folders/{{ drive_connection.folder_id }}" target="_blank" rel="noopener noreferrer" aria-label="Open {{ organization.name }} reports in Google Drive">Google Drive ↗</a>
+          {% endif %}
           <span class="connection-pill"><i></i><span id="live-label">Connecting live view</span></span>
           <span class="verification-pill verification-{{ organization.verification_status }}">Domain {{ organization.verification_status }}</span>
           {% if demo_mode %}

@@ -6578,6 +6578,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "workspaces": user_memberships,
             "platform_admin": user.email.lower() in PLATFORM_ADMIN_EMAILS and scoped_key is None,
             "workspace_key_session": scoped_key is not None,
+            "drive_connection": db.get(DriveConnection, organization.id),
             "demo_mode": DEMO_MODE,
             "cis_client_release": release_status(DATA_DIR / "cis-client-release"),
             "workspace_controls_enabled": (
