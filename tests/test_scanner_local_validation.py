@@ -394,6 +394,25 @@ class GuardLauncherTests(unittest.TestCase):
             self.assertNotIn('different-private-value',json.dumps(result))
             self.assertEqual(rejected.read_bytes(),before)
 
+    def test_rejection_receipt_classifies_command_result_without_exposing_result(self):
+        import json
+        import sqlite3
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spool=root/'spool';commands=spool/('commands-'+'a'*24);commands.mkdir(parents=True)
+            rejected=commands/'result-00000000000000000001-7.rejected'
+            rejected.write_text(json.dumps({'command_id':7,'status':'accepted','result':'private-acceptance'}))
+            before=rejected.read_bytes()
+            database=root/'portal.db'
+            with sqlite3.connect(database) as db:
+                db.execute('CREATE TABLE agent_commands (id INTEGER,status TEXT,result TEXT)')
+                db.execute('INSERT INTO agent_commands VALUES (?,?,?)',(7,'succeeded','private-completion'))
+            log=root/'bridge.log';log.write_text('Command result retained for review after rejection (409): '+rejected.with_suffix('.json').name)
+            result=validation.recovery_rejection_diagnostics(spool,database,[log])
+            self.assertEqual(result['entries'],[{'envelope_kind':'command_result','command_id':7,'status':'accepted','http_status':409,'saved_command_found':True,'saved_status':'succeeded','result_matches_saved':False}])
+            self.assertNotIn('private-',json.dumps(result))
+            self.assertEqual(rejected.read_bytes(),before)
+
     def test_rejection_receipt_handles_malformed_and_symlink_entries_without_following_them(self):
         import tempfile
         with tempfile.TemporaryDirectory() as directory:

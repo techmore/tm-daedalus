@@ -723,7 +723,7 @@ class NmapUIBridge:
                         return
                     if response.status_code < 500 and response.status_code not in {401, 403, 408, 429}:
                         self.command_journal.reject(path)
-                        LOG.error("Command result retained for review after rejection (%s)", response.status_code)
+                        LOG.error("Command result retained for review after rejection (%s): %s", response.status_code, path.name)
                         continue
                     return
                 except httpx.HTTPError:
