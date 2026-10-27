@@ -27,24 +27,24 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --e-window: #14130e; --e-surface: #1c1b15; --e-surface-2: #24231c; --e-sidebar: #181711;
+    --e-window: #26251e; --e-surface: #302f27; --e-surface-2: #3a3930; --e-sidebar: #22211b;
     --e-text: #f0ede0; --e-text-2: #d3cdb8; --e-text-3: #a49e86;
     --e-border: rgba(240,232,200,.11); --e-border-soft: rgba(240,232,200,.065);
     --e-accent: #b3bc82; --e-accent-strong: #cfd6a4; --e-accent-soft: rgba(179,188,130,.14); --e-on-accent: #fff;
     --e-strawberry: #d9705f; --e-orange: #d9aa4a; --e-lime: #9bb35f;
     --e-warn-bg: rgba(217,170,74,.14); --e-warn: #e6c47a; --e-bad-bg: rgba(217,112,95,.16); --e-bad: #eda090; --e-ok-bg: rgba(155,179,95,.15); --e-ok: #bdd18a;
-    --e-shadow: 0 0 0 1px rgba(240,232,200,.05), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
+    --e-shadow: 0 0 0 1px rgba(240,232,200,.06), 0 1px 2px rgba(0,0,0,.25), 0 10px 28px -14px rgba(0,0,0,.4);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --e-window: #14130e; --e-surface: #1c1b15; --e-surface-2: #24231c; --e-sidebar: #181711;
+  --e-window: #26251e; --e-surface: #302f27; --e-surface-2: #3a3930; --e-sidebar: #22211b;
   --e-text: #f0ede0; --e-text-2: #d3cdb8; --e-text-3: #a49e86;
   --e-border: rgba(240,232,200,.11); --e-border-soft: rgba(240,232,200,.065);
   --e-accent: #b3bc82; --e-accent-strong: #cfd6a4; --e-accent-soft: rgba(179,188,130,.14); --e-on-accent: #fff;
   --e-strawberry: #d9705f; --e-orange: #d9aa4a; --e-lime: #9bb35f;
   --e-warn-bg: rgba(217,170,74,.14); --e-warn: #e6c47a; --e-bad-bg: rgba(217,112,95,.16); --e-bad: #eda090; --e-ok-bg: rgba(155,179,95,.15); --e-ok: #bdd18a;
-  --e-shadow: 0 0 0 1px rgba(240,232,200,.05), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
+  --e-shadow: 0 0 0 1px rgba(240,232,200,.06), 0 1px 2px rgba(0,0,0,.25), 0 10px 28px -14px rgba(0,0,0,.4);
 }
 :root[data-theme="light"] { color-scheme: light; }
 /* Palette: Slate (cool neutrals, indigo accent). Olive above is the default. */

@@ -227,7 +227,7 @@ html #workspace-priorities .status-check-meter i.is-fail { background: var(--e-o
 html #workspace-priorities .status-check-meter i.is-unknown { background: var(--e-text-3); opacity: .3; }
 html #workspace-priorities .status-checks { grid-area: checks; display: grid; gap: 0; margin: 8px 0 2px; padding: 0; list-style: none; border-top: 1px solid var(--e-border-soft); }
 html #workspace-priorities .status-check { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--e-border-soft); font-size: 13.5px; }
-html #workspace-priorities .status-check-icon { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 99px; font-size: 12px; font-weight: 700; color: var(--e-ok); background: none; }
+html #workspace-priorities .status-check-icon { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 99px; font-size: 12px; font-weight: 700; color: var(--e-ok); background: var(--e-ok-bg); }
 html #workspace-priorities .status-check.is-fail .status-check-icon { color: var(--e-warn); background: none; }
 html #workspace-priorities .status-check.is-unknown .status-check-icon { color: var(--e-text-3); background: none; }
 html #workspace-priorities .status-check-label { color: var(--e-text); font-weight: 500; }
