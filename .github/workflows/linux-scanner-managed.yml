@@ -23,13 +23,16 @@ permissions:
 
 concurrency:
   group: linux-managed-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR pushes cancel; runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   managed:
     name: Managed scanner — ${{ matrix.scenario }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Repeat scenarios include a deliberate 300 s product-scan cooldown;
+    # 20 minutes was hit by slow-mirror runs.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -37,9 +40,25 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Retry stalled apt downloads
-        # Config file, so apt calls made by playwright install-deps / --with-deps retry too.
-        run: echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries
+      - name: Prepare CI package cache directory
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/ci-cache
+      - name: Restore apt/pip package cache
+        # The apt mirror sometimes serves at ~75 kB/s; cached .debs skip that download.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/ci-cache
+          key: scanner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements-production.txt', 'src/daedalus/agent_bundle/nmapui-source.zip') }}
+          restore-keys: |
+            scanner-${{ runner.os }}-${{ runner.arch }}-
+      - name: Configure apt retries and package cache
+        # Config files, so apt calls made by playwright install-deps / --with-deps use them too.
+        run: |
+          mkdir -p /opt/ci-cache/apt/partial /opt/ci-cache/pip
+          chmod -R a+rwX /opt/ci-cache  # writable by disposable test users too
+          printf '%s\n' 'Acquire::Retries "5";' 'Dir::Cache::Archives "/opt/ci-cache/apt";' \
+            'APT::Sandbox::User "root";' 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
+            | sudo tee /etc/apt/apt.conf.d/80-ci
+          printf '[global]\ncache-dir = /opt/ci-cache/pip\n' | sudo tee /etc/pip.conf
       - name: Install Linux prerequisites
         run: |
           sudo apt-get update -qq
@@ -123,3 +142,6 @@ jobs:
             ${{ runner.temp }}/managed-scanner.pdf
           if-no-files-found: warn
           retention-days: 14
+      - name: Make package cache readable for saving
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" /opt/ci-cache && sudo chmod -R a+rwX /opt/ci-cache
