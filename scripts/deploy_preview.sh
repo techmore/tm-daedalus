@@ -18,7 +18,7 @@ rm -f "/tmp/${ARCHIVE}"
 ssh -o BatchMode=yes "${HOST}" bash -s -- "${CONTAINER}" "${ARCHIVE}" "${PORT}" "${REV}" <<'REMOTE'
 set -euo pipefail
 container="$1"; archive="$2"; port="$3"; rev="$4"
-incus file push --mode 0644 "/tmp/${archive}" "${container}/tmp/${archive}"
+incus file push -q --mode 0644 "/tmp/${archive}" "${container}/tmp/${archive}"
 rm -f "/tmp/${archive}"
 incus exec "${container}" -- bash -s -- "${archive}" "${rev}" <<'INSIDE'
 set -euo pipefail
@@ -61,7 +61,7 @@ systemctl daemon-reload
 systemctl enable -q daedalus-preview.service
 systemctl restart daedalus-preview.service
 for _ in $(seq 1 30); do
-  curl -fsS -o /dev/null http://127.0.0.1:8000/healthz && break
+  curl -fsS -o /dev/null http://127.0.0.1:8000/healthz 2>/dev/null && break
   sleep 1
 done
 curl -fsS http://127.0.0.1:8000/healthz >/dev/null && echo "preview healthy at ${rev}"
