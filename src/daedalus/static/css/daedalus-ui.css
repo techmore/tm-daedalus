@@ -8,6 +8,7 @@
   --d-radius-xs: 6px; --d-radius-sm: 8px; --d-radius: 12px; --d-radius-lg: 16px;
   --d-sidebar-w: 264px;
   --d-ease: cubic-bezier(.2, .8, .2, 1);
+  --d-serif: "Instrument Serif", ui-serif, Georgia, serif;
   --d-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --d-btn: var(--e-accent); --d-btn-hover: var(--e-accent-strong);
   --d-ring: 0 0 0 3px color-mix(in srgb, var(--e-accent) 30%, transparent);
@@ -196,6 +197,43 @@ html .verification-pill.verification-verified { color: var(--e-ok); background: 
 html .verification-pill.verification-pending, html .verification-pill.verification-expired { color: var(--e-warn); background: var(--e-warn-bg); border-color: transparent; }
 @keyframes d-pulse { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--e-lime) 22%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--e-lime) 6%, transparent); } }
 
+/* ---------- Overview: one headline, then area cards in sidebar order ----------
+ * Rows arrive as External (2), Network (2), Identity & devices (2), so a two-column
+ * grid puts each group on one line. Labels come from the row's own area key. */
+html #workspace-priorities .status-banner { flex-wrap: wrap; padding: 28px 28px 24px; }
+html #workspace-priorities .status-banner strong { flex: 1 1 100%; font: 400 40px/1.05 var(--d-serif); letter-spacing: -.01em; }
+html #workspace-priorities .status-banner > span { flex: 1 1 auto; max-width: 70ch; font-size: 14px; }
+html #workspace-priorities .status-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; border: 0; border-radius: 0; background: none; overflow: visible; }
+html #workspace-priorities .status-row {
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-areas: "group group group" "dot name name" ". verdict verdict" ". why why" ". when action";
+  align-items: center; column-gap: 12px; row-gap: 6px; padding: 18px 20px 16px;
+  border: 1px solid var(--e-border-soft); border-radius: var(--d-radius-lg); background: var(--e-surface);
+  transition: border-color .15s, box-shadow .15s;
+}
+html #workspace-priorities .status-row + .status-row { border-top: 1px solid var(--e-border-soft); }
+html #workspace-priorities .status-row:hover { background: var(--e-surface); border-color: var(--e-border); box-shadow: var(--e-shadow); }
+html #workspace-priorities .status-row::before { grid-area: group; margin-bottom: 4px; font: 500 11px/1 var(--e-font); letter-spacing: .06em; text-transform: uppercase; color: var(--e-text-3); }
+html #workspace-priorities .status-row:has([data-status-key^="dns-"])::before, html #workspace-priorities .status-row:has([data-status-key^="web-"])::before { content: "External"; }
+html #workspace-priorities .status-row:has([data-status-key^="scanners-"])::before, html #workspace-priorities .status-row:has([data-status-key^="meraki-"])::before { content: "Network"; }
+html #workspace-priorities .status-row:has([data-status-key^="google-admin-"])::before, html #workspace-priorities .status-row:has([data-status-key^="cis-"])::before { content: "Identity & devices"; }
+html #workspace-priorities .status-dot { grid-area: dot; }
+html #workspace-priorities .status-name { grid-area: name; font-size: 15px; }
+html #workspace-priorities .status-verdict { grid-area: verdict; font: 400 26px/1.1 var(--d-serif); letter-spacing: -.005em; }
+html #workspace-priorities .status-row.is-idle .status-verdict { color: var(--e-text-3); }
+html #workspace-priorities .status-why { grid-area: why; margin: 2px 0 6px; font-size: 13px; line-height: 1.5; }
+html #workspace-priorities .status-row .status-when { grid-area: when; text-align: left; font-size: 12px; }
+html #workspace-priorities .status-action-slot { grid-area: action; justify-content: flex-end; }
+html #workspace-priorities .status-row.is-warn { border-color: color-mix(in srgb, var(--e-orange) 35%, var(--e-border-soft)); }
+html #workspace-priorities .status-row.is-bad { border-color: color-mix(in srgb, var(--e-strawberry) 40%, var(--e-border-soft)); }
+@media (max-width: 900px) { html #workspace-priorities .status-list { grid-template-columns: minmax(0, 1fr); } }
+
+/* Display serif for the few headings that set the page's voice */
+html .topbar h1 { font: 400 28px/1.1 var(--d-serif); letter-spacing: -.005em; }
+html .topic-priority > h3, html .assessment-review-heading h3 { font: 400 26px/1.15 var(--d-serif); letter-spacing: 0; }
+html .login-card h1, html .empty-workspace h1 { font: 400 34px/1.1 var(--d-serif); letter-spacing: 0; }
+html .site-snapshot-hero h3 { font: 400 26px/1.15 var(--d-serif); }
+
 /* ---------- Page intro: the topbar title is the page title ---------- */
 html .page-intro { margin: 0 0 22px; gap: 20px; align-items: center; }
 html .page-intro > div > .eyebrow, html .page-intro > div > h2 { display: none; }
@@ -374,7 +412,6 @@ html .workspace-dialog[open] { animation: d-pop .22s var(--d-ease) both; }
 html .workspace-dialog::backdrop { background: rgba(8, 10, 16, .45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 @keyframes d-pop { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
 
-html .site-snapshot-hero h3 { font: 650 22px/1.15 var(--e-font); letter-spacing: -.02em; }
 
 /* The generated color map tinted some neutral beige surfaces with the warning fill.
  * Return containers, fields and code to neutral surfaces; real warnings keep it. */
