@@ -42,6 +42,8 @@ jobs:
   backend:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    # Typically 3-4 minutes; up to ~14 when the apt mirror is slow.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +56,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+      - name: Retry stalled apt downloads
+        # Config file, so apt calls made by playwright install-deps / --with-deps retry too.
+        run: echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries
       - name: Install locked dependencies
         run: uv sync --locked --group dev
       - name: Verify pinned production requirements export
