@@ -37,6 +37,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Retry stalled apt downloads
+        # Config file, so apt calls made by playwright install-deps / --with-deps retry too.
+        run: echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries
       - name: Install Linux prerequisites
         run: |
           sudo apt-get update -qq
