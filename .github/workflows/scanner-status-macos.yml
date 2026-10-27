@@ -21,7 +21,8 @@ permissions:
 
 concurrency:
   group: scanner-status-macos-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR pushes cancel; runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   native-status:

@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: test-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR pushes cancel; runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
@@ -26,6 +27,8 @@ jobs:
       - name: Check Python sources
         # Pinned tool run; the lockfile and production requirements stay unchanged.
         run: uvx ruff@0.14.1 check src tests scripts
+      - name: Check JavaScript syntax
+        run: find src/daedalus tests -name '*.js' -print0 | xargs -0 -n1 node --check
 
   deployment-staging:
     name: Protected deployment staging
@@ -42,7 +45,7 @@ jobs:
   backend:
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
-    # Typically 3-4 minutes; up to ~14 when the apt mirror is slow.
+    # Typically 3-4 minutes; longer only on a cache miss with a slow apt mirror.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -56,9 +59,25 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Retry stalled apt downloads
-        # Config file, so apt calls made by playwright install-deps / --with-deps retry too.
-        run: echo 'Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/80-retries
+      - name: Prepare CI package cache directory
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/ci-cache
+      - name: Restore apt/pip package cache
+        # The apt mirror sometimes serves at ~75 kB/s; cached .debs skip that download.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /opt/ci-cache
+          key: apt-${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            apt-${{ runner.os }}-${{ runner.arch }}-playwright-
+      - name: Configure apt retries and package cache
+        # Config files, so apt calls made by playwright install-deps / --with-deps use them too.
+        run: |
+          mkdir -p /opt/ci-cache/apt/partial /opt/ci-cache/pip
+          chmod -R a+rwX /opt/ci-cache  # writable by disposable test users too
+          printf '%s\n' 'Acquire::Retries "5";' 'Dir::Cache::Archives "/opt/ci-cache/apt";' \
+            'APT::Sandbox::User "root";' 'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
+            | sudo tee /etc/apt/apt.conf.d/80-ci
+          printf '[global]\ncache-dir = /opt/ci-cache/pip\n' | sudo tee /etc/pip.conf
       - name: Install locked dependencies
         run: uv sync --locked --group dev
       - name: Verify pinned production requirements export
@@ -71,3 +90,6 @@ jobs:
         run: |
           uv run --locked python -m playwright install --with-deps chromium --only-shell
           uv run --locked python -m pytest -q
+      - name: Make package cache readable for saving
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" /opt/ci-cache && sudo chmod -R a+rwX /opt/ci-cache
