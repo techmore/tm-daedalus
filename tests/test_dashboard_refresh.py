@@ -118,7 +118,8 @@ assert.equal(postureLoads, 1);
         result = subprocess.run(['node', '-'], input=script, text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         template = (Path(__file__).parents[1] / 'src/daedalus/templates/dashboard.html').read_text()
-        self.assertIn('<nav class="main-nav" aria-label="Administration">', template)
+        records = template.index('<nav class="main-nav" aria-label="Records and access">')
+        self.assertLess(records, template.index('data-tab="members"'), 'Members & access belongs to a labelled navigation group')
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is needed for the JavaScript fixture')
     def test_meraki_organization_selection_defaults_to_authorized_scope(self):
