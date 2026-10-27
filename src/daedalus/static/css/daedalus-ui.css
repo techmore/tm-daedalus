@@ -206,7 +206,7 @@ html #workspace-priorities .status-banner > span { flex: 1 1 auto; max-width: 70
 html #workspace-priorities .status-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 18px; border: 0; border-radius: 0; background: none; overflow: visible; }
 html #workspace-priorities .status-row {
   grid-template-columns: 10px minmax(0, 1fr) auto;
-  grid-template-areas: "group group group" "dot name name" ". verdict verdict" ". why why" ". when action";
+  grid-template-areas: "group group group" "dot name name" ". verdict verdict" ". checks checks" ". why why" ". more more" ". when action";
   align-items: center; column-gap: 12px; row-gap: 6px; padding: 18px 20px 16px;
   border: 1px solid var(--e-border-soft); border-radius: var(--d-radius-lg); background: var(--e-surface);
   transition: border-color .15s, box-shadow .15s;
@@ -226,6 +226,30 @@ html #workspace-priorities .status-row .status-when { grid-area: when; text-alig
 html #workspace-priorities .status-action-slot { grid-area: action; justify-content: flex-end; }
 html #workspace-priorities .status-row.is-warn { border-color: color-mix(in srgb, var(--e-orange) 35%, var(--e-border-soft)); }
 html #workspace-priorities .status-row.is-bad { border-color: color-mix(in srgb, var(--e-strawberry) 40%, var(--e-border-soft)); }
+/* Overview checklist: every saved check as ✓ passed, ! needs attention, ? not confirmed */
+html #workspace-priorities .status-check-tally { flex: 1 1 100%; display: grid; gap: 10px; margin: 6px 0 4px; }
+html #workspace-priorities .status-check-count { margin: 0; font-size: 15px; font-weight: 600; color: var(--e-text); }
+html #workspace-priorities .status-check-meter { display: flex; gap: 3px; max-width: 560px; }
+html #workspace-priorities .status-check-meter i { flex: 1; height: 8px; border-radius: 3px; background: var(--e-ok); opacity: .85; }
+html #workspace-priorities .status-check-meter i.is-fail { background: var(--e-orange); opacity: 1; }
+html #workspace-priorities .status-check-meter i.is-unknown { background: var(--e-text-3); opacity: .3; }
+html #workspace-priorities .status-checks { grid-area: checks; display: grid; gap: 0; margin: 8px 0 2px; padding: 0; list-style: none; border-top: 1px solid var(--e-border-soft); }
+html #workspace-priorities .status-check { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--e-border-soft); font-size: 13.5px; }
+html #workspace-priorities .status-check-icon { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 99px; font-size: 11px; font-weight: 800; color: var(--e-ok); background: var(--e-ok-bg); }
+html #workspace-priorities .status-check.is-fail .status-check-icon { color: var(--e-warn); background: var(--e-warn-bg); }
+html #workspace-priorities .status-check.is-unknown .status-check-icon { color: var(--e-text-3); background: var(--e-surface-2); }
+html #workspace-priorities .status-check-label { color: var(--e-text); font-weight: 500; }
+html #workspace-priorities .status-check-detail { color: var(--e-text-3); font-size: 12.5px; text-align: right; }
+html #workspace-priorities .status-more { grid-area: more; font-size: 12.5px; }
+html #workspace-priorities .status-more > summary { cursor: pointer; width: max-content; color: var(--e-text-3); font-weight: 500; }
+html #workspace-priorities .status-more > summary:hover { color: var(--e-accent-strong); }
+html #workspace-priorities .status-more[open] > summary { margin-bottom: 6px; }
+html #workspace-priorities .status-more .status-why { display: block; margin: 0 0 4px; }
+html #workspace-priorities .status-row > .status-why ~ .status-why { grid-area: more; }
+@media (max-width: 560px) {
+  html #workspace-priorities .status-check { grid-template-columns: 22px minmax(0, 1fr); }
+  html #workspace-priorities .status-check-detail { grid-column: 2; text-align: left; }
+}
 @media (max-width: 900px) { html #workspace-priorities .status-list { grid-template-columns: minmax(0, 1fr); } }
 
 /* Display serif for the few headings that set the page's voice */
