@@ -9,10 +9,12 @@
   <meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261020-203">
   <link rel="stylesheet" href="/static/css/elementary-overrides.css?v=20261019-2">
   <link rel="stylesheet" href="/static/css/elementary.css?v=20261020-1">
+  <link rel="stylesheet" href="/static/css/daedalus-ui.css?v=20261027-1">
+  <script src="/static/js/theme.js?v=20261027-1"></script>
 </head>
 <body class="login-page">
   <main class="login-card">
@@ -20,7 +22,6 @@
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
       <span class="brand-wordmark"><strong>Daedalus</strong><small>Cyber Security Pilot</small></span>
     </a>
-    <p class="eyebrow">CYBER SECURITY PILOT</p>
     <h1>Security work, in one place.</h1>
     <p class="muted">Sign in to your organization's private security workspace.</p>
     {% if google_configured %}
@@ -44,6 +45,7 @@
     <p class="fine-print">Use the demo member to try an access request and approve it from the CSP admin account.</p>
     <p class="fine-print">The local demo login is restricted to a loopback server.</p>
     {% endif %}
+    <p class="d-login-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Each workspace is private to its approved members.</p>
   </main>
 </body>
 </html>
