@@ -8,14 +8,14 @@
   var root = document.documentElement;
 
   function storedMode() {
-    try { var mode = window.localStorage.getItem(THEME_KEY); return mode === "light" || mode === "dark" ? mode : "system"; }
-    catch (error) { return "system"; }
+    try { var mode = window.localStorage.getItem(THEME_KEY); return mode === "dark" || mode === "system" ? mode : "light"; }
+    catch (error) { return "light"; }
   }
   function applyMode(mode) {
     if (mode === "light" || mode === "dark") root.setAttribute("data-theme", mode);
     else root.removeAttribute("data-theme");
     try {
-      if (mode === "system") window.localStorage.removeItem(THEME_KEY);
+      if (mode === "light") window.localStorage.removeItem(THEME_KEY);
       else window.localStorage.setItem(THEME_KEY, mode);
     } catch (error) { /* the choice lasts for this page only */ }
     document.querySelectorAll("[data-theme-toggle]").forEach(function (button) {
@@ -46,7 +46,7 @@
     button.addEventListener("click", function () { applyPalette(storedPalette() === "olive" ? "slate" : "olive"); });
   });
   function nextMode() {
-    var order = ["system", "light", "dark"];
+    var order = ["light", "dark", "system"];
     applyMode(order[(order.indexOf(storedMode()) + 1) % order.length]);
   }
   applyMode(storedMode());
