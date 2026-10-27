@@ -6863,6 +6863,9 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         "summary": f"{summary.get('definitive', 0)}/{summary.get('applicable', 10)} checks assessed; {summary.get('fail', 0)} failed. Effective-policy manual review remains required." if google_job else "No Google Admin audit saved. Separate read-only consent is required.",
         "updated_at": iso_utc(google_job.completed_at) if google_job else None,
         "latest_attempt_status": google_attempt.status if google_attempt else None})
+    # Same order as the sidebar: external, network, identity and devices.
+    order = {key: index for index, key in enumerate(("dns", "web", "scanners", "meraki", "google-admin", "cis"))}
+    areas.sort(key=lambda area: order.get(area["key"], len(order)))
     return areas
 
 

@@ -1,4 +1,4 @@
-/* Command palette (Ctrl/Cmd+K or "/") and the theme switch.
+/* Command palette (Ctrl/Cmd+K or "/"), the light/dark switch and the color-scheme switch.
  * Reads the sidebar navigation, the workspace selector and existing buttons, then
  * clicks or changes those same controls, so dashboard.js keeps owning behaviour. */
 (function () {
@@ -25,6 +25,26 @@
       button.title = label;
     });
   }
+  var PALETTE_KEY = "daedalus-palette";
+  var PALETTES = { olive: "Olive", slate: "Slate" };
+  function storedPalette() {
+    try { var palette = window.localStorage.getItem(PALETTE_KEY); return PALETTES[palette] ? palette : "olive"; }
+    catch (error) { return "olive"; }
+  }
+  function applyPalette(palette) {
+    if (palette === "olive") root.removeAttribute("data-palette"); else root.setAttribute("data-palette", palette);
+    try {
+      if (palette === "olive") window.localStorage.removeItem(PALETTE_KEY); else window.localStorage.setItem(PALETTE_KEY, palette);
+    } catch (error) { /* the choice lasts for this page only */ }
+    document.querySelectorAll("[data-palette-toggle]").forEach(function (button) {
+      button.setAttribute("aria-label", "Color scheme: " + PALETTES[palette] + ". Activate to change.");
+      button.title = "Color scheme: " + PALETTES[palette];
+    });
+  }
+  applyPalette(storedPalette());
+  document.querySelectorAll("[data-palette-toggle]").forEach(function (button) {
+    button.addEventListener("click", function () { applyPalette(storedPalette() === "olive" ? "slate" : "olive"); });
+  });
   function nextMode() {
     var order = ["system", "light", "dark"];
     applyMode(order[(order.indexOf(storedMode()) + 1) % order.length]);
@@ -43,6 +63,7 @@
     moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
     monitor: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
     out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    palette: '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2a5.6 5.6 0 0 0 5.6-5.6C22 6 17.5 2 12 2z"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'
   };
   function icon(name) {
@@ -78,6 +99,8 @@
     if (keys) commands.push({ group: "Account", label: "Personal access keys", icon: icon("key"), run: function () { window.location.assign(keys.href); } });
     commands.push({ group: "Appearance", label: "Use light theme", icon: icon("sun"), keywords: "theme appearance", run: function () { applyMode("light"); } });
     commands.push({ group: "Appearance", label: "Use dark theme", icon: icon("moon"), keywords: "theme appearance", run: function () { applyMode("dark"); } });
+    commands.push({ group: "Appearance", label: "Olive color scheme", icon: icon("palette"), keywords: "palette colors warm", run: function () { applyPalette("olive"); } });
+    commands.push({ group: "Appearance", label: "Slate color scheme", icon: icon("palette"), keywords: "palette colors cool blue", run: function () { applyPalette("slate"); } });
     commands.push({ group: "Appearance", label: "Match system theme", icon: icon("monitor"), keywords: "theme appearance auto", run: function () { applyMode("system"); } });
     var logout = document.querySelector('form[action="/logout"]');
     if (logout) commands.push({ group: "Account", label: "Sign out", icon: icon("out"), run: function () { logout.requestSubmit ? logout.requestSubmit() : logout.submit(); } });

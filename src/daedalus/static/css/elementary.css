@@ -1,19 +1,19 @@
-/* Daedalus theme tokens (2026 remaster: slate neutrals, electric-indigo accent).
+/* Daedalus theme tokens (2026 remaster: olive and tan, light and dark).
  * Originally the elementary OS look for the Daedalus portal.
  * Redefines the design tokens from app.css (Blueberry accent, Slate text, Silver
  * surfaces, Inter, 9px radii) for light and dark, then overrides the components
  * that hard-code colors. Loaded after app.css. */
 :root {
   color-scheme: light dark;
-  --e-blueberry-100: #c7d2ff; --e-blueberry-300: #8ea2ff; --e-blueberry-500: #3d5afe; --e-blueberry-700: #2a40d4;
-  --e-strawberry: #e5484d; --e-orange: #f59e0b; --e-banana: #fbbf24; --e-lime: #22a55b; --e-mint: #12a594;
-  --e-window: #f6f7f9; --e-surface: #ffffff; --e-surface-2: #f1f3f6; --e-sidebar: #fbfbfc;
-  --e-text: #10141c; --e-text-2: #394252; --e-text-3: #5f6b7d;
-  --e-border: rgba(16,24,40,.11); --e-border-soft: rgba(16,24,40,.065);
+  --e-blueberry-100: #e3e5cc; --e-blueberry-300: #b5bd84; --e-blueberry-500: #66703f; --e-blueberry-700: #4d5530;
+  --e-strawberry: #b5483a; --e-orange: #c9962c; --e-banana: #d9b45a; --e-lime: #6f8a3a; --e-mint: #5f8a72;
+  --e-window: #f6f4ec; --e-surface: #fdfcf7; --e-surface-2: #efede2; --e-sidebar: #f1efe5;
+  --e-text: #29261b; --e-text-2: #4a4430; --e-text-3: #6b654e;
+  --e-border: rgba(61,57,38,.14); --e-border-soft: rgba(61,57,38,.085);
   --e-accent: var(--e-blueberry-500); --e-accent-strong: var(--e-blueberry-700); --e-on-accent: #fff;
-  --e-accent-soft: rgba(61,90,254,.09);
-  --e-warn-bg: rgba(245,158,11,.14); --e-warn: #8a4b06; --e-bad-bg: rgba(229,72,77,.11); --e-bad: #b4232a; --e-ok-bg: rgba(34,165,91,.12); --e-ok: #17713e;
-  --e-shadow: 0 0 0 1px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -12px rgba(16,24,40,.14);
+  --e-accent-soft: rgba(102,112,63,.11);
+  --e-warn-bg: rgba(201,150,44,.15); --e-warn: #7d5a12; --e-bad-bg: rgba(181,72,58,.11); --e-bad: #973a2e; --e-ok-bg: rgba(111,138,58,.14); --e-ok: #4b6224;
+  --e-shadow: 0 0 0 1px rgba(61,57,38,.06), 0 1px 2px rgba(61,57,38,.06), 0 8px 24px -12px rgba(61,57,38,.16);
   --e-font: "Inter", "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   /* app.css tokens */
   --olive-50: var(--e-window); --olive-100: var(--e-surface-2); --olive-200: var(--e-border);
@@ -27,26 +27,57 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --e-window: #0a0c10; --e-surface: #111419; --e-surface-2: #181c23; --e-sidebar: #0d1014;
-    --e-text: #eef1f6; --e-text-2: #c4cbd6; --e-text-3: #8d97a8;
-    --e-border: rgba(255,255,255,.09); --e-border-soft: rgba(255,255,255,.055);
-    --e-accent: #6c84ff; --e-accent-strong: #98a8ff; --e-accent-soft: rgba(108,132,255,.15); --e-on-accent: #fff;
-    --e-strawberry: #f2555a; --e-orange: #f5a524; --e-lime: #3dd68c;
-    --e-warn-bg: rgba(245,165,36,.14); --e-warn: #fbc65a; --e-bad-bg: rgba(242,85,90,.16); --e-bad: #ff9592; --e-ok-bg: rgba(61,214,140,.13); --e-ok: #6ee7a8;
-    --e-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
+    --e-window: #14130e; --e-surface: #1c1b15; --e-surface-2: #24231c; --e-sidebar: #181711;
+    --e-text: #f0ede0; --e-text-2: #d3cdb8; --e-text-3: #a49e86;
+    --e-border: rgba(240,232,200,.11); --e-border-soft: rgba(240,232,200,.065);
+    --e-accent: #b3bc82; --e-accent-strong: #cfd6a4; --e-accent-soft: rgba(179,188,130,.14); --e-on-accent: #fff;
+    --e-strawberry: #d9705f; --e-orange: #d9aa4a; --e-lime: #9bb35f;
+    --e-warn-bg: rgba(217,170,74,.14); --e-warn: #e6c47a; --e-bad-bg: rgba(217,112,95,.16); --e-bad: #eda090; --e-ok-bg: rgba(155,179,95,.15); --e-ok: #bdd18a;
+    --e-shadow: 0 0 0 1px rgba(240,232,200,.05), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
+  --e-window: #14130e; --e-surface: #1c1b15; --e-surface-2: #24231c; --e-sidebar: #181711;
+  --e-text: #f0ede0; --e-text-2: #d3cdb8; --e-text-3: #a49e86;
+  --e-border: rgba(240,232,200,.11); --e-border-soft: rgba(240,232,200,.065);
+  --e-accent: #b3bc82; --e-accent-strong: #cfd6a4; --e-accent-soft: rgba(179,188,130,.14); --e-on-accent: #fff;
+  --e-strawberry: #d9705f; --e-orange: #d9aa4a; --e-lime: #9bb35f;
+  --e-warn-bg: rgba(217,170,74,.14); --e-warn: #e6c47a; --e-bad-bg: rgba(217,112,95,.16); --e-bad: #eda090; --e-ok-bg: rgba(155,179,95,.15); --e-ok: #bdd18a;
+  --e-shadow: 0 0 0 1px rgba(240,232,200,.05), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] { color-scheme: light; }
+/* Palette: Slate (cool neutrals, indigo accent). Olive above is the default. */
+:root[data-palette="slate"] {
+  --e-blueberry-100: #c7d2ff; --e-blueberry-300: #8ea2ff; --e-blueberry-500: #3d5afe; --e-blueberry-700: #2a40d4;
+  --e-strawberry: #e5484d; --e-orange: #f59e0b; --e-banana: #fbbf24; --e-lime: #22a55b; --e-mint: #12a594;
+  --e-window: #f6f7f9; --e-surface: #ffffff; --e-surface-2: #f1f3f6; --e-sidebar: #fbfbfc;
+  --e-text: #10141c; --e-text-2: #394252; --e-text-3: #5f6b7d;
+  --e-border: rgba(16,24,40,.11); --e-border-soft: rgba(16,24,40,.065);
+  --e-accent: var(--e-blueberry-500); --e-accent-strong: var(--e-blueberry-700); --e-accent-soft: rgba(61,90,254,.09);
+  --e-warn-bg: rgba(245,158,11,.14); --e-warn: #8a4b06; --e-bad-bg: rgba(229,72,77,.11); --e-bad: #b4232a; --e-ok-bg: rgba(34,165,91,.12); --e-ok: #17713e;
+  --e-shadow: 0 0 0 1px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -12px rgba(16,24,40,.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="slate"]:not([data-theme="light"]) {
   --e-window: #0a0c10; --e-surface: #111419; --e-surface-2: #181c23; --e-sidebar: #0d1014;
   --e-text: #eef1f6; --e-text-2: #c4cbd6; --e-text-3: #8d97a8;
   --e-border: rgba(255,255,255,.09); --e-border-soft: rgba(255,255,255,.055);
-  --e-accent: #6c84ff; --e-accent-strong: #98a8ff; --e-accent-soft: rgba(108,132,255,.15); --e-on-accent: #fff;
+  --e-accent: #6c84ff; --e-accent-strong: #98a8ff; --e-accent-soft: rgba(108,132,255,.15);
+  --e-strawberry: #f2555a; --e-orange: #f5a524; --e-lime: #3dd68c;
+  --e-warn-bg: rgba(245,165,36,.14); --e-warn: #fbc65a; --e-bad-bg: rgba(242,85,90,.16); --e-bad: #ff9592; --e-ok-bg: rgba(61,214,140,.13); --e-ok: #6ee7a8;
+  --e-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-palette="slate"][data-theme="dark"] {
+  --e-window: #0a0c10; --e-surface: #111419; --e-surface-2: #181c23; --e-sidebar: #0d1014;
+  --e-text: #eef1f6; --e-text-2: #c4cbd6; --e-text-3: #8d97a8;
+  --e-border: rgba(255,255,255,.09); --e-border-soft: rgba(255,255,255,.055);
+  --e-accent: #6c84ff; --e-accent-strong: #98a8ff; --e-accent-soft: rgba(108,132,255,.15);
   --e-strawberry: #f2555a; --e-orange: #f5a524; --e-lime: #3dd68c;
   --e-warn-bg: rgba(245,165,36,.14); --e-warn: #fbc65a; --e-bad-bg: rgba(242,85,90,.16); --e-bad: #ff9592; --e-ok-bg: rgba(61,214,140,.13); --e-ok: #6ee7a8;
   --e-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.5), 0 12px 32px -12px rgba(0,0,0,.7);
 }
-:root[data-theme="light"] { color-scheme: light; }
 html body { font-family: var(--e-font); font-size: 14px; color: var(--e-text); background: var(--e-window); -webkit-font-smoothing: antialiased; }
 html h1, html h2, html h3, html h4 { font-family: var(--e-font); font-style: normal; font-weight: 700; letter-spacing: -.01em; color: var(--e-text); }
 html :focus-visible { outline: 2px solid var(--e-accent); outline-offset: 2px; border-radius: 6px; }
