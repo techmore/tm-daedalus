@@ -56,4 +56,4 @@ assert.ok(all(unknown).some(n=>n.tag==='dd'&&n.textContent==='Unavailable'));
         self.assertIn('background: var(--card-surface)', style)
         template = (root / 'templates/dashboard.html').read_text()
         self.assertIn('app.css?v=daedalus-20261020-203', template)
-        self.assertIn('dashboard.js?v=daedalus-20261009-202', template)
+        self.assertIn('dashboard.js?v=daedalus-20261027-1', template)

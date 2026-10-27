@@ -1433,6 +1433,23 @@
       headline: headline, detail: details.join(" · "), level: rows.length ? rows[0].level : "warn"};
   }
 
+  // Plain-language checklist lines the server derives from each area's saved evidence.
+  function areaChecks(area) {
+    var checks = area && Array.isArray(area.checks) ? area.checks : [];
+    return checks.filter(function (check) { return check && typeof check.label === "string"; }).map(function (check) {
+      var status = check.status === "pass" || check.status === "fail" ? check.status : "unknown";
+      return {label: check.label, status: status, detail: typeof check.detail === "string" ? check.detail : ""};
+    });
+  }
+
+  function checkTally(areas) {
+    var tally = {pass: 0, fail: 0, unknown: 0, total: 0, items: []};
+    (Array.isArray(areas) ? areas : []).forEach(function (area) {
+      areaChecks(area).forEach(function (check) { tally[check.status] += 1; tally.total += 1; tally.items.push(check); });
+    });
+    return tally;
+  }
+
   function areaLevel(area) {
     return workspaceAreaPresentation(area).level;
   }
@@ -1572,7 +1589,21 @@
     banner.className = "status-banner is-" + assessment.level;
     var headline = document.createElement("strong"); headline.textContent = assessment.headline;
     var sub = document.createElement("span"); sub.textContent = assessment.detail + ". Saved evidence is not a security verdict.";
-    banner.append(headline, sub);
+    banner.append(headline);
+    var tally = checkTally(areas);
+    if (tally.total) {
+      var tallyHost = document.createElement("div"); tallyHost.className = "status-check-tally";
+      var tallyText = document.createElement("p"); tallyText.className = "status-check-count";
+      var parts = [tally.pass + " of " + tally.total + " checks passed"];
+      if (tally.fail) parts.push(tally.fail + " need attention");
+      if (tally.unknown) parts.push(tally.unknown + " not confirmed");
+      tallyText.textContent = parts.join(" · ");
+      var meter = document.createElement("span"); meter.className = "status-check-meter"; meter.setAttribute("aria-hidden", "true");
+      tally.items.forEach(function (check) { var tick = document.createElement("i"); tick.className = "is-" + check.status; meter.append(tick); });
+      tallyHost.append(tallyText, meter);
+      banner.append(tallyHost);
+    }
+    banner.append(sub);
     if (role === "admin" && workspacePostureRead.body && workspacePostureRead.body.can_manage === true) {
       var runAll = document.createElement("button"); runAll.type = "button"; runAll.className = "button button-primary status-run-all";
       runAll.textContent = workspacePostureRead.publicCheckRetryTypes ? "Retry " + workspacePostureRead.publicCheckRetryTypes.map(function (type) { return type === "dns" ? "DNS & email" : "website"; }).join(" & ") : "Check DNS & website now";
@@ -1616,7 +1647,9 @@
     }
     host.append(banner);
     var list = document.createElement("ul"); list.className = "status-list";
-    assessment.rows.forEach(function (row) {
+    var areaOrder = Array.isArray(areas) ? areas : [];
+    // Keep the workspace's own order (matches the sidebar) so customers always find areas in the same place.
+    assessment.rows.slice().sort(function (left, right) { return areaOrder.indexOf(left.area) - areaOrder.indexOf(right.area); }).forEach(function (row) {
       var li = document.createElement("li"); li.className = "status-row is-" + row.level;
       var dot = document.createElement("span"); dot.className = "status-dot"; dot.setAttribute("aria-hidden", "true");
       var key = typeof row.area.key === "string" && /^[a-z-]+$/.test(row.area.key) ? row.area.key : null;
@@ -1664,15 +1697,46 @@
         });
         action.append(turnOn);
       }
+      var checks = areaChecks(row.area);
+      if (checks.length && row.state !== "running" && row.state !== "unavailable" && row.state !== "unknown") {
+        var passed = checks.filter(function (check) { return check.status === "pass"; }).length;
+        verdict.textContent = passed + " of " + checks.length + " checks passed";
+      }
       li.append(dot, name, verdict, when, action);
+      if (checks.length) {
+        var checklist = document.createElement("ul"); checklist.className = "status-checks";
+        checks.forEach(function (check) {
+          var item = document.createElement("li"); item.className = "status-check is-" + check.status;
+          var icon = document.createElement("span"); icon.className = "status-check-icon"; icon.setAttribute("aria-hidden", "true");
+          icon.textContent = check.status === "pass" ? "\u2713" : check.status === "fail" ? "!" : "?";
+          var label = document.createElement("span"); label.className = "status-check-label";
+          var hidden = document.createElement("span"); hidden.className = "visually-hidden";
+          hidden.textContent = (check.status === "pass" ? "Passed: " : check.status === "fail" ? "Needs attention: " : "Not confirmed: ");
+          label.append(hidden, document.createTextNode(check.label));
+          var detail = document.createElement("span"); detail.className = "status-check-detail"; detail.textContent = check.detail;
+          item.append(icon, label, detail);
+          checklist.append(item);
+        });
+        li.append(checklist);
+      }
+      var evidence = [];
       var why = document.createElement("span"); why.className = "status-why";
       why.textContent = (row.area.summary || "Assessment summary unavailable.") + (row.scheduleLabel ? " · " + row.scheduleLabel : "");
-      li.append(why);
+      evidence.push(why);
       if (row.area.audit_summary) {
         var audit = document.createElement("span"); audit.className = "status-why";
         var auditTime = workspaceEvidenceTime(row.area.audit_updated_at, Date.now());
         audit.textContent = row.area.audit_summary + " · " + (auditTime !== null ? "Audit evidence " + dateLabel(row.area.audit_updated_at) : "Audit evidence time unknown");
-        li.append(audit);
+        evidence.push(audit);
+      }
+      // With a checklist, the full evidence sentence sits behind "Technical details"; without one it stays in view.
+      if (checks.length) {
+        var more = document.createElement("details"); more.className = "status-more";
+        var moreSummary = document.createElement("summary"); moreSummary.textContent = "Technical details";
+        more.append.apply(more, [moreSummary].concat(evidence));
+        li.append(more);
+      } else {
+        li.append.apply(li, evidence);
       }
       list.append(li);
     });

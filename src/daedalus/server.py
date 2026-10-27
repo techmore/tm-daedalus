@@ -6713,6 +6713,11 @@ def save_vendor_review(payload: VendorReviewInput, request: Request, db: Session
     return {"review": _serialize_vendor_review(row), "created": True}
 
 
+def _posture_check(label: str, ok: bool | None, detail: str) -> dict[str, Any]:
+    """One plain-language line on the overview checklist. ok=None means not known."""
+    return {"label": label, "status": "pass" if ok is True else "fail" if ok is False else "unknown", "detail": detail}
+
+
 def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[str, Any]]:
     areas = []
     for kind, title in (("dns", "DNS & email"), ("web", "Website")):
@@ -6722,6 +6727,7 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         snapshot = (saved.snapshot or {}) if saved else {}
         state = "not_assessed" if saved is None else "recorded"
         summary = "No completed assessment yet."
+        checks: list[dict[str, Any]] = []
         if saved and kind == "dns":
             assessment = snapshot.get("email_authentication_assessment") or {}
             spf = (assessment.get("spf") or {}).get("label") or "Not assessed"
@@ -6731,6 +6737,19 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
             summary = f"SPF: {spf} · DKIM: {dkim} · DMARC: {dmarc} · {unknown} lookup(s) failed"
             needs_action = any(item.get("level") == "action" for item in (assessment.get("guidance") or []) if isinstance(item, dict))
             if unknown or needs_action or saved.status == "completed_with_warnings" or any((assessment.get(policy) or {}).get("tone") != "good" for policy in ("spf", "dmarc")): state = "attention"
+            def tone_ok(policy: str) -> bool | None:
+                observed = assessment.get(policy) or {}
+                tone = observed.get("tone")
+                if tone == "good":
+                    return True
+                # A published record that is weaker than recommended needs attention; a failed lookup is unknown.
+                return False if tone == "attention" or observed.get("status") == "published" else None
+            checks = [
+                _posture_check("Approved mail senders (SPF)", tone_ok("spf"), spf),
+                _posture_check("Email signing (DKIM)", tone_ok("dkim"), dkim),
+                _posture_check("Spoofing protection (DMARC)", tone_ok("dmarc"), dmarc),
+                _posture_check("All DNS lookups answered", unknown == 0, "Every lookup answered" if not unknown else f"{unknown} lookup(s) failed"),
+            ]
         elif saved:
             observed_headers = snapshot.get("security_headers")
             headers = observed_headers if isinstance(observed_headers, dict) else {}
@@ -6741,6 +6760,13 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
             header_summary = f"{absent} selected header(s) absent" if headers else "Selected header evidence unknown"
             summary = f"HTTPS {http_status if http_status is not None else 'unknown'} · {certificate_label} · {header_summary}"
             if certificate_review or absent or not headers or http_status is None or not (200 <= http_status < 400): state = "attention"
+            checks = [
+                _posture_check("Website loads over HTTPS", None if http_status is None else 200 <= http_status < 400,
+                               f"Responded {http_status}" if http_status is not None else "Response unknown"),
+                _posture_check("Security certificate valid", not certificate_review, certificate_label),
+                _posture_check("Browser security headers", (absent == 0) if headers else None,
+                               "All selected headers present" if headers and not absent else header_summary),
+            ]
         if latest and latest.status in {"queued", "running", "failed"}:
             state = "running" if latest.status in {"queued", "running"} else "unavailable"
         schedule = db.scalar(select(ExternalCheckSchedule).where(
@@ -6748,6 +6774,7 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         areas.append({"key":kind, "title":title, "state":state, "summary":summary,
             "updated_at":iso_utc(saved.completed_at) if saved else None,
             "latest_attempt_status":latest.status if latest else None,
+            "checks": checks,
             "schedule":serialize_external_schedule(schedule, kind)})
     nikto = db.scalar(select(ExternalCheckRun).where(
         ExternalCheckRun.organization_id == org.id, ExternalCheckRun.check_type == "web-nikto",
@@ -6803,6 +6830,15 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         scanner_state = "attention"
     areas.append({"key":"scanners", "title":"Internal network", "state":scanner_state,
         "upload_delivery": {"queued_uploads_observed": queued_uploads, "review_scanners": delivery_reviews, "unknown_queues": unknown_queues},
+        "checks": [
+            _posture_check("Scanners online", online == len(agents), f"{online} of {len(agents)} online"),
+            _posture_check("Scan engines ready", ready == len(agents), f"{ready} of {len(agents)} ready"),
+            _posture_check("Approved network ranges set", scoped == len(agents), f"{scoped} of {len(agents)} scanners"),
+            _posture_check("Scanned in the last 48 hours", None if unknown_scan_times else recent_scans == len(agents),
+                           f"{recent_scans} of {len(agents)} recent" + (f" · {unknown_scan_times} unknown" if unknown_scan_times else "")),
+            _posture_check("Results delivered", None if unknown_queues else delivery_reviews == 0,
+                           "Nothing waiting for review" if not delivery_reviews and not unknown_queues else f"{delivery_reviews} need review · {unknown_queues} unknown"),
+        ] if agents else [],
         "summary":delivery_summary + f"{ready}/{len(agents)} scan engines ready · {online} online · {scoped} with approved ranges · {completed_scans} with a completed latest scan · {recent_scans} within 48 hours · {older_scans} older · {unknown_scan_times} with unknown scan time. Saved runs do not establish coverage of all approved ranges." if agents else "No enabled scanners in this workspace.",
         "updated_at":max(scan_times, default=None),
         "availability_updated_at":iso_utc(max((a.last_seen_at for a in agents if a.last_seen_at), default=None))})
@@ -6832,7 +6868,15 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         )
     else:
         cis_summary += " · no baseline results yet"
-    areas.append({"key":"cis", "title":"Endpoint checks", "state":"recorded" if cis and reporting == len(devices) and not cis_needs_review else "attention" if devices or cis else "not_assessed",
+    cis_checks = []
+    if devices or cis:
+        cis_checks.append(_posture_check("Devices reporting in", reporting == len(devices) if devices else None, f"{reporting} of {len(devices)} current"))
+        cis_checks.append(_posture_check("Devices without open issues", review_devices == 0, "None need review" if not review_devices else f"{review_devices} need review"))
+        if cis:
+            for name, label in (("fail", "No failed baseline checks"), ("manual", "No manual checks waiting"), ("error", "No collection errors")):
+                value = counts[name]
+                cis_checks.append(_posture_check(label, None if value is None else value == 0, f"{value if value is not None else 'Unknown'} found"))
+    areas.append({"key":"cis", "title":"Endpoint checks", "checks": cis_checks, "state":"recorded" if cis and reporting == len(devices) and not cis_needs_review else "attention" if devices or cis else "not_assessed",
         "summary":cis_summary, "updated_at":iso_utc(cis.collected_at) if cis else None})
     meraki = db.scalar(select(ReportJob).where(ReportJob.organization_id == org.id, ReportJob.report_type == "meraki_security", ReportJob.status == "completed").order_by(ReportJob.id.desc()).limit(1))
     totals = meraki_review_summary((meraki.report_snapshot or {}).get("meraki")) if meraki else {}
@@ -6844,7 +6888,12 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         meraki_state = "running"
     elif meraki_attempt and meraki_attempt.status == "failed":
         meraki_state = "unavailable"
-    areas.append({"key":"meraki", "title":"Meraki network", "state":meraki_state,
+    meraki_checks = [
+        _posture_check("Network report saved", True, f"{totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} devices"),
+        _posture_check("No findings to review", None if review is None else review == 0, f"{review if review is not None else 'Unknown'} to review"),
+        _posture_check("All security controls readable", None if unavailable is None else unavailable == 0, f"{unavailable if unavailable is not None else 'Unknown'} unavailable"),
+    ] if meraki else []
+    areas.append({"key":"meraki", "title":"Meraki network", "state":meraki_state, "checks": meraki_checks,
         "summary":f"{review if review is not None else 'Unknown'} review observations · {unavailable if unavailable is not None else 'unknown'} controls unavailable · {totals.get('network_count', 'Unknown')} networks · {totals.get('device_count', 'unknown')} assigned devices" if meraki else "No completed network report yet.",
         "latest_attempt_status":meraki_attempt.status if meraki_attempt else None,
         "updated_at":iso_utc(meraki.completed_at) if meraki else None})
@@ -6859,7 +6908,13 @@ def build_workspace_posture_areas(db: Session, org: Organization) -> list[dict[s
         state = "running"
     elif google_attempt and google_attempt.status == "failed" or google_connection and google_connection.last_error:
         state = "unavailable"
-    areas.append({"key": "google-admin", "title": "Google Admin security", "state": state,
+    google_checks = [
+        _posture_check("Admin settings audited", summary.get("definitive", 0) == summary.get("applicable", 10),
+                       f"{summary.get('definitive', 0)} of {summary.get('applicable', 10)} checks assessed"),
+        _posture_check("No failed settings", summary.get("fail", 0) == 0, f"{summary.get('fail', 0)} failed"),
+        _posture_check("Effective policy reviewed", None, "Needs a person to confirm"),
+    ] if google_job else []
+    areas.append({"key": "google-admin", "title": "Google Admin security", "state": state, "checks": google_checks,
         "summary": f"{summary.get('definitive', 0)}/{summary.get('applicable', 10)} checks assessed; {summary.get('fail', 0)} failed. Effective-policy manual review remains required." if google_job else "No Google Admin audit saved. Separate read-only consent is required.",
         "updated_at": iso_utc(google_job.completed_at) if google_job else None,
         "latest_attempt_status": google_attempt.status if google_attempt else None})
