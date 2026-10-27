@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -50,19 +52,34 @@ def _source_worktree_paths(source: Path, packaged_paths: set[str]) -> list[str]:
     """Identify packaged files whose bytes are not represented by the source HEAD."""
     try:
         status = subprocess.check_output(
-            ["git", "-C", str(source), "status", "--porcelain", "--untracked-files=all"],
-            text=True,
+            [
+                "git", "-C", str(source), "status", "--porcelain=v1", "-z",
+                "--untracked-files=all", "--ignored=traditional", "--",
+                *sorted(set(ROOT_FILES) | set(RUNTIME_DIRECTORIES) | packaged_paths),
+            ],
             stderr=subprocess.DEVNULL,
         )
     except (OSError, subprocess.CalledProcessError):
-        return []
+        return ["<source-status-unavailable>"]
     changed = set()
-    for line in status.splitlines():
-        if len(line) < 4:
+    entries = iter(status.split(b"\0"))
+    for entry in entries:
+        if len(entry) < 4:
             continue
-        path = line[3:].split(" -> ")[-1].strip().strip('"')
-        if path in packaged_paths:
-            changed.add(path)
+        paths = [os.fsdecode(entry[3:])]
+        if b"R" in entry[:2] or b"C" in entry[:2]:
+            paths.append(os.fsdecode(next(entries, b"")))
+        for path in paths:
+            parts = Path(path).parts
+            runtime_path = (
+                bool(parts) and parts[0] in RUNTIME_DIRECTORIES
+                and not any(part in EXCLUDED_PARTS for part in parts)
+                and parts[-1] not in EXCLUDED_NAMES and not parts[-1].startswith(".env")
+            )
+            # Include deletions and renames out of the runtime too: omitted
+            # files otherwise made a changed tree falsely appear HEAD-clean.
+            if path in packaged_paths or path in ROOT_FILES or runtime_path:
+                changed.add(path)
     return sorted(changed)
 
 
@@ -115,6 +132,30 @@ def collect_files(source: Path) -> dict[str, bytes]:
     return files
 
 
+def write_bundle(output: Path, files: dict[str, bytes]) -> None:
+    """Publish a complete deterministic bundle without truncating its predecessor."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w+b", dir=output.parent, prefix=f".{output.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            with zipfile.ZipFile(handle, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+                for name, contents in sorted(files.items()):
+                    info = zipfile.ZipInfo(f"daedalus-nmapui-source/{name}")
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.external_attr = 0o100644 << 16
+                    archive.writestr(info, contents, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.chmod(0o644)
+        os.replace(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -132,20 +173,20 @@ def main() -> int:
         / "agent_bundle"
         / "nmapui-source.zip",
     )
+    parser.add_argument(
+        "--require-clean-source", action="store_true",
+        help="Refuse a release bundle when packaged runtime files are uncommitted or source HEAD is unavailable",
+    )
     args = parser.parse_args()
     source = args.source.expanduser().resolve(strict=True)
     output = args.output.expanduser()
-    output.parent.mkdir(parents=True, exist_ok=True)
     files = collect_files(source)
-    with zipfile.ZipFile(
-        output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
-    ) as archive:
-        for name, contents in sorted(files.items()):
-            info = zipfile.ZipInfo(f"daedalus-nmapui-source/{name}")
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            archive.writestr(info, contents, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
     manifest = json.loads(files["manifest.json"])
+    if args.require_clean_source and (
+        manifest["source_commit"] == "unavailable" or manifest["source_worktree_paths"]
+    ):
+        raise SystemExit("Release bundle requires a committed NmapUI runtime with a known source HEAD.")
+    write_bundle(output, files)
     print(
         f"Built NmapUI {manifest['version']} source bundle: {len(files) - 1} files, "
         f"{output.stat().st_size} bytes; source sha256 {manifest['source_tree_sha256']}"
