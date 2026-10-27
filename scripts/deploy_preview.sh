@@ -65,14 +65,16 @@ systemctl enable -q daedalus-preview.service
 systemctl stop daedalus-preview.service || true
 # A previous release can outlive its unit (open live-update sockets); free the port first.
 pkill -u daedalus -f 'uvicorn daedalus.server:app' || true
-for _ in $(seq 1 10); do ss -ltn | grep -q '127.0.0.1:8000 ' || break; sleep 1; done
+for _ in $(seq 1 5); do ss -ltn | grep -q '127.0.0.1:8000 ' || break; sleep 1; done
+pkill -KILL -u daedalus -f 'uvicorn daedalus.server:app' || true
+for _ in $(seq 1 5); do ss -ltn | grep -q '127.0.0.1:8000 ' || break; sleep 1; done
 systemctl reset-failed daedalus-preview.service || true
 systemctl start daedalus-preview.service
 for _ in $(seq 1 30); do
   curl -fsS -o /dev/null http://127.0.0.1:8000/healthz 2>/dev/null && break
   sleep 1
 done
-systemctl is-active --quiet daedalus-preview.service && readlink /opt/daedalus/app | grep -q "${rev}" && curl -fsS http://127.0.0.1:8000/healthz >/dev/null && echo "preview healthy at ${rev}"
+sleep 3; systemctl is-active --quiet daedalus-preview.service && readlink /opt/daedalus/app | grep -q "${rev}" && curl -fsS http://127.0.0.1:8000/healthz >/dev/null && echo "preview healthy at ${rev}"
 INSIDE
 # Loopback-only forward on the SER8 host; peers arrive as 127.0.0.1 so the demo login works.
 if ! incus config device show "${container}" | grep -q '^preview:'; then
