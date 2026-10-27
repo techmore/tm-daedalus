@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="/static/css/app.css?v=daedalus-20261020-203">
   <link rel="stylesheet" href="/static/css/elementary-overrides.css?v=20261019-2">
   <link rel="stylesheet" href="/static/css/elementary.css?v=20261027-2">
-  <link rel="stylesheet" href="/static/css/daedalus-ui.css?v=20261027-quiet1">
+  <link rel="stylesheet" href="/static/css/daedalus-ui.css?v=20261027-quiet2">
   <script src="/static/js/theme.js?v=20261027-2"></script>
 </head>
 <body class="app-page">
@@ -40,28 +40,28 @@
         </select>
       </label>
       {% if not workspace_key_session %}<button class="sidebar-add-workspace" type="button" data-open-workspace-dialog><svg class="d-icon d-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg> Add or join workspace</button>{% endif %}
-      <div class="nav-label">WORKSPACE</div>
+      <div class="nav-label">Workspace</div>
       <nav class="main-nav" aria-label="Workspace">
         {% if workspaces|length > 1 %}<button class="nav-item" data-tab="portfolio"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></span>All customers</button>
         {% endif %}
         <button class="nav-item active" data-tab="overview"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>Overview</button>
       </nav>
-      <div class="nav-label nav-label-lower">EXTERNAL</div>
+      <div class="nav-label nav-label-lower">External</div>
       <nav class="main-nav" aria-label="External">
         <button class="nav-item" data-tab="dns"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m16 19 2 2 4-4"/></svg></span>DNS &amp; email health</button>
         <button class="nav-item" data-tab="web"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>Website health</button>
       </nav>
-      <div class="nav-label nav-label-lower">NETWORK</div>
+      <div class="nav-label nav-label-lower">Network</div>
       <nav class="main-nav" aria-label="Network">
         <button class="nav-item" data-tab="scanners"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><path d="M19.07 4.93A10 10 0 1 0 22 12"/><path d="M16.24 7.76A6 6 0 1 0 18 12"/><circle cx="12" cy="12" r="2"/><path d="m13.4 10.6 6-6"/></svg></span>Internal network</button>
         <button class="nav-item" data-tab="meraki"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg></span>Meraki security</button>
       </nav>
-      <div class="nav-label nav-label-lower">IDENTITY &amp; DEVICES</div>
+      <div class="nav-label nav-label-lower">Identity &amp; devices</div>
       <nav class="main-nav" aria-label="Identity and devices">
         <button class="nav-item" data-tab="google-admin"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 16.5a4.5 4.5 0 0 1 8 0"/></svg></span>Google Admin security</button>
         <button class="nav-item" data-tab="cis"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 20h20"/><path d="m9 9.5 2 2 4-4"/></svg></span>Endpoint compliance</button>
       </nav>
-      <div class="nav-label nav-label-lower">RECORDS &amp; ACCESS</div>
+      <div class="nav-label nav-label-lower">Records &amp; access</div>
       <nav class="main-nav" aria-label="Records and access">
         <button class="nav-item" data-tab="reports"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/><path d="M8 13h8M8 17h5"/></svg></span>Reports</button>
         <button class="nav-item" data-tab="notifications"><span aria-hidden="true"><svg class="d-icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>Notifications <b id="notification-badge" class="notification-badge hidden" aria-label="Unread notifications">0</b></button>

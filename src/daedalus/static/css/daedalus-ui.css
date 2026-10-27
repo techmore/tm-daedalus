@@ -322,7 +322,7 @@ html .status-banner {
 }
 html .status-banner strong { font-size: 26px; font-weight: 700; letter-spacing: -.025em; color: var(--e-text); }
 html .status-banner span { font-size: 13px; color: var(--e-text-3); }
-html .status-banner.is-idle { background: var(--e-surface-2); }
+html .status-banner.is-ok, html .status-banner.is-warn, html .status-banner.is-bad, html .status-banner.is-idle { background: var(--e-surface); }
 
 html .status-list { gap: 0; margin-top: 14px; border: 1px solid var(--e-border-soft); border-radius: var(--d-radius); overflow: hidden; background: var(--e-surface); }
 html .status-row { padding: 14px 18px; border: 0; border-radius: 0; background: transparent; box-shadow: none; transition: background-color .14s; }
