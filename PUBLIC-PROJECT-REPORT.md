@@ -2,6 +2,13 @@
 
 October 20 source/CI audit: [deployment-readiness blueprint](docs/deployment-readiness.md) tracks current unresolved gates. The dated release and acceptance receipts below remain historical; this audit did not reverify the live host or complete a new rollout.
 
+## Deployment — October 27, 2026
+
+- **Active application release:** `e3c24512852bb035ba00f5b00dd1f8817c2a5ce8` (#34), deployed with `scripts/deploy_incus.py`. Before switching, it wrote and verified an off-host data backup and verified the release archive digest; internal and public `/readyz` checks passed afterwards. The earlier deployment that day (`cb67035`, #29/#31/#32) followed the same steps.
+- **Validation:** required CI (Python 3.11, Python 3.12, Protected deployment staging, Lint) passed on #34 before merge.
+- **Interface:** remastered portal (olive theme, light by default, optional dark and Slate palette, Ctrl K command menu). Overview shows a per-area ✓ / ! / ? checklist of saved checks.
+- **Still pending:** isolated restore rehearsal (real sign-in plus DNS/TLS failover), independent recovery-password custody, and the acceptance gates in #11 and #14–#16. Later commits on `main` that change only CI workflows are not part of this release.
+
 ## Current state — October 9, 2026
 
 **Daedalus is a working, internet-hosted pilot. The full project remains incomplete.** This report covers the whole intended platform. The [historical checkpoints](PROJECT-HISTORY.md) preserve earlier receipts; their release identifiers and counts apply to their own dates.
@@ -37,7 +44,7 @@ The endpoint rollout staged source `9973e38`, then entered its rollback path whe
 | CIS macOS 26 | Published profile selection, source collectors, upload/score/coverage/history/report paths and authenticated release delivery support. Actual macOS 26.6.2 CI retains all 119 results: 10 pass, 22 fail, 87 manual. | Developer ID signed/notarized client; physical managed macOS 26 deployment/check-ins, selected profiles, remaining procedures and login/reboot persistence. No trusted production package is currently published. |
 | Google Admin security | Deployed read-only OAuth connector, customer/domain validation, settings checklist, manual evidence, saved reports/comparisons and opt-in recurrence. | Dedicated OAuth setup and real tenant consent, benchmark applicability/version review, CSP/BFS assessment and recurring-operation acceptance. No live tenant audit is claimed. |
 | Reports, comparisons and inbox | JIT generation/progress/download; frozen report evidence; workspace-scoped topic/history pagination, unread filtering/read receipts and durable dated notices. Original scanner XSL/assets and historical report versions are preserved. | Human approval of the complete report/customer workflow, operating-scale generation, retention and notification-delivery policy. Current notices are in-app; no customer email delivery is claimed. |
-| Theme and product experience | CSP ivory/olive/brown styling, topic summaries, refreshable URLs, inline controls, history grouping and native scanner status. Implemented/API behavior and some visual receipts exist. | Populated desktop/mobile review of every topic, consistent priority/freshness/change/action hierarchy, keyboard/screen-reader review and final marketing/content acceptance. |
+| Theme and product experience | October 27 remaster: quiet olive design, light by default with optional dark and Slate palette, Ctrl K command menu, grouped navigation, and an Overview checklist that marks each saved check ✓ / ! / ? with dated evidence behind **Technical details**. Topic summaries, refreshable URLs, inline controls, history grouping and native scanner status. Screenshots are in the README. | Populated desktop/mobile review of every topic, consistent priority/freshness/change/action hierarchy, keyboard/screen-reader review and final marketing/content acceptance. |
 | Hosting and recovery | Incus deployment, verified off-host backups, staged activation, health checks and automatic rollback. The latest disposable restore recovered all 72 pre-deployment report pairs and passed SQLite integrity/foreign-key checks. | Independent recovery-secret custody, restored real Google sign-in, public DNS/TLS failover, storage/retention policy, capacity and sustained operating acceptance. |
 
 ## Endpoint review improvement — implementation checkpoint

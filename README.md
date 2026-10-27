@@ -11,6 +11,21 @@ Daedalus is Cyber Security Pilot's multi-organization security portal. It brings
 - **Profiles:** [`src/daedalus/profiles/`](src/daedalus/profiles/) — endpoint baseline profiles.
 - **Tests:** [`tests/`](tests/).
 
+## Interface
+
+![Workspace overview, light theme](docs/images/overview-light.png)
+
+Customers can start and stay on **Overview**. It answers "is everything okay?" with one headline, a pass count and a row of marks (green passed, amber needs attention, grey not confirmed). Below that, one card per area (DNS & email, Website, Internal network, Meraki, Google Admin, Endpoint) lists each saved check as ✓, ! or ?. Each card shows what was observed and when, and **Technical details** expands the full evidence. The wording never claims "all good": saved evidence is not a security verdict.
+
+- **Light by default.** The header button cycles light → dark → match system, and the choice is remembered per browser. A second palette, Slate, sits beside the default Olive.
+- **Ctrl K** (or **/**) opens a command menu for pages, workspaces, theme and palette.
+- The sidebar groups topics as External, Network, Identity & devices, and Records & access.
+- Styles are layered: `app.css`, then generated `elementary-overrides.css`, then the theme tokens in `elementary.css`, then the design layer in `daedalus-ui.css`. `theme.js` applies the saved theme before first paint, and `command-palette.js` owns the menu and theme switches.
+
+| Dark theme | Phone |
+| --- | --- |
+| ![Overview, dark theme](docs/images/overview-dark.png) | ![Overview on a phone](docs/images/overview-phone.png) |
+
 ## Google Admin security reporting
 
 The deployed Google Admin connector supports read-only OAuth connection, customer/domain validation, CIS Controls v8.1 rationale, manual policy evidence and immutable recurring reports. Dedicated OAuth configuration, real tenant consent and CSP/BFS acceptance remain pending. See the [audit guide and checklist](docs/GOOGLE-ADMIN-SECURITY-AUDIT.md).
@@ -35,7 +50,16 @@ Open `http://127.0.0.1:8000`. Google sign-in and external integrations need thei
 
 ## Production on Incus
 
-The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/INCUS-DEPLOYMENT.md) for the verified backup, staged release, health-check, and automatic rollback workflow.
+The pilot runs in Incus, without Docker. See [`docs/INCUS-DEPLOYMENT.md`](docs/INCUS-DEPLOYMENT.md) for the verified backup, staged release, health-check, and automatic rollback workflow. Deploy from a clean `main` checkout:
+
+```sh
+DAEDALUS_INCUS_HOST=<incus-host> uv run python scripts/deploy_incus.py --plan   # dry run
+DAEDALUS_INCUS_HOST=<incus-host> uv run python scripts/deploy_incus.py
+```
+
+### Preview a branch before merging
+
+`scripts/deploy_preview.sh` deploys the current commit to a separate, demo-only `daedalus-test` container. It has seeded demo data and no production data, secrets or OAuth. Reach it through an SSH tunnel; the demo login only accepts loopback connections. UI changes go to the preview first and merge to `main` once they have been tried.
 
 ## Validate the application
 
@@ -144,13 +168,6 @@ xcodebuild test \
 
 For a private local demo archive, run `sh clients/csp-cis-audit/scripts/build-local-client.sh`. It does not bundle workspace credentials. The app receives an ad hoc bundle signature for integrity checks, but that signature has no publisher identity and is not notarized; downloaded copies may still be blocked by Gatekeeper. Do not ask end users to override that protection. With a Developer ID Application identity and a configured `notarytool` keychain profile, build an external distribution ZIP using `sh clients/csp-cis-audit/scripts/build-notarized-client.sh`.
 
-## Screenshots
-
-_Screenshots of the workspace overview, scanner cards and report library are
-pending; capture them from a local demo workspace (`uv run uvicorn
-daedalus.server:app`) at desktop and phone widths, in light and dark mode, and
-add them here._
-
 ## Product overview
 
 See the [Daedalus project overview](site/daedalus.html) for the feature map, architecture, and current scope. The application is an active pilot; the overview distinguishes implemented workflows from hosting and operational work that remains.
@@ -178,10 +195,6 @@ to replace an existing runtime. `DAEDALUS_NIKTO_EXECUTABLE` can point to another
 reviewed absolute program path. Engine updates require an operator review;
 audits disable interactive prompts, startup update checks and telemetry.
 See the [official Nikto options](https://github.com/sullo/nikto/blob/main/documentation/nikto.1).
-
-## License and contributions
-
-This repository does not yet define a license or contribution policy. Contact Cyber Security Pilot before reusing or redistributing the software.
 
 ## Personal access keys
 
@@ -230,3 +243,7 @@ Saved Network evidence can recover after a failed read through inline retry: [Me
 Report refreshes retain unchanged cards, expanded Meraki evidence and focused actions: [report review context](docs/REPORT-REVIEW-CONTEXT.md).
 
 Saved Meraki connection refresh restores approved organizations and protects setup actions through failed reads: [connection and approval workflow](docs/MERAKI-CONNECTION-REVIEW.md).
+
+## License
+
+[MIT](LICENSE). Contributions go through pull requests to `main`. Required checks: Python 3.11, Python 3.12, Protected deployment staging and Lint (ruff).
